@@ -87,6 +87,7 @@ describe("calculateTenderReadiness", () => {
 
     expect(result.status).toBe(ReadinessStatus.NotReady);
     expect(result.criticalAlerts).toBe(1);
+    expect(result.hasBlockingIssue).toBe(true);
   });
 
   it("caps the status at NOT_READY when a critical risk is unresolved", () => {
@@ -110,6 +111,21 @@ describe("calculateTenderReadiness", () => {
     });
 
     expect(result.status).toBe(ReadinessStatus.NotReady);
+    expect(result.hasBlockingIssue).toBe(true);
+  });
+
+  it("has no blocking issue when everything is fine", () => {
+    const result = calculateTenderReadiness({
+      checklistItems: [],
+      requestedDocuments: [],
+      criteria: [],
+      milestones: [],
+      risks: [],
+      alerts: [],
+      now: NOW,
+    });
+
+    expect(result.hasBlockingIssue).toBe(false);
   });
 
   it("counts an overdue milestone as a warning and reduces the score", () => {

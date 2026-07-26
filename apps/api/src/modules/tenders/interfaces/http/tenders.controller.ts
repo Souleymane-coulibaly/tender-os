@@ -7,8 +7,10 @@ import { ArchiveTenderUseCase } from "../../application/use-cases/archive-tender
 import { ChangeTenderStatusUseCase } from "../../application/use-cases/change-tender-status.use-case";
 import { CreateTenderUseCase } from "../../application/use-cases/create-tender.use-case";
 import { GetTenderUseCase } from "../../application/use-cases/get-tender.use-case";
+import { GetTenderBoardUseCase } from "../../application/use-cases/get-tender-board.use-case";
+import { GetTenderListViewUseCase } from "../../application/use-cases/get-tender-list-view.use-case";
 import { GetTenderReadinessUseCase } from "../../application/use-cases/get-tender-readiness.use-case";
-import { ListTendersUseCase } from "../../application/use-cases/list-tenders.use-case";
+import { GetTenderStatisticsUseCase } from "../../application/use-cases/get-tender-statistics.use-case";
 import { ListTenderStatusHistoryUseCase } from "../../application/use-cases/list-tender-status-history.use-case";
 import { UpdateTenderUseCase } from "../../application/use-cases/update-tender.use-case";
 
@@ -65,7 +67,10 @@ import {
   presentRisk,
   presentStatusHistoryEntry,
   presentTender,
+  presentTenderBoard,
+  presentTenderListItem,
   presentTenderLot,
+  presentTenderStatistics,
 } from "./presenters";
 import { TendersErrorFilter } from "./tenders-error.filter";
 import {
@@ -84,6 +89,7 @@ import {
   CreateTenderLotBodySchema,
   IdParamSchema,
   ListTendersQuerySchema,
+  TenderBoardQuerySchema,
   UpdateAwardCriterionBodySchema,
   UpdateChecklistItemBodySchema,
   UpdateMilestoneBodySchema,
@@ -105,6 +111,7 @@ import {
   type CreateTenderBody,
   type CreateTenderLotBody,
   type ListTendersQuery,
+  type TenderBoardQuery,
   type UpdateAwardCriterionBody,
   type UpdateChecklistItemBody,
   type UpdateMilestoneBody,
@@ -122,7 +129,9 @@ export class TendersController {
     private readonly createTenderUseCase: CreateTenderUseCase,
     private readonly updateTenderUseCase: UpdateTenderUseCase,
     private readonly getTenderUseCase: GetTenderUseCase,
-    private readonly listTendersUseCase: ListTendersUseCase,
+    private readonly getTenderBoardUseCase: GetTenderBoardUseCase,
+    private readonly getTenderListViewUseCase: GetTenderListViewUseCase,
+    private readonly getTenderStatisticsUseCase: GetTenderStatisticsUseCase,
     private readonly changeTenderStatusUseCase: ChangeTenderStatusUseCase,
     private readonly archiveTenderUseCase: ArchiveTenderUseCase,
     private readonly listTenderStatusHistoryUseCase: ListTenderStatusHistoryUseCase,
@@ -191,12 +200,39 @@ export class TendersController {
     @CurrentMembershipContext() membership: MembershipContext,
     @Query(new ZodValidationPipe(ListTendersQuerySchema)) query: ListTendersQuery,
   ) {
-    const result = await this.listTendersUseCase.execute({
+    // Vue Liste enrichie (mission Kanban & List Views §5) — additif par rapport au
+    // TenderSummary de base, ListTendersUseCase reste disponible comme brique interne plus
+    // légère (voir list-tenders.use-case.ts) si un futur appelant n'a pas besoin de l'enrichissement.
+    const result = await this.getTenderListViewUseCase.execute({
       organizationId: membership.organizationId,
       actorRole: membership.role,
       ...query,
     });
-    return presentPage(result.items.map(presentTender), result.nextCursor);
+    return presentPage(result.items.map(presentTenderListItem), result.nextCursor);
+  }
+
+  @Get("board")
+  @HttpCode(HttpStatus.OK)
+  async board(
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Query(new ZodValidationPipe(TenderBoardQuerySchema)) query: TenderBoardQuery,
+  ) {
+    const result = await this.getTenderBoardUseCase.execute({
+      organizationId: membership.organizationId,
+      actorRole: membership.role,
+      ...query,
+    });
+    return presentTenderBoard(result);
+  }
+
+  @Get("stats")
+  @HttpCode(HttpStatus.OK)
+  async stats(@CurrentMembershipContext() membership: MembershipContext) {
+    const result = await this.getTenderStatisticsUseCase.execute({
+      organizationId: membership.organizationId,
+      actorRole: membership.role,
+    });
+    return presentTenderStatistics(result);
   }
 
   @Get(":tenderId")

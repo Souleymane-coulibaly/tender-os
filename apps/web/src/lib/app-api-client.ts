@@ -73,6 +73,22 @@ export async function appApiFetch<T>(path: string, init?: RequestInit): Promise<
   return (await response.json()) as T;
 }
 
+/**
+ * Résout le rôle de l'utilisateur courant dans l'organisation active — nécessaire côté UI
+ * uniquement pour un confort d'affichage (griser le glisser-déposer, masquer une action)
+ * jamais comme autorité : chaque mutation reste revalidée côté API quoi que montre l'UI.
+ */
+export async function getCurrentMembershipRole(): Promise<string | undefined> {
+  const organizationId = await getAppOrganizationId();
+  if (!organizationId) return undefined;
+
+  const page = await appApiFetch<{ items: { role: string; organization: { id: string } }[] }>(
+    "/api/v1/organization-memberships/me?limit=100",
+  );
+
+  return page.items.find((item) => item.organization.id === organizationId)?.role;
+}
+
 export async function appApiFetchWithToken<T>(token: string, path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,

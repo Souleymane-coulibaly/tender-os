@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { TenderId } from "../../domain/tender-id.value-object";
 import { Tender } from "../../domain/tender.aggregate";
-import { InMemoryTenderRepository } from "../../test-support/fakes";
+import { InMemoryTenderRepository, InMemoryTenderSearchProvider } from "../../test-support/fakes";
 import { ListTendersUseCase } from "./list-tenders.use-case";
 
 describe("ListTendersUseCase", () => {
@@ -10,7 +10,7 @@ describe("ListTendersUseCase", () => {
 
   beforeEach(async () => {
     tenderRepository = new InMemoryTenderRepository();
-    useCase = new ListTendersUseCase(tenderRepository);
+    useCase = new ListTendersUseCase(tenderRepository, new InMemoryTenderSearchProvider(tenderRepository));
 
     await tenderRepository.seed(
       Tender.create({
@@ -58,6 +58,34 @@ describe("ListTendersUseCase", () => {
 
     expect(result.items).toHaveLength(1);
     expect(result.items[0]?.id).toBe("tender-2");
+  });
+
+  it("returns an empty page when the search matches nothing (never falls back to unfiltered)", async () => {
+    const result = await useCase.execute({
+      organizationId: "org-1",
+      actorRole: "READ_ONLY",
+      limit: 10,
+      search: "no-such-tender-anywhere",
+    });
+
+    expect(result.items).toHaveLength(0);
+  });
+
+  it("filters overdue tenders (past deadline, not submitted/won/lost/archived)", async () => {
+    const overdueTender = Tender.create({
+      id: TenderId.from("tender-4"),
+      organizationId: "org-1",
+      title: "Marche en retard",
+      submissionDeadline: new Date("2020-01-01T00:00:00Z"),
+      createdBy: "user-1",
+      occurredAt: new Date("2026-01-04T00:00:00Z"),
+    });
+    await tenderRepository.seed(overdueTender);
+
+    const result = await useCase.execute({ organizationId: "org-1", actorRole: "READ_ONLY", limit: 10, overdue: true });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.id).toBe("tender-4");
   });
 
   it("paginates with a cursor and limit", async () => {

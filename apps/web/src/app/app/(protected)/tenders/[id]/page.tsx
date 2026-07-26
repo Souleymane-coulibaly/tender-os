@@ -14,6 +14,7 @@ import {
   type TenderLot,
 } from "../../../../../lib/tenders-types";
 import { ApiErrorState } from "../../api-error-state";
+import { TenderStatusBadge } from "../tender-status-badge";
 import { AlertsSection } from "./alerts-section";
 import { ArchiveButton } from "./archive-button";
 import { ChecklistSection } from "./checklist-section";
@@ -82,9 +83,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="rounded bg-neutral-100 px-2 py-1 text-xs font-medium text-neutral-800">
-            {TENDER_STATUS_LABELS[tender.status]}
-          </span>
+          <TenderStatusBadge status={tender.status} />
           {tender.status !== "ARCHIVED" ? <ArchiveButton tenderId={tender.id} /> : null}
         </div>
       </div>

@@ -202,3 +202,64 @@ export const ALLOWED_TENDER_TRANSITIONS: Record<TenderStatus, TenderStatus[]> = 
   LOST: ["ARCHIVED"],
   ARCHIVED: [],
 };
+
+/** Colonnes actives du Kanban — ARCHIVED est un statut terminal retire du pilotage actif,
+ *  meme decision que le backend (get-tender-board.use-case.ts). */
+export const BOARD_STATUSES: TenderStatus[] = (Object.keys(TENDER_STATUS_LABELS) as TenderStatus[]).filter(
+  (status) => status !== "ARCHIVED",
+);
+
+export type TenderBoardItem = {
+  id: string;
+  title: string;
+  reference?: string;
+  buyerName?: string;
+  submissionDeadline?: string;
+  internalOwnerId?: string;
+  status: TenderStatus;
+  readinessScore: number;
+  readinessStatus: ReadinessStatus;
+  openRisksCount: number;
+  incompleteChecklistCount: number;
+  overdue: boolean;
+  updatedAt: string;
+};
+
+export type TenderListItem = TenderBoardItem & { createdAt: string; version: number };
+
+export type TenderBoardColumn = {
+  status: TenderStatus;
+  totalCount: number;
+  items: TenderBoardItem[];
+};
+
+export type TenderBoard = { columns: TenderBoardColumn[] };
+
+export type TenderStatistics = {
+  totalActive: number;
+  byStatus: Record<string, number>;
+  deadlinesNext7Days: number;
+  overdueCount: number;
+  readyToSubmitCount: number;
+  atRiskCount: number;
+  averageReadinessScore: number;
+  disclaimer: string;
+};
+
+/** Miroir cote UI de ROLE_TENDER_PERMISSIONS (tender-permission.ts) pour ce seul role
+ *  "tender:update" — sert uniquement a griser le glisser-depose / masquer l'action ;
+ *  la seule autorite reelle reste la revalidation backend a chaque requete. */
+const ROLES_ALLOWED_TO_CHANGE_STATUS = ["ORGANIZATION_ADMIN", "BID_MANAGER"];
+
+export function canChangeTenderStatus(role: string | undefined): boolean {
+  return role !== undefined && ROLES_ALLOWED_TO_CHANGE_STATUS.includes(role);
+}
+
+export type TenderFiltersState = {
+  search?: string | undefined;
+  status?: TenderStatus | undefined;
+  internalOwnerId?: string | undefined;
+  deadlineAfter?: string | undefined;
+  deadlineBefore?: string | undefined;
+  overdue?: boolean | undefined;
+};

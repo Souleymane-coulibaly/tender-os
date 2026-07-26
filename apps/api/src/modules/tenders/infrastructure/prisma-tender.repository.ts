@@ -1,10 +1,40 @@
 import { Injectable } from "@nestjs/common";
 import type { Prisma, Tender as TenderRecord } from "@prisma/client";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
-import type { TenderPage, TenderRepository } from "../application/ports/tender.repository";
+import type { TenderListFilter, TenderPage, TenderRepository } from "../application/ports/tender.repository";
 import { TenderConcurrentModificationError } from "../domain/errors";
+import { TenderStatus } from "../domain/tender-status";
 import type { Tender } from "../domain/tender.aggregate";
 import { TenderPersistenceMapper } from "./tender.persistence-mapper";
+
+/** Statuts pour lesquels une échéance de soumission passée n'est plus "en retard" au sens
+ *  du filtre `overdue` de la vue Liste — le dépôt a déjà eu lieu ou le dossier est clos. */
+const STATUSES_EXEMPT_FROM_OVERDUE: readonly string[] = [
+  TenderStatus.Submitted,
+  TenderStatus.Won,
+  TenderStatus.Lost,
+  TenderStatus.Archived,
+];
+
+function buildWhere(input: TenderListFilter): Prisma.TenderWhereInput {
+  const andConditions: Prisma.TenderWhereInput[] = [];
+  if (input.status) andConditions.push({ status: input.status });
+  if (input.internalOwnerId) andConditions.push({ internalOwnerId: input.internalOwnerId });
+  if (input.idsFilter) andConditions.push({ id: { in: [...input.idsFilter] } });
+  if (input.deadlineAfter) andConditions.push({ submissionDeadline: { gte: input.deadlineAfter } });
+  if (input.deadlineBefore) andConditions.push({ submissionDeadline: { lte: input.deadlineBefore } });
+  if (input.overdue) {
+    andConditions.push({
+      submissionDeadline: { lt: new Date() },
+      status: { notIn: [...STATUSES_EXEMPT_FROM_OVERDUE] },
+    });
+  }
+
+  return {
+    organizationId: input.organizationId,
+    ...(andConditions.length > 0 ? { AND: andConditions } : {}),
+  };
+}
 
 @Injectable()
 export class PrismaTenderRepository implements TenderRepository {
@@ -20,35 +50,21 @@ export class PrismaTenderRepository implements TenderRepository {
     return record ? this.mapper.toDomain(record) : null;
   }
 
-  async list(input: {
-    organizationId: string;
-    cursor?: string | undefined;
-    limit: number;
-    status?: string | undefined;
-    internalOwnerId?: string | undefined;
-    search?: string | undefined;
-    deadlineBefore?: Date | undefined;
-    sort?: "createdAt" | "submissionDeadline" | "title" | undefined;
-    sortDirection?: "asc" | "desc" | undefined;
-  }): Promise<TenderPage> {
+  async list(
+    input: TenderListFilter & {
+      cursor?: string | undefined;
+      limit: number;
+      sort?: "createdAt" | "submissionDeadline" | "title" | "updatedAt" | undefined;
+      sortDirection?: "asc" | "desc" | undefined;
+    },
+  ): Promise<TenderPage> {
+    if (input.idsFilter && input.idsFilter.length === 0) {
+      return { items: [], nextCursor: null };
+    }
+
     const sortField = input.sort ?? "createdAt";
     const sortDirection = input.sortDirection ?? "desc";
-
-    const where: Prisma.TenderWhereInput = {
-      organizationId: input.organizationId,
-      ...(input.status ? { status: input.status } : {}),
-      ...(input.internalOwnerId ? { internalOwnerId: input.internalOwnerId } : {}),
-      ...(input.deadlineBefore ? { submissionDeadline: { lte: input.deadlineBefore } } : {}),
-      ...(input.search
-        ? {
-            OR: [
-              { title: { contains: input.search, mode: "insensitive" } },
-              { reference: { contains: input.search, mode: "insensitive" } },
-              { description: { contains: input.search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    };
+    const where = buildWhere(input);
 
     const records = await this.prisma.tender.findMany({
       where,
@@ -64,6 +80,23 @@ export class PrismaTenderRepository implements TenderRepository {
       items: page.map((record: TenderRecord) => this.mapper.toDomain(record)),
       nextCursor: hasNextPage ? (page[page.length - 1]?.id ?? null) : null,
     };
+  }
+
+  async count(input: TenderListFilter): Promise<number> {
+    if (input.idsFilter && input.idsFilter.length === 0) {
+      return 0;
+    }
+    return this.prisma.tender.count({ where: buildWhere(input) });
+  }
+
+  async countByStatus(organizationId: string): Promise<Record<string, number>> {
+    const groups = await this.prisma.tender.groupBy({
+      by: ["status"],
+      where: { organizationId },
+      _count: { _all: true },
+    });
+
+    return Object.fromEntries(groups.map((group) => [group.status, group._count._all]));
   }
 
   async save(tender: Tender): Promise<void> {

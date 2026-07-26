@@ -55,6 +55,14 @@ export class PrismaAlertRepository implements AlertRepository {
     return records.map(toDomain);
   }
 
+  async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<Alert[]> {
+    if (input.tenderIds.length === 0) return [];
+    const records = await this.prisma.tenderAlert.findMany({
+      where: { organizationId: input.organizationId, tenderId: { in: [...input.tenderIds] } },
+    });
+    return records.map(toDomain);
+  }
+
   async save(alert: Alert): Promise<void> {
     const data = toPersistence(alert);
     await this.prisma.tenderAlert.upsert({ where: { id: data.id }, create: data, update: data });

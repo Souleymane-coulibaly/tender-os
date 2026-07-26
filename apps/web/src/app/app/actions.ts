@@ -185,6 +185,32 @@ export async function changeTenderStatusAction(
   return {};
 }
 
+/**
+ * Meme endpoint et meme use case que changeTenderStatusAction (POST /tenders/:id/status,
+ * ChangeTenderStatusUseCase) — variante en fonction directement appelable plutot que liee a
+ * useActionState, pour le glisser-deposer du Kanban (mission Kanban & List Views §4) :
+ * aucune nouvelle logique metier, le backend revalide la transition, les permissions,
+ * l'organisation et ecrit l'audit exactement comme depuis la fiche Tender.
+ */
+export async function changeTenderStatusDirectAction(
+  tenderId: string,
+  status: string,
+): Promise<{ error?: string }> {
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/status`, {
+      method: "POST",
+      body: JSON.stringify({ status, reason: "Deplacement Kanban" }),
+    });
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+
+  revalidatePath(`/app/tenders/${tenderId}`);
+  revalidatePath("/app/tenders");
+  revalidatePath("/app/tenders/board");
+  return {};
+}
+
 export async function archiveTenderAction(
   tenderId: string,
   _prevState: FormActionState,

@@ -65,6 +65,17 @@ export class PrismaRequestedDocumentRepository implements RequestedDocumentRepos
     return records.map(toDomain);
   }
 
+  async listByTenderIds(input: {
+    organizationId: string;
+    tenderIds: readonly string[];
+  }): Promise<RequestedDocument[]> {
+    if (input.tenderIds.length === 0) return [];
+    const records = await this.prisma.tenderRequestedDocument.findMany({
+      where: { organizationId: input.organizationId, tenderId: { in: [...input.tenderIds] } },
+    });
+    return records.map(toDomain);
+  }
+
   async save(document: RequestedDocument): Promise<void> {
     const data = toPersistence(document);
     await this.prisma.tenderRequestedDocument.upsert({ where: { id: data.id }, create: data, update: data });

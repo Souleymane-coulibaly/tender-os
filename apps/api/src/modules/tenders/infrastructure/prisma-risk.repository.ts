@@ -59,6 +59,14 @@ export class PrismaRiskRepository implements RiskRepository {
     return records.map(toDomain);
   }
 
+  async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<Risk[]> {
+    if (input.tenderIds.length === 0) return [];
+    const records = await this.prisma.tenderRisk.findMany({
+      where: { organizationId: input.organizationId, tenderId: { in: [...input.tenderIds] } },
+    });
+    return records.map(toDomain);
+  }
+
   async save(risk: Risk): Promise<void> {
     const data = toPersistence(risk);
     await this.prisma.tenderRisk.upsert({ where: { id: data.id }, create: data, update: data });

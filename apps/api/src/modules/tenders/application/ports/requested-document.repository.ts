@@ -7,6 +7,7 @@ export interface RequestedDocumentRepository {
     documentId: string;
   }): Promise<RequestedDocument | null>;
   listByTender(input: { organizationId: string; tenderId: string }): Promise<RequestedDocument[]>;
+  listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<RequestedDocument[]>;
   save(document: RequestedDocument): Promise<void>;
   delete(input: { organizationId: string; tenderId: string; documentId: string }): Promise<void>;
 }

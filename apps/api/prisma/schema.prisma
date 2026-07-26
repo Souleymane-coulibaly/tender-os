@@ -299,6 +299,11 @@ model Tender {
   @@index([organizationId, status])
   @@index([organizationId, submissionDeadline])
   @@index([organizationId, createdAt])
+  /// Filtre "responsable" (mission Kanban & List Views §8) — déjà exposé par l'API sans
+  /// index dédié jusqu'ici.
+  @@index([organizationId, internalOwnerId])
+  /// Tri "dernière modification" de la vue Liste (mission Kanban & List Views §5, §8).
+  @@index([organizationId, updatedAt])
   @@map("tenders")
 }
 

@@ -59,6 +59,14 @@ export class PrismaMilestoneRepository implements MilestoneRepository {
     return records.map(toDomain);
   }
 
+  async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<Milestone[]> {
+    if (input.tenderIds.length === 0) return [];
+    const records = await this.prisma.tenderMilestone.findMany({
+      where: { organizationId: input.organizationId, tenderId: { in: [...input.tenderIds] } },
+    });
+    return records.map(toDomain);
+  }
+
   async save(milestone: Milestone): Promise<void> {
     const data = toPersistence(milestone);
     await this.prisma.tenderMilestone.upsert({ where: { id: data.id }, create: data, update: data });

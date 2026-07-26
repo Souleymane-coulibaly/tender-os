@@ -8,6 +8,7 @@ import type {
   TenderLotSummary,
   TenderSummary,
 } from "../../application/dtos";
+import type { TenderBoardDto, TenderListItemDto, TenderStatisticsDto } from "../../application/board-dtos";
 import type { ReadinessResult } from "../../domain/readiness-calculator";
 import type { TenderStatusHistoryEntry } from "../../application/ports/tender-status-history.repository";
 
@@ -56,5 +57,21 @@ export function presentReadiness(result: ReadinessResult): ReadinessResponse {
   return {
     ...result,
     disclaimer: "Ce score est un indicateur interne, pas une garantie de conformité juridique ou contractuelle.",
+  };
+}
+
+export function presentTenderBoard(board: TenderBoardDto): TenderBoardDto {
+  return board;
+}
+export function presentTenderListItem(item: TenderListItemDto): TenderListItemDto {
+  return { ...item };
+}
+
+export type TenderStatisticsResponse = TenderStatisticsDto & Readonly<{ disclaimer: string }>;
+
+export function presentTenderStatistics(stats: TenderStatisticsDto): TenderStatisticsResponse {
+  return {
+    ...stats,
+    disclaimer: "Le score de préparation moyen reste un indicateur interne, pas une garantie de conformité.",
   };
 }

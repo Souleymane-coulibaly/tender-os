@@ -57,6 +57,17 @@ export class PrismaAwardCriterionRepository implements AwardCriterionRepository 
     return records.map(toDomain);
   }
 
+  async listByTenderIds(input: {
+    organizationId: string;
+    tenderIds: readonly string[];
+  }): Promise<AwardCriterion[]> {
+    if (input.tenderIds.length === 0) return [];
+    const records = await this.prisma.tenderAwardCriterion.findMany({
+      where: { organizationId: input.organizationId, tenderId: { in: [...input.tenderIds] } },
+    });
+    return records.map(toDomain);
+  }
+
   async save(criterion: AwardCriterion): Promise<void> {
     const data = toPersistence(criterion);
     await this.prisma.tenderAwardCriterion.upsert({ where: { id: data.id }, create: data, update: data });

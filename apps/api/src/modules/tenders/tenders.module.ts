@@ -8,6 +8,7 @@ import { CHECKLIST_ITEM_REPOSITORY } from "./application/ports/checklist-item.re
 import { MILESTONE_REPOSITORY } from "./application/ports/milestone.repository";
 import { REQUESTED_DOCUMENT_REPOSITORY } from "./application/ports/requested-document.repository";
 import { RISK_REPOSITORY } from "./application/ports/risk.repository";
+import { TENDER_SEARCH_PROVIDER } from "./application/ports/tender-search-provider";
 import { TENDER_LOT_REPOSITORY } from "./application/ports/tender-lot.repository";
 import { TENDER_STATUS_HISTORY_REPOSITORY } from "./application/ports/tender-status-history.repository";
 import { TENDER_REPOSITORY } from "./application/ports/tender.repository";
@@ -16,7 +17,10 @@ import { ArchiveTenderUseCase } from "./application/use-cases/archive-tender.use
 import { ChangeTenderStatusUseCase } from "./application/use-cases/change-tender-status.use-case";
 import { CreateTenderUseCase } from "./application/use-cases/create-tender.use-case";
 import { GetTenderUseCase } from "./application/use-cases/get-tender.use-case";
+import { GetTenderBoardUseCase } from "./application/use-cases/get-tender-board.use-case";
+import { GetTenderListViewUseCase } from "./application/use-cases/get-tender-list-view.use-case";
 import { GetTenderReadinessUseCase } from "./application/use-cases/get-tender-readiness.use-case";
+import { GetTenderStatisticsUseCase } from "./application/use-cases/get-tender-statistics.use-case";
 import { ListTendersUseCase } from "./application/use-cases/list-tenders.use-case";
 import { ListTenderStatusHistoryUseCase } from "./application/use-cases/list-tender-status-history.use-case";
 import { UpdateTenderUseCase } from "./application/use-cases/update-tender.use-case";
@@ -67,6 +71,7 @@ import { PrismaAlertRepository } from "./infrastructure/prisma-alert.repository"
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
 import { PrismaAwardCriterionRepository } from "./infrastructure/prisma-award-criterion.repository";
 import { PrismaChecklistItemRepository } from "./infrastructure/prisma-checklist-item.repository";
+import { PrismaIlikeTenderSearchProvider } from "./infrastructure/prisma-ilike-tender-search.provider";
 import { PrismaMilestoneRepository } from "./infrastructure/prisma-milestone.repository";
 import { PrismaRequestedDocumentRepository } from "./infrastructure/prisma-requested-document.repository";
 import { PrismaRiskRepository } from "./infrastructure/prisma-risk.repository";
@@ -83,6 +88,9 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     UpdateTenderUseCase,
     GetTenderUseCase,
     ListTendersUseCase,
+    GetTenderBoardUseCase,
+    GetTenderListViewUseCase,
+    GetTenderStatisticsUseCase,
     ChangeTenderStatusUseCase,
     ArchiveTenderUseCase,
     ListTenderStatusHistoryUseCase,
@@ -125,6 +133,7 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     ListAlertsUseCase,
 
     { provide: TENDER_REPOSITORY, useClass: PrismaTenderRepository },
+    { provide: TENDER_SEARCH_PROVIDER, useClass: PrismaIlikeTenderSearchProvider },
     { provide: TENDER_LOT_REPOSITORY, useClass: PrismaTenderLotRepository },
     { provide: CHECKLIST_ITEM_REPOSITORY, useClass: PrismaChecklistItemRepository },
     { provide: AWARD_CRITERION_REPOSITORY, useClass: PrismaAwardCriterionRepository },

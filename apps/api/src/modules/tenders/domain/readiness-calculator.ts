@@ -21,6 +21,9 @@ export type ReadinessResult = Readonly<{
   criticalAlerts: number;
   warnings: number;
   breakdown: ReadinessBreakdownEntry[];
+  /** Alerte critique non résolue ou risque critique non résolu — utilisé tel quel par les
+   *  statistiques Kanban & List Views ("dossiers à risque") pour ne pas dupliquer ce calcul. */
+  hasBlockingIssue: boolean;
 }>;
 
 /**
@@ -103,5 +106,6 @@ export function calculateTenderReadiness(input: {
     criticalAlerts,
     warnings,
     breakdown,
+    hasBlockingIssue,
   };
 }

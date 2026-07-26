@@ -14,11 +14,20 @@ import type { ChecklistItemRepository } from "../application/ports/checklist-ite
 import type { MilestoneRepository } from "../application/ports/milestone.repository";
 import type { RequestedDocumentRepository } from "../application/ports/requested-document.repository";
 import type { RiskRepository } from "../application/ports/risk.repository";
+import type { TenderSearchCriteria, TenderSearchProvider } from "../application/ports/tender-search-provider";
 import type {
   TenderStatusHistoryEntry,
   TenderStatusHistoryRepository,
 } from "../application/ports/tender-status-history.repository";
 import type { TenderPage, TenderRepository } from "../application/ports/tender.repository";
+import { TenderStatus } from "../domain/tender-status";
+
+const OVERDUE_EXEMPT_STATUSES: readonly string[] = [
+  TenderStatus.Submitted,
+  TenderStatus.Won,
+  TenderStatus.Lost,
+  TenderStatus.Archived,
+];
 
 export const FIXED_NOW = new Date("2026-07-26T14:00:00Z");
 
@@ -47,6 +56,16 @@ export class InMemoryAuditLogWriter implements AuditLogWriter {
   }
 }
 
+type InMemoryTenderFilter = {
+  organizationId: string;
+  status?: string | undefined;
+  internalOwnerId?: string | undefined;
+  idsFilter?: readonly string[] | undefined;
+  deadlineAfter?: Date | undefined;
+  deadlineBefore?: Date | undefined;
+  overdue?: boolean | undefined;
+};
+
 export class InMemoryTenderRepository implements TenderRepository {
   private readonly tenders = new Map<string, Tender>();
 
@@ -62,14 +81,11 @@ export class InMemoryTenderRepository implements TenderRepository {
     return tender;
   }
 
-  async list(input: {
-    organizationId: string;
-    cursor?: string | undefined;
-    limit: number;
-    status?: string | undefined;
-    internalOwnerId?: string | undefined;
-    search?: string | undefined;
-  }): Promise<TenderPage> {
+  private filtered(input: InMemoryTenderFilter): Tender[] {
+    if (input.idsFilter && input.idsFilter.length === 0) {
+      return [];
+    }
+
     let items = [...this.tenders.values()].filter((tender) => tender.organizationId === input.organizationId);
 
     if (input.status) {
@@ -78,11 +94,37 @@ export class InMemoryTenderRepository implements TenderRepository {
     if (input.internalOwnerId) {
       items = items.filter((tender) => tender.internalOwnerId === input.internalOwnerId);
     }
-    if (input.search) {
-      const needle = input.search.toLowerCase();
-      items = items.filter((tender) => tender.title.toLowerCase().includes(needle));
+    if (input.idsFilter) {
+      const allowed = new Set(input.idsFilter);
+      items = items.filter((tender) => allowed.has(tender.id.value));
+    }
+    if (input.deadlineAfter) {
+      items = items.filter(
+        (tender) => tender.submissionDeadline !== undefined && tender.submissionDeadline >= input.deadlineAfter!,
+      );
+    }
+    if (input.deadlineBefore) {
+      items = items.filter(
+        (tender) => tender.submissionDeadline !== undefined && tender.submissionDeadline <= input.deadlineBefore!,
+      );
+    }
+    if (input.overdue) {
+      const now = new Date();
+      items = items.filter(
+        (tender) =>
+          tender.submissionDeadline !== undefined &&
+          tender.submissionDeadline < now &&
+          !OVERDUE_EXEMPT_STATUSES.includes(tender.status),
+      );
     }
 
+    return items;
+  }
+
+  async list(
+    input: InMemoryTenderFilter & { cursor?: string | undefined; limit: number },
+  ): Promise<TenderPage> {
+    const items = this.filtered(input);
     items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     const startIndex = input.cursor ? items.findIndex((tender) => tender.id.value === input.cursor) + 1 : 0;
@@ -92,8 +134,33 @@ export class InMemoryTenderRepository implements TenderRepository {
     return { items: page, nextCursor: hasNextPage ? (page[page.length - 1]?.id.value ?? null) : null };
   }
 
+  async count(input: InMemoryTenderFilter): Promise<number> {
+    return this.filtered(input).length;
+  }
+
+  async countByStatus(organizationId: string): Promise<Record<string, number>> {
+    const counts: Record<string, number> = {};
+    for (const tender of this.tenders.values()) {
+      if (tender.organizationId !== organizationId) continue;
+      counts[tender.status] = (counts[tender.status] ?? 0) + 1;
+    }
+    return counts;
+  }
+
   async save(tender: Tender): Promise<void> {
     this.tenders.set(tender.id.value, tender);
+  }
+}
+
+/** Implémentation en mémoire du même contrat que PrismaIlikeTenderSearchProvider — une
+ *  correspondance texte simple, cohérente avec l'implémentation réelle pour les tests. */
+export class InMemoryTenderSearchProvider implements TenderSearchProvider {
+  constructor(private readonly repository: InMemoryTenderRepository) {}
+
+  async findMatchingTenderIds(criteria: TenderSearchCriteria): Promise<string[]> {
+    const needle = criteria.query.toLowerCase();
+    const page = await this.repository.list({ organizationId: criteria.organizationId, limit: 500 });
+    return page.items.filter((tender) => tender.title.toLowerCase().includes(needle)).map((tender) => tender.id.value);
   }
 }
 
@@ -145,6 +212,13 @@ export class InMemoryRiskRepository implements RiskRepository {
     );
   }
 
+  async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<Risk[]> {
+    const allowed = new Set(input.tenderIds);
+    return [...this.risks.values()].filter(
+      (risk) => risk.organizationId === input.organizationId && allowed.has(risk.tenderId),
+    );
+  }
+
   async save(risk: Risk): Promise<void> {
     this.risks.set(risk.id, risk);
   }
@@ -171,6 +245,13 @@ export class InMemoryAlertRepository implements AlertRepository {
     );
   }
 
+  async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<Alert[]> {
+    const allowed = new Set(input.tenderIds);
+    return [...this.alerts.values()].filter(
+      (alert) => alert.organizationId === input.organizationId && allowed.has(alert.tenderId),
+    );
+  }
+
   async save(alert: Alert): Promise<void> {
     this.alerts.set(alert.id, alert);
   }
@@ -187,6 +268,11 @@ export class InMemoryChecklistItemRepository implements ChecklistItemRepository 
     return this.items;
   }
 
+  async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<ChecklistItem[]> {
+    const allowed = new Set(input.tenderIds);
+    return this.items.filter((item) => item.organizationId === input.organizationId && allowed.has(item.tenderId));
+  }
+
   async save(): Promise<void> {}
 }
 
@@ -199,6 +285,14 @@ export class InMemoryRequestedDocumentRepository implements RequestedDocumentRep
 
   async listByTender(): Promise<RequestedDocument[]> {
     return this.documents;
+  }
+
+  async listByTenderIds(input: {
+    organizationId: string;
+    tenderIds: readonly string[];
+  }): Promise<RequestedDocument[]> {
+    const allowed = new Set(input.tenderIds);
+    return this.documents.filter((doc) => doc.organizationId === input.organizationId && allowed.has(doc.tenderId));
   }
 
   async save(): Promise<void> {}
@@ -217,6 +311,13 @@ export class InMemoryAwardCriterionRepository implements AwardCriterionRepositor
     return this.criteria;
   }
 
+  async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<AwardCriterion[]> {
+    const allowed = new Set(input.tenderIds);
+    return this.criteria.filter(
+      (criterion) => criterion.organizationId === input.organizationId && allowed.has(criterion.tenderId),
+    );
+  }
+
   async save(): Promise<void> {}
 
   async delete(): Promise<void> {}
@@ -231,6 +332,13 @@ export class InMemoryMilestoneRepository implements MilestoneRepository {
 
   async listByTender(): Promise<Milestone[]> {
     return this.milestones;
+  }
+
+  async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<Milestone[]> {
+    const allowed = new Set(input.tenderIds);
+    return this.milestones.filter(
+      (milestone) => milestone.organizationId === input.organizationId && allowed.has(milestone.tenderId),
+    );
   }
 
   async save(): Promise<void> {}

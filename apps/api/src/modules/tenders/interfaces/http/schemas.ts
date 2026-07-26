@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const IdParamSchema = z.string().uuid();
 
-const TENDER_STATUSES = [
+export const TENDER_STATUSES = [
   "DRAFT",
   "IN_ANALYSIS",
   "READY",
@@ -53,12 +53,23 @@ export const ListTendersQuerySchema = z
     status: z.enum(TENDER_STATUSES).optional(),
     internalOwnerId: z.string().uuid().optional(),
     search: z.string().trim().min(1).max(200).optional(),
+    deadlineAfter: z.string().datetime().optional(),
     deadlineBefore: z.string().datetime().optional(),
-    sort: z.enum(["createdAt", "submissionDeadline", "title"]).optional(),
+    overdue: z.coerce.boolean().optional(),
+    sort: z.enum(["createdAt", "submissionDeadline", "title", "updatedAt"]).optional(),
     sortDirection: z.enum(["asc", "desc"]).optional(),
   })
   .strict();
 export type ListTendersQuery = z.infer<typeof ListTendersQuerySchema>;
+
+export const TenderBoardQuerySchema = z
+  .object({
+    search: z.string().trim().min(1).max(200).optional(),
+    internalOwnerId: z.string().uuid().optional(),
+    limitPerColumn: z.coerce.number().int().min(1).max(200).optional(),
+  })
+  .strict();
+export type TenderBoardQuery = z.infer<typeof TenderBoardQuerySchema>;
 
 export const CreateTenderLotBodySchema = z
   .object({

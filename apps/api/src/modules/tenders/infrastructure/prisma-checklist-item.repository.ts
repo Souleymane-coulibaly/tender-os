@@ -67,6 +67,14 @@ export class PrismaChecklistItemRepository implements ChecklistItemRepository {
     return records.map(toDomain);
   }
 
+  async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<ChecklistItem[]> {
+    if (input.tenderIds.length === 0) return [];
+    const records = await this.prisma.tenderChecklistItem.findMany({
+      where: { organizationId: input.organizationId, tenderId: { in: [...input.tenderIds] } },
+    });
+    return records.map(toDomain);
+  }
+
   async save(item: ChecklistItem): Promise<void> {
     const data = toPersistence(item);
     await this.prisma.tenderChecklistItem.upsert({ where: { id: data.id }, create: data, update: data });
