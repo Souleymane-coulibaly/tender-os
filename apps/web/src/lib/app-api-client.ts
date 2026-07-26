@@ -52,10 +52,14 @@ export async function appApiFetch<T>(path: string, init?: RequestInit): Promise<
     throw new AppApiError(400, "ORGANIZATION_ID_HEADER_REQUIRED", "No organization selected.");
   }
 
+  // FormData (upload multipart d'un Document) ne doit jamais recevoir un Content-Type manuel :
+  // fetch/undici calcule seul la frontiere multipart correcte a partir du corps.
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...(init?.body && !isFormData ? { "Content-Type": "application/json" } : {}),
       Authorization: `Bearer ${token}`,
       "X-Organization-Id": organizationId,
       ...init?.headers,

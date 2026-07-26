@@ -1,0 +1,59 @@
+import { Module } from "@nestjs/common";
+import { IdentityModule } from "../identity";
+import { MembershipsModule } from "../memberships";
+import { TendersModule } from "../tenders";
+import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
+import { DOCUMENT_REPOSITORY } from "./application/ports/document.repository";
+import { DOCUMENT_TENDER_ASSOCIATION_REPOSITORY } from "./application/ports/document-tender-association.repository";
+import { DOCUMENT_VERSION_REPOSITORY } from "./application/ports/document-version.repository";
+import { STORAGE_PROVIDER } from "./application/ports/storage-provider";
+
+import { AddDocumentVersionUseCase } from "./application/use-cases/add-document-version.use-case";
+import { ArchiveDocumentUseCase } from "./application/use-cases/archive-document.use-case";
+import { AttachDocumentToTenderUseCase } from "./application/use-cases/attach-document-to-tender.use-case";
+import { CreateDocumentWithFirstVersionUseCase } from "./application/use-cases/create-document-with-first-version.use-case";
+import { DeleteDocumentUseCase } from "./application/use-cases/delete-document.use-case";
+import { DetachDocumentFromTenderUseCase } from "./application/use-cases/detach-document-from-tender.use-case";
+import { DownloadDocumentVersionUseCase } from "./application/use-cases/download-document-version.use-case";
+import { GetDocumentUseCase } from "./application/use-cases/get-document.use-case";
+import { ListDocumentVersionsUseCase } from "./application/use-cases/list-document-versions.use-case";
+import { ListOrganizationDocumentsUseCase } from "./application/use-cases/list-organization-documents.use-case";
+import { ListTenderDocumentsUseCase } from "./application/use-cases/list-tender-documents.use-case";
+import { RestoreDocumentUseCase } from "./application/use-cases/restore-document.use-case";
+import { UpdateDocumentMetadataUseCase } from "./application/use-cases/update-document-metadata.use-case";
+
+import { LocalFilesystemStorageProvider } from "./infrastructure/local-filesystem-storage.provider";
+import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
+import { PrismaDocumentRepository } from "./infrastructure/prisma-document.repository";
+import { PrismaDocumentTenderAssociationRepository } from "./infrastructure/prisma-document-tender-association.repository";
+import { PrismaDocumentVersionRepository } from "./infrastructure/prisma-document-version.repository";
+
+import { DocumentsController } from "./interfaces/http/documents.controller";
+import { TenderDocumentsController } from "./interfaces/http/tender-documents.controller";
+
+@Module({
+  imports: [IdentityModule, MembershipsModule, TendersModule],
+  controllers: [DocumentsController, TenderDocumentsController],
+  providers: [
+    CreateDocumentWithFirstVersionUseCase,
+    AddDocumentVersionUseCase,
+    GetDocumentUseCase,
+    ListOrganizationDocumentsUseCase,
+    ListTenderDocumentsUseCase,
+    UpdateDocumentMetadataUseCase,
+    ArchiveDocumentUseCase,
+    RestoreDocumentUseCase,
+    DeleteDocumentUseCase,
+    ListDocumentVersionsUseCase,
+    DownloadDocumentVersionUseCase,
+    AttachDocumentToTenderUseCase,
+    DetachDocumentFromTenderUseCase,
+
+    { provide: DOCUMENT_REPOSITORY, useClass: PrismaDocumentRepository },
+    { provide: DOCUMENT_VERSION_REPOSITORY, useClass: PrismaDocumentVersionRepository },
+    { provide: DOCUMENT_TENDER_ASSOCIATION_REPOSITORY, useClass: PrismaDocumentTenderAssociationRepository },
+    { provide: STORAGE_PROVIDER, useClass: LocalFilesystemStorageProvider },
+    { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
+  ],
+})
+export class DocumentsModule {}

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { appApiFetch } from "../../../../../lib/app-api-client";
+import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
+import { canUploadOrEditDocument, type DocumentSummary } from "../../../../../lib/documents-types";
 import {
   TENDER_STATUS_LABELS,
   type Alert,
@@ -19,6 +20,7 @@ import { AlertsSection } from "./alerts-section";
 import { ArchiveButton } from "./archive-button";
 import { ChecklistSection } from "./checklist-section";
 import { CriteriaSection } from "./criteria-section";
+import { DocumentsSection } from "./documents-section";
 import { LotsSection } from "./lots-section";
 import { MilestonesSection } from "./milestones-section";
 import { RequestedDocumentsSection } from "./requested-documents-section";
@@ -53,9 +55,11 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   let alerts: Alert[];
   let readiness: Readiness;
   let history: StatusHistoryEntry[];
+  let documents: DocumentSummary[];
+  let role: string | undefined;
 
   try {
-    [tender, lots, checklistItems, criteria, requestedDocuments, milestones, risks, alerts, readiness, history] =
+    [tender, lots, checklistItems, criteria, requestedDocuments, milestones, risks, alerts, readiness, history, documents, role] =
       await Promise.all([
         appApiFetch<Tender>(`/api/v1/tenders/${id}`),
         appApiFetch<TenderLot[]>(`/api/v1/tenders/${id}/lots`),
@@ -67,6 +71,8 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         appApiFetch<Alert[]>(`/api/v1/tenders/${id}/alerts`),
         appApiFetch<Readiness>(`/api/v1/tenders/${id}/readiness`),
         appApiFetch<StatusHistoryEntry[]>(`/api/v1/tenders/${id}/history`),
+        appApiFetch<DocumentSummary[]>(`/api/v1/tenders/${id}/documents`),
+        getCurrentMembershipRole(),
       ]);
   } catch (error) {
     return <ApiErrorState error={error} />;
@@ -113,6 +119,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         <ChecklistSection tenderId={tender.id} items={checklistItems} />
         <CriteriaSection tenderId={tender.id} criteria={criteria} />
         <RequestedDocumentsSection tenderId={tender.id} documents={requestedDocuments} />
+        <DocumentsSection tenderId={tender.id} documents={documents} canManage={canUploadOrEditDocument(role)} />
         <MilestonesSection tenderId={tender.id} milestones={milestones} />
         <RisksSection tenderId={tender.id} risks={risks} />
         <AlertsSection tenderId={tender.id} alerts={alerts} />

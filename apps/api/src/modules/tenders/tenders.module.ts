@@ -144,5 +144,9 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     { provide: TENDER_STATUS_HISTORY_REPOSITORY, useClass: PrismaTenderStatusHistoryRepository },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
   ],
+  // GetTenderUseCase est réexporté uniquement pour que le module Documents puisse vérifier
+  // qu'un Tender existe et appartient à l'organisation active avant une association — même
+  // motif que les réexports déjà pratiqués par Memberships (voir index.ts).
+  exports: [GetTenderUseCase],
 })
 export class TendersModule {}

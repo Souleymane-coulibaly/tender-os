@@ -6,8 +6,11 @@
 // Platform Administration (aucune documentation préexistante — table dédiée, distincte
 // de Memberships, voir modules/platform-administration),
 // Tenders (premier vertical slice "préparation de réponse" — statuts et périmètre propres
-// à ce module, distincts du `tenders` de découverte documenté en §8.3 ; voir modules/tenders).
-// Aucun autre module métier (Invitations, Documents, AI, ...)
+// à ce module, distincts du `tenders` de découverte documenté en §8.3 ; voir modules/tenders),
+// Documents (gestion documentaire, versioning, associations Tender — voir modules/documents,
+// docs/04-architecture/DOCUMENTS_MODULE.md ; fondation pour de futurs modules IA/Knowledge,
+// aucune extraction/OCR/embedding implémentés ici).
+// Aucun autre module métier (Invitations, IA, Billing, ...)
 // n'est défini ici — voir skills/platform-foundation/DATABASE_PATTERNS.md avant d'en ajouter.
 // Prisma reste confiné à la couche Infrastructure (skills/platform-foundation/ARCHITECTURE_RULES.md).
 
@@ -100,6 +103,7 @@ model Organization {
 
   memberships OrganizationMembership[]
   tenders     Tender[]
+  documents   Document[]
   auditLogs   AuditLog[]
 
   @@map("organizations")
@@ -287,14 +291,15 @@ model Tender {
   /// Concurrence optimiste (docs/04-architecture/DATABASE_DESIGN.md §23 — Tender y figure explicitement).
   version Int @default(1)
 
-  lots               TenderLot[]
-  checklistItems     TenderChecklistItem[]
-  awardCriteria      TenderAwardCriterion[]
-  requestedDocuments TenderRequestedDocument[]
-  milestones         TenderMilestone[]
-  risks              TenderRisk[]
-  alerts             TenderAlert[]
-  statusHistory      TenderStatusHistoryEntry[]
+  lots                 TenderLot[]
+  checklistItems       TenderChecklistItem[]
+  awardCriteria        TenderAwardCriterion[]
+  requestedDocuments   TenderRequestedDocument[]
+  milestones           TenderMilestone[]
+  risks                TenderRisk[]
+  alerts               TenderAlert[]
+  statusHistory        TenderStatusHistoryEntry[]
+  documentAssociations DocumentTenderAssociation[]
 
   @@index([organizationId, status])
   @@index([organizationId, submissionDeadline])
@@ -380,7 +385,8 @@ model TenderAwardCriterion {
 
 /// Référence métier vers une pièce attendue dans la réponse — fusionne §8 "Pièces demandées"
 /// et §9 "Références documentaires" de la mission (champs quasi identiques). Aucun stockage
-/// binaire : `documentId` est un simple uuid facultatif, sans FK (module Documents non implémenté).
+/// binaire ici : `documentId` référence le module Documents (FK ajoutée avec ce module —
+/// décision validée lors de la conception Documents §V.3).
 model TenderRequestedDocument {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
@@ -398,7 +404,8 @@ model TenderRequestedDocument {
   /// PENDING | PROVIDED | VALIDATED | REJECTED
   status String @db.VarChar(30)
 
-  documentId String? @map("document_id") @db.Uuid
+  documentId String?   @map("document_id") @db.Uuid
+  document   Document? @relation(fields: [documentId], references: [id])
 
   displayOrder Int @default(0) @map("display_order")
 
@@ -501,4 +508,118 @@ model TenderStatusHistoryEntry {
 
   @@index([organizationId, tenderId, changedAt])
   @@map("tender_status_history")
+}
+
+// ---------------------------------------------------------------------------------------
+// Module Documents (conception validée — voir docs/04-architecture/DOCUMENTS_MODULE.md).
+// Document reste indépendant du fournisseur de stockage : seule une `storageKey` opaque est
+// persistée, jamais un chemin ou une configuration. DocumentDomain volontairement limité à
+// 5 valeurs génériques ; la classification métier fine (RC, CCAP, KBIS, CV...) est portée par
+// `category`, un champ libre (suggestions côté frontend uniquement, aucune contrainte en base).
+// Statut réservé au cycle de vie actif/archivé ; la suppression logique passe par `deletedAt`
+// (même précédent que User/Organization), jamais un 3ᵉ statut.
+// ---------------------------------------------------------------------------------------
+
+/// Document logique, indépendant de ses versions physiques.
+model Document {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  title       String  @db.VarChar(500)
+  description String?
+
+  /// USER_UPLOAD | DCE | TEMPLATE | GENERATED | IMPORTED
+  origin String @db.VarChar(30)
+  /// TENDER | ORGANIZATION | KNOWLEDGE | TEMPLATE | GENERATED — classification large ;
+  /// la classification métier fine est portée par `category` (champ libre ci-dessous).
+  domain String @db.VarChar(30)
+  /// Champ libre (ex. RC, CCAP, CCTP, KBIS, CV...) — aucune contrainte en base, suggestions
+  /// gérées côté frontend (conception §V.1).
+  category String? @db.VarChar(100)
+
+  /// ACTIVE | ARCHIVED — voir suppression logique via `deletedAt` ci-dessous.
+  status String @db.VarChar(20)
+
+  /// Nullable en base uniquement pour permettre le bootstrap transactionnel de la création
+  /// (le Document doit exister avant que sa première DocumentVersion ne puisse le référencer) —
+  /// jamais nul une fois `createWithInitialVersion` terminé avec succès.
+  currentVersionId     String?          @map("current_version_id") @db.Uuid
+  currentVersion       DocumentVersion? @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  currentVersionNumber Int              @default(0) @map("current_version_number")
+
+  createdByUserId String  @map("created_by_user_id") @db.Uuid
+  updatedByUserId String? @map("updated_by_user_id") @db.Uuid
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  archivedAt DateTime? @map("archived_at")
+  /// Suppression logique (même précédent que User.deletedAt/Organization.deletedAt) — jamais
+  /// exposé dans les listes normales, protège aussi le téléchargement (conception §F).
+  deletedAt DateTime? @map("deleted_at")
+
+  versions                    DocumentVersion[]           @relation("AllVersions")
+  tenderAssociations          DocumentTenderAssociation[]
+  requestedDocumentReferences TenderRequestedDocument[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, domain])
+  @@index([organizationId, origin])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, createdByUserId])
+  @@map("documents")
+}
+
+/// Version immuable d'un fichier précis — pas de `updatedAt` : l'absence même de ce champ
+/// matérialise l'immuabilité (aucune mutation possible après création).
+model DocumentVersion {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  documentId String   @map("document_id") @db.Uuid
+  document   Document @relation("AllVersions", fields: [documentId], references: [id], onDelete: Cascade)
+
+  versionNumber Int @map("version_number")
+
+  originalFilename  String @map("original_filename") @db.VarChar(255)
+  sanitizedFilename String @map("sanitized_filename") @db.VarChar(255)
+  mimeType          String @map("mime_type") @db.VarChar(160)
+  extension         String @db.VarChar(20)
+  sizeBytes         Int    @map("size_bytes")
+  /// SHA-256 hexadécimal — détection de doublon au sein d'un même document, jamais un blocage
+  /// automatique (conception §11).
+  checksum   String @db.VarChar(64)
+  /// Opaque, générée côté serveur à partir d'identifiants (jamais du nom de fichier fourni par
+  /// l'utilisateur) — jamais exposée dans une réponse API (conception §M, §22).
+  storageKey String @map("storage_key") @db.VarChar(500)
+
+  uploadedByUserId String @map("uploaded_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  documentsCurrentlyPointingHere Document[] @relation("CurrentVersion")
+
+  @@unique([documentId, versionNumber])
+  @@index([documentId, checksum])
+  @@map("document_versions")
+}
+
+/// Lien many-to-many Document ↔ Tender — ne duplique jamais le fichier physique (conception §D).
+/// L'appartenance à la même organisation n'est pas garantie par une contrainte SQL native
+/// multi-table : elle est vérifiée par AttachDocumentToTenderUseCase avant toute écriture ici.
+model DocumentTenderAssociation {
+  documentId String   @map("document_id") @db.Uuid
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  organizationId  String   @map("organization_id") @db.Uuid
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([documentId, tenderId])
+  @@index([organizationId, tenderId])
+  @@index([organizationId, documentId])
+  @@map("document_tender_associations")
 }

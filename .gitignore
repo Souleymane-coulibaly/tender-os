@@ -12,6 +12,10 @@ out/
 # Prisma
 apps/api/prisma/generated/
 
+# Documents module — stockage local de développement (LocalFilesystemStorageProvider)
+.local-storage/
+apps/api/.local-storage/
+
 # Environment
 .env
 .env.local
