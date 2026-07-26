@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Prisma
+apps/api/prisma/generated/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+pnpm-debug.log*
+
+# Test and coverage
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# Editor / OS
+.DS_Store
+*.pem
+
+# TypeScript
+*.tsbuildinfo

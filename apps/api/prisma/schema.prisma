@@ -1,0 +1,499 @@
+// TenderOS — Prisma schema
+//
+// Modules implémentés : Identity, Authentication (bible/03-domain/domain-model.md,
+// docs/04-architecture/DATABASE_DESIGN.md §5.1), Organizations (docs/04-architecture/DATABASE_DESIGN.md §5.2),
+// Memberships (docs/04-architecture/DATABASE_DESIGN.md §5.3, §6, §21),
+// Platform Administration (aucune documentation préexistante — table dédiée, distincte
+// de Memberships, voir modules/platform-administration),
+// Tenders (premier vertical slice "préparation de réponse" — statuts et périmètre propres
+// à ce module, distincts du `tenders` de découverte documenté en §8.3 ; voir modules/tenders).
+// Aucun autre module métier (Invitations, Documents, AI, ...)
+// n'est défini ici — voir skills/platform-foundation/DATABASE_PATTERNS.md avant d'en ajouter.
+// Prisma reste confiné à la couche Infrastructure (skills/platform-foundation/ARCHITECTURE_RULES.md).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Identité humaine globale, indépendante de toute organisation
+/// (docs/04-architecture/DATABASE_DESIGN.md §5.1 — "users").
+/// L'appartenance à une organisation est gérée par le futur module Memberships.
+model User {
+  id     String @id @default(uuid()) @db.Uuid
+  /// Normalisé en minuscules par le Domain (value object EmailAddress) avant persistance —
+  /// tient lieu d'unicité insensible à la casse sans dépendre de l'extension Postgres citext.
+  email  String @unique @db.VarChar(320)
+
+  displayName String  @map("display_name") @db.VarChar(160)
+  firstName   String? @map("first_name") @db.VarChar(100)
+  lastName    String? @map("last_name") @db.VarChar(100)
+
+  /// INVITED | ACTIVE | SUSPENDED | DEACTIVATED (docs/04-architecture/DATABASE_DESIGN.md §5.1)
+  status String @db.VarChar(30)
+
+  /// Authentification locale par mot de passe (hash scrypt, jamais le mot de passe en clair).
+  /// La documentation autorise explicitement un fournisseur d'identité externe à la place —
+  /// ce champ reste propre à ce mécanisme d'authentification, pas à l'identité elle-même.
+  passwordHash String @map("password_hash")
+
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  lastLoginAt     DateTime? @map("last_login_at")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  sessions               Session[]
+  memberships            OrganizationMembership[]
+  platformAdministrator  PlatformAdministrator?
+
+  @@map("users")
+}
+
+/// Session d'authentification server-side, référencée par le jeton d'accès émis
+/// (bible/04-architecture/system-architecture.md §14 — IdentityProvider.revokeSession).
+model Session {
+  id String @id @default(uuid()) @db.Uuid
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id])
+
+  issuedAt  DateTime  @default(now()) @map("issued_at")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+/// Entreprise cliente de TenderOS, agrégat racine du tenant
+/// (docs/04-architecture/DATABASE_DESIGN.md §5.2, bible/02-product/ubiquitous-language.md).
+/// Ne porte pas de organizationId — c'est elle-même la frontière d'isolation multi-tenant.
+model Organization {
+  id String @id @default(uuid()) @db.Uuid
+
+  name String @db.VarChar(200)
+
+  /// Unique — sert de clé métier lisible (URLs, sous-domaines).
+  slug String @unique @db.VarChar(120)
+
+  legalName          String? @map("legal_name") @db.VarChar(240)
+  registrationNumber String? @map("registration_number") @db.VarChar(100)
+  countryCode        String? @map("country_code") @db.Char(2)
+
+  defaultCurrency String @default("EUR") @map("default_currency") @db.Char(3)
+  defaultTimezone String @map("default_timezone") @db.VarChar(80)
+
+  /// TRIAL | ACTIVE | SUSPENDED | CLOSED (docs/04-architecture/DATABASE_DESIGN.md §5.2)
+  status String @db.VarChar(30)
+
+  settings Json @default("{}")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  memberships OrganizationMembership[]
+  tenders     Tender[]
+  auditLogs   AuditLog[]
+
+  @@map("organizations")
+}
+
+/// Relie un utilisateur à une organisation (docs/04-architecture/DATABASE_DESIGN.md §5.3).
+/// Pas de deletedAt : le retrait est une transition de statut vers REMOVED, pas un soft delete —
+/// la contrainte UNIQUE(organizationId, userId) s'applique donc à toutes les lignes, y compris REMOVED
+/// (empêche explicitement les doublons d'appartenance, y compris après un retrait).
+model OrganizationMembership {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id])
+
+  /// INVITED | ACTIVE | SUSPENDED | EXPIRED | REMOVED (docs/04-architecture/DATABASE_DESIGN.md §5.3)
+  status String @db.VarChar(30)
+
+  joinedAt    DateTime? @map("joined_at")
+  suspendedAt DateTime? @map("suspended_at")
+  /// Accès limité dans le temps (bible/03-domain/permissions.md §22, External Consultant) —
+  /// vérifié à la lecture, aucun job planifié ne fait transiter le statut vers EXPIRED dans cette tranche.
+  expiresAt   DateTime? @map("expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  roles MembershipRole[]
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, status])
+  @@index([userId])
+  @@map("organization_memberships")
+}
+
+/// Rôle attribuable à une Membership — uniquement des rôles système dans cette tranche
+/// (organizationId toujours nul ; les rôles personnalisés par organisation ne sont pas implémentés).
+model Role {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String? @map("organization_id") @db.Uuid
+  code           String  @db.VarChar(100)
+  name           String  @db.VarChar(160)
+
+  /// ORGANIZATION | WORKSPACE (docs/04-architecture/DATABASE_DESIGN.md §6.1) — seul ORGANIZATION est utilisé ici.
+  scope    String  @db.VarChar(30)
+  isSystem Boolean @default(true) @map("is_system")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  rolePermissions RolePermission[]
+  membershipRoles MembershipRole[]
+
+  @@unique([code])
+  @@map("roles")
+}
+
+/// Catalogue des permissions, notation `resource:action` (bible/03-domain/permissions.md §6).
+model Permission {
+  id          String  @id @default(uuid()) @db.Uuid
+  code        String  @unique @db.VarChar(160)
+  resource    String  @db.VarChar(100)
+  action      String  @db.VarChar(100)
+  description String?
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId String @map("role_id") @db.Uuid
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  permissionId String     @map("permission_id") @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+/// Relie une Membership à un rôle d'organisation (docs/04-architecture/DATABASE_DESIGN.md §6.4).
+/// Le Domain impose qu'une Membership n'ait jamais plus d'un rôle actif à la fois dans cette tranche
+/// ("modifier LE rôle d'un membre") — la table reste générique pour rester compatible avec une évolution future.
+model MembershipRole {
+  membershipId String                 @map("membership_id") @db.Uuid
+  membership   OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  roleId String @map("role_id") @db.Uuid
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  assignedBy String?  @map("assigned_by") @db.Uuid
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  @@id([membershipId, roleId])
+  @@map("membership_roles")
+}
+
+/// Journal d'audit append-only (docs/04-architecture/DATABASE_DESIGN.md §21.1, BR-GEN-002).
+/// Sous-ensemble des colonnes documentées : ipAddress/userAgent/traceId omis, aucune source fiable
+/// n'étant disponible dans les use cases actuels sans étendre le contexte de requête (hors périmètre Memberships).
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  actorType    String  @map("actor_type") @db.VarChar(30)
+  actorId      String? @map("actor_id") @db.Uuid
+  action       String  @db.VarChar(160)
+  resourceType String  @map("resource_type") @db.VarChar(100)
+  resourceId   String? @map("resource_id") @db.Uuid
+  result       String  @db.VarChar(30)
+  reasonCode   String? @map("reason_code") @db.VarChar(100)
+  requestId    String? @map("request_id") @db.VarChar(120)
+  metadata     Json    @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
+
+/// Identité d'administration plateforme — distincte de Memberships/roles d'organisation
+/// (mission Platform Administration : "N'ajoute pas ces rôles dans Memberships"). Un OWNER
+/// ou ADMIN d'une organisation cliente n'obtient jamais automatiquement d'accès ici : cette
+/// table est la seule source d'autorisation pour le back-office plateforme.
+model PlatformAdministrator {
+  id String @id @default(uuid()) @db.Uuid
+
+  userId String @unique @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id])
+
+  /// PLATFORM_OWNER | PLATFORM_ADMIN | PLATFORM_SUPPORT (aucun rôle plateforme documenté —
+  /// ensemble minimal proposé et validé lors de cette mission).
+  role String @db.VarChar(30)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_administrators")
+}
+
+/// Appel d'offres — "premier vertical slice" de préparation de réponse (mission Tenders).
+/// Statuts et champs distincts du `tenders` de découverte documenté en §8.3 (module Discovery/
+/// Qualification non implémenté) — voir commentaire d'en-tête de ce fichier.
+/// Toutes les références utilisateur (createdBy, internalOwnerId, ...) restent de simples uuid
+/// sans relation Prisma vers User, à l'image de `AuditLog.actorId` déjà dans ce schéma.
+model Tender {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  title       String  @db.VarChar(500)
+  reference   String? @db.VarChar(255)
+  buyerName   String? @map("buyer_name") @db.VarChar(300)
+  description String?
+
+  publicationDate    DateTime? @map("publication_date")
+  submissionDeadline DateTime? @map("submission_deadline")
+
+  procedureType String? @map("procedure_type") @db.VarChar(80)
+  marketType    String? @map("market_type") @db.VarChar(80)
+
+  estimatedAmount Decimal? @map("estimated_amount") @db.Decimal(19, 4)
+  currency        String?  @db.Char(3)
+
+  internalOwnerId String? @map("internal_owner_id") @db.Uuid
+
+  /// DRAFT | IN_ANALYSIS | READY | IN_PREPARATION | READY_TO_SUBMIT | SUBMITTED | WON | LOST | ARCHIVED
+  status String @db.VarChar(40)
+
+  tags String[]
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  archivedAt DateTime? @map("archived_at")
+
+  /// Concurrence optimiste (docs/04-architecture/DATABASE_DESIGN.md §23 — Tender y figure explicitement).
+  version Int @default(1)
+
+  lots               TenderLot[]
+  checklistItems     TenderChecklistItem[]
+  awardCriteria      TenderAwardCriterion[]
+  requestedDocuments TenderRequestedDocument[]
+  milestones         TenderMilestone[]
+  risks              TenderRisk[]
+  alerts             TenderAlert[]
+  statusHistory      TenderStatusHistoryEntry[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, submissionDeadline])
+  @@index([organizationId, createdAt])
+  @@map("tenders")
+}
+
+model TenderLot {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  lotNumber       String   @map("lot_number") @db.VarChar(80)
+  title           String   @db.VarChar(500)
+  description     String?
+  estimatedAmount Decimal? @map("estimated_amount") @db.Decimal(19, 4)
+  currency        String?  @db.Char(3)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenderId, lotNumber])
+  @@index([organizationId, tenderId])
+  @@map("tender_lots")
+}
+
+model TenderChecklistItem {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  title       String  @db.VarChar(300)
+  description String?
+  required    Boolean @default(false)
+
+  /// TODO | IN_PROGRESS | COMPLETED | NOT_APPLICABLE
+  status String @db.VarChar(30)
+
+  assignedTo String?   @map("assigned_to") @db.Uuid
+  dueDate    DateTime? @map("due_date")
+  comment    String?
+
+  completedAt DateTime? @map("completed_at")
+  completedBy String?   @map("completed_by") @db.Uuid
+
+  displayOrder Int @default(0) @map("display_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, tenderId, displayOrder])
+  @@map("tender_checklist_items")
+}
+
+model TenderAwardCriterion {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  name        String  @db.VarChar(300)
+  description String?
+  /// Pondération en pourcentage (0-100) — aucune règle de somme totale n'est documentée.
+  weight      Decimal @db.Decimal(5, 2)
+
+  parentCriterionId String? @map("parent_criterion_id") @db.Uuid
+
+  displayOrder Int @default(0) @map("display_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, tenderId, displayOrder])
+  @@map("tender_award_criteria")
+}
+
+/// Référence métier vers une pièce attendue dans la réponse — fusionne §8 "Pièces demandées"
+/// et §9 "Références documentaires" de la mission (champs quasi identiques). Aucun stockage
+/// binaire : `documentId` est un simple uuid facultatif, sans FK (module Documents non implémenté).
+model TenderRequestedDocument {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  name         String  @db.VarChar(300)
+  category     String? @db.VarChar(100)
+  documentType String? @map("document_type") @db.VarChar(100)
+  required     Boolean @default(false)
+  description  String?
+
+  expirationDate DateTime? @map("expiration_date")
+
+  /// PENDING | PROVIDED | VALIDATED | REJECTED
+  status String @db.VarChar(30)
+
+  documentId String? @map("document_id") @db.Uuid
+
+  displayOrder Int @default(0) @map("display_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, tenderId, displayOrder])
+  @@map("tender_requested_documents")
+}
+
+model TenderMilestone {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  title       String  @db.VarChar(300)
+  description String?
+  date        DateTime
+
+  /// SUBMISSION_DEADLINE | QUESTION_DEADLINE | MANDATORY_VISIT | INTERNAL_VALIDATION | CUSTOM
+  type String @db.VarChar(40)
+
+  /// PENDING | DONE — le dépassement ("MISSED") est calculé à la lecture (date < now), jamais
+  /// stocké, pour éviter un job planifié (même principe que l'expiration de Membership).
+  status String @db.VarChar(20)
+
+  responsibleUserId String? @map("responsible_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, tenderId, date])
+  @@map("tender_milestones")
+}
+
+model TenderRisk {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  title       String  @db.VarChar(300)
+  description String?
+
+  /// LOW | MEDIUM | HIGH | CRITICAL
+  severity String @db.VarChar(20)
+  source   String? @db.VarChar(120)
+
+  /// OPEN | MITIGATED | RESOLVED | ACCEPTED
+  status String @db.VarChar(20)
+
+  mitigation String?
+  assignedTo String?   @map("assigned_to") @db.Uuid
+  resolvedAt DateTime? @map("resolved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, tenderId, status])
+  @@map("tender_risks")
+}
+
+model TenderAlert {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  type String @db.VarChar(60)
+
+  /// CRITICAL | WARNING | INFO
+  severity String  @db.VarChar(20)
+  message  String
+  source   String? @db.VarChar(120)
+
+  resolved   Boolean   @default(false)
+  resolvedAt DateTime? @map("resolved_at")
+  resolvedBy String?   @map("resolved_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, tenderId, resolved])
+  @@map("tender_alerts")
+}
+
+/// Historique des changements de statut — reprend le modèle documenté (§8.7).
+model TenderStatusHistoryEntry {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  previousStatus String? @map("previous_status") @db.VarChar(40)
+  newStatus      String  @map("new_status") @db.VarChar(40)
+  reason         String?
+
+  changedBy String   @map("changed_by") @db.Uuid
+  changedAt DateTime @default(now()) @map("changed_at")
+
+  @@index([organizationId, tenderId, changedAt])
+  @@map("tender_status_history")
+}

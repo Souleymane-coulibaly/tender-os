@@ -1,0 +1,139 @@
+import { Module } from "@nestjs/common";
+import { IdentityModule } from "../identity";
+import { MembershipsModule } from "../memberships";
+import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
+import { ALERT_REPOSITORY } from "./application/ports/alert.repository";
+import { AWARD_CRITERION_REPOSITORY } from "./application/ports/award-criterion.repository";
+import { CHECKLIST_ITEM_REPOSITORY } from "./application/ports/checklist-item.repository";
+import { MILESTONE_REPOSITORY } from "./application/ports/milestone.repository";
+import { REQUESTED_DOCUMENT_REPOSITORY } from "./application/ports/requested-document.repository";
+import { RISK_REPOSITORY } from "./application/ports/risk.repository";
+import { TENDER_LOT_REPOSITORY } from "./application/ports/tender-lot.repository";
+import { TENDER_STATUS_HISTORY_REPOSITORY } from "./application/ports/tender-status-history.repository";
+import { TENDER_REPOSITORY } from "./application/ports/tender.repository";
+
+import { ArchiveTenderUseCase } from "./application/use-cases/archive-tender.use-case";
+import { ChangeTenderStatusUseCase } from "./application/use-cases/change-tender-status.use-case";
+import { CreateTenderUseCase } from "./application/use-cases/create-tender.use-case";
+import { GetTenderUseCase } from "./application/use-cases/get-tender.use-case";
+import { GetTenderReadinessUseCase } from "./application/use-cases/get-tender-readiness.use-case";
+import { ListTendersUseCase } from "./application/use-cases/list-tenders.use-case";
+import { ListTenderStatusHistoryUseCase } from "./application/use-cases/list-tender-status-history.use-case";
+import { UpdateTenderUseCase } from "./application/use-cases/update-tender.use-case";
+
+import { CreateTenderLotUseCase } from "./application/use-cases/create-tender-lot.use-case";
+import { DeleteTenderLotUseCase, UpdateTenderLotUseCase } from "./application/use-cases/update-tender-lot.use-case";
+import { ListTenderLotsUseCase } from "./application/use-cases/list-tender-lots.use-case";
+
+import { CreateChecklistItemUseCase } from "./application/use-cases/create-checklist-item.use-case";
+import {
+  ChangeChecklistItemStatusUseCase,
+  UpdateChecklistItemUseCase,
+} from "./application/use-cases/update-checklist-item.use-case";
+import { ListChecklistItemsUseCase } from "./application/use-cases/list-checklist-items.use-case";
+
+import { CreateAwardCriterionUseCase } from "./application/use-cases/create-award-criterion.use-case";
+import {
+  DeleteAwardCriterionUseCase,
+  UpdateAwardCriterionUseCase,
+} from "./application/use-cases/update-award-criterion.use-case";
+import { ListAwardCriteriaUseCase } from "./application/use-cases/list-award-criteria.use-case";
+
+import { CreateRequestedDocumentUseCase } from "./application/use-cases/create-requested-document.use-case";
+import {
+  ChangeRequestedDocumentStatusUseCase,
+  DeleteRequestedDocumentUseCase,
+  UpdateRequestedDocumentUseCase,
+} from "./application/use-cases/update-requested-document.use-case";
+import { ListRequestedDocumentsUseCase } from "./application/use-cases/list-requested-documents.use-case";
+
+import { CreateMilestoneUseCase } from "./application/use-cases/create-milestone.use-case";
+import {
+  DeleteMilestoneUseCase,
+  MarkMilestoneDoneUseCase,
+  UpdateMilestoneUseCase,
+} from "./application/use-cases/update-milestone.use-case";
+import { ListMilestonesUseCase } from "./application/use-cases/list-milestones.use-case";
+
+import { CreateRiskUseCase } from "./application/use-cases/create-risk.use-case";
+import { ChangeRiskStatusUseCase, UpdateRiskUseCase } from "./application/use-cases/update-risk.use-case";
+import { ListRisksUseCase } from "./application/use-cases/list-risks.use-case";
+
+import { CreateAlertUseCase } from "./application/use-cases/create-alert.use-case";
+import { ResolveAlertUseCase } from "./application/use-cases/resolve-alert.use-case";
+import { ListAlertsUseCase } from "./application/use-cases/list-alerts.use-case";
+
+import { PrismaAlertRepository } from "./infrastructure/prisma-alert.repository";
+import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
+import { PrismaAwardCriterionRepository } from "./infrastructure/prisma-award-criterion.repository";
+import { PrismaChecklistItemRepository } from "./infrastructure/prisma-checklist-item.repository";
+import { PrismaMilestoneRepository } from "./infrastructure/prisma-milestone.repository";
+import { PrismaRequestedDocumentRepository } from "./infrastructure/prisma-requested-document.repository";
+import { PrismaRiskRepository } from "./infrastructure/prisma-risk.repository";
+import { PrismaTenderLotRepository } from "./infrastructure/prisma-tender-lot.repository";
+import { PrismaTenderStatusHistoryRepository } from "./infrastructure/prisma-tender-status-history.repository";
+import { PrismaTenderRepository } from "./infrastructure/prisma-tender.repository";
+import { TendersController } from "./interfaces/http/tenders.controller";
+
+@Module({
+  imports: [IdentityModule, MembershipsModule],
+  controllers: [TendersController],
+  providers: [
+    CreateTenderUseCase,
+    UpdateTenderUseCase,
+    GetTenderUseCase,
+    ListTendersUseCase,
+    ChangeTenderStatusUseCase,
+    ArchiveTenderUseCase,
+    ListTenderStatusHistoryUseCase,
+    GetTenderReadinessUseCase,
+
+    CreateTenderLotUseCase,
+    UpdateTenderLotUseCase,
+    DeleteTenderLotUseCase,
+    ListTenderLotsUseCase,
+
+    CreateChecklistItemUseCase,
+    UpdateChecklistItemUseCase,
+    ChangeChecklistItemStatusUseCase,
+    ListChecklistItemsUseCase,
+
+    CreateAwardCriterionUseCase,
+    UpdateAwardCriterionUseCase,
+    DeleteAwardCriterionUseCase,
+    ListAwardCriteriaUseCase,
+
+    CreateRequestedDocumentUseCase,
+    UpdateRequestedDocumentUseCase,
+    ChangeRequestedDocumentStatusUseCase,
+    DeleteRequestedDocumentUseCase,
+    ListRequestedDocumentsUseCase,
+
+    CreateMilestoneUseCase,
+    UpdateMilestoneUseCase,
+    MarkMilestoneDoneUseCase,
+    DeleteMilestoneUseCase,
+    ListMilestonesUseCase,
+
+    CreateRiskUseCase,
+    UpdateRiskUseCase,
+    ChangeRiskStatusUseCase,
+    ListRisksUseCase,
+
+    CreateAlertUseCase,
+    ResolveAlertUseCase,
+    ListAlertsUseCase,
+
+    { provide: TENDER_REPOSITORY, useClass: PrismaTenderRepository },
+    { provide: TENDER_LOT_REPOSITORY, useClass: PrismaTenderLotRepository },
+    { provide: CHECKLIST_ITEM_REPOSITORY, useClass: PrismaChecklistItemRepository },
+    { provide: AWARD_CRITERION_REPOSITORY, useClass: PrismaAwardCriterionRepository },
+    { provide: REQUESTED_DOCUMENT_REPOSITORY, useClass: PrismaRequestedDocumentRepository },
+    { provide: MILESTONE_REPOSITORY, useClass: PrismaMilestoneRepository },
+    { provide: RISK_REPOSITORY, useClass: PrismaRiskRepository },
+    { provide: ALERT_REPOSITORY, useClass: PrismaAlertRepository },
+    { provide: TENDER_STATUS_HISTORY_REPOSITORY, useClass: PrismaTenderStatusHistoryRepository },
+    { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
+  ],
+})
+export class TendersModule {}
