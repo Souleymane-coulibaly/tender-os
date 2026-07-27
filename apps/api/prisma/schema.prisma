@@ -27,10 +27,10 @@ datasource db {
 /// (docs/04-architecture/DATABASE_DESIGN.md §5.1 — "users").
 /// L'appartenance à une organisation est gérée par le futur module Memberships.
 model User {
-  id     String @id @default(uuid()) @db.Uuid
+  id    String @id @default(uuid()) @db.Uuid
   /// Normalisé en minuscules par le Domain (value object EmailAddress) avant persistance —
   /// tient lieu d'unicité insensible à la casse sans dépendre de l'extension Postgres citext.
-  email  String @unique @db.VarChar(320)
+  email String @unique @db.VarChar(320)
 
   displayName String  @map("display_name") @db.VarChar(160)
   firstName   String? @map("first_name") @db.VarChar(100)
@@ -51,9 +51,9 @@ model User {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  sessions               Session[]
-  memberships            OrganizationMembership[]
-  platformAdministrator  PlatformAdministrator?
+  sessions              Session[]
+  memberships           OrganizationMembership[]
+  platformAdministrator PlatformAdministrator?
 
   @@map("users")
 }
@@ -301,6 +301,10 @@ model Tender {
   statusHistory        TenderStatusHistoryEntry[]
   documentAssociations DocumentTenderAssociation[]
 
+  /// AUDIT-007 : contrainte composite support de la FK composée de TenderLot ci-dessous — garantit
+  /// au niveau base de données qu'un TenderLot ne peut jamais référencer un couple
+  /// (tenderId, organizationId) incohérent avec le Tender réel (organizationId dénormalisé).
+  @@unique([id, organizationId])
   @@index([organizationId, status])
   @@index([organizationId, submissionDeadline])
   @@index([organizationId, createdAt])
@@ -316,19 +320,30 @@ model TenderLot {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
   tenderId       String @map("tender_id") @db.Uuid
-  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  /// AUDIT-007 : FK composée (tenderId, organizationId) → Tender(id, organizationId) plutôt
+  /// qu'une simple FK sur tenderId — empêche à la racine (contrainte Postgres, jamais contournable
+  /// par un bug applicatif ou un accès direct à la base) qu'un lot porte un organizationId
+  /// différent de celui du Tender qu'il référence. Voir §K du rapport d'implémentation pour les
+  /// alternatives écartées.
+  tender         Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   lotNumber       String   @map("lot_number") @db.VarChar(80)
   title           String   @db.VarChar(500)
   description     String?
   estimatedAmount Decimal? @map("estimated_amount") @db.Decimal(19, 4)
   currency        String?  @db.Char(3)
+  displayOrder    Int      @default(0) @map("display_order")
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  /// Suppression logique (conception Lots §D) — un lot supprimé reste soumis à la contrainte
+  /// d'unicité ci-dessous : son numéro n'est jamais libéré, ce qui rend RestoreTenderLot
+  /// toujours sûr (jamais de collision possible avec un lot créé entretemps).
+  deletedAt DateTime? @map("deleted_at")
 
   @@unique([tenderId, lotNumber])
   @@index([organizationId, tenderId])
+  @@index([organizationId, tenderId, displayOrder])
   @@map("tender_lots")
 }
 
@@ -422,7 +437,7 @@ model TenderMilestone {
   tenderId       String @map("tender_id") @db.Uuid
   tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
 
-  title       String  @db.VarChar(300)
+  title       String   @db.VarChar(300)
   description String?
   date        DateTime
 
@@ -452,7 +467,7 @@ model TenderRisk {
   description String?
 
   /// LOW | MEDIUM | HIGH | CRITICAL
-  severity String @db.VarChar(20)
+  severity String  @db.VarChar(20)
   source   String? @db.VarChar(120)
 
   /// OPEN | MITIGATED | RESOLVED | ACCEPTED
@@ -530,10 +545,10 @@ model Document {
   description String?
 
   /// USER_UPLOAD | DCE | TEMPLATE | GENERATED | IMPORTED
-  origin String @db.VarChar(30)
+  origin   String  @db.VarChar(30)
   /// TENDER | ORGANIZATION | KNOWLEDGE | TEMPLATE | GENERATED — classification large ;
   /// la classification métier fine est portée par `category` (champ libre ci-dessous).
-  domain String @db.VarChar(30)
+  domain   String  @db.VarChar(30)
   /// Champ libre (ex. RC, CCAP, CCTP, KBIS, CV...) — aucune contrainte en base, suggestions
   /// gérées côté frontend (conception §V.1).
   category String? @db.VarChar(100)
@@ -556,7 +571,7 @@ model Document {
   archivedAt DateTime? @map("archived_at")
   /// Suppression logique (même précédent que User.deletedAt/Organization.deletedAt) — jamais
   /// exposé dans les listes normales, protège aussi le téléchargement (conception §F).
-  deletedAt DateTime? @map("deleted_at")
+  deletedAt  DateTime? @map("deleted_at")
 
   versions                    DocumentVersion[]           @relation("AllVersions")
   tenderAssociations          DocumentTenderAssociation[]
@@ -588,10 +603,10 @@ model DocumentVersion {
   sizeBytes         Int    @map("size_bytes")
   /// SHA-256 hexadécimal — détection de doublon au sein d'un même document, jamais un blocage
   /// automatique (conception §11).
-  checksum   String @db.VarChar(64)
+  checksum          String @db.VarChar(64)
   /// Opaque, générée côté serveur à partir d'identifiants (jamais du nom de fichier fourni par
   /// l'utilisateur) — jamais exposée dans une réponse API (conception §M, §22).
-  storageKey String @map("storage_key") @db.VarChar(500)
+  storageKey        String @map("storage_key") @db.VarChar(500)
 
   uploadedByUserId String @map("uploaded_by_user_id") @db.Uuid
 

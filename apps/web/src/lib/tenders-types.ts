@@ -45,6 +45,7 @@ export type TenderLot = {
   description?: string;
   estimatedAmount?: string;
   currency?: string;
+  displayOrder: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -252,6 +253,13 @@ export type TenderStatistics = {
 const ROLES_ALLOWED_TO_CHANGE_STATUS = ["ORGANIZATION_ADMIN", "BID_MANAGER"];
 
 export function canChangeTenderStatus(role: string | undefined): boolean {
+  return role !== undefined && ROLES_ALLOWED_TO_CHANGE_STATUS.includes(role);
+}
+
+/** AUDIT-005 : les lots reutilisent la permission tender:update (aucune permission dediee,
+ *  decision validee) — memes roles habilites que canChangeTenderStatus. Gate d'affichage
+ *  uniquement ; le backend revalide tender:update a chaque requete quoi que montre l'UI. */
+export function canManageTenderLots(role: string | undefined): boolean {
   return role !== undefined && ROLES_ALLOWED_TO_CHANGE_STATUS.includes(role);
 }
 

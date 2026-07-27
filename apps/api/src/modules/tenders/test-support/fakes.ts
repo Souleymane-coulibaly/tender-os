@@ -7,6 +7,8 @@ import type { Milestone } from "../domain/milestone.entity";
 import type { RequestedDocument } from "../domain/requested-document.entity";
 import type { Risk } from "../domain/risk.entity";
 import type { Tender } from "../domain/tender.aggregate";
+import type { TenderLot } from "../domain/tender-lot.entity";
+import { DuplicateTenderLotNumberError } from "../domain/errors";
 import type { AlertRepository } from "../application/ports/alert.repository";
 import type { AuditLogWriter, TenderAuditLogEntry } from "../application/ports/audit-log-writer";
 import type { AwardCriterionRepository } from "../application/ports/award-criterion.repository";
@@ -19,6 +21,7 @@ import type {
   TenderStatusHistoryEntry,
   TenderStatusHistoryRepository,
 } from "../application/ports/tender-status-history.repository";
+import type { TenderLotRepository } from "../application/ports/tender-lot.repository";
 import type { TenderPage, TenderRepository } from "../application/ports/tender.repository";
 import { TenderStatus } from "../domain/tender-status";
 
@@ -321,6 +324,83 @@ export class InMemoryAwardCriterionRepository implements AwardCriterionRepositor
   async save(): Promise<void> {}
 
   async delete(): Promise<void> {}
+}
+
+/** Reproduit fidèlement le comportement attendu du repository Prisma réel (conception §D, §E) :
+ *  findById exclut toujours les lots supprimés, findByIdIncludingDeleted les inclut, save
+ *  applique la contrainte d'unicité (tenderId, lotNumber) même pour un lot supprimé. */
+export class InMemoryTenderLotRepository implements TenderLotRepository {
+  private readonly lots = new Map<string, TenderLot>();
+
+  async seed(lot: TenderLot): Promise<void> {
+    this.lots.set(lot.id, lot);
+  }
+
+  async findById(input: { organizationId: string; tenderId: string; lotId: string }): Promise<TenderLot | null> {
+    const lot = this.lots.get(input.lotId);
+    if (
+      !lot ||
+      lot.organizationId !== input.organizationId ||
+      lot.tenderId !== input.tenderId ||
+      lot.deletedAt !== undefined
+    ) {
+      return null;
+    }
+    return lot;
+  }
+
+  async findByIdIncludingDeleted(input: {
+    organizationId: string;
+    tenderId: string;
+    lotId: string;
+  }): Promise<TenderLot | null> {
+    const lot = this.lots.get(input.lotId);
+    if (!lot || lot.organizationId !== input.organizationId || lot.tenderId !== input.tenderId) {
+      return null;
+    }
+    return lot;
+  }
+
+  async listByTender(input: { organizationId: string; tenderId: string }): Promise<TenderLot[]> {
+    return [...this.lots.values()]
+      .filter(
+        (lot) => lot.organizationId === input.organizationId && lot.tenderId === input.tenderId && !lot.deletedAt,
+      )
+      .sort((a, b) => a.displayOrder - b.displayOrder);
+  }
+
+  async createAppendedAtEnd(lot: TenderLot): Promise<TenderLot> {
+    const activeCount = (await this.listByTender({ organizationId: lot.organizationId, tenderId: lot.tenderId })).length;
+    lot.reorder(activeCount, lot.updatedAt);
+    await this.save(lot);
+    return lot;
+  }
+
+  async restoreAppendedAtEnd(input: { lot: TenderLot; occurredAt: Date }): Promise<TenderLot> {
+    const activeCount = (
+      await this.listByTender({ organizationId: input.lot.organizationId, tenderId: input.lot.tenderId })
+    ).length;
+    input.lot.restore(activeCount, input.occurredAt);
+    await this.save(input.lot);
+    return input.lot;
+  }
+
+  async save(lot: TenderLot): Promise<void> {
+    const duplicate = [...this.lots.values()].find(
+      (existing) =>
+        existing.id !== lot.id && existing.tenderId === lot.tenderId && existing.lotNumber === lot.lotNumber,
+    );
+    if (duplicate) {
+      throw new DuplicateTenderLotNumberError();
+    }
+    this.lots.set(lot.id, lot);
+  }
+
+  async saveReordered(lots: readonly TenderLot[]): Promise<void> {
+    for (const lot of lots) {
+      this.lots.set(lot.id, lot);
+    }
+  }
 }
 
 export class InMemoryMilestoneRepository implements MilestoneRepository {

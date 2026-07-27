@@ -63,6 +63,7 @@ export type TenderLotSummary = {
   description?: string | undefined;
   estimatedAmount?: string | undefined;
   currency?: string | undefined;
+  displayOrder: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -76,6 +77,7 @@ export function toTenderLotSummary(lot: TenderLot): TenderLotSummary {
     description: lot.description,
     estimatedAmount: lot.estimatedAmount,
     currency: lot.currency,
+    displayOrder: lot.displayOrder,
     createdAt: lot.createdAt.toISOString(),
     updatedAt: lot.updatedAt.toISOString(),
   };

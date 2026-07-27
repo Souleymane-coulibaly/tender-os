@@ -258,6 +258,76 @@ export async function createLotAction(
   return {};
 }
 
+export async function updateLotAction(
+  tenderId: string,
+  lotId: string,
+  _prevState: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
+  const title = formData.get("title");
+  if (typeof title !== "string" || !title.trim()) {
+    return { error: "Le titre est obligatoire." };
+  }
+
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/lots/${lotId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        title: title.trim(),
+        description: optional(formData.get("description")),
+        estimatedAmount: optional(formData.get("estimatedAmount")),
+      }),
+    });
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+
+  revalidatePath(`/app/tenders/${tenderId}`);
+  return {};
+}
+
+/** Suppression logique (conception Lots §D) — jamais physique. */
+export async function deleteLotAction(tenderId: string, lotId: string): Promise<{ error?: string }> {
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/lots/${lotId}`, { method: "DELETE" });
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+
+  revalidatePath(`/app/tenders/${tenderId}`);
+  return {};
+}
+
+/** Repositionne le lot restaure en fin de liste active (conception Lots §E) — jamais a son
+ *  ancienne position. Accessible uniquement depuis l'action "Annuler" qui suit une suppression
+ *  dans la meme session (pas d'ecran dedie aux lots supprimes en V1, conception Lots §G). */
+export async function restoreLotAction(tenderId: string, lotId: string): Promise<{ error?: string }> {
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/lots/${lotId}/restore`, { method: "POST" });
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+
+  revalidatePath(`/app/tenders/${tenderId}`);
+  return {};
+}
+
+/** Envoie toujours la liste complete et ordonnee des lots actifs (conception Lots §E, §F) —
+ *  jamais une position isolee. */
+export async function reorderLotsAction(tenderId: string, lotIds: string[]): Promise<{ error?: string }> {
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/lots/reorder`, {
+      method: "PATCH",
+      body: JSON.stringify({ lotIds }),
+    });
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+
+  revalidatePath(`/app/tenders/${tenderId}`);
+  return {};
+}
+
 // ---- Checklist ----
 
 export async function createChecklistItemAction(

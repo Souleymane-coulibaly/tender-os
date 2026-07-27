@@ -1,21 +1,26 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { TenderNotFoundError } from "../../domain/errors";
+import { TenderLotNotFoundError, TenderNotFoundError } from "../../domain/errors";
 import { TenderPermission } from "../../domain/tender-permission";
 import { toTenderLotSummary, type TenderLotSummary } from "../dtos";
 import { TENDER_LOT_REPOSITORY, type TenderLotRepository } from "../ports/tender-lot.repository";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
 
-export type ListTenderLotsQuery = Readonly<{ organizationId: string; tenderId: string; actorRole: string }>;
+export type GetTenderLotQuery = Readonly<{
+  organizationId: string;
+  tenderId: string;
+  lotId: string;
+  actorRole: string;
+}>;
 
 @Injectable()
-export class ListTenderLotsUseCase {
+export class GetTenderLotUseCase {
   constructor(
     @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
     @Inject(TENDER_LOT_REPOSITORY) private readonly lotRepository: TenderLotRepository,
   ) {}
 
-  async execute(query: ListTenderLotsQuery): Promise<TenderLotSummary[]> {
+  async execute(query: GetTenderLotQuery): Promise<TenderLotSummary> {
     assertHasTenderPermission(query.actorRole, TenderPermission.Read);
 
     const tender = await this.tenderRepository.findById({
@@ -26,11 +31,15 @@ export class ListTenderLotsUseCase {
       throw new TenderNotFoundError();
     }
 
-    const lots = await this.lotRepository.listByTender({
+    const lot = await this.lotRepository.findById({
       organizationId: query.organizationId,
       tenderId: query.tenderId,
+      lotId: query.lotId,
     });
+    if (!lot) {
+      throw new TenderLotNotFoundError();
+    }
 
-    return lots.map(toTenderLotSummary);
+    return toTenderLotSummary(lot);
   }
 }

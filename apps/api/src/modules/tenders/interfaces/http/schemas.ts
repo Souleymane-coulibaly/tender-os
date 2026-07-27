@@ -83,6 +83,12 @@ export const CreateTenderLotBodySchema = z
 export type CreateTenderLotBody = z.infer<typeof CreateTenderLotBodySchema>;
 export const UpdateTenderLotBodySchema = CreateTenderLotBodySchema.omit({ lotNumber: true }).partial();
 export type UpdateTenderLotBody = z.infer<typeof UpdateTenderLotBodySchema>;
+export const RestoreTenderLotBodySchema = z.object({}).strict().default({});
+export type RestoreTenderLotBody = z.infer<typeof RestoreTenderLotBodySchema>;
+// displayOrder n'est jamais accepté par Create/Update (conception Lots §D) — seul ce schéma,
+// dédié au réordonnancement, en modifie la valeur, via la liste complète et ordonnée des lots actifs.
+export const ReorderTenderLotsBodySchema = z.object({ lotIds: z.array(z.string().uuid()).min(1) }).strict();
+export type ReorderTenderLotsBody = z.infer<typeof ReorderTenderLotsBodySchema>;
 
 export const CreateChecklistItemBodySchema = z
   .object({

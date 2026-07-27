@@ -14,10 +14,6 @@ import { GetTenderStatisticsUseCase } from "../../application/use-cases/get-tend
 import { ListTenderStatusHistoryUseCase } from "../../application/use-cases/list-tender-status-history.use-case";
 import { UpdateTenderUseCase } from "../../application/use-cases/update-tender.use-case";
 
-import { CreateTenderLotUseCase } from "../../application/use-cases/create-tender-lot.use-case";
-import { DeleteTenderLotUseCase, UpdateTenderLotUseCase } from "../../application/use-cases/update-tender-lot.use-case";
-import { ListTenderLotsUseCase } from "../../application/use-cases/list-tender-lots.use-case";
-
 import { CreateChecklistItemUseCase } from "../../application/use-cases/create-checklist-item.use-case";
 import {
   ChangeChecklistItemStatusUseCase,
@@ -69,7 +65,6 @@ import {
   presentTender,
   presentTenderBoard,
   presentTenderListItem,
-  presentTenderLot,
   presentTenderStatistics,
 } from "./presenters";
 import { TendersErrorFilter } from "./tenders-error.filter";
@@ -86,7 +81,6 @@ import {
   CreateRequestedDocumentBodySchema,
   CreateRiskBodySchema,
   CreateTenderBodySchema,
-  CreateTenderLotBodySchema,
   IdParamSchema,
   ListTendersQuerySchema,
   TenderBoardQuerySchema,
@@ -96,7 +90,6 @@ import {
   UpdateRequestedDocumentBodySchema,
   UpdateRiskBodySchema,
   UpdateTenderBodySchema,
-  UpdateTenderLotBodySchema,
   type ArchiveTenderBody,
   type ChangeChecklistItemStatusBody,
   type ChangeRequestedDocumentStatusBody,
@@ -109,7 +102,6 @@ import {
   type CreateRequestedDocumentBody,
   type CreateRiskBody,
   type CreateTenderBody,
-  type CreateTenderLotBody,
   type ListTendersQuery,
   type TenderBoardQuery,
   type UpdateAwardCriterionBody,
@@ -118,7 +110,6 @@ import {
   type UpdateRequestedDocumentBody,
   type UpdateRiskBody,
   type UpdateTenderBody,
-  type UpdateTenderLotBody,
 } from "./schemas";
 
 @Controller("tenders")
@@ -136,11 +127,6 @@ export class TendersController {
     private readonly archiveTenderUseCase: ArchiveTenderUseCase,
     private readonly listTenderStatusHistoryUseCase: ListTenderStatusHistoryUseCase,
     private readonly getTenderReadinessUseCase: GetTenderReadinessUseCase,
-
-    private readonly createTenderLotUseCase: CreateTenderLotUseCase,
-    private readonly updateTenderLotUseCase: UpdateTenderLotUseCase,
-    private readonly deleteTenderLotUseCase: DeleteTenderLotUseCase,
-    private readonly listTenderLotsUseCase: ListTenderLotsUseCase,
 
     private readonly createChecklistItemUseCase: CreateChecklistItemUseCase,
     private readonly updateChecklistItemUseCase: UpdateChecklistItemUseCase,
@@ -336,71 +322,6 @@ export class TendersController {
       actorRole: membership.role,
     });
     return presentReadiness(result);
-  }
-
-  // ---- Lots ----
-
-  @Post(":tenderId/lots")
-  @HttpCode(HttpStatus.CREATED)
-  async createLot(
-    @CurrentMembershipContext() membership: MembershipContext,
-    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
-    @Body(new ZodValidationPipe(CreateTenderLotBodySchema)) body: CreateTenderLotBody,
-  ) {
-    const result = await this.createTenderLotUseCase.execute({
-      organizationId: membership.organizationId,
-      tenderId,
-      actorRole: membership.role,
-      ...body,
-    });
-    return presentTenderLot(result);
-  }
-
-  @Get(":tenderId/lots")
-  @HttpCode(HttpStatus.OK)
-  async listLots(
-    @CurrentMembershipContext() membership: MembershipContext,
-    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
-  ) {
-    const lots = await this.listTenderLotsUseCase.execute({
-      organizationId: membership.organizationId,
-      tenderId,
-      actorRole: membership.role,
-    });
-    return lots.map(presentTenderLot);
-  }
-
-  @Patch(":tenderId/lots/:lotId")
-  @HttpCode(HttpStatus.OK)
-  async updateLot(
-    @CurrentMembershipContext() membership: MembershipContext,
-    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
-    @Param("lotId", new ZodValidationPipe(IdParamSchema)) lotId: string,
-    @Body(new ZodValidationPipe(UpdateTenderLotBodySchema)) body: UpdateTenderLotBody,
-  ) {
-    const result = await this.updateTenderLotUseCase.execute({
-      organizationId: membership.organizationId,
-      tenderId,
-      lotId,
-      actorRole: membership.role,
-      ...body,
-    });
-    return presentTenderLot(result);
-  }
-
-  @Delete(":tenderId/lots/:lotId")
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteLot(
-    @CurrentMembershipContext() membership: MembershipContext,
-    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
-    @Param("lotId", new ZodValidationPipe(IdParamSchema)) lotId: string,
-  ) {
-    await this.deleteTenderLotUseCase.execute({
-      organizationId: membership.organizationId,
-      tenderId,
-      lotId,
-      actorRole: membership.role,
-    });
   }
 
   // ---- Checklist ----

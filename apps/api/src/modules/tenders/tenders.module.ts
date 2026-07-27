@@ -27,7 +27,10 @@ import { UpdateTenderUseCase } from "./application/use-cases/update-tender.use-c
 
 import { CreateTenderLotUseCase } from "./application/use-cases/create-tender-lot.use-case";
 import { DeleteTenderLotUseCase, UpdateTenderLotUseCase } from "./application/use-cases/update-tender-lot.use-case";
+import { GetTenderLotUseCase } from "./application/use-cases/get-tender-lot.use-case";
 import { ListTenderLotsUseCase } from "./application/use-cases/list-tender-lots.use-case";
+import { ReorderTenderLotsUseCase } from "./application/use-cases/reorder-tender-lots.use-case";
+import { RestoreTenderLotUseCase } from "./application/use-cases/restore-tender-lot.use-case";
 
 import { CreateChecklistItemUseCase } from "./application/use-cases/create-checklist-item.use-case";
 import {
@@ -78,11 +81,12 @@ import { PrismaRiskRepository } from "./infrastructure/prisma-risk.repository";
 import { PrismaTenderLotRepository } from "./infrastructure/prisma-tender-lot.repository";
 import { PrismaTenderStatusHistoryRepository } from "./infrastructure/prisma-tender-status-history.repository";
 import { PrismaTenderRepository } from "./infrastructure/prisma-tender.repository";
+import { TenderLotsController } from "./interfaces/http/tender-lots.controller";
 import { TendersController } from "./interfaces/http/tenders.controller";
 
 @Module({
   imports: [IdentityModule, MembershipsModule],
-  controllers: [TendersController],
+  controllers: [TendersController, TenderLotsController],
   providers: [
     CreateTenderUseCase,
     UpdateTenderUseCase,
@@ -100,6 +104,9 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     UpdateTenderLotUseCase,
     DeleteTenderLotUseCase,
     ListTenderLotsUseCase,
+    GetTenderLotUseCase,
+    RestoreTenderLotUseCase,
+    ReorderTenderLotsUseCase,
 
     CreateChecklistItemUseCase,
     UpdateChecklistItemUseCase,

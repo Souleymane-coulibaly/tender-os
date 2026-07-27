@@ -56,6 +56,27 @@ export class DuplicateTenderLotNumberError extends DomainError {
   }
 }
 
+export class TenderLotDeletedError extends DomainError {
+  readonly code = "TENDER_LOT_DELETED";
+  constructor() {
+    super("This lot has been deleted.");
+  }
+}
+
+export class TenderLotNotDeletedError extends DomainError {
+  readonly code = "TENDER_LOT_NOT_DELETED";
+  constructor() {
+    super("Only a deleted lot can be restored.");
+  }
+}
+
+export class InvalidLotReorderPayloadError extends DomainError {
+  readonly code = "INVALID_LOT_REORDER_PAYLOAD";
+  constructor(input: { reason: string }) {
+    super(`Invalid lot reorder payload: ${input.reason}.`);
+  }
+}
+
 export class ChecklistItemNotFoundError extends DomainError {
   readonly code = "CHECKLIST_ITEM_NOT_FOUND";
   constructor() {
@@ -95,5 +116,14 @@ export class AlertNotFoundError extends DomainError {
   readonly code = "ALERT_NOT_FOUND";
   constructor() {
     super("Alert not found.");
+  }
+}
+
+export class InvalidLotEstimatedAmountError extends DomainError {
+  readonly code = "INVALID_LOT_ESTIMATED_AMOUNT";
+  constructor(input: { value: string }) {
+    super(
+      `"${input.value}" is not a valid estimated amount (must be a positive decimal number with at most 15 integer digits and 4 decimal digits).`,
+    );
   }
 }

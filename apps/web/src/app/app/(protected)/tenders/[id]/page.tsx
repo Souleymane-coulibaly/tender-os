@@ -3,6 +3,7 @@ import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-ap
 import { canUploadOrEditDocument, type DocumentSummary } from "../../../../../lib/documents-types";
 import {
   TENDER_STATUS_LABELS,
+  canManageTenderLots,
   type Alert,
   type AwardCriterion,
   type ChecklistItem,
@@ -115,7 +116,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       </section>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <LotsSection tenderId={tender.id} lots={lots} />
+        <LotsSection tenderId={tender.id} lots={lots} canManage={canManageTenderLots(role)} />
         <ChecklistSection tenderId={tender.id} items={checklistItems} />
         <CriteriaSection tenderId={tender.id} criteria={criteria} />
         <RequestedDocumentsSection tenderId={tender.id} documents={requestedDocuments} />
