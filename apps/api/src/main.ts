@@ -19,8 +19,12 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix("api/v1", { exclude: ["health"] });
 
   // PORT (fourni par Railway) prime sur API_PORT (développement local) — fallback 4000.
-  const port = process.env.PORT ? Number(process.env.PORT) : process.env.API_PORT ? Number(process.env.API_PORT) : 4000;
-  await app.listen(port);
+  // Ne jamais fixer PORT manuellement dans Railway : la plateforme l'injecte elle-même.
+  const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
+  // Écoute explicite sur toutes les interfaces — nécessaire pour que le proxy Railway
+  // atteigne le conteneur (le binding par défaut de Node peut se limiter à ::1/127.0.0.1
+  // selon l'environnement).
+  await app.listen(port, "0.0.0.0");
 }
 
 void bootstrap();
