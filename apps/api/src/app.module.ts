@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { HealthModule } from "./health/health.module";
+import { DceModule } from "./modules/dce/dce.module";
 import { DocumentsModule } from "./modules/documents/documents.module";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { MembershipsModule } from "./modules/memberships/memberships.module";
@@ -20,6 +21,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     PlatformAdministrationModule,
     TendersModule,
     DocumentsModule,
+    DceModule,
   ],
 })
 export class AppModule {}

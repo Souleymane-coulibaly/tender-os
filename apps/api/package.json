@@ -29,6 +29,7 @@
     "multer": "^2.2.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "yauzl": "^3.4.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -39,6 +40,7 @@
     "@types/express-serve-static-core": "^5.0.0",
     "@types/multer": "^2.2.0",
     "@types/node": "^22.10.7",
+    "@types/yauzl": "^3.4.0",
     "prisma": "^6.2.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",

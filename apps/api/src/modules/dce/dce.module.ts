@@ -1,0 +1,54 @@
+import { Module } from "@nestjs/common";
+import { DocumentsModule } from "../documents";
+import { IdentityModule } from "../identity";
+import { MembershipsModule } from "../memberships";
+import { TendersModule } from "../tenders";
+import { ASYNC_JOB_SUBMITTER } from "./application/ports/async-job-submitter";
+import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
+import { DCE_DOCUMENT_REPOSITORY } from "./application/ports/dce-document.repository";
+import { DCE_REPOSITORY } from "./application/ports/dce.repository";
+import { FILE_SIGNATURE_DETECTOR } from "./application/ports/file-signature-detector";
+import { ZIP_ARCHIVE_INSPECTOR } from "./application/ports/zip-archive-inspector";
+
+import { CreateDceUseCase } from "./application/use-cases/create-dce.use-case";
+import { DeleteDceDocumentUseCase } from "./application/use-cases/delete-dce-document.use-case";
+import { DownloadDceDocumentUseCase } from "./application/use-cases/download-dce-document.use-case";
+import { GetDceUseCase } from "./application/use-cases/get-dce.use-case";
+import { GetDceDocumentUseCase } from "./application/use-cases/get-dce-document.use-case";
+import { ImportDceFilesUseCase } from "./application/use-cases/import-dce-files.use-case";
+import { ImportDceZipUseCase } from "./application/use-cases/import-dce-zip.use-case";
+import { ListDceDocumentsUseCase } from "./application/use-cases/list-dce-documents.use-case";
+import { ReplaceDceDocumentUseCase } from "./application/use-cases/replace-dce-document.use-case";
+
+import { MagicByteFileSignatureDetector } from "./infrastructure/magic-byte-file-signature.detector";
+import { NotWiredAsyncJobSubmitter } from "./infrastructure/not-wired-async-job.submitter";
+import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
+import { PrismaDceDocumentRepository } from "./infrastructure/prisma-dce-document.repository";
+import { PrismaDceRepository } from "./infrastructure/prisma-dce.repository";
+import { YauzlArchiveInspector } from "./infrastructure/yauzl-archive-inspector";
+
+import { DceController } from "./interfaces/http/dce.controller";
+
+@Module({
+  imports: [IdentityModule, MembershipsModule, TendersModule, DocumentsModule],
+  controllers: [DceController],
+  providers: [
+    CreateDceUseCase,
+    GetDceUseCase,
+    ImportDceFilesUseCase,
+    ImportDceZipUseCase,
+    ListDceDocumentsUseCase,
+    GetDceDocumentUseCase,
+    DownloadDceDocumentUseCase,
+    DeleteDceDocumentUseCase,
+    ReplaceDceDocumentUseCase,
+
+    { provide: DCE_REPOSITORY, useClass: PrismaDceRepository },
+    { provide: DCE_DOCUMENT_REPOSITORY, useClass: PrismaDceDocumentRepository },
+    { provide: FILE_SIGNATURE_DETECTOR, useClass: MagicByteFileSignatureDetector },
+    { provide: ZIP_ARCHIVE_INSPECTOR, useClass: YauzlArchiveInspector },
+    { provide: ASYNC_JOB_SUBMITTER, useClass: NotWiredAsyncJobSubmitter },
+    { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
+  ],
+})
+export class DceModule {}

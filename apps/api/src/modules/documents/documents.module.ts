@@ -55,5 +55,16 @@ import { TenderDocumentsController } from "./interfaces/http/tender-documents.co
     { provide: STORAGE_PROVIDER, useClass: LocalFilesystemStorageProvider },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
   ],
+  // Réexportés pour permettre au module DCE de déléguer ses écritures de fichier (création,
+  // ajout de version, suppression, téléchargement, lecture) à Documents plutôt que de dupliquer
+  // le stockage/versionnement/checksum — même motif que la réexportation de GetTenderUseCase par
+  // Tenders pour Documents.
+  exports: [
+    CreateDocumentWithFirstVersionUseCase,
+    AddDocumentVersionUseCase,
+    GetDocumentUseCase,
+    DownloadDocumentVersionUseCase,
+    DeleteDocumentUseCase,
+  ],
 })
 export class DocumentsModule {}

@@ -300,6 +300,7 @@ model Tender {
   alerts               TenderAlert[]
   statusHistory        TenderStatusHistoryEntry[]
   documentAssociations DocumentTenderAssociation[]
+  dces                 Dce[]
 
   /// AUDIT-007 : contrainte composite support de la FK composée de TenderLot ci-dessous — garantit
   /// au niveau base de données qu'un TenderLot ne peut jamais référencer un couple
@@ -576,7 +577,12 @@ model Document {
   versions                    DocumentVersion[]           @relation("AllVersions")
   tenderAssociations          DocumentTenderAssociation[]
   requestedDocumentReferences TenderRequestedDocument[]
+  dceDocuments                DceDocument[]
 
+  /// Support de la FK composée de DceDocument (module DCE) — même motif que TenderLot/AUDIT-007 :
+  /// garantit au niveau base qu'un DceDocument ne peut jamais référencer un Document d'une autre
+  /// organisation.
+  @@unique([id, organizationId])
   @@index([organizationId, status])
   @@index([organizationId, domain])
   @@index([organizationId, origin])
@@ -637,4 +643,58 @@ model DocumentTenderAssociation {
   @@index([organizationId, tenderId])
   @@index([organizationId, documentId])
   @@map("document_tender_associations")
+}
+
+/// Dossier de Consultation des Entreprises (module DCE, Sprint 0/1) — conteneur du cycle de vie
+/// global de l'import, un par Tender au maximum (conception §4). Ne porte aucune donnée de
+/// fichier : le contenu réel (nom, MIME, taille, checksum, clé de stockage) reste entièrement
+/// porté par Document/DocumentVersion (module Documents), référencé via DceDocument ci-dessous.
+model Dce {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  /// FK composée (tenderId, organizationId) → Tender(id, organizationId) — même motif que
+  /// TenderLot (AUDIT-007) : empêche au niveau base qu'un Dce référence un Tender d'une autre
+  /// organisation, y compris via un bug applicatif ou un accès direct à la base.
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// DRAFT | IMPORTED — voir dce/domain/dce-status.ts pour la justification du sous-ensemble
+  /// volontairement restreint à cette tranche.
+  status String @db.VarChar(20)
+
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  documents DceDocument[]
+
+  /// Un Tender ne porte jamais plus d'un DCE (conception §4, mission Sprint 0).
+  @@unique([tenderId])
+  /// Support de la FK composée de DceDocument ci-dessous.
+  @@unique([id, organizationId])
+  @@index([organizationId])
+  @@map("dces")
+}
+
+/// Lien pur entre un Dce et un Document (même motif que DocumentTenderAssociation) — ne duplique
+/// jamais le fichier physique. Les deux FK composées ci-dessous garantissent ensemble, au niveau
+/// base de données, qu'un DceDocument ne peut jamais relier un Dce et un Document appartenant à
+/// des organisations différentes l'une de l'autre ou du lien lui-même (mission Sprint 0
+/// §"contrainte réelle DCE/Tender/organisation").
+model DceDocument {
+  dceId String @map("dce_id") @db.Uuid
+  dce   Dce    @relation(fields: [dceId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  documentId String   @map("document_id") @db.Uuid
+  document   Document @relation(fields: [documentId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  organizationId  String   @map("organization_id") @db.Uuid
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([dceId, documentId])
+  @@index([organizationId, dceId])
+  @@index([organizationId, documentId])
+  @@map("dce_documents")
 }

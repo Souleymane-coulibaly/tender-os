@@ -18,7 +18,8 @@ async function bootstrap(): Promise<void> {
   // /health reste hors versionnement (contrat fixé par la fondation technique).
   app.setGlobalPrefix("api/v1", { exclude: ["health"] });
 
-  const port = process.env.API_PORT ? Number(process.env.API_PORT) : 4000;
+  // PORT (fourni par Railway) prime sur API_PORT (développement local) — fallback 4000.
+  const port = process.env.PORT ? Number(process.env.PORT) : process.env.API_PORT ? Number(process.env.API_PORT) : 4000;
   await app.listen(port);
 }
 
