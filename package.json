@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "description": "Système d'exploitation IA dédié aux appels d'offres.",
-  "main": "index.js",
   "directories": {
     "doc": "docs",
     "test": "tests"
@@ -15,6 +14,7 @@
   "scripts": {
     "dev": "pnpm --parallel -r run dev",
     "build": "pnpm -r run build",
+    "start": "pnpm --filter @tenderos/api start",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
