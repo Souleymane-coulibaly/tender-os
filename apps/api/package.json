@@ -15,6 +15,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:seed:staging": "tsx prisma/seed-staging.ts",
+    "db:init:staging": "pnpm run db:migrate:deploy && pnpm run db:seed && pnpm run db:seed:staging",
     "bootstrap:platform-owner": "tsx prisma/bootstrap-platform-owner.ts",
     "postinstall": "prisma generate"
   },

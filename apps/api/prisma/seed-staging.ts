@@ -13,6 +13,7 @@ import { MembershipId } from "../src/modules/memberships/domain/membership-id.va
 import { OrganizationRole } from "../src/modules/memberships/domain/organization-role";
 import { PrismaMembershipRepository } from "../src/modules/memberships/infrastructure/prisma-membership.repository";
 import { PrismaService } from "../src/shared-kernel/prisma.service";
+import { seedSystemRolesAndPermissions } from "./seed";
 
 /**
  * Seed de comptes de démonstration — STAGING UNIQUEMENT. Jamais exécuté automatiquement
@@ -23,6 +24,12 @@ import { PrismaService } from "../src/shared-kernel/prisma.service";
  * Idempotent : réutilise Organization/User/Membership déjà existants (mêmes slugs/emails)
  * plutôt que de les dupliquer ou d'échouer — peut être relancé sans risque à chaque déploiement
  * de staging.
+ *
+ * Autonome sur un environnement vierge : rejoue d'abord `seedSystemRolesAndPermissions` (mêmes
+ * upserts que `prisma/seed.ts`, aucune duplication de logique) avant de créer la moindre
+ * Membership. Sans cette étape, `PrismaMembershipRepository.save()` échoue avec
+ * `No record was found for a query. modelName: 'Role'` — la Membership référence un `Role` par
+ * son `code`, qui n'existe que si le seed système a déjà tourné.
  *
  * Mots de passe volontairement en clair dans ce fichier : ce sont des identifiants de
  * démonstration jetables, jamais valides en production, jamais des secrets réels.
@@ -62,6 +69,11 @@ async function main(): Promise<void> {
   await prisma.$connect();
 
   try {
+    // Prérequis des Membership créées plus bas (Role référencé par code) — idempotent, sûr à
+    // rejouer à chaque exécution, y compris sur un environnement déjà initialisé.
+    await seedSystemRolesAndPermissions(prisma);
+    console.log("System roles and permissions ready.");
+
     const organizationRepository = new PrismaOrganizationRepository(prisma);
     const userRepository = new PrismaUserRepository(prisma);
     const membershipRepository = new PrismaMembershipRepository(prisma);

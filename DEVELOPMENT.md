@@ -89,6 +89,30 @@ Le schéma Prisma (`apps/api/prisma/schema.prisma`) ne contient encore aucun mod
 
 Cible : Railway (voir `skills/platform-foundation/DEPLOYMENT_PATTERNS.md`). `apps/api` et `apps/web` sont déployés comme deux services distincts, partageant la même base PostgreSQL managée.
 
+### 8.1. Initialiser un environnement Railway vierge (staging)
+
+Une seule commande, à lancer depuis le service API (Railway → Run Command) une fois la base PostgreSQL provisionnée et `DATABASE_URL` reliée au service :
+
+```bash
+pnpm --filter @tenderos/api db:init:staging
+```
+
+Elle enchaîne, sans intervention manuelle :
+
+1. `prisma migrate deploy` — applique les migrations.
+2. `prisma db seed` — rôles et permissions système (`Role`, `Permission`, `RolePermission`), prérequis de toute `OrganizationMembership`.
+3. `db:seed:staging` — organisations et comptes de démonstration (voir 8.2).
+
+**Idempotente** : peut être relancée sans risque à chaque redéploiement (chaque étape n'écrit que ce qui manque encore, aucun doublon).
+
+Les commandes granulaires (`db:migrate:deploy`, `db:seed`, `db:seed:staging`) restent disponibles séparément si besoin — `db:seed:staging` réapplique elle-même le seed système en préambule (voir 8.2), donc elle fonctionne aussi bien seule qu'à l'intérieur de `db:init:staging`.
+
+### 8.2. Comptes de démonstration (staging uniquement)
+
+`db:seed:staging` crée deux organisations (`TenderOS Demo`, `Acme Demo`), chacune avec un compte Admin/Contributor/Read-Only (`admin@tenderos.local`, `user@tenderos.local`, `viewer@tenderos.local` — et l'équivalent `@acme.local`, tous en `Admin123!`/`User123!`/`Viewer123!`).
+
+Le script refuse de s'exécuter si `NODE_ENV=production` (garde codée en dur, indépendante de toute discipline opérationnelle) — s'assurer que ce n'est jamais la valeur configurée sur un service qui sert réellement de production.
+
 ---
 
 ## 9. Documentation de référence
