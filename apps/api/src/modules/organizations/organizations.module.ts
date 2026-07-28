@@ -26,8 +26,15 @@ import { OrganizationsController } from "./interfaces/http/organizations.control
     CountOrganizationsByStatusUseCase,
     { provide: ORGANIZATION_REPOSITORY, useClass: PrismaOrganizationRepository },
   ],
+  // CreateOrganizationUseCase et DeleteOrganizationUseCase sont réexportés pour que Memberships
+  // (qui dépend déjà de ce module) puisse composer la création atomique Organization+OWNER et la
+  // suppression réservée à l'OWNER (bible/03-domain/business-rules.md BR-ORG-002/§4) — Organizations
+  // ne doit jamais dépendre de Memberships en retour (dépendance circulaire interdite), c'est
+  // pourquoi ces deux endpoints sont composés côté Memberships plutôt qu'ici.
   exports: [
+    CreateOrganizationUseCase,
     GetOrganizationUseCase,
+    DeleteOrganizationUseCase,
     ListOrganizationsUseCase,
     SuspendOrganizationUseCase,
     ReactivateOrganizationUseCase,

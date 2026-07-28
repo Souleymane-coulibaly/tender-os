@@ -30,6 +30,7 @@ describe("DCE — real HTTP + PostgreSQL (NestJS)", () => {
   let tokenAdminB: string;
 
   let tenderAId: string;
+  let tenderA2Id: string;
   let archivedTenderId: string;
   let tenderBId: string;
 
@@ -69,6 +70,32 @@ describe("DCE — real HTTP + PostgreSQL (NestJS)", () => {
 
   function authHeaders(token: string, organizationId: string): Record<string, string> {
     return { Authorization: `Bearer ${token}`, "X-Organization-Id": organizationId };
+  }
+
+  async function ensureDce(tenderId: string, token: string, organizationId: string): Promise<void> {
+    const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/dce`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(token, organizationId) },
+    });
+    expect(res.status).toBe(201);
+  }
+
+  async function importFile(input: {
+    tenderId: string;
+    token: string;
+    organizationId: string;
+    buffer: Buffer;
+    filename: string;
+  }): Promise<{ status: number; accepted: { documentId: string }[]; rejected: { reason: string }[] }> {
+    const form = new FormData();
+    form.append("files", new Blob([input.buffer], { type: "application/pdf" }), input.filename);
+    const res = await fetch(`${baseUrl}/api/v1/tenders/${input.tenderId}/dce/documents`, {
+      method: "POST",
+      headers: authHeaders(input.token, input.organizationId),
+      body: form,
+    });
+    const body = (await res.json()) as { accepted: { documentId: string }[]; rejected: { reason: string }[] };
+    return { status: res.status, ...body };
   }
 
   beforeAll(async () => {
@@ -142,6 +169,18 @@ describe("DCE — real HTTP + PostgreSQL (NestJS)", () => {
       headers: { "Content-Type": "application/json", ...authHeaders(tokenAdminA, orgAId) },
     });
     expect(archiveRes.status).toBe(200);
+
+    tenderA2Id = randomUUID();
+    await prisma.tender.create({
+      data: {
+        id: tenderA2Id,
+        organizationId: orgAId,
+        title: "Tender A2 — DCE HTTP (concurrency/idempotence)",
+        status: "DRAFT",
+        tags: [],
+        createdBy: adminA.userId,
+      },
+    });
 
     tenderBId = randomUUID();
     await prisma.tender.create({
@@ -277,6 +316,104 @@ describe("DCE — real HTTP + PostgreSQL (NestJS)", () => {
     expect(res.status).toBe(201);
     const body = (await res.json()) as { accepted: unknown[] };
     expect(body.accepted).toHaveLength(2);
+  });
+
+  it("mission P1-2 — two concurrent imports of the exact same file content into the same DCE create only one active document", async () => {
+    await ensureDce(tenderA2Id, tokenAdminA, orgAId);
+    const identicalContent = Buffer.from(`%PDF-1.7 concurrency-idempotence-${randomUUID()}`);
+
+    const [first, second] = await Promise.all([
+      importFile({ tenderId: tenderA2Id, token: tokenAdminA, organizationId: orgAId, buffer: identicalContent, filename: "cctp-a.pdf" }),
+      importFile({ tenderId: tenderA2Id, token: tokenAdminA, organizationId: orgAId, buffer: identicalContent, filename: "cctp-b.pdf" }),
+    ]);
+
+    const accepted = [...first.accepted, ...second.accepted];
+    const rejected = [...first.rejected, ...second.rejected];
+    expect(accepted).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]?.reason).toMatch(/duplicate/);
+
+    const listRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderA2Id}/dce/documents`, {
+      headers: authHeaders(tokenAdminA, orgAId),
+    });
+    const listed = (await listRes.json()) as unknown[];
+    expect(listed).toHaveLength(1);
+  });
+
+  it("mission P1-2 — a retried import (sequential, simulating a client retry after a timeout) does not duplicate", async () => {
+    const content = Buffer.from(`%PDF-1.7 retry-${randomUUID()}`);
+
+    const firstAttempt = await importFile({
+      tenderId: tenderA2Id,
+      token: tokenAdminA,
+      organizationId: orgAId,
+      buffer: content,
+      filename: "retry-1.pdf",
+    });
+    expect(firstAttempt.accepted).toHaveLength(1);
+
+    const retriedAttempt = await importFile({
+      tenderId: tenderA2Id,
+      token: tokenAdminA,
+      organizationId: orgAId,
+      buffer: content,
+      filename: "retry-2.pdf",
+    });
+    expect(retriedAttempt.accepted).toHaveLength(0);
+    expect(retriedAttempt.rejected[0]?.reason).toMatch(/duplicate/);
+  });
+
+  it("mission P1-2 — the same ZIP replayed does not create duplicate active documents", async () => {
+    const zip = buildZipBuffer([{ name: `replayed-${randomUUID()}.pdf`, content: Buffer.from("%PDF-1.7 replayed entry") }]);
+    const form = () => {
+      const f = new FormData();
+      f.append("archive", new Blob([zip], { type: "application/zip" }), "archive.zip");
+      return f;
+    };
+
+    const firstImport = await fetch(`${baseUrl}/api/v1/tenders/${tenderA2Id}/dce/import-zip`, {
+      method: "POST",
+      headers: authHeaders(tokenAdminA, orgAId),
+      body: form(),
+    });
+    expect(firstImport.status).toBe(201);
+    const firstBody = (await firstImport.json()) as { accepted: unknown[] };
+    expect(firstBody.accepted).toHaveLength(1);
+
+    const replayedImport = await fetch(`${baseUrl}/api/v1/tenders/${tenderA2Id}/dce/import-zip`, {
+      method: "POST",
+      headers: authHeaders(tokenAdminA, orgAId),
+      body: form(),
+    });
+    expect(replayedImport.status).toBe(201);
+    const replayedBody = (await replayedImport.json()) as { accepted: unknown[]; rejected: { reason: string }[] };
+    expect(replayedBody.accepted).toHaveLength(0);
+    expect(replayedBody.rejected[0]?.reason).toMatch(/duplicate/);
+  });
+
+  it("mission P1-2 — two different organizations can import byte-identical content without collision", async () => {
+    await ensureDce(tenderBId, tokenAdminB, orgBId);
+    const identicalContent = Buffer.from(`%PDF-1.7 cross-org-${randomUUID()}`);
+
+    const [orgAResult, orgBResult] = await Promise.all([
+      importFile({ tenderId: tenderA2Id, token: tokenAdminA, organizationId: orgAId, buffer: identicalContent, filename: "shared.pdf" }),
+      importFile({ tenderId: tenderBId, token: tokenAdminB, organizationId: orgBId, buffer: identicalContent, filename: "shared.pdf" }),
+    ]);
+
+    expect(orgAResult.accepted).toHaveLength(1);
+    expect(orgBResult.accepted).toHaveLength(1);
+  });
+
+  it("mission P1-2 — two different DCEs of the same organization can import byte-identical content without collision", async () => {
+    const identicalContent = Buffer.from(`%PDF-1.7 cross-dce-${randomUUID()}`);
+
+    const [tenderAResult, tenderA2Result] = await Promise.all([
+      importFile({ tenderId: tenderAId, token: tokenAdminA, organizationId: orgAId, buffer: identicalContent, filename: "shared-2.pdf" }),
+      importFile({ tenderId: tenderA2Id, token: tokenAdminA, organizationId: orgAId, buffer: identicalContent, filename: "shared-2.pdf" }),
+    ]);
+
+    expect(tenderAResult.accepted).toHaveLength(1);
+    expect(tenderA2Result.accepted).toHaveLength(1);
   });
 
   it("refuses to mutate the DCE of an archived tender (409)", async () => {

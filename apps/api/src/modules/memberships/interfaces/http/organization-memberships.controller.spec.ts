@@ -8,6 +8,7 @@ import type { ListMyMembershipsUseCase } from "../../application/use-cases/list-
 import type { ListOrganizationMembersUseCase } from "../../application/use-cases/list-organization-members.use-case";
 import type { RemoveMembershipUseCase } from "../../application/use-cases/remove-membership.use-case";
 import type { SuspendMembershipUseCase } from "../../application/use-cases/suspend-membership.use-case";
+import type { TransferOrganizationOwnershipUseCase } from "../../application/use-cases/transfer-organization-ownership.use-case";
 import { OrganizationRole } from "../../domain/organization-role";
 import type { RequestWithId } from "../../../../shared-kernel/request-id.middleware";
 import type { MembershipContext } from "./organization-membership.guard";
@@ -40,6 +41,7 @@ function createController(overrides?: {
   changeMembershipRoleUseCase?: Partial<ChangeMembershipRoleUseCase>;
   suspendMembershipUseCase?: Partial<SuspendMembershipUseCase>;
   removeMembershipUseCase?: Partial<RemoveMembershipUseCase>;
+  transferOrganizationOwnershipUseCase?: Partial<TransferOrganizationOwnershipUseCase>;
 }) {
   const createMembershipUseCase = {
     execute: vi.fn().mockResolvedValue(MEMBERSHIP_SUMMARY),
@@ -76,6 +78,14 @@ function createController(overrides?: {
     ...overrides?.removeMembershipUseCase,
   } as unknown as RemoveMembershipUseCase;
 
+  const transferOrganizationOwnershipUseCase = {
+    execute: vi.fn().mockResolvedValue({
+      previousOwner: { ...MEMBERSHIP_SUMMARY, id: "membership-actor", role: "ORGANIZATION_ADMIN" },
+      newOwner: { ...MEMBERSHIP_SUMMARY, role: "OWNER" },
+    }),
+    ...overrides?.transferOrganizationOwnershipUseCase,
+  } as unknown as TransferOrganizationOwnershipUseCase;
+
   const controller = new OrganizationMembershipsController(
     createMembershipUseCase,
     getMembershipUseCase,
@@ -84,6 +94,7 @@ function createController(overrides?: {
     changeMembershipRoleUseCase,
     suspendMembershipUseCase,
     removeMembershipUseCase,
+    transferOrganizationOwnershipUseCase,
   );
 
   return {
@@ -95,6 +106,7 @@ function createController(overrides?: {
     changeMembershipRoleUseCase,
     suspendMembershipUseCase,
     removeMembershipUseCase,
+    transferOrganizationOwnershipUseCase,
   };
 }
 
@@ -194,6 +206,25 @@ describe("OrganizationMembershipsController", () => {
       requestId: "request-1",
     });
     expect(result.status).toBe("SUSPENDED");
+  });
+
+  it("transferOwnership delegates to TransferOrganizationOwnershipUseCase", async () => {
+    const { controller, transferOrganizationOwnershipUseCase } = createController();
+
+    const result = await controller.transferOwnership(
+      ACTOR,
+      MEMBERSHIP_CONTEXT,
+      { newOwnerMembershipId: "membership-1" },
+      REQUEST,
+    );
+
+    expect(transferOrganizationOwnershipUseCase.execute).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      actorId: "user-1",
+      newOwnerMembershipId: "membership-1",
+      requestId: "request-1",
+    });
+    expect(result.newOwner.role).toBe("OWNER");
   });
 
   it("remove delegates to RemoveMembershipUseCase", async () => {

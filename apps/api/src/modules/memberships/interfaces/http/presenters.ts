@@ -48,6 +48,18 @@ export function presentMyMembership(membership: MyMembershipView): MyMembershipR
   };
 }
 
+export type OwnershipTransferResponse = Readonly<{ previousOwner: MembershipResponse; newOwner: MembershipResponse }>;
+
+export function presentOwnershipTransfer(result: {
+  previousOwner: MembershipSummary;
+  newOwner: MembershipSummary;
+}): OwnershipTransferResponse {
+  return {
+    previousOwner: presentMembership(result.previousOwner),
+    newOwner: presentMembership(result.newOwner),
+  };
+}
+
 export type PageResponse<T> = Readonly<{
   items: readonly T[];
   pageInfo: Readonly<{ hasNextPage: boolean; nextCursor: string | null }>;

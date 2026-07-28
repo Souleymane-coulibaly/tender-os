@@ -106,6 +106,17 @@ export class InMemoryDocumentRepository implements DocumentRepository {
     await this.versionSink?.(input.version);
   }
 
+  async hardDeleteJustCreatedDocument(input: { organizationId: string; documentId: string }): Promise<void> {
+    const document = this.documents.get(input.documentId);
+    if (document && document.organizationId === input.organizationId) {
+      this.documents.delete(input.documentId);
+    }
+    await this.versionDeleteSink?.(input.documentId);
+  }
+
+  /** Câblé par l'orchestrateur de fakes pour retirer aussi les DocumentVersion associées. */
+  versionDeleteSink?: (documentId: string) => Promise<void>;
+
   /** Câblé par le test/l'orchestrateur de fakes pour que les versions créées via les méthodes
    *  composites atterrissent aussi dans `InMemoryDocumentVersionRepository` — évite de dupliquer
    *  un mini-store de versions ici. */
@@ -171,6 +182,13 @@ export function wireDocumentFakes(): {
     return [...versionRepository.versions.values()]
       .filter((version) => version.documentId === documentId)
       .map((version) => version.versionNumber);
+  };
+  documentRepository.versionDeleteSink = async (documentId) => {
+    for (const version of [...versionRepository.versions.values()]) {
+      if (version.documentId === documentId) {
+        versionRepository.versions.delete(version.id);
+      }
+    }
   };
   return { documentRepository, versionRepository };
 }

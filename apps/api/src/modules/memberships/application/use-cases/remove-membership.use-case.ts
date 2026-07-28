@@ -6,7 +6,7 @@ import { OrganizationPermission } from "../../domain/organization-permission";
 import type { OrganizationRole } from "../../domain/organization-role";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { MEMBERSHIP_REPOSITORY, type MembershipRepository } from "../ports/membership.repository";
-import { assertNotLastActiveOrganizationAdmin } from "../policies/last-admin.policy";
+import { assertNotLastActiveOrganizationAdmin, assertNotLastActiveOwner } from "../policies/last-admin.policy";
 import { assertHasPermission } from "../policies/membership-authorization.policy";
 
 export type RemoveMembershipCommand = Readonly<{
@@ -37,6 +37,11 @@ export class RemoveMembershipUseCase {
       throw new MembershipNotFoundError();
     }
 
+    await assertNotLastActiveOwner({
+      membershipRepository: this.membershipRepository,
+      organizationId: command.organizationId,
+      membership,
+    });
     await assertNotLastActiveOrganizationAdmin({
       membershipRepository: this.membershipRepository,
       organizationId: command.organizationId,

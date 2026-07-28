@@ -14,6 +14,13 @@ export const TENDER_STATUSES = [
   "ARCHIVED",
 ] as const;
 
+// Mission architecture §5 — ensembles minimaux préparant le multi-pays/multi-source, alignés sur
+// domain/market-type.ts, domain/tender-country.ts, domain/tender-language.ts, domain/tender-source.ts.
+export const MARKET_TYPES = ["PUBLIC", "PRIVATE"] as const;
+export const TENDER_COUNTRIES = ["FR", "BE", "DE", "ES", "IT", "LU", "NL", "EU", "OTHER"] as const;
+export const TENDER_LANGUAGES = ["fr", "en", "de", "es", "it", "nl"] as const;
+export const TENDER_SOURCES = ["MANUAL", "BOAMP", "TED", "PRIVATE", "OTHER"] as const;
+
 export const CreateTenderBodySchema = z
   .object({
     title: z.string().trim().min(1).max(500),
@@ -23,7 +30,12 @@ export const CreateTenderBodySchema = z
     publicationDate: z.string().datetime().optional(),
     submissionDeadline: z.string().datetime().optional(),
     procedureType: z.string().trim().min(1).max(80).optional(),
-    marketType: z.string().trim().min(1).max(80).optional(),
+    marketType: z.enum(MARKET_TYPES).optional(),
+    country: z.enum(TENDER_COUNTRIES).optional(),
+    language: z.enum(TENDER_LANGUAGES).optional(),
+    source: z.enum(TENDER_SOURCES).optional(),
+    externalReference: z.string().trim().min(1).max(255).optional(),
+    sourceUrl: z.string().trim().url().max(2048).optional(),
     estimatedAmount: z.string().trim().min(1).optional(),
     currency: z.string().trim().length(3).optional(),
     internalOwnerId: z.string().uuid().optional(),

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CreateDocumentWithFirstVersionUseCase } from "../../../documents";
+import type { CreateDocumentWithFirstVersionUseCase, InternalDocumentCleanupService } from "../../../documents";
 import type { GetTenderUseCase } from "../../../tenders";
 import { ZipSecurityViolationError } from "../../domain/errors";
 import { Dce } from "../../domain/dce.aggregate";
@@ -79,7 +79,13 @@ describe("ImportDceZipUseCase", () => {
     );
   });
 
-  function buildUseCase(entriesOrError: readonly ZipExtractedEntry[] | Error) {
+  function buildUseCase(
+    entriesOrError: readonly ZipExtractedEntry[] | Error,
+    overrides?: { internalDocumentCleanupService?: InternalDocumentCleanupService },
+  ) {
+    const internalDocumentCleanupService =
+      overrides?.internalDocumentCleanupService ??
+      ({ purgeJustCreatedDocument: vi.fn().mockResolvedValue(undefined) } as unknown as InternalDocumentCleanupService);
     const importDceFilesUseCase = new ImportDceFilesUseCase(
       dceRepository,
       dceDocumentRepository,
@@ -89,8 +95,12 @@ describe("ImportDceZipUseCase", () => {
       new SequentialIdGenerator(),
       fakeGetTenderUseCase(),
       fakeCreateDocumentUseCase(dceDocumentRepository),
+      internalDocumentCleanupService,
     );
-    return new ImportDceZipUseCase(new StaticZipArchiveInspector(entriesOrError), importDceFilesUseCase);
+    return {
+      useCase: new ImportDceZipUseCase(new StaticZipArchiveInspector(entriesOrError), importDceFilesUseCase),
+      internalDocumentCleanupService,
+    };
   }
 
   function baseCommand() {
@@ -106,7 +116,7 @@ describe("ImportDceZipUseCase", () => {
   }
 
   it("imports every valid entry extracted from the archive", async () => {
-    const useCase = buildUseCase([
+    const { useCase } = buildUseCase([
       { entryName: "cctp.pdf", buffer: Buffer.from("%PDF-1.7 fake content") },
       { entryName: "plan.png", buffer: Buffer.from("png bytes") },
     ]);
@@ -118,7 +128,7 @@ describe("ImportDceZipUseCase", () => {
   });
 
   it("rejects a nested .zip entry per-file, without failing the rest of the batch (no nested archives)", async () => {
-    const useCase = buildUseCase([
+    const { useCase } = buildUseCase([
       { entryName: "cctp.pdf", buffer: Buffer.from("%PDF-1.7 fake content") },
       { entryName: "nested.zip", buffer: Buffer.from("PK..") },
     ]);
@@ -131,7 +141,7 @@ describe("ImportDceZipUseCase", () => {
   });
 
   it("rejects an unsupported entry format per-file", async () => {
-    const useCase = buildUseCase([{ entryName: "malware.exe", buffer: Buffer.from("MZ...") }]);
+    const { useCase } = buildUseCase([{ entryName: "malware.exe", buffer: Buffer.from("MZ...") }]);
 
     const result = await useCase.execute({ ...baseCommand(), zipBuffer: Buffer.from("irrelevant") });
 
@@ -140,10 +150,26 @@ describe("ImportDceZipUseCase", () => {
   });
 
   it("propagates ZipSecurityViolationError for the whole archive when the inspector rejects it structurally", async () => {
-    const useCase = buildUseCase(new ZipSecurityViolationError({ reason: "path traversal detected" }));
+    const { useCase } = buildUseCase(new ZipSecurityViolationError({ reason: "path traversal detected" }));
 
     await expect(useCase.execute({ ...baseCommand(), zipBuffer: Buffer.from("irrelevant") })).rejects.toThrow(
       ZipSecurityViolationError,
     );
+  });
+
+  it("mission P1-1 bis — a ZIP entry that fails DceDocument linking also triggers the internal compensation (same orchestrator as the plain file import)", async () => {
+    const purgeJustCreatedDocument = vi.fn().mockResolvedValue(undefined);
+    const internalDocumentCleanupService = { purgeJustCreatedDocument } as unknown as InternalDocumentCleanupService;
+    const { useCase } = buildUseCase(
+      [{ entryName: "cctp.pdf", buffer: Buffer.from("%PDF-1.7 fake content") }],
+      { internalDocumentCleanupService },
+    );
+    vi.spyOn(dceDocumentRepository, "create").mockRejectedValueOnce(new Error("unexpected DB failure"));
+
+    await expect(useCase.execute({ ...baseCommand(), zipBuffer: Buffer.from("irrelevant") })).rejects.toThrow(
+      "unexpected DB failure",
+    );
+
+    expect(purgeJustCreatedDocument).toHaveBeenCalledWith({ organizationId: "org-1", documentId: "document-1" });
   });
 });

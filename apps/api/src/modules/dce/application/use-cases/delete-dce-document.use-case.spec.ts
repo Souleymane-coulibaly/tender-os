@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DeleteDocumentUseCase } from "../../../documents";
 import type { GetTenderUseCase } from "../../../tenders";
 import { DceDocumentNotFoundError, DceNotFoundError, DcePermissionMissingError, TenderArchivedForDceMutationError } from "../../domain/errors";
+import { DceDocumentCategory } from "../../domain/dce-document-category";
 import { Dce } from "../../domain/dce.aggregate";
 import { DceId } from "../../domain/dce-id.value-object";
 import { DceDocument } from "../../domain/dce-document.entity";
@@ -45,6 +46,7 @@ describe("DeleteDceDocumentUseCase", () => {
         documentId: "document-1",
         organizationId: "org-1",
         createdByUserId: "user-1",
+        category: DceDocumentCategory.Other,
         occurredAt: new Date(),
       }),
     );

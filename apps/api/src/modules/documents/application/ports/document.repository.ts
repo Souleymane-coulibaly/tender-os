@@ -34,6 +34,14 @@ export interface DocumentRepository {
    *  La contrainte unique (documentId, versionNumber) fait office de verrou de concurrence —
    *  une violation doit être traduite en `ConcurrentVersionCreationError` par l'implémentation. */
   addVersionAndPromote(input: { document: Document; version: DocumentVersion }): Promise<void>;
+  /**
+   * Suppression définitive (jamais `deletedAt`) réservée au nettoyage technique interne —
+   * `InternalDocumentCleanupService` uniquement, jamais un use case exposé à un utilisateur ni un
+   * contrôleur HTTP. Retire la/les DocumentVersion puis le Document, scopé à l'organisation
+   * (isolation multi-tenant préservée comme partout ailleurs). Irréversible : l'appelant est seul
+   * responsable de garantir qu'il s'agit bien d'un Document tout juste créé, jamais utilisé.
+   */
+  hardDeleteJustCreatedDocument(input: { organizationId: string; documentId: string }): Promise<void>;
 }
 
 export const DOCUMENT_REPOSITORY = Symbol("DOCUMENT_REPOSITORY");

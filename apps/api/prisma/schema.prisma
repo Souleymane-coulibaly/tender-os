@@ -270,10 +270,28 @@ model Tender {
   submissionDeadline DateTime? @map("submission_deadline")
 
   procedureType String? @map("procedure_type") @db.VarChar(80)
-  marketType    String? @map("market_type") @db.VarChar(80)
+
+  /// PUBLIC | PRIVATE (domain/market-type.ts) — nature du marché, distincte de `source` ci-dessous.
+  marketType String? @default("PUBLIC") @map("market_type") @db.VarChar(80)
+
+  /// FR | BE | DE | ES | IT | LU | NL | EU | OTHER (domain/tender-country.ts) — préparation
+  /// internationale (mission architecture §12), sans logique métier par pays branchée dessus.
+  country String? @default("FR") @db.VarChar(10)
+
+  /// fr | en | de | es | it | nl (domain/tender-language.ts).
+  language String? @default("fr") @db.VarChar(10)
+
+  /// MANUAL | BOAMP | TED | PRIVATE | OTHER (domain/tender-source.ts) — provenance du Tender ;
+  /// aucun connecteur BOAMP/TED réel n'existe dans cette tranche (mission architecture §6).
+  source String? @default("MANUAL") @db.VarChar(20)
+
+  /// Identifiant du marché dans le système source (BOAMP/TED/plateforme privée) — jamais utilisé
+  /// en clé de jointure applicative, purement informatif tant qu'aucun connecteur n'existe.
+  externalReference String? @map("external_reference") @db.VarChar(255)
+  sourceUrl         String? @map("source_url") @db.VarChar(2048)
 
   estimatedAmount Decimal? @map("estimated_amount") @db.Decimal(19, 4)
-  currency        String?  @db.Char(3)
+  currency        String?  @default("EUR") @db.Char(3)
 
   internalOwnerId String? @map("internal_owner_id") @db.Uuid
 
@@ -689,9 +707,21 @@ model DceDocument {
   documentId String   @map("document_id") @db.Uuid
   document   Document @relation(fields: [documentId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
-  organizationId  String   @map("organization_id") @db.Uuid
-  createdByUserId String   @map("created_by_user_id") @db.Uuid
-  createdAt       DateTime @default(now()) @map("created_at")
+  organizationId  String @map("organization_id") @db.Uuid
+  createdByUserId String @map("created_by_user_id") @db.Uuid
+
+  /// ADMINISTRATIVE | TECHNICAL | FINANCIAL | DRAWINGS | OTHER (domain/dce-document-category.ts)
+  /// — classification déterministe calculée à l'import (mission architecture §7), jamais par IA.
+  category String @default("OTHER") @db.VarChar(20)
+
+  /// IMPORTED | READY_FOR_OCR | PENDING_TEXT_INSPECTION | READY_FOR_NATIVE_EXTRACTION |
+  /// NOT_PROCESSABLE (domain/dce-document-processing-status.ts, révisé mission P1-3) —
+  /// préparation OCR/extraction uniquement, aucun job réel ne consomme cet état dans cette
+  /// tranche. Défaut IMPORTED (jamais READY_FOR_OCR : ce n'est plus l'issue systématique).
+  processingStatus String @default("IMPORTED") @map("processing_status") @db.VarChar(32)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([dceId, documentId])
   @@index([organizationId, dceId])

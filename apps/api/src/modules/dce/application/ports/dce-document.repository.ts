@@ -31,6 +31,16 @@ export interface DceDocumentRepository {
     checksum: string;
   }): Promise<DceDocumentSummary | null>;
   countActiveByDceId(input: { organizationId: string; dceId: string }): Promise<number>;
+  /**
+   * Mission P1-2 — sérialise, pour un même DCE, tout le cycle "vérifier l'absence de doublon actif
+   * puis créer" derrière un verrou consultatif transactionnel Postgres (`pg_advisory_xact_lock`,
+   * même mécanisme que `MembershipRepository.runExclusiveForOrganization`) : un `find` suivi d'un
+   * `insert` hors verrou serait une race condition check-then-insert. `fn` ne doit jamais supposer
+   * qu'aucun import concurrent du même fichier n'est en cours — il doit relire l'absence de
+   * doublon via `dceDocumentRepository.findActiveByChecksum` après l'acquisition du verrou (donc
+   * depuis l'intérieur de `fn`), jamais avant d'appeler cette méthode.
+   */
+  runExclusiveForDce<T>(input: { dceId: string; fn: () => Promise<T> }): Promise<T>;
 }
 
 export const DCE_DOCUMENT_REPOSITORY = Symbol("DCE_DOCUMENT_REPOSITORY");

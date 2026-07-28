@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GetCurrentUserUseCase } from "../../../identity";
-import { MembershipAlreadyExistsError, PermissionMissingError } from "../../domain/errors";
+import { MembershipAlreadyExistsError, OwnershipRequiresTransferError, PermissionMissingError } from "../../domain/errors";
 import { MembershipId } from "../../domain/membership-id.value-object";
 import { OrganizationMembership } from "../../domain/organization-membership.aggregate";
 import { OrganizationRole } from "../../domain/organization-role";
@@ -84,6 +84,50 @@ describe("CreateMembershipUseCase", () => {
         role: OrganizationRole.Reviewer,
       }),
     ).rejects.toThrow(MembershipAlreadyExistsError);
+  });
+
+  it("refuses to create a membership with role OWNER when the actor is an Organization Admin", async () => {
+    const useCase = createUseCase();
+
+    await expect(
+      useCase.execute({
+        organizationId: "org-1",
+        actorId: "user-1",
+        actorRole: OrganizationRole.OrganizationAdmin,
+        userId: "user-2",
+        role: "OWNER",
+      }),
+    ).rejects.toThrow(OwnershipRequiresTransferError);
+  });
+
+  it("refuses to create a membership with role OWNER even when the actor is already OWNER", async () => {
+    const useCase = createUseCase();
+
+    await expect(
+      useCase.execute({
+        organizationId: "org-1",
+        actorId: "user-1",
+        actorRole: OrganizationRole.Owner,
+        userId: "user-2",
+        role: "OWNER",
+      }),
+    ).rejects.toThrow(OwnershipRequiresTransferError);
+
+    expect(auditLogWriter.entries).toHaveLength(0);
+  });
+
+  it("refuses a forged DTO whose role value is OWNER regardless of casing/source", async () => {
+    const useCase = createUseCase();
+
+    await expect(
+      useCase.execute({
+        organizationId: "org-1",
+        actorId: "user-1",
+        actorRole: OrganizationRole.OrganizationAdmin,
+        userId: "user-2",
+        role: OrganizationRole.Owner,
+      }),
+    ).rejects.toThrow(OwnershipRequiresTransferError);
   });
 
   it("propagates UserNotFoundError when the target user does not exist", async () => {

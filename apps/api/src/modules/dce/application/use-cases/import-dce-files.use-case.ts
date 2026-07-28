@@ -1,11 +1,13 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
-import { CreateDocumentWithFirstVersionUseCase, DocumentDomain, DocumentOrigin } from "../../../documents";
+import { CreateDocumentWithFirstVersionUseCase, DocumentDomain, DocumentOrigin, InternalDocumentCleanupService } from "../../../documents";
 import { GetTenderUseCase } from "../../../tenders";
+import { classifyDceDocument } from "../../domain/dce-document-classifier";
 import { DceDocument } from "../../domain/dce-document.entity";
+import { determineDceDocumentProcessingStatus } from "../../domain/dce-document-processing-status";
 import { DceNotFoundError, TooManyFilesError } from "../../domain/errors";
 import { isSignatureCompatibleWithExtension } from "../../domain/allowed-file-types";
 import { DcePermission } from "../../domain/dce-permission";
@@ -59,6 +61,8 @@ export type ImportDceFilesResult = Readonly<{
  */
 @Injectable()
 export class ImportDceFilesUseCase {
+  private readonly logger = new Logger(ImportDceFilesUseCase.name);
+
   constructor(
     @Inject(DCE_REPOSITORY) private readonly dceRepository: DceRepository,
     @Inject(DCE_DOCUMENT_REPOSITORY) private readonly dceDocumentRepository: DceDocumentRepository,
@@ -68,6 +72,7 @@ export class ImportDceFilesUseCase {
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly createDocumentWithFirstVersionUseCase: CreateDocumentWithFirstVersionUseCase,
+    private readonly internalDocumentCleanupService: InternalDocumentCleanupService,
   ) {}
 
   async execute(command: ImportDceFilesCommand): Promise<ImportDceFilesResult> {
@@ -121,63 +126,120 @@ export class ImportDceFilesUseCase {
         continue;
       }
 
-      const duplicate = await this.dceDocumentRepository.findActiveByChecksum({
-        organizationId: command.organizationId,
+      // Mission P1-2 — tout le cycle "vérifier l'absence de doublon actif puis créer" s'exécute
+      // à l'intérieur d'un verrou consultatif transactionnel scopé à ce DCE
+      // (runExclusiveForDce) : un `find` suivi d'un `insert` hors verrou serait une race
+      // condition check-then-insert entre deux imports concurrents du même fichier.
+      const outcome = await this.dceDocumentRepository.runExclusiveForDce({
         dceId: dce.id.value,
-        checksum: validated.checksum,
+        fn: async () => {
+          const duplicate = await this.dceDocumentRepository.findActiveByChecksum({
+            organizationId: command.organizationId,
+            dceId: dce.id.value,
+            checksum: validated.checksum,
+          });
+          if (duplicate) {
+            return { kind: "duplicate" as const, duplicate };
+          }
+
+          const documentSummary = await this.createDocumentWithFirstVersionUseCase.execute({
+            organizationId: command.organizationId,
+            actorId: command.actorId,
+            actorRole: command.actorRole,
+            title: validated.sanitizedFilename,
+            origin: DocumentOrigin.Dce,
+            domain: DocumentDomain.Tender,
+            file: { buffer: file.buffer, originalFilename: file.originalFilename, mimeType: file.mimeType },
+            maxFileSizeBytes: command.maxFileSizeBytes,
+            requestId: command.requestId,
+          });
+
+          try {
+            const occurredAt = this.clock.now();
+            const category = classifyDceDocument({
+              filename: validated.sanitizedFilename,
+              extension: validated.extension,
+            });
+            // Mission P1-3 — le statut de préparation dépend du format réel, jamais un
+            // READY_FOR_OCR systématique (voir determineDceDocumentProcessingStatus).
+            const processingStatus = determineDceDocumentProcessingStatus(validated.extension);
+
+            const link = DceDocument.create({
+              dceId: dce.id.value,
+              documentId: documentSummary.id,
+              organizationId: command.organizationId,
+              createdByUserId: command.actorId,
+              category,
+              occurredAt,
+            });
+            link.transitionProcessingStatus(processingStatus, occurredAt);
+            await this.dceDocumentRepository.create(link);
+
+            await this.auditLogWriter.record({
+              organizationId: command.organizationId,
+              actorId: command.actorId,
+              action: "dce.document_imported",
+              resourceType: "dce_document",
+              resourceId: documentSummary.id,
+              requestId: command.requestId,
+              metadata: {
+                dceId: dce.id.value,
+                tenderId: command.tenderId,
+                checksum: validated.checksum,
+                category,
+                processingStatus,
+              },
+            });
+
+            const summary: DceDocumentSummary = {
+              dceId: dce.id.value,
+              documentId: documentSummary.id,
+              originalFilename: validated.sanitizedFilename,
+              sanitizedFilename: validated.sanitizedFilename,
+              mimeType: file.mimeType,
+              extension: validated.extension,
+              sizeBytes: validated.sizeBytes,
+              checksum: validated.checksum,
+              currentVersionNumber: 1,
+              category: link.category,
+              processingStatus: link.processingStatus,
+              createdByUserId: command.actorId,
+              createdAt: link.createdAt.toISOString(),
+            };
+            return { kind: "accepted" as const, summary };
+          } catch (error) {
+            // Mission P1-1 bis — compensation via un mécanisme interne, jamais DeleteDocumentUseCase
+            // (protégé par DocumentPermission.Delete : un CONTRIBUTOR a dce:import mais pas
+            // forcément document:delete, ce qui ferait échouer silencieusement la compensation
+            // elle-même). Ce Document vient d'être créé DANS cette tentative, jamais réutilisé (ce
+            // use case crée toujours un Document neuf par fichier accepté) — le nettoyer ici ne
+            // peut donc jamais affecter un autre import ni une ressource préexistante.
+            // InternalDocumentCleanupService ne lève jamais lui-même (échecs journalisés en
+            // interne) ; le `catch` ci-dessous n'est qu'un filet de sécurité supplémentaire pour
+            // garantir, même en cas de bug, que l'erreur d'origine reste toujours prioritaire.
+            await this.internalDocumentCleanupService
+              .purgeJustCreatedDocument({ organizationId: command.organizationId, documentId: documentSummary.id })
+              .catch((cleanupError: unknown) => {
+                this.logger.error(
+                  `Compensation failed: could not purge orphaned Document ${documentSummary.id} ` +
+                    `after a DceDocument linking failure (dceId=${dce.id.value}). Manual cleanup required.`,
+                  cleanupError instanceof Error ? cleanupError.stack : String(cleanupError),
+                );
+              });
+            throw error;
+          }
+        },
       });
-      if (duplicate) {
+
+      if (outcome.kind === "duplicate") {
         rejected.push({
           originalFilename: file.originalFilename,
-          reason: `duplicate of an already imported file (${duplicate.originalFilename}).`,
+          reason: `duplicate of an already imported file (${outcome.duplicate.originalFilename}).`,
         });
         continue;
       }
 
-      const documentSummary = await this.createDocumentWithFirstVersionUseCase.execute({
-        organizationId: command.organizationId,
-        actorId: command.actorId,
-        actorRole: command.actorRole,
-        title: validated.sanitizedFilename,
-        origin: DocumentOrigin.Dce,
-        domain: DocumentDomain.Tender,
-        file: { buffer: file.buffer, originalFilename: file.originalFilename, mimeType: file.mimeType },
-        maxFileSizeBytes: command.maxFileSizeBytes,
-        requestId: command.requestId,
-      });
-
-      const link = DceDocument.create({
-        dceId: dce.id.value,
-        documentId: documentSummary.id,
-        organizationId: command.organizationId,
-        createdByUserId: command.actorId,
-        occurredAt: this.clock.now(),
-      });
-      await this.dceDocumentRepository.create(link);
-
-      await this.auditLogWriter.record({
-        organizationId: command.organizationId,
-        actorId: command.actorId,
-        action: "dce.document_imported",
-        resourceType: "dce_document",
-        resourceId: documentSummary.id,
-        requestId: command.requestId,
-        metadata: { dceId: dce.id.value, tenderId: command.tenderId, checksum: validated.checksum },
-      });
-
-      accepted.push({
-        dceId: dce.id.value,
-        documentId: documentSummary.id,
-        originalFilename: validated.sanitizedFilename,
-        sanitizedFilename: validated.sanitizedFilename,
-        mimeType: file.mimeType,
-        extension: validated.extension,
-        sizeBytes: validated.sizeBytes,
-        checksum: validated.checksum,
-        currentVersionNumber: 1,
-        createdByUserId: command.actorId,
-        createdAt: link.createdAt.toISOString(),
-      });
+      accepted.push(outcome.summary);
     }
 
     if (accepted.length > 0) {

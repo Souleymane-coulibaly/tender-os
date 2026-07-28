@@ -75,11 +75,27 @@ Elle possède :
 - son abonnement ;
 - ses paramètres IA.
 
-### BR-ORG-002 — Administrateur obligatoire
+### BR-ORG-002 — Propriétaire obligatoire (OWNER)
 
-Chaque organisation doit avoir au moins un utilisateur avec le rôle `Organization Admin`.
+Chaque organisation doit avoir, à tout moment, exactement un membre actif avec le rôle `OWNER` — distinct de `Organization Admin` (qui reste le rôle administratif le plus élevé après l'OWNER, mais n'est jamais le seul rempart de dernier recours).
 
-Le dernier administrateur ne peut pas être supprimé ou rétrogradé sans transfert préalable.
+Le créateur d'une organisation devient automatiquement son `OWNER` — création de l'`Organization` et de la première `OrganizationMembership` (rôle `OWNER`) dans la même opération atomique, jamais deux étapes séparées.
+
+Le dernier `OWNER` actif d'une organisation ne peut :
+- ni quitter l'organisation (retrait de sa propre Membership) ;
+- ni être supprimé (retrait de sa Membership par un tiers) ;
+- ni être suspendu ;
+- ni être rétrogradé (changement de rôle) ;
+
+sans transfert de propriété préalable (BR-ORG-004). Ces quatre interdictions sont vérifiées par le Domain/les cas d'usage, jamais seulement par un contrôleur ou l'interface.
+
+Un `Organization Admin` ne peut jamais attribuer le rôle `OWNER` par un changement de rôle ordinaire (`organization:role:assign`) : seul le cas d'usage dédié de transfert de propriété (BR-ORG-004) peut faire porter ce rôle à quelqu'un d'autre. Un utilisateur ne peut jamais s'auto-attribuer `OWNER`.
+
+La suppression d'une organisation (`organization:delete` — action destructive, distincte de l'archivage d'un Tender/Workspace) est réservée à son `OWNER`.
+
+### BR-ORG-002bis — Administrateur obligatoire (règle historique, toujours active)
+
+Indépendamment de BR-ORG-002, chaque organisation doit conserver au moins un `Organization Admin` actif (l'`OWNER` compte structurellement comme satisfaisant cette exigence tant qu'aucun rôle `Organization Admin` distinct n'existe par ailleurs). Le dernier `Organization Admin` actif ne peut pas être rétrogradé, suspendu ou retiré sans qu'un autre membre actif ne porte déjà ce rôle ou le rôle `OWNER`.
 
 ### BR-ORG-003 — Profil entreprise
 
@@ -98,12 +114,26 @@ Le profil entreprise peut contenir :
 
 Ces informations alimentent le matching et la qualification IA.
 
+### BR-ORG-004 — Transfert de propriété
+
+Le transfert de propriété (`OrganizationOwnershipTransferred`) est une opération métier dédiée, jamais un simple changement de rôle :
+
+- seul l'`OWNER` actif courant peut l'initier ;
+- l'ancien et le nouveau propriétaire doivent appartenir à la même organisation ;
+- le nouveau propriétaire doit être une Membership active existante (jamais un utilisateur externe à l'organisation) ;
+- l'opération est atomique : l'ancien `OWNER` devient `Organization Admin` et le nouveau devient `OWNER` dans la même transaction, ou aucun des deux changements n'a lieu ;
+- l'organisation ne se retrouve jamais, à aucun instant observable, sans `OWNER` ;
+- un `Organization Admin` ne peut pas contourner ce cas d'usage avec un changement de rôle classique (BR-ORG-002).
+
+Modèle retenu pour cette tranche : **propriétaire unique**. L'architecture (Membership porte le rôle, pas de champ `ownerId` sur `Organization`) permet d'évoluer vers plusieurs `OWNER` simultanés plus tard sans migration structurelle, mais cette évolution n'est pas développée maintenant.
+
 ---
 
 ## 4. Utilisateurs, rôles et permissions
 
 ### Rôles initiaux
 
+- `OWNER` — propriétaire de l'organisation, exactement un membre actif à la fois (BR-ORG-002). Superset des permissions `Organization Admin`.
 - `Organization Admin`
 - `Bid Manager`
 - `Contributor`
@@ -111,6 +141,8 @@ Ces informations alimentent le matching et la qualification IA.
 - `Executive`
 - `External Consultant`
 - `Read Only`
+
+Un éventuel rôle plateforme (`PLATFORM_OWNER`, `PLATFORM_ADMIN`, `PLATFORM_SUPPORT` — voir module Platform Administration) reste distinct de ces rôles d'organisation : un `OWNER` d'organisation n'est jamais, de ce seul fait, un administrateur de la plateforme TenderOS elle-même.
 
 ### BR-USER-001 — Principe du moindre privilège
 

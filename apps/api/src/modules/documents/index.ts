@@ -25,6 +25,9 @@ export type { DocumentDownload } from "./application/ports/storage-provider";
 export { DeleteDocumentUseCase } from "./application/use-cases/delete-document.use-case";
 export type { DeleteDocumentCommand } from "./application/use-cases/delete-document.use-case";
 
+export { InternalDocumentCleanupService } from "./application/services/internal-document-cleanup.service";
+export type { PurgeJustCreatedDocumentCommand } from "./application/services/internal-document-cleanup.service";
+
 export type { IncomingFile } from "./application/incoming-file";
 
 export { DocumentOrigin } from "./domain/document-origin";

@@ -23,6 +23,7 @@ import { ListMyMembershipsUseCase } from "../../application/use-cases/list-my-me
 import { ListOrganizationMembersUseCase } from "../../application/use-cases/list-organization-members.use-case";
 import { RemoveMembershipUseCase } from "../../application/use-cases/remove-membership.use-case";
 import { SuspendMembershipUseCase } from "../../application/use-cases/suspend-membership.use-case";
+import { TransferOrganizationOwnershipUseCase } from "../../application/use-cases/transfer-organization-ownership.use-case";
 import { CurrentMembershipContext } from "./current-membership-context.decorator";
 import { MembershipsErrorFilter } from "./memberships-error.filter";
 import type { MembershipContext } from "./organization-membership.guard";
@@ -31,9 +32,11 @@ import {
   presentMembership,
   presentMyMembership,
   presentOrganizationMember,
+  presentOwnershipTransfer,
   presentPage,
   type MembershipResponse,
   type OrganizationMemberResponse,
+  type OwnershipTransferResponse,
   type PageResponse,
 } from "./presenters";
 import {
@@ -41,9 +44,11 @@ import {
   CreateMembershipBodySchema,
   ListMembershipsQuerySchema,
   MembershipIdParamSchema,
+  TransferOwnershipBodySchema,
   type ChangeMembershipRoleBody,
   type CreateMembershipBody,
   type ListMembershipsQuery,
+  type TransferOwnershipBody,
 } from "./schemas";
 
 @Controller("organization-memberships")
@@ -58,6 +63,7 @@ export class OrganizationMembershipsController {
     private readonly changeMembershipRoleUseCase: ChangeMembershipRoleUseCase,
     private readonly suspendMembershipUseCase: SuspendMembershipUseCase,
     private readonly removeMembershipUseCase: RemoveMembershipUseCase,
+    private readonly transferOrganizationOwnershipUseCase: TransferOrganizationOwnershipUseCase,
   ) {}
 
   @Get("me")
@@ -152,6 +158,25 @@ export class OrganizationMembershipsController {
     });
 
     return presentMembership(result);
+  }
+
+  @Post("transfer-ownership")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(OrganizationMembershipGuard)
+  async transferOwnership(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membershipContext: MembershipContext,
+    @Body(new ZodValidationPipe(TransferOwnershipBodySchema)) body: TransferOwnershipBody,
+    @Req() request: RequestWithId,
+  ): Promise<OwnershipTransferResponse> {
+    const result = await this.transferOrganizationOwnershipUseCase.execute({
+      organizationId: membershipContext.organizationId,
+      actorId: actor.userId,
+      newOwnerMembershipId: body.newOwnerMembershipId,
+      requestId: request.id,
+    });
+
+    return presentOwnershipTransfer(result);
   }
 
   @Post(":id/suspend")

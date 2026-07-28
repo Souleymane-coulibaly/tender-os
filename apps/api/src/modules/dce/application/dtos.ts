@@ -38,6 +38,8 @@ export type DceDocumentSummary = {
   sizeBytes: number;
   checksum: string;
   currentVersionNumber: number;
+  category: string;
+  processingStatus: string;
   createdByUserId: string;
   createdAt: string;
 };

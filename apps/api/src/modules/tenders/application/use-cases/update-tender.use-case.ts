@@ -3,6 +3,10 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import { TenderNotFoundError } from "../../domain/errors";
 import { TenderPermission } from "../../domain/tender-permission";
+import { parseMarketType } from "../../domain/market-type";
+import { parseTenderCountry } from "../../domain/tender-country";
+import { parseTenderLanguage } from "../../domain/tender-language";
+import { parseTenderSource } from "../../domain/tender-source";
 import { toTenderSummary, type TenderSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
@@ -21,6 +25,11 @@ export type UpdateTenderCommand = Readonly<{
   submissionDeadline?: string | undefined;
   procedureType?: string | undefined;
   marketType?: string | undefined;
+  country?: string | undefined;
+  language?: string | undefined;
+  source?: string | undefined;
+  externalReference?: string | undefined;
+  sourceUrl?: string | undefined;
   estimatedAmount?: string | undefined;
   currency?: string | undefined;
   internalOwnerId?: string | undefined;
@@ -59,7 +68,12 @@ export class UpdateTenderUseCase {
         publicationDate: command.publicationDate ? new Date(command.publicationDate) : undefined,
         submissionDeadline: command.submissionDeadline ? new Date(command.submissionDeadline) : undefined,
         procedureType: command.procedureType,
-        marketType: command.marketType,
+        marketType: command.marketType !== undefined ? parseMarketType(command.marketType) : undefined,
+        country: command.country !== undefined ? parseTenderCountry(command.country) : undefined,
+        language: command.language !== undefined ? parseTenderLanguage(command.language) : undefined,
+        source: command.source !== undefined ? parseTenderSource(command.source) : undefined,
+        externalReference: command.externalReference,
+        sourceUrl: command.sourceUrl,
         estimatedAmount: command.estimatedAmount,
         currency: command.currency,
         internalOwnerId: command.internalOwnerId,

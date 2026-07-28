@@ -9,6 +9,7 @@ import { Document } from "../../documents/domain/document.aggregate";
 import { PrismaDocumentRepository } from "../../documents/infrastructure/prisma-document.repository";
 import { Dce } from "../domain/dce.aggregate";
 import { DceDocument } from "../domain/dce-document.entity";
+import { DceDocumentCategory } from "../domain/dce-document-category";
 import { DceId } from "../domain/dce-id.value-object";
 import { PrismaDceDocumentRepository } from "./prisma-dce-document.repository";
 import { PrismaDceRepository } from "./prisma-dce.repository";
@@ -125,6 +126,7 @@ describe("PrismaDceDocumentRepository (PostgreSQL)", () => {
       documentId: document.id.value,
       organizationId,
       createdByUserId: actorId,
+      category: DceDocumentCategory.Other,
       occurredAt: new Date(),
     });
     await repository.create(link);
@@ -150,6 +152,7 @@ describe("PrismaDceDocumentRepository (PostgreSQL)", () => {
         documentId: document.id.value,
         organizationId,
         createdByUserId: actorId,
+        category: DceDocumentCategory.Other,
         occurredAt: new Date(),
       }),
     );
@@ -167,6 +170,7 @@ describe("PrismaDceDocumentRepository (PostgreSQL)", () => {
             documentId: document.id.value,
             organizationId,
             createdByUserId: actorId,
+            category: DceDocumentCategory.Other,
             occurredAt: new Date(),
           }),
         );
@@ -194,6 +198,7 @@ describe("PrismaDceDocumentRepository (PostgreSQL)", () => {
         documentId: document.id.value,
         organizationId,
         createdByUserId: actorId,
+        category: DceDocumentCategory.Other,
         occurredAt: new Date(),
       }),
     );

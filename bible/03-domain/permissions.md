@@ -166,6 +166,10 @@ interface AuthorizationDecision {
 
 ## 4. Rôles d'organisation
 
+### Owner
+
+Propriétaire de l'organisation — exactement un membre actif à la fois (`bible/03-domain/business-rules.md` BR-ORG-002). Dispose de toutes les permissions d'`Organization Admin`, plus des actions réservées : suppression de l'organisation ; transfert de propriété. Le rôle `OWNER` ne peut jamais être attribué par un changement de rôle ordinaire (`organization:role:assign`) — uniquement par le cas d'usage dédié de transfert de propriété (BR-ORG-004).
+
 ### Organization Admin
 
 Responsable de l'administration globale. Peut notamment : gérer les membres ; gérer les rôles ; configurer les intégrations ; gérer l'abonnement ; accéder aux paramètres de sécurité ; définir les politiques de l'organisation ; consulter les Audit Logs selon les droits accordés.

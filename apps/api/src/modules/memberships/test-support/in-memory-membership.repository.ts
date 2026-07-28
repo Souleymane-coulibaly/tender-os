@@ -1,4 +1,8 @@
-import type { MembershipPage, MembershipRepository } from "../application/ports/membership.repository";
+import type {
+  MembershipPage,
+  MembershipRepository,
+  OwnershipTransferContext,
+} from "../application/ports/membership.repository";
 import type { OrganizationMembership } from "../domain/organization-membership.aggregate";
 import type { OrganizationRole } from "../domain/organization-role";
 import { MembershipStatus } from "../domain/membership-status";
@@ -75,6 +79,26 @@ export class InMemoryMembershipRepository implements MembershipRepository {
 
   async save(membership: OrganizationMembership): Promise<void> {
     this.records.set(membership.id.value, membership);
+  }
+
+  /**
+   * Ne simule aucun verrou réel (pas de concurrence possible en mémoire, mono-thread) : suffisant
+   * pour les tests unitaires de logique métier, jamais pour prouver l'absence de race condition —
+   * voir prisma-membership.repository.integration.spec.ts pour la preuve réelle contre PostgreSQL.
+   */
+  async runExclusiveForOrganization<T>(input: {
+    organizationId: string;
+    fn: (context: OwnershipTransferContext) => Promise<T>;
+  }): Promise<T> {
+    const context: OwnershipTransferContext = {
+      findByOrganizationAndUser: (findInput) => this.findByOrganizationAndUser(findInput),
+      findById: (findInput) => this.findById(findInput),
+      save: async (saveInput) => {
+        this.records.set(saveInput.previousOwner.id.value, saveInput.previousOwner);
+        this.records.set(saveInput.newOwner.id.value, saveInput.newOwner);
+      },
+    };
+    return input.fn(context);
   }
 
   async seed(membership: OrganizationMembership): Promise<void> {

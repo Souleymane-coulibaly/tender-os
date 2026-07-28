@@ -20,6 +20,7 @@ import { ImportDceZipUseCase } from "./application/use-cases/import-dce-zip.use-
 import { ListDceDocumentsUseCase } from "./application/use-cases/list-dce-documents.use-case";
 import { ReplaceDceDocumentUseCase } from "./application/use-cases/replace-dce-document.use-case";
 
+import { DCE_CONFIG, loadDceConfig } from "./infrastructure/dce-config";
 import { MagicByteFileSignatureDetector } from "./infrastructure/magic-byte-file-signature.detector";
 import { NotWiredAsyncJobSubmitter } from "./infrastructure/not-wired-async-job.submitter";
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
@@ -49,6 +50,10 @@ import { DceController } from "./interfaces/http/dce.controller";
     { provide: ZIP_ARCHIVE_INSPECTOR, useClass: YauzlArchiveInspector },
     { provide: ASYNC_JOB_SUBMITTER, useClass: NotWiredAsyncJobSubmitter },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
+    // Mission P1-4 — la factory s'exécute une seule fois, à l'instanciation du module (donc au
+    // démarrage de l'application) : une configuration absente ou invalide fait échouer
+    // NestFactory.create(...) avant même que le serveur n'écoute, jamais au milieu d'une requête.
+    { provide: DCE_CONFIG, useFactory: () => loadDceConfig() },
   ],
 })
 export class DceModule {}

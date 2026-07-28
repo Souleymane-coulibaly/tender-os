@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export const MembershipIdParamSchema = z.string().uuid();
 
+export const OrganizationIdParamSchema = z.string().uuid();
+
 export const CreateMembershipBodySchema = z
   .object({
     userId: z.string().uuid(),
@@ -19,6 +21,14 @@ export const ChangeMembershipRoleBodySchema = z
   .strict();
 
 export type ChangeMembershipRoleBody = z.infer<typeof ChangeMembershipRoleBodySchema>;
+
+export const TransferOwnershipBodySchema = z
+  .object({
+    newOwnerMembershipId: z.string().uuid(),
+  })
+  .strict();
+
+export type TransferOwnershipBody = z.infer<typeof TransferOwnershipBodySchema>;
 
 export const ListMembershipsQuerySchema = z
   .object({

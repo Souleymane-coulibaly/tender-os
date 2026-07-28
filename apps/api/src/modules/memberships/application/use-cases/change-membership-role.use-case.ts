@@ -1,14 +1,13 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
-import { MembershipNotFoundError } from "../../domain/errors";
+import { MembershipNotFoundError, OwnershipRequiresTransferError } from "../../domain/errors";
 import { OrganizationPermission } from "../../domain/organization-permission";
-import type { OrganizationRole } from "../../domain/organization-role";
-import { parseOrganizationRole } from "../../domain/organization-role";
+import { OrganizationRole, parseOrganizationRole } from "../../domain/organization-role";
 import { toMembershipSummary, type MembershipSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { MEMBERSHIP_REPOSITORY, type MembershipRepository } from "../ports/membership.repository";
-import { assertNotLastActiveOrganizationAdmin } from "../policies/last-admin.policy";
+import { assertNotLastActiveOrganizationAdmin, assertNotLastActiveOwner } from "../policies/last-admin.policy";
 import { assertHasPermission } from "../policies/membership-authorization.policy";
 
 export type ChangeMembershipRoleCommand = Readonly<{
@@ -35,6 +34,14 @@ export class ChangeMembershipRoleUseCase {
 
     const nextRole = parseOrganizationRole(command.role);
 
+    // BR-ORG-002/BR-ORG-004 — le rôle OWNER ne s'attribue ni ne se retire jamais par un
+    // changement de rôle ordinaire, dans un sens comme dans l'autre : seul
+    // TransferOrganizationOwnershipUseCase peut le faire. Vérifié avant même de charger la
+    // Membership cible : un ADMIN ne doit jamais pouvoir "essayer" de désigner un OWNER.
+    if (nextRole === OrganizationRole.Owner) {
+      throw new OwnershipRequiresTransferError();
+    }
+
     const membership = await this.membershipRepository.findById({
       organizationId: command.organizationId,
       membershipId: command.membershipId,
@@ -44,7 +51,16 @@ export class ChangeMembershipRoleUseCase {
       throw new MembershipNotFoundError();
     }
 
+    if (membership.role === OrganizationRole.Owner) {
+      throw new OwnershipRequiresTransferError();
+    }
+
     if (nextRole !== membership.role) {
+      await assertNotLastActiveOwner({
+        membershipRepository: this.membershipRepository,
+        organizationId: command.organizationId,
+        membership,
+      });
       await assertNotLastActiveOrganizationAdmin({
         membershipRepository: this.membershipRepository,
         organizationId: command.organizationId,

@@ -118,6 +118,8 @@ export class InMemoryDceDocumentRepository implements DceDocumentRepository {
       sizeBytes: version.sizeBytes,
       checksum: version.checksum,
       currentVersionNumber: version.currentVersionNumber,
+      category: link.category,
+      processingStatus: link.processingStatus,
       createdByUserId: link.createdByUserId,
       createdAt: link.createdAt.toISOString(),
     };
@@ -150,6 +152,13 @@ export class InMemoryDceDocumentRepository implements DceDocumentRepository {
 
   async countActiveByDceId(input: { organizationId: string; dceId: string }): Promise<number> {
     return (await this.listSummariesByDceId(input)).length;
+  }
+
+  /** Ne simule aucun verrou réel (mono-thread, pas de concurrence possible en mémoire) —
+   *  suffisant pour les tests unitaires de logique métier, jamais pour prouver l'absence de race
+   *  condition (voir l'intégration PostgreSQL dédiée). */
+  async runExclusiveForDce<T>(input: { dceId: string; fn: () => Promise<T> }): Promise<T> {
+    return input.fn();
   }
 }
 

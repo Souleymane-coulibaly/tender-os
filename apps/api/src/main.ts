@@ -1,12 +1,17 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
+import { loadDceConfig } from "./modules/dce/infrastructure/dce-config";
 import { getRequiredEnv } from "./shared-kernel/env";
 import { requestIdMiddleware } from "./shared-kernel/request-id.middleware";
 
 function assertRequiredEnv(): void {
   getRequiredEnv("DATABASE_URL");
   getRequiredEnv("AUTH_SECRET");
+  // Échec précoce et explicite (mission P1-4) — DceModule revalide la même configuration via sa
+  // propre factory DI, mais un échec ici survient avant même que NestFactory.create() ne
+  // commence à construire le graphe de dépendances.
+  loadDceConfig();
 }
 
 async function bootstrap(): Promise<void> {

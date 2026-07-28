@@ -21,6 +21,7 @@ import { ListOrganizationDocumentsUseCase } from "./application/use-cases/list-o
 import { ListTenderDocumentsUseCase } from "./application/use-cases/list-tender-documents.use-case";
 import { RestoreDocumentUseCase } from "./application/use-cases/restore-document.use-case";
 import { UpdateDocumentMetadataUseCase } from "./application/use-cases/update-document-metadata.use-case";
+import { InternalDocumentCleanupService } from "./application/services/internal-document-cleanup.service";
 
 import { LocalFilesystemStorageProvider } from "./infrastructure/local-filesystem-storage.provider";
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
@@ -48,6 +49,7 @@ import { TenderDocumentsController } from "./interfaces/http/tender-documents.co
     DownloadDocumentVersionUseCase,
     AttachDocumentToTenderUseCase,
     DetachDocumentFromTenderUseCase,
+    InternalDocumentCleanupService,
 
     { provide: DOCUMENT_REPOSITORY, useClass: PrismaDocumentRepository },
     { provide: DOCUMENT_VERSION_REPOSITORY, useClass: PrismaDocumentVersionRepository },
@@ -65,6 +67,10 @@ import { TenderDocumentsController } from "./interfaces/http/tender-documents.co
     GetDocumentUseCase,
     DownloadDocumentVersionUseCase,
     DeleteDocumentUseCase,
+    // Nettoyage technique interne (mission P1-1 bis) — jamais un endpoint, réexporté uniquement
+    // pour que DCE (ImportDceFilesUseCase) puisse compenser une écriture partielle sans dépendre
+    // du RBAC utilisateur porté par DeleteDocumentUseCase.
+    InternalDocumentCleanupService,
   ],
 })
 export class DocumentsModule {}

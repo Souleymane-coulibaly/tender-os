@@ -1169,3 +1169,250 @@ L'architecture est considérée comme correctement implémentée lorsque :
 - les migrations sont versionnées ;
 - les workflows critiques disposent de tests ;
 - toute déviation majeure possède un ADR.
+
+---
+
+## 46. Mise à jour d'architecture — organisations, marchés, sources, DCE unique (2026)
+
+Les sections 46 à 54 documentent une mise à jour d'architecture réalisée après l'implémentation réelle des modules Identity, Organizations, Memberships, Tenders, Documents et DCE. Elles **complètent** ce document sans contredire les sections 1-45 sur les principes généraux (monolithe modulaire, DDD, Clean Architecture, multi-tenant, sécurité) — mais elles **corrigent** la référence là où le code réel a divergé du modèle `Workspace` initialement décrit en §8 et dans `bible/03-domain/domain-model.md` : **il n'existe pas de `Workspace`**. `Tender` est directement l'agrégat racine du travail de réponse ; `DCE` s'y rattache directement (`tenderId`), jamais via un `Workspace` intermédiaire. Toute mention de `Workspace` dans les documents antérieurs (`domain-model.md`, `events.md`, `workflow.md`, `permissions.md` §5) reste une cible non implémentée, à réévaluer si un besoin réel de regroupement au-dessus du Tender apparaît — elle ne doit pas être prise comme description de l'existant.
+
+Convention utilisée ci-dessous, répétée à chaque section concernée :
+
+```text
+[PRÉPARÉ]   = port, enum, champ ou document d'architecture posé maintenant, aucune logique métier réelle derrière
+[DÉVELOPPÉ] = fonctionnalité réellement implémentée et testée
+```
+
+---
+
+## 47. Utilisateurs, organisations et propriétaire (OWNER) — [DÉVELOPPÉ]
+
+Le rôle n'est jamais porté directement par `User` : il est porté par `OrganizationMembership` (module Memberships), qui relie un `User` (Identity) à une `Organization` (Organizations) par identifiant uniquement (frontière de module, §36).
+
+```text
+User
+  └── OrganizationMembership
+          ├── id
+          ├── userId
+          ├── organizationId
+          ├── role            (OrganizationRole)
+          ├── status          (MembershipStatus : INVITED | ACTIVE | SUSPENDED | REMOVED)
+          ├── joinedAt / suspendedAt / expiresAt
+          ├── createdAt / updatedAt
+```
+
+`OrganizationRole` (8 valeurs, `apps/api/src/modules/memberships/domain/organization-role.ts`) :
+
+```text
+OWNER                 — propriétaire, exactement un membre actif à la fois
+ORGANIZATION_ADMIN
+BID_MANAGER
+CONTRIBUTOR
+REVIEWER
+EXECUTIVE
+EXTERNAL_CONSULTANT
+READ_ONLY
+```
+
+Un rôle plateforme distinct (`PlatformRole` : `PLATFORM_OWNER | PLATFORM_ADMIN | PLATFORM_SUPPORT`, module Platform Administration) existe déjà et reste indépendant — un `OWNER` d'organisation n'a aucun droit plateforme de ce seul fait, et réciproquement.
+
+**Règles appliquées par le Domain et les cas d'usage** (jamais seulement par un contrôleur) — voir `bible/03-domain/business-rules.md` BR-ORG-002/BR-ORG-002bis/BR-ORG-004 pour le détail normatif :
+
+- le créateur d'une organisation devient automatiquement son `OWNER`, dans la même opération atomique que la création de l'`Organization` ;
+- une organisation a toujours exactement un `OWNER` actif ;
+- le dernier `OWNER` ne peut ni quitter, ni être supprimé, ni être suspendu, ni être rétrogradé ;
+- un `Organization Admin` ne peut pas attribuer le rôle `OWNER` par un changement de rôle ordinaire ;
+- un utilisateur ne peut pas s'auto-attribuer `OWNER` ;
+- la suppression d'une organisation est réservée à son `OWNER`.
+
+---
+
+## 48. Transfert de propriété — [DÉVELOPPÉ]
+
+Cas d'usage dédié `TransferOrganizationOwnershipUseCase` (module Memberships) — jamais un simple `ChangeMembershipRole`.
+
+```text
+Avant : Membership A = OWNER, Membership B = ADMIN|CONTRIBUTOR|...
+Après : Membership A = ORGANIZATION_ADMIN, Membership B = OWNER
+```
+
+Règles : seul l'`OWNER` actif courant peut l'initier ; l'ancien et le nouveau propriétaire doivent appartenir à la même organisation ; le nouveau propriétaire doit déjà être une Membership active ; transfert atomique (une seule transaction Prisma, les deux changements de rôle réussissent ou échouent ensemble) ; l'organisation ne se retrouve jamais sans `OWNER`, à aucun instant observable.
+
+Traçabilité : entrée d'audit `organization_membership.ownership_transferred` (mécanisme d'audit déjà en place, `AuditLogWriter` du module Memberships) portant `organizationId`, `previousOwnerId`, `newOwnerId`, `transferredBy`, `transferredAt`. **[PRÉPARÉ]** — pas de bus d'événements/Outbox distinct : ce projet n'a pas encore de Transactional Outbox réelle (§20 reste une cible), donc aucun événement `OrganizationOwnershipTransferred` publié ailleurs que dans l'audit log pour cette tranche.
+
+Modèle retenu : **propriétaire unique**. L'architecture (rôle porté par la Membership, pas par un champ `ownerId` sur `Organization`) permet d'évoluer vers plusieurs `OWNER` simultanés plus tard sans migration structurelle — **[PRÉPARÉ]**, non activé, car cela complexifierait inutilement le MVP (quel `OWNER` peut retirer quel autre `OWNER` ? aucun besoin documenté ne le justifie aujourd'hui).
+
+---
+
+## 49. Architecture globale des marchés — [DÉVELOPPÉ] pour le cœur, [PRÉPARÉ] pour l'international/privé
+
+`Tender` (module Tenders) reste l'agrégat central unique — aucun moteur distinct par type de marché.
+
+```text
+Marchés
+├── Marchés publics
+│   ├── France        [DÉVELOPPÉ] — cas d'usage réel de ce projet
+│   ├── Europe         [PRÉPARÉ]  — country=EU, aucun connecteur
+│   └── futurs pays     [PRÉPARÉ]  — enum extensible
+│
+└── Marchés privés      [PRÉPARÉ]  — marketType=PRIVATE accepté, aucune règle spécifique codée
+    ├── consultations privées
+    ├── invitations fournisseurs
+    └── dépôts sécurisés
+```
+
+Champs `Tender` (existants, marqués `[DÉVELOPPÉ]`, et nouveaux, marqués `[PRÉPARÉ]` — Prisma §51) :
+
+| Champ | État | Notes |
+|---|---|---|
+| `estimatedAmount`, `currency` | [DÉVELOPPÉ] | déjà présents |
+| `marketType` | [DÉVELOPPÉ] → enum formalisé | existait en string libre ; validé désormais par `MarketType` (`PUBLIC \| PRIVATE`) côté application, colonne SQL inchangée (VARCHAR, même convention que `TenderStatus`) |
+| `country` | [PRÉPARÉ] | `TenderCountry` : `FR \| BE \| DE \| ES \| IT \| LU \| NL \| EU \| OTHER` — défaut `FR` sur les lignes existantes |
+| `language` | [PRÉPARÉ] | `TenderLanguage` : `fr \| en \| de \| es \| it \| nl` — défaut `fr` |
+| `source` | [PRÉPARÉ] | `TenderSource` : `MANUAL \| BOAMP \| TED \| PRIVATE \| OTHER` — défaut `MANUAL` |
+| `externalReference` | [PRÉPARÉ] | identifiant côté source externe, nullable |
+| `sourceUrl` | [PRÉPARÉ] | URL de l'avis d'origine, nullable |
+
+`marketType` (nature du marché : public/privé) et `source` (provenance technique/fonctionnelle : import manuel, BOAMP, TED, marché privé...) sont deux dimensions **distinctes**, jamais confondues dans un seul champ.
+
+Valeurs par défaut appliquées aux lignes déjà existantes lors de la migration (§51) : `country=FR`, `language=fr`, `currency` déjà nullable inchangé, `source=MANUAL`, `marketType=PUBLIC` lorsque non renseigné.
+
+---
+
+## 50. Sources et connecteurs — [PRÉPARÉ] (abstraction uniquement)
+
+Port indépendant de NestJS/Prisma/tout SDK externe, posé dans le module Tenders (`apps/api/src/modules/tenders/application/ports/tender-source-connector.ts`) :
+
+```typescript
+interface TenderSourceConnector {
+  readonly source: TenderSource;
+  search(criteria: TenderSearchCriteria): Promise<TenderSourceSearchResult[]>;
+  fetchTender(externalReference: string): Promise<ExternalTender>;
+  fetchDocuments(externalReference: string): Promise<ExternalTenderDocument[]>;
+}
+```
+
+**Aucun connecteur réel n'est développé.** Aucune implémentation de ce port n'existe, aucun provider NestJS ne l'enregistre — le port existe uniquement pour que sa forme soit stable le jour où un connecteur sera construit.
+
+Structure de dossier cible, à créer seulement quand un premier connecteur réel sera développé (aucun dossier vide créé maintenant) :
+
+```text
+connectors/
+├── manual/    (déjà l'implémentation implicite : création directe d'un Tender via l'API)
+├── boamp/
+├── ted/
+├── private/
+├── belgium/ ...
+└── future/
+```
+
+Explicitement hors périmètre pour l'instant : authentification BOAMP, appels API TED, scraping, import automatique, synchronisation planifiée, matching IA, alertes.
+
+---
+
+## 51. Moteur DCE unique — état réel et pipeline cible
+
+Le module `DCE` (`apps/api/src/modules/dce`) est l'unique moteur documentaire, quelle que soit la source du `Tender` auquel il se rattache — un document importé via un connecteur entrerait dans le **même** pipeline qu'un import manuel, jamais un chemin de code séparé.
+
+```text
+Source du marché (manuel [DÉVELOPPÉ] | connecteur [PRÉPARÉ])
+        │
+        ▼
+Import du DCE                    [DÉVELOPPÉ] — fichier unique, multi-fichiers, archive ZIP
+        │
+        ▼
+Stockage sécurisé                [DÉVELOPPÉ] — délégué à Documents (StorageProvider)
+        │
+        ▼
+Décompression                    [DÉVELOPPÉ] — yauzl, sécurité ZIP obligatoire (voir §52)
+        │
+        ▼
+Classification documentaire      [DÉVELOPPÉ] — sprint repris par cette mission (§52)
+        │
+        ▼
+Préparation OCR                   [DÉVELOPPÉ] — statut READY_FOR_OCR uniquement (§52)
+        │
+        ▼
+OCR réel                          [PRÉPARÉ] — aucun traitement, aucune infrastructure asynchrone
+        │
+        ▼
+Extraction structurée             [PRÉPARÉ] — hors périmètre de cette mission
+        │
+        ▼
+Analyse IA                        [PRÉPARÉ] — hors périmètre
+        │
+        ▼
+Validation utilisateur            [PRÉPARÉ] — hors périmètre
+        │
+        ▼
+Base de connaissances              [PRÉPARÉ] — hors périmètre
+        │
+        ▼
+Génération de la réponse           [PRÉPARÉ] — hors périmètre
+        │
+        ▼
+Devis prévisionnel                  [PRÉPARÉ] — hors périmètre
+        │
+        ▼
+Export Word/PDF                     [PRÉPARÉ] — hors périmètre
+        │
+        ▼
+Dépôt                                [PRÉPARÉ] — voir §53
+```
+
+Concepts réels (noms adaptés à l'existant, pas de duplication) : `Tender` (racine), `Dce` (conteneur, un par Tender), `DceDocument` (lien vers `Document`/`DocumentVersion`, module Documents — le contenu physique n'est jamais dupliqué), porte désormais `category` et `processingStatus` **[DÉVELOPPÉ, cette mission, voir §52]**. `Analysis`/`Submission` : **[PRÉPARÉ]**, non créés en base tant qu'aucun traitement réel ne les consomme — seuls les ports strictement nécessaires sont posés.
+
+---
+
+## 52. Classification documentaire et préparation OCR — [DÉVELOPPÉ]
+
+Reprise exacte du sprint DCE interrompu après l'import/stockage/ZIP (`apps/api/src/modules/dce`). La classification de cette tranche est **déterministe**, jamais un appel IA :
+
+```text
+nom du fichier (sans extension) + extension
+        ↓
+tokenisation (minuscule, accents retirés, séparateurs non alphanumériques)
+        ↓
+règles déterministes, dans cet ordre :
+  1. mots-clés financiers  (bpu, dpgf, dqe, devis, prix, financier, bordereau)   → FINANCIAL
+  2. mots-clés techniques  (cctp, technique, specifications)                    → TECHNICAL
+  3. mots-clés administratifs (rc, ccap, aapc, dc1-4, reglement, consultation,
+     acte, engagement, avis)                                                    → ADMINISTRATIVE
+  4. extension image (png/jpg/jpeg), aucun mot-clé reconnu                      → DRAWINGS
+  5. aucune règle ci-dessus                                                     → OTHER
+        ↓
+DceDocumentCategory (domain/dce-document-category.ts) — persisté sur DceDocument
+```
+
+Implémentation : `classifyDceDocument` (`domain/dce-document-classifier.ts`), fonction pure, aucune dépendance NestJS/Prisma/IA — appelée synchronement par `ImportDceFilesUseCase` pour chaque fichier accepté. Remplaçable plus tard par une classification IA sans changer `DceDocumentCategory` ni les appelants — **[PRÉPARÉ]** pour cette évolution, aucun fournisseur IA connecté dans cette tranche.
+
+Préparation OCR : `DceDocument` porte un second champ, `processingStatus` (`domain/dce-document-processing-status.ts`, `IMPORTED | READY_FOR_OCR`). La classification étant synchrone et déterministe dans cette tranche, **chaque fichier accepté passe directement à `READY_FOR_OCR`** au moment de l'import (`DceDocument.markReadyForOcr`, idempotent) — aucune distinction PDF scanné/texte n'est faite (elle nécessiterait d'analyser le contenu binaire, hors périmètre déterministe de cette tranche). Aucun nouveau port n'a été créé : le port déjà préparé `AsyncJobSubmitter` (`application/ports/async-job-submitter.ts`, Sprint 0) documentait déjà l'OCR comme un des traitements longs futurs visés — il reste **[PRÉPARÉ]**, non appelé, son adaptateur (`NotWiredAsyncJobSubmitter`) échouant explicitement si jamais invoqué. Un futur sprint OCR réel n'aurait qu'à : consommer les `DceDocument` à `READY_FOR_OCR`, appeler `AsyncJobSubmitter.submit()` avec un job réel, et faire progresser un nouvel état (p. ex. `OCR_DONE`) sans changer la classification ni l'import.
+
+---
+
+## 53. Préparation du futur dépôt des offres — [PRÉPARÉ]
+
+Trois niveaux cibles, aucun développé dans cette tranche : dépôt manuel préparé, dépôt assisté, dépôt automatique lorsque la plateforme l'autorise.
+
+```typescript
+interface OfferSubmissionGateway {
+  submit(submission: PreparedSubmission): Promise<SubmissionResult>;
+  getStatus(externalSubmissionId: string): Promise<SubmissionStatusResult>;
+  getReceipt(externalSubmissionId: string): Promise<SubmissionReceipt>;
+}
+```
+
+Ce contrat reste indépendant d'une plateforme de dépôt particulière — **[PRÉPARÉ]**, non implémenté, pas d'adaptateur. Explicitement hors périmètre : robot Playwright, intégration profil acheteur, signature électronique, coffre-fort de certificats, envoi réel, accusé de réception réel, interface de dépôt.
+
+---
+
+## 54. Modules futurs, veille, marchés privés, international, Enterprise — [PRÉPARÉ] (documentation seule)
+
+Positionnement documentaire uniquement, aucun code introduit par cette mission pour ces sujets :
+
+- **Veille** — source d'identification et d'import de Tenders (BOAMP local/France, TED européen), jamais un moteur DCE séparé : `Connecteur → récupération des avis → normalisation → critères → matching → notification → sélection → création du Tender → import du DCE`. Non développé : abonnements, alertes, notifications, matching IA, recherches enregistrées.
+- **Marchés privés** — `PrivateConsultation → SupplierInvitation → SubmissionSpace → Offer → OfferComparison → AwardDecision`, réutilisant les concepts communs (`Tender.marketType = PRIVATE`). Non développé. Le Domain évite toute hypothèse implicite "tous les marchés viennent d'une autorité publique" (ex. `Tender.buyerName` reste un simple texte libre, jamais une contrainte vers un référentiel d'acheteurs publics).
+- **International** — `country`/`language`/`currency` déjà extensibles (§49). Le Domain n'a et ne doit avoir aucun texte français codé en dur, aucune hypothèse systématique sur l'euro ou sur BOAMP, aucune validation propre à un seul pays dans une entité générique. Non développé : interface multilingue, traduction, connecteurs nationaux, règles juridiques par pays.
+- **Enterprise** — points d'extension futurs uniquement : Public API, Webhooks, SSO/SAML/OIDC/Azure AD/LDAP, Audit Log étendu, Custom Connectors, External Storage, intégrations ERP/CRM. Rien de ce périmètre n'est implémenté.
+- **Documentation et formation automatisées** — prévue après stabilisation du design commercialisable (Playwright → captures → documentation/FAQ/guides). Non développée, simple mention de roadmap.
+- **Positionnement des modules** (cible, non tous implémentés) : Identity & Access [DÉVELOPPÉ] → Organizations [DÉVELOPPÉ] → Users & Memberships [DÉVELOPPÉ] → Tenders [DÉVELOPPÉ] → Documents [DÉVELOPPÉ] → DCE [DÉVELOPPÉ, cette mission] → OCR [PRÉPARÉ] → DCE Analysis [PRÉPARÉ] → User Validation [PRÉPARÉ] → Knowledge Base [PRÉPARÉ] → Prompt Management [PRÉPARÉ] → AI Generation [PRÉPARÉ] → AI Quotation [PRÉPARÉ] → Export [PRÉPARÉ] → Collaboration [PRÉPARÉ] → Private Markets [PRÉPARÉ] → Watch [PRÉPARÉ] → Submissions [PRÉPARÉ] → Analytics [PRÉPARÉ] → Affiliate [PRÉPARÉ] → Billing [PRÉPARÉ] → Enterprise Integrations [PRÉPARÉ] → Help Center [PRÉPARÉ]. Modules transversaux déjà réels : Identity, Organizations. Transversaux non développés : Billing, Notifications (hors audit déjà réel), Audit (partiel, déjà réel via `AuditLogWriter` par module), Storage (réel, local uniquement), AI Providers (non développé).

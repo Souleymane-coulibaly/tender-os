@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CreateDocumentWithFirstVersionUseCase } from "../../../documents";
+import type { CreateDocumentWithFirstVersionUseCase, InternalDocumentCleanupService } from "../../../documents";
 import type { GetTenderUseCase } from "../../../tenders";
 import { DceNotFoundError, DcePermissionMissingError, TenderArchivedForDceMutationError, TooManyFilesError } from "../../domain/errors";
 import { Dce } from "../../domain/dce.aggregate";
@@ -52,17 +52,27 @@ function fakeCreateDocumentUseCase(dceDocumentRepository: InMemoryDceDocumentRep
   } as unknown as CreateDocumentWithFirstVersionUseCase;
 }
 
+function fakeInternalDocumentCleanupService(overrides?: {
+  purgeJustCreatedDocument?: ReturnType<typeof vi.fn>;
+}): InternalDocumentCleanupService {
+  return {
+    purgeJustCreatedDocument: overrides?.purgeJustCreatedDocument ?? vi.fn().mockResolvedValue(undefined),
+  } as unknown as InternalDocumentCleanupService;
+}
+
 describe("ImportDceFilesUseCase", () => {
   let dceRepository: InMemoryDceRepository;
   let dceDocumentRepository: InMemoryDceDocumentRepository;
   let auditLogWriter: InMemoryAuditLogWriter;
   let createDocumentUseCase: CreateDocumentWithFirstVersionUseCase;
+  let internalDocumentCleanupService: InternalDocumentCleanupService;
 
   beforeEach(async () => {
     dceRepository = new InMemoryDceRepository();
     dceDocumentRepository = new InMemoryDceDocumentRepository();
     auditLogWriter = new InMemoryAuditLogWriter();
     createDocumentUseCase = fakeCreateDocumentUseCase(dceDocumentRepository);
+    internalDocumentCleanupService = fakeInternalDocumentCleanupService();
 
     await dceRepository.seed(
       Dce.create({
@@ -85,6 +95,7 @@ describe("ImportDceFilesUseCase", () => {
       new SequentialIdGenerator(),
       getTenderUseCase,
       createDocumentUseCase,
+      internalDocumentCleanupService,
     );
   }
 
@@ -126,6 +137,109 @@ describe("ImportDceFilesUseCase", () => {
     );
 
     expect(result.accepted).toHaveLength(2);
+  });
+
+  it("classifies each accepted file and assigns a processing status that reflects its real format (mission P1-3)", async () => {
+    const useCase = buildUseCase();
+
+    const result = await useCase.execute(
+      baseCommand([
+        { buffer: PDF_BYTES, originalFilename: "cctp.pdf", mimeType: "application/pdf" },
+        { buffer: Buffer.from("png bytes"), originalFilename: "plan.png", mimeType: "image/png" },
+        { buffer: Buffer.from("annex bytes"), originalFilename: "annexe-1.pdf", mimeType: "application/pdf" },
+      ]),
+    );
+
+    expect(result.accepted.map((doc) => doc.category)).toEqual(["TECHNICAL", "DRAWINGS", "OTHER"]);
+    // PDF (texte ou scanné indécidable sans ouvrir le contenu) -> jamais READY_FOR_OCR directement.
+    expect(result.accepted[0]?.processingStatus).toBe("PENDING_TEXT_INSPECTION");
+    // Image -> candidat OCR confiant.
+    expect(result.accepted[1]?.processingStatus).toBe("READY_FOR_OCR");
+    expect(result.accepted[2]?.processingStatus).toBe("PENDING_TEXT_INSPECTION");
+  });
+
+  it("assigns READY_FOR_NATIVE_EXTRACTION to DOCX/XLSX, never OCR (mission P1-3)", async () => {
+    const useCase = buildUseCase();
+
+    const result = await useCase.execute(
+      baseCommand([
+        {
+          buffer: Buffer.from("docx bytes"),
+          originalFilename: "cctp.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+        {
+          buffer: Buffer.from("xlsx bytes"),
+          originalFilename: "bpu.xlsx",
+          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+      ]),
+    );
+
+    expect(result.accepted.map((doc) => doc.processingStatus)).toEqual([
+      "READY_FOR_NATIVE_EXTRACTION",
+      "READY_FOR_NATIVE_EXTRACTION",
+    ]);
+  });
+
+  it("never calls the internal cleanup on the success path", async () => {
+    const useCase = buildUseCase();
+
+    await useCase.execute(
+      baseCommand([{ buffer: PDF_BYTES, originalFilename: "cctp.pdf", mimeType: "application/pdf" }]),
+    );
+
+    expect(internalDocumentCleanupService.purgeJustCreatedDocument).not.toHaveBeenCalled();
+  });
+
+  it("mission P1-1 bis — CONTRIBUTOR (who has dce:import but never DocumentPermission.Delete) still triggers a full compensation when DceDocument creation fails, and the original error propagates", async () => {
+    const linkingFailure = new Error("unexpected DB failure while creating the DceDocument link");
+    vi.spyOn(dceDocumentRepository, "create").mockRejectedValueOnce(linkingFailure);
+    const useCase = buildUseCase();
+
+    // baseCommand() utilise actorRole: "CONTRIBUTOR" — confirmé sans organization:member ni
+    // DocumentPermission.Delete (voir bible/03-domain/permissions.md) : le use case n'a jamais
+    // besoin de cette permission pour compenser, contrairement à l'ancienne implémentation basée
+    // sur DeleteDocumentUseCase (protégé par RBAC).
+    await expect(
+      useCase.execute(baseCommand([{ buffer: PDF_BYTES, originalFilename: "cctp.pdf", mimeType: "application/pdf" }])),
+    ).rejects.toThrow(linkingFailure);
+
+    // Le mécanisme interne ne reçoit et n'a besoin d'aucune information d'acteur/rôle : sa
+    // signature (organizationId + documentId uniquement) exclut structurellement toute
+    // dépendance au RBAC utilisateur — jamais actorId ni actorRole transmis.
+    expect(internalDocumentCleanupService.purgeJustCreatedDocument).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      documentId: "document-1",
+    });
+    expect(internalDocumentCleanupService.purgeJustCreatedDocument).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(internalDocumentCleanupService.purgeJustCreatedDocument).mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(call).not.toHaveProperty("actorId");
+    expect(call).not.toHaveProperty("actorRole");
+
+    // Aucun DceDocument ni entrée d'audit ne doit survivre à l'échec.
+    expect(await dceDocumentRepository.listSummariesByDceId({ organizationId: "org-1", dceId: "dce-1" })).toHaveLength(
+      0,
+    );
+    expect(auditLogWriter.entries).toHaveLength(0);
+  });
+
+  it("logs but does not mask the original error when the internal cleanup itself fails (mission P1-1)", async () => {
+    const linkingFailure = new Error("unexpected DB failure while creating the DceDocument link");
+    vi.spyOn(dceDocumentRepository, "create").mockRejectedValueOnce(linkingFailure);
+    internalDocumentCleanupService = fakeInternalDocumentCleanupService({
+      purgeJustCreatedDocument: vi.fn().mockRejectedValue(new Error("compensation also failed")),
+    });
+    const useCase = buildUseCase();
+
+    await expect(
+      useCase.execute(baseCommand([{ buffer: PDF_BYTES, originalFilename: "cctp.pdf", mimeType: "application/pdf" }])),
+    ).rejects.toThrow(linkingFailure);
+
+    expect(internalDocumentCleanupService.purgeJustCreatedDocument).toHaveBeenCalled();
   });
 
   it("rejects an unsupported format per-file without failing the rest of the batch", async () => {
@@ -177,6 +291,7 @@ describe("ImportDceFilesUseCase", () => {
       new SequentialIdGenerator(),
       fakeGetTenderUseCase(),
       createDocumentUseCase,
+      internalDocumentCleanupService,
     );
 
     const result = await useCase.execute(
@@ -209,6 +324,7 @@ describe("ImportDceFilesUseCase", () => {
       new SequentialIdGenerator(),
       fakeGetTenderUseCase(),
       createDocumentUseCase,
+      internalDocumentCleanupService,
     );
 
     await expect(

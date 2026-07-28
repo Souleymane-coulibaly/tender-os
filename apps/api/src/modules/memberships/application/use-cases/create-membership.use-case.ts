@@ -4,12 +4,11 @@ import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { GetCurrentUserUseCase } from "../../../identity";
-import { MembershipAlreadyExistsError } from "../../domain/errors";
+import { MembershipAlreadyExistsError, OwnershipRequiresTransferError } from "../../domain/errors";
 import { MembershipId } from "../../domain/membership-id.value-object";
 import { OrganizationMembership } from "../../domain/organization-membership.aggregate";
 import { OrganizationPermission } from "../../domain/organization-permission";
-import type { OrganizationRole } from "../../domain/organization-role";
-import { parseOrganizationRole } from "../../domain/organization-role";
+import { OrganizationRole, parseOrganizationRole } from "../../domain/organization-role";
 import { toMembershipSummary, type MembershipSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { MEMBERSHIP_REPOSITORY, type MembershipRepository } from "../ports/membership.repository";
@@ -46,6 +45,15 @@ export class CreateMembershipUseCase {
     assertHasPermission(command.actorRole, OrganizationPermission.MemberInvite);
 
     const role = parseOrganizationRole(command.role);
+
+    // BR-ORG-002/BR-ORG-004 — le rôle OWNER ne s'obtient jamais par la création générique d'un
+    // membership (ni par un ADMIN, ni par un OWNER lui-même, ni via un DTO forgé) : seuls le
+    // bootstrap d'organisation (CreateOrganizationWithOwnerUseCase) et le transfert explicite
+    // (TransferOrganizationOwnershipUseCase) peuvent produire un OWNER. Vérifié avant toute
+    // lecture, pour qu'aucun appel direct de ce use case ne devienne une porte dérobée.
+    if (role === OrganizationRole.Owner) {
+      throw new OwnershipRequiresTransferError();
+    }
 
     await this.getCurrentUserUseCase.execute({ userId: command.userId });
 

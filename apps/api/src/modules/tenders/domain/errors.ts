@@ -119,6 +119,34 @@ export class AlertNotFoundError extends DomainError {
   }
 }
 
+export class InvalidMarketTypeError extends DomainError {
+  readonly code = "INVALID_MARKET_TYPE";
+  constructor(value: string) {
+    super(`"${value}" is not a valid market type.`);
+  }
+}
+
+export class InvalidTenderCountryError extends DomainError {
+  readonly code = "INVALID_TENDER_COUNTRY";
+  constructor(value: string) {
+    super(`"${value}" is not a valid tender country.`);
+  }
+}
+
+export class InvalidTenderLanguageError extends DomainError {
+  readonly code = "INVALID_TENDER_LANGUAGE";
+  constructor(value: string) {
+    super(`"${value}" is not a valid tender language.`);
+  }
+}
+
+export class InvalidTenderSourceError extends DomainError {
+  readonly code = "INVALID_TENDER_SOURCE";
+  constructor(value: string) {
+    super(`"${value}" is not a valid tender source.`);
+  }
+}
+
 export class InvalidLotEstimatedAmountError extends DomainError {
   readonly code = "INVALID_LOT_ESTIMATED_AMOUNT";
   constructor(input: { value: string }) {

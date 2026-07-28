@@ -1,6 +1,10 @@
 import { ALLOWED_TENDER_TRANSITIONS, TenderStatus } from "./tender-status";
 import { InvalidTenderStatusTransitionError, TenderArchivedError } from "./errors";
 import { TenderId } from "./tender-id.value-object";
+import type { MarketType } from "./market-type";
+import type { TenderCountry } from "./tender-country";
+import type { TenderLanguage } from "./tender-language";
+import type { TenderSource } from "./tender-source";
 
 export type TenderProps = {
   id: TenderId;
@@ -12,7 +16,12 @@ export type TenderProps = {
   publicationDate?: Date | undefined;
   submissionDeadline?: Date | undefined;
   procedureType?: string | undefined;
-  marketType?: string | undefined;
+  marketType?: MarketType | undefined;
+  country?: TenderCountry | undefined;
+  language?: TenderLanguage | undefined;
+  source?: TenderSource | undefined;
+  externalReference?: string | undefined;
+  sourceUrl?: string | undefined;
   estimatedAmount?: string | undefined;
   currency?: string | undefined;
   internalOwnerId?: string | undefined;
@@ -33,7 +42,12 @@ export type TenderDetailsUpdate = {
   publicationDate?: Date | undefined;
   submissionDeadline?: Date | undefined;
   procedureType?: string | undefined;
-  marketType?: string | undefined;
+  marketType?: MarketType | undefined;
+  country?: TenderCountry | undefined;
+  language?: TenderLanguage | undefined;
+  source?: TenderSource | undefined;
+  externalReference?: string | undefined;
+  sourceUrl?: string | undefined;
   estimatedAmount?: string | undefined;
   currency?: string | undefined;
   internalOwnerId?: string | undefined;
@@ -57,7 +71,12 @@ export class Tender {
     publicationDate?: Date | undefined;
     submissionDeadline?: Date | undefined;
     procedureType?: string | undefined;
-    marketType?: string | undefined;
+    marketType?: MarketType | undefined;
+    country?: TenderCountry | undefined;
+    language?: TenderLanguage | undefined;
+    source?: TenderSource | undefined;
+    externalReference?: string | undefined;
+    sourceUrl?: string | undefined;
     estimatedAmount?: string | undefined;
     currency?: string | undefined;
     internalOwnerId?: string | undefined;
@@ -76,6 +95,11 @@ export class Tender {
       submissionDeadline: input.submissionDeadline,
       procedureType: input.procedureType,
       marketType: input.marketType,
+      country: input.country,
+      language: input.language,
+      source: input.source,
+      externalReference: input.externalReference,
+      sourceUrl: input.sourceUrl,
       estimatedAmount: input.estimatedAmount,
       currency: input.currency,
       internalOwnerId: input.internalOwnerId,
@@ -104,6 +128,11 @@ export class Tender {
     if (update.submissionDeadline !== undefined) this.props.submissionDeadline = update.submissionDeadline;
     if (update.procedureType !== undefined) this.props.procedureType = update.procedureType;
     if (update.marketType !== undefined) this.props.marketType = update.marketType;
+    if (update.country !== undefined) this.props.country = update.country;
+    if (update.language !== undefined) this.props.language = update.language;
+    if (update.source !== undefined) this.props.source = update.source;
+    if (update.externalReference !== undefined) this.props.externalReference = update.externalReference;
+    if (update.sourceUrl !== undefined) this.props.sourceUrl = update.sourceUrl;
     if (update.estimatedAmount !== undefined) this.props.estimatedAmount = update.estimatedAmount;
     if (update.currency !== undefined) this.props.currency = update.currency;
     if (update.internalOwnerId !== undefined) this.props.internalOwnerId = update.internalOwnerId;
@@ -177,8 +206,28 @@ export class Tender {
     return this.props.procedureType;
   }
 
-  get marketType(): string | undefined {
+  get marketType(): MarketType | undefined {
     return this.props.marketType;
+  }
+
+  get country(): TenderCountry | undefined {
+    return this.props.country;
+  }
+
+  get language(): TenderLanguage | undefined {
+    return this.props.language;
+  }
+
+  get source(): TenderSource | undefined {
+    return this.props.source;
+  }
+
+  get externalReference(): string | undefined {
+    return this.props.externalReference;
+  }
+
+  get sourceUrl(): string | undefined {
+    return this.props.sourceUrl;
   }
 
   get estimatedAmount(): string | undefined {

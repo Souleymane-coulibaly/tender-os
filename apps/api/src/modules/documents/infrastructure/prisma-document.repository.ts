@@ -140,4 +140,22 @@ export class PrismaDocumentRepository implements DocumentRepository {
       throw error;
     }
   }
+
+  async hardDeleteJustCreatedDocument(input: { organizationId: string; documentId: string }): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      // Retire d'abord le pointeur currentVersionId (contrainte FK) avant de supprimer les
+      // DocumentVersion, puis le Document — même ordre que le nettoyage déjà pratiqué par les
+      // tests d'intégration (afterAll) pour cette même contrainte.
+      await tx.document.updateMany({
+        where: { id: input.documentId, organizationId: input.organizationId },
+        data: { currentVersionId: null },
+      });
+      await tx.documentVersion.deleteMany({
+        where: { documentId: input.documentId, organizationId: input.organizationId },
+      });
+      await tx.document.deleteMany({
+        where: { id: input.documentId, organizationId: input.organizationId },
+      });
+    });
+  }
 }

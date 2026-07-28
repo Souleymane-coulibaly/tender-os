@@ -7,9 +7,17 @@ import { InvalidOrganizationRoleError } from "./errors";
  * business-rules.md §4 n'en documente que 7 (sans "Approver"). En cas de conflit,
  * `skills/platform-foundation/SECURITY_PATTERNS.md` §2 fixe l'ordre d'autorité :
  * business-rules.md prime sur permissions.md pour toute question de sécurité — ce
- * sont donc ces 7 rôles qui font foi ici, jusqu'à mise à jour officielle des documents.
+ * sont donc ces rôles qui font foi ici, jusqu'à mise à jour officielle des documents.
+ *
+ * `Owner` a été ajouté (mission "mise à jour architecture", BR-ORG-002) : propriétaire de
+ * l'organisation, distinct d'`OrganizationAdmin` — exactement un membre actif à la fois par
+ * organisation, jamais attribuable par un changement de rôle ordinaire (voir
+ * `change-membership-role.use-case.ts` et `transfer-organization-ownership.use-case.ts`).
+ * Un rôle plateforme (`PlatformRole`, module Platform Administration) reste totalement
+ * distinct de ces rôles d'organisation.
  */
 export const OrganizationRole = {
+  Owner: "OWNER",
   OrganizationAdmin: "ORGANIZATION_ADMIN",
   BidManager: "BID_MANAGER",
   Contributor: "CONTRIBUTOR",
@@ -22,6 +30,7 @@ export const OrganizationRole = {
 export type OrganizationRole = (typeof OrganizationRole)[keyof typeof OrganizationRole];
 
 export const ORGANIZATION_ROLE_NAMES: Record<OrganizationRole, string> = {
+  [OrganizationRole.Owner]: "Owner",
   [OrganizationRole.OrganizationAdmin]: "Organization Admin",
   [OrganizationRole.BidManager]: "Bid Manager",
   [OrganizationRole.Contributor]: "Contributor",

@@ -12,25 +12,37 @@ export const OrganizationPermission = {
   MemberSuspend: "organization:member:suspend",
   MemberRemove: "organization:member:remove",
   RoleAssign: "organization:role:assign",
+  /** Réservées à OWNER (bible/03-domain/permissions.md §4 "Owner") — jamais accordées à
+   *  ORGANIZATION_ADMIN, quel que soit son périmètre par ailleurs. */
+  OrganizationDelete: "organization:delete",
+  OwnershipTransfer: "organization:ownership:transfer",
 } as const;
 
 export type OrganizationPermission = (typeof OrganizationPermission)[keyof typeof OrganizationPermission];
 
 /**
- * Attribution rôle → permissions (bible/03-domain/permissions.md §4) : seul "Organization Admin"
- * a explicitement "gérer les membres ; gérer les rôles" dans sa description. Aucune matrice
- * rôle→permission détaillée n'existe pour les 6 autres rôles vis-à-vis des permissions
- * organization:member: et organization:role: — appliqué ici : refus par défaut (PERM-001),
- * aucune permission accordée.
+ * Attribution rôle → permissions (bible/03-domain/permissions.md §4) : "Organization Admin"
+ * a explicitement "gérer les membres ; gérer les rôles" dans sa description, mais jamais
+ * la suppression de l'organisation ni le transfert de propriété — réservés à OWNER (superset
+ * strict des permissions ORGANIZATION_ADMIN). Aucune matrice rôle→permission détaillée n'existe
+ * pour les autres rôles vis-à-vis de ces permissions — appliqué ici : refus par défaut
+ * (PERM-001), aucune permission accordée.
  */
+const ORGANIZATION_ADMIN_PERMISSIONS: readonly OrganizationPermission[] = [
+  OrganizationPermission.MemberList,
+  OrganizationPermission.MemberInvite,
+  OrganizationPermission.MemberSuspend,
+  OrganizationPermission.MemberRemove,
+  OrganizationPermission.RoleAssign,
+];
+
 export const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrganizationPermission[]> = {
-  [OrganizationRole.OrganizationAdmin]: [
-    OrganizationPermission.MemberList,
-    OrganizationPermission.MemberInvite,
-    OrganizationPermission.MemberSuspend,
-    OrganizationPermission.MemberRemove,
-    OrganizationPermission.RoleAssign,
+  [OrganizationRole.Owner]: [
+    ...ORGANIZATION_ADMIN_PERMISSIONS,
+    OrganizationPermission.OrganizationDelete,
+    OrganizationPermission.OwnershipTransfer,
   ],
+  [OrganizationRole.OrganizationAdmin]: ORGANIZATION_ADMIN_PERMISSIONS,
   [OrganizationRole.BidManager]: [],
   [OrganizationRole.Contributor]: [],
   [OrganizationRole.Reviewer]: [],

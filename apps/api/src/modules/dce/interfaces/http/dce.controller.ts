@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Inject,
   Param,
   Post,
   Put,
@@ -22,8 +23,8 @@ import { memoryStorage } from "multer";
 import { AuthenticatedGuard, CurrentActor, type AuthenticatedActor } from "../../../identity";
 import { CurrentMembershipContext, OrganizationMembershipGuard, type MembershipContext } from "../../../memberships";
 import type { RequestWithId } from "../../../../shared-kernel/request-id.middleware";
-import { getRequiredEnv } from "../../../../shared-kernel/env";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
+import { DCE_CONFIG, type DceConfig } from "../../infrastructure/dce-config";
 import { CreateDceUseCase } from "../../application/use-cases/create-dce.use-case";
 import { DeleteDceDocumentUseCase } from "../../application/use-cases/delete-dce-document.use-case";
 import { DownloadDceDocumentUseCase } from "../../application/use-cases/download-dce-document.use-case";
@@ -46,24 +47,6 @@ const MULTER_HARD_CEILING_BYTES = 100 * 1024 * 1024;
  *  plutôt qu'un rejet brut de Multer. */
 const MULTER_HARD_CEILING_FILE_COUNT = 100;
 
-function maxDceFileSizeBytes(): number {
-  return Number(getRequiredEnv("DCE_MAX_FILE_SIZE_MB")) * 1024 * 1024;
-}
-
-function maxDceFilesPerImport(): number {
-  return Number(getRequiredEnv("DCE_MAX_FILES_PER_IMPORT"));
-}
-
-function dceZipLimits() {
-  return {
-    maxEntries: Number(getRequiredEnv("DCE_ZIP_MAX_ENTRIES")),
-    maxTotalUncompressedBytes: Number(getRequiredEnv("DCE_ZIP_MAX_TOTAL_UNCOMPRESSED_MB")) * 1024 * 1024,
-    maxSingleEntryUncompressedBytes:
-      Number(getRequiredEnv("DCE_ZIP_MAX_SINGLE_ENTRY_UNCOMPRESSED_MB")) * 1024 * 1024,
-    maxCompressionRatio: Number(getRequiredEnv("DCE_ZIP_MAX_COMPRESSION_RATIO")),
-  };
-}
-
 /** Route imbriquée sous /tenders (même motif que TenderDocumentsController/TenderLotsController :
  *  dépendance autorisée DCE → Tenders/Documents, jamais l'inverse). */
 @Controller("tenders/:tenderId/dce")
@@ -80,6 +63,7 @@ export class DceController {
     private readonly downloadDceDocumentUseCase: DownloadDceDocumentUseCase,
     private readonly deleteDceDocumentUseCase: DeleteDceDocumentUseCase,
     private readonly replaceDceDocumentUseCase: ReplaceDceDocumentUseCase,
+    @Inject(DCE_CONFIG) private readonly dceConfig: DceConfig,
   ) {}
 
   @Post()
@@ -139,8 +123,8 @@ export class DceController {
         originalFilename: file.originalname,
         mimeType: file.mimetype,
       })),
-      maxFileSizeBytes: maxDceFileSizeBytes(),
-      maxFilesPerImport: maxDceFilesPerImport(),
+      maxFileSizeBytes: this.dceConfig.maxFileSizeBytes,
+      maxFilesPerImport: this.dceConfig.maxFilesPerImport,
       requestId: request.id,
     });
     return presentImportResult(result);
@@ -162,9 +146,9 @@ export class DceController {
       actorId: actor.userId,
       actorRole: membership.role,
       zipBuffer: archive.buffer,
-      maxFileSizeBytes: maxDceFileSizeBytes(),
-      maxFilesPerImport: maxDceFilesPerImport(),
-      zipLimits: dceZipLimits(),
+      maxFileSizeBytes: this.dceConfig.maxFileSizeBytes,
+      maxFilesPerImport: this.dceConfig.maxFilesPerImport,
+      zipLimits: this.dceConfig.zipLimits,
       requestId: request.id,
     });
     return presentImportResult(result);
@@ -246,7 +230,7 @@ export class DceController {
       actorId: actor.userId,
       actorRole: membership.role,
       file: { buffer: file.buffer, originalFilename: file.originalname, mimeType: file.mimetype },
-      maxFileSizeBytes: maxDceFileSizeBytes(),
+      maxFileSizeBytes: this.dceConfig.maxFileSizeBytes,
       requestId: request.id,
     });
     return presentDceDocument(result);

@@ -3,9 +3,17 @@ import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
 import type { DceDocumentRepository } from "../application/ports/dce-document.repository";
 import { DceDocument } from "../domain/dce-document.entity";
+import type { DceDocumentCategory } from "../domain/dce-document-category";
+import type { DceDocumentProcessingStatus } from "../domain/dce-document-processing-status";
 import type { DceDocumentSummary } from "../application/dtos";
 
 const SUMMARY_INCLUDE = { document: { include: { currentVersion: true } } } as const;
+
+/** Durée large et volontaire (mission P1-2), même motif que
+ *  MembershipRepository.runExclusiveForOrganization : la transaction reste ouverte le temps que
+ *  `fn` (fourni par ImportDceFilesUseCase) termine, y compris l'attente d'un import concurrent
+ *  déjà en cours sur le même DCE. */
+const DCE_IMPORT_TX_OPTIONS = { timeout: 15_000, maxWait: 15_000 } as const;
 
 type DceDocumentWithDocument = Prisma.DceDocumentGetPayload<{ include: typeof SUMMARY_INCLUDE }>;
 
@@ -30,6 +38,8 @@ function toSummary(record: DceDocumentWithDocument): DceDocumentSummary | null {
     sizeBytes: version.sizeBytes,
     checksum: version.checksum,
     currentVersionNumber: record.document.currentVersionNumber,
+    category: record.category,
+    processingStatus: record.processingStatus,
     createdByUserId: record.createdByUserId,
     createdAt: record.createdAt.toISOString(),
   };
@@ -46,7 +56,10 @@ export class PrismaDceDocumentRepository implements DceDocumentRepository {
         documentId: link.documentId,
         organizationId: link.organizationId,
         createdByUserId: link.createdByUserId,
+        category: link.category,
+        processingStatus: link.processingStatus,
         createdAt: link.createdAt,
+        updatedAt: link.updatedAt,
       },
     });
     return link;
@@ -66,7 +79,10 @@ export class PrismaDceDocumentRepository implements DceDocumentRepository {
           documentId: record.documentId,
           organizationId: record.organizationId,
           createdByUserId: record.createdByUserId,
+          category: record.category as DceDocumentCategory,
+          processingStatus: record.processingStatus as DceDocumentProcessingStatus,
           createdAt: record.createdAt,
+          updatedAt: record.updatedAt,
         })
       : null;
   }
@@ -117,5 +133,16 @@ export class PrismaDceDocumentRepository implements DceDocumentRepository {
     return this.prisma.dceDocument.count({
       where: { dceId: input.dceId, organizationId: input.organizationId, document: { deletedAt: null } },
     });
+  }
+
+  async runExclusiveForDce<T>(input: { dceId: string; fn: () => Promise<T> }): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      // Verrou consultatif Postgres scopé au DCE (mission P1-2) : sérialise tout import concurrent
+      // du même DCE (deux organisations ou deux DCE différents ne sont jamais bloqués entre eux).
+      // Auto-libéré à la fin de la transaction — même mécanisme que PrismaTenderLotRepository et
+      // PrismaMembershipRepository.runExclusiveForOrganization.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.dceId}))`;
+      return input.fn();
+    }, DCE_IMPORT_TX_OPTIONS);
   }
 }

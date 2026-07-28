@@ -18,6 +18,11 @@ export type TenderSummary = {
   submissionDeadline?: string | undefined;
   procedureType?: string | undefined;
   marketType?: string | undefined;
+  country?: string | undefined;
+  language?: string | undefined;
+  source?: string | undefined;
+  externalReference?: string | undefined;
+  sourceUrl?: string | undefined;
   estimatedAmount?: string | undefined;
   currency?: string | undefined;
   internalOwnerId?: string | undefined;
@@ -42,6 +47,11 @@ export function toTenderSummary(tender: Tender): TenderSummary {
     submissionDeadline: tender.submissionDeadline?.toISOString(),
     procedureType: tender.procedureType,
     marketType: tender.marketType,
+    country: tender.country,
+    language: tender.language,
+    source: tender.source,
+    externalReference: tender.externalReference,
+    sourceUrl: tender.sourceUrl,
     estimatedAmount: tender.estimatedAmount,
     currency: tender.currency,
     internalOwnerId: tender.internalOwnerId,

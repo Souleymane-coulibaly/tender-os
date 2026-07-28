@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { LastOrganizationAdminError, PermissionMissingError } from "../../domain/errors";
+import { LastOrganizationAdminError, LastOrganizationOwnerError, PermissionMissingError } from "../../domain/errors";
 import { MembershipId } from "../../domain/membership-id.value-object";
 import { OrganizationMembership } from "../../domain/organization-membership.aggregate";
 import { OrganizationRole } from "../../domain/organization-role";
@@ -80,5 +80,35 @@ describe("SuspendMembershipUseCase", () => {
         actorRole: OrganizationRole.OrganizationAdmin,
       }),
     ).rejects.toThrow(LastOrganizationAdminError);
+  });
+
+  it("refuses to suspend the OWNER, even when another Organization Admin exists", async () => {
+    await membershipRepository.seed(
+      OrganizationMembership.create({
+        id: MembershipId.from("membership-owner"),
+        organizationId: "org-1",
+        userId: "user-1",
+        role: OrganizationRole.Owner,
+        occurredAt: new Date(),
+      }),
+    );
+    await membershipRepository.seed(
+      OrganizationMembership.create({
+        id: MembershipId.from("membership-admin"),
+        organizationId: "org-1",
+        userId: "user-2",
+        role: OrganizationRole.OrganizationAdmin,
+        occurredAt: new Date(),
+      }),
+    );
+
+    await expect(
+      useCase.execute({
+        organizationId: "org-1",
+        membershipId: "membership-owner",
+        actorId: "user-2",
+        actorRole: OrganizationRole.OrganizationAdmin,
+      }),
+    ).rejects.toThrow(LastOrganizationOwnerError);
   });
 });

@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { LastOrganizationAdminError, MembershipNotFoundError, PermissionMissingError } from "../../domain/errors";
+import {
+  LastOrganizationAdminError,
+  MembershipNotFoundError,
+  OwnershipRequiresTransferError,
+  PermissionMissingError,
+} from "../../domain/errors";
 import { MembershipId } from "../../domain/membership-id.value-object";
 import { OrganizationMembership } from "../../domain/organization-membership.aggregate";
 import { OrganizationRole } from "../../domain/organization-role";
@@ -126,5 +131,58 @@ describe("ChangeMembershipRoleUseCase", () => {
         role: OrganizationRole.Contributor,
       }),
     ).rejects.toThrow(MembershipNotFoundError);
+  });
+
+  it("refuses to assign OWNER via an ordinary role change (an Organization Admin cannot promote to Owner)", async () => {
+    await membershipRepository.seed(
+      OrganizationMembership.create({
+        id: MembershipId.from("membership-1"),
+        organizationId: "org-1",
+        userId: "user-2",
+        role: OrganizationRole.Contributor,
+        occurredAt: new Date(),
+      }),
+    );
+
+    await expect(
+      useCase.execute({
+        organizationId: "org-1",
+        membershipId: "membership-1",
+        actorId: "user-1",
+        actorRole: OrganizationRole.OrganizationAdmin,
+        role: OrganizationRole.Owner,
+      }),
+    ).rejects.toThrow(OwnershipRequiresTransferError);
+  });
+
+  it("refuses to demote the OWNER via an ordinary role change (must go through ownership transfer)", async () => {
+    await membershipRepository.seed(
+      OrganizationMembership.create({
+        id: MembershipId.from("membership-owner"),
+        organizationId: "org-1",
+        userId: "user-1",
+        role: OrganizationRole.Owner,
+        occurredAt: new Date(),
+      }),
+    );
+    await membershipRepository.seed(
+      OrganizationMembership.create({
+        id: MembershipId.from("membership-admin"),
+        organizationId: "org-1",
+        userId: "user-2",
+        role: OrganizationRole.OrganizationAdmin,
+        occurredAt: new Date(),
+      }),
+    );
+
+    await expect(
+      useCase.execute({
+        organizationId: "org-1",
+        membershipId: "membership-owner",
+        actorId: "user-2",
+        actorRole: OrganizationRole.OrganizationAdmin,
+        role: OrganizationRole.Contributor,
+      }),
+    ).rejects.toThrow(OwnershipRequiresTransferError);
   });
 });
