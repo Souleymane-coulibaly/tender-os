@@ -1,0 +1,31 @@
+# Configuration Railway du service API (monorepo pnpm — Root Directory = racine du dépôt).
+#
+# Pourquoi ce fichier : sans configuration versionnée, Railway/Nixpacks retombe sur sa propre
+# détection automatique d'un monorepo pnpm pour construire ses commandes de build/démarrage, un
+# comportement non déterministe et non reproductible localement (voir le rapport de diagnostic
+# "Correction déploiement Railway"). Ce fichier fixe explicitement chaque commande exécutée par
+# Railway — plus aucune dépendance à un champ de tableau de bord ou à une heuristique Nixpacks.
+#
+# `pnpm --filter @tenderos/api ...` est utilisé partout (jamais `pnpm -r`/`--recursive`) : c'est
+# la même syntaxe déjà confirmée fonctionnelle par la Pre-Deploy Command existante
+# (`pnpm --filter @tenderos/api exec prisma migrate deploy`, qui applique déjà les migrations avec
+# succès sur Railway).
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "pnpm --filter @tenderos/api build"
+
+[deploy]
+# Les migrations s'exécutent avant que le nouveau code ne serve du trafic (mission
+# DEPLOYMENT_PATTERNS.md §"migrations en production") — jamais au sein du process applicatif
+# lui-même.
+preDeployCommand = "pnpm --filter @tenderos/api exec prisma migrate deploy"
+# Commande directe `node`, jamais un script pnpm/workspace au démarrage : élimine toute
+# possibilité qu'un mécanisme pnpm (filtre, recursive, résolution de workspace) intervienne sur
+# le chemin critique de démarrage du process. `apps/api/dist/main.js` est le chemin réel confirmé
+# après `pnpm --filter @tenderos/api build` (voir rapport §E).
+startCommand = "node apps/api/dist/main.js"
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

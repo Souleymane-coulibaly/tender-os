@@ -11,10 +11,11 @@
     "node": ">=20",
     "pnpm": ">=9"
   },
+  "packageManager": "pnpm@11.17.0",
   "scripts": {
     "dev": "pnpm --parallel -r run dev",
     "build": "pnpm -r run build",
-    "start": "pnpm --filter @tenderos/api start",
+    "start": "node apps/api/dist/main.js",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
