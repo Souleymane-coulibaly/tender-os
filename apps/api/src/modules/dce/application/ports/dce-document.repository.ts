@@ -32,6 +32,20 @@ export interface DceDocumentRepository {
   }): Promise<DceDocumentSummary | null>;
   countActiveByDceId(input: { organizationId: string; dceId: string }): Promise<number>;
   /**
+   * Mission Sprint 3 — met à jour uniquement `processingStatus` (jamais `category`, jamais
+   * recréé) : le module Extraction fait progresser ce statut vers READY_FOR_ANALYSIS /
+   * READY_FOR_ANALYSIS_WITH_WARNINGS en miroir d'un DocumentExtraction terminé avec succès,
+   * jamais l'inverse (une seule source de vérité par sens de dépendance : DCE → Extraction lit,
+   * Extraction → DCE n'écrit que ce seul champ).
+   */
+  updateProcessingStatus(input: {
+    organizationId: string;
+    dceId: string;
+    documentId: string;
+    processingStatus: string;
+    updatedAt: Date;
+  }): Promise<void>;
+  /**
    * Mission P1-2 — sérialise, pour un même DCE, tout le cycle "vérifier l'absence de doublon actif
    * puis créer" derrière un verrou consultatif transactionnel Postgres (`pg_advisory_xact_lock`,
    * même mécanisme que `MembershipRepository.runExclusiveForOrganization`) : un `find` suivi d'un

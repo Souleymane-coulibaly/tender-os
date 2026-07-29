@@ -55,5 +55,10 @@ import { DceController } from "./interfaces/http/dce.controller";
     // NestFactory.create(...) avant même que le serveur n'écoute, jamais au milieu d'une requête.
     { provide: DCE_CONFIG, useFactory: () => loadDceConfig() },
   ],
+  // Ports bruts, réexportés uniquement pour un usage système/interne par Extraction (mission
+  // Sprint 3 — résolution du DCE d'un Tender et du lien document/DCE pour la chaîne
+  // d'autorisation, mise à jour de `processingStatus` en miroir d'une extraction terminée),
+  // jamais un contournement du RBAC DCE pour un acteur utilisateur.
+  exports: [DCE_REPOSITORY, DCE_DOCUMENT_REPOSITORY],
 })
 export class DceModule {}

@@ -21,6 +21,14 @@ export const DceDocumentProcessingStatus = {
   PendingTextInspection: "PENDING_TEXT_INSPECTION",
   ReadyForNativeExtraction: "READY_FOR_NATIVE_EXTRACTION",
   NotProcessable: "NOT_PROCESSABLE",
+  /** Mission Sprint 3 — issue agrégée d'une extraction SUCCEEDED (module Extraction) : le
+   *  contenu et les chunks sont exploitables sans réserve. Jamais atteint autrement que via
+   *  DocumentExtraction.status = SUCCEEDED (une seule machine d'état par granularité, jamais
+   *  deux modélisations concurrentes du même concept). */
+  ReadyForAnalysis: "READY_FOR_ANALYSIS",
+  /** Extraction PARTIALLY_SUCCEEDED : exploitable, mais avec des réserves (pages/feuilles en
+   *  échec partiel) — jamais confondu avec un succès complet. */
+  ReadyForAnalysisWithWarnings: "READY_FOR_ANALYSIS_WITH_WARNINGS",
 } as const;
 
 export type DceDocumentProcessingStatus = (typeof DceDocumentProcessingStatus)[keyof typeof DceDocumentProcessingStatus];

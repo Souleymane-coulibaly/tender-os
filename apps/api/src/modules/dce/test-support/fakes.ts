@@ -1,6 +1,7 @@
 import type { Clock } from "../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../shared-kernel/id-generator";
 import { DceDocument } from "../domain/dce-document.entity";
+import type { DceDocumentProcessingStatus } from "../domain/dce-document-processing-status";
 import { Dce } from "../domain/dce.aggregate";
 import { DceAlreadyExistsError } from "../domain/errors";
 import type { AsyncJobSubmission, AsyncJobSubmitter } from "../application/ports/async-job-submitter";
@@ -152,6 +153,20 @@ export class InMemoryDceDocumentRepository implements DceDocumentRepository {
 
   async countActiveByDceId(input: { organizationId: string; dceId: string }): Promise<number> {
     return (await this.listSummariesByDceId(input)).length;
+  }
+
+  async updateProcessingStatus(input: {
+    organizationId: string;
+    dceId: string;
+    documentId: string;
+    processingStatus: string;
+    updatedAt: Date;
+  }): Promise<void> {
+    const link = await this.findByDceIdAndDocumentId(input);
+    if (!link) {
+      return;
+    }
+    link.transitionProcessingStatus(input.processingStatus as DceDocumentProcessingStatus, input.updatedAt);
   }
 
   /** Ne simule aucun verrou réel (mono-thread, pas de concurrence possible en mémoire) —

@@ -153,7 +153,9 @@ import { TendersController } from "./interfaces/http/tenders.controller";
   ],
   // GetTenderUseCase est réexporté uniquement pour que le module Documents puisse vérifier
   // qu'un Tender existe et appartient à l'organisation active avant une association — même
-  // motif que les réexports déjà pratiqués par Memberships (voir index.ts).
-  exports: [GetTenderUseCase],
+  // motif que les réexports déjà pratiqués par Memberships (voir index.ts). TENDER_REPOSITORY
+  // est réexporté pour un usage système interne par Extraction (mission Sprint 3 — lecture de
+  // `Tender.language` comme indication OCR, jamais via un use case RBAC-gated dans ce contexte).
+  exports: [GetTenderUseCase, TENDER_REPOSITORY],
 })
 export class TendersModule {}

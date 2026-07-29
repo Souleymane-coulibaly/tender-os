@@ -16,6 +16,10 @@ apps/api/prisma/generated/
 .local-storage/
 apps/api/.local-storage/
 
+# Extraction module — données de langue Tesseract.js mises en cache localement au premier appel
+# OCR (voir TesseractOcrProvider) : un artefact runtime téléchargé, jamais du code source.
+*.traineddata
+
 # Environment
 .env
 .env.local

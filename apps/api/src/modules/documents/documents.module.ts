@@ -71,6 +71,12 @@ import { TenderDocumentsController } from "./interfaces/http/tender-documents.co
     // pour que DCE (ImportDceFilesUseCase) puisse compenser une écriture partielle sans dépendre
     // du RBAC utilisateur porté par DeleteDocumentUseCase.
     InternalDocumentCleanupService,
+    // Ports bruts, réexportés uniquement pour un usage système interne par Extraction (mission
+    // Sprint 3 — résolution du fichier stocké à traiter), jamais par un contournement du RBAC
+    // Documents pour un acteur utilisateur.
+    DOCUMENT_REPOSITORY,
+    DOCUMENT_VERSION_REPOSITORY,
+    STORAGE_PROVIDER,
   ],
 })
 export class DocumentsModule {}

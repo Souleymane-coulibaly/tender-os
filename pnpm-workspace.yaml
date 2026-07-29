@@ -8,6 +8,7 @@ allowBuilds:
   esbuild: true
   prisma: true
   sharp: true
+  tesseract.js: true
 minimumReleaseAgeExclude:
   - '@playwright/test@1.62.0'
   - playwright-core@1.62.0

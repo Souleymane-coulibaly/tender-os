@@ -596,6 +596,7 @@ model Document {
   tenderAssociations          DocumentTenderAssociation[]
   requestedDocumentReferences TenderRequestedDocument[]
   dceDocuments                DceDocument[]
+  documentExtraction          DocumentExtraction?
 
   /// Support de la FK composée de DceDocument (module DCE) — même motif que TenderLot/AUDIT-007 :
   /// garantit au niveau base qu'un DceDocument ne peut jamais référencer un Document d'une autre
@@ -685,7 +686,8 @@ model Dce {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  documents DceDocument[]
+  documents           DceDocument[]
+  documentExtractions DocumentExtraction[]
 
   /// Un Tender ne porte jamais plus d'un DCE (conception §4, mission Sprint 0).
   @@unique([tenderId])
@@ -715,9 +717,11 @@ model DceDocument {
   category String @default("OTHER") @db.VarChar(20)
 
   /// IMPORTED | READY_FOR_OCR | PENDING_TEXT_INSPECTION | READY_FOR_NATIVE_EXTRACTION |
-  /// NOT_PROCESSABLE (domain/dce-document-processing-status.ts, révisé mission P1-3) —
-  /// préparation OCR/extraction uniquement, aucun job réel ne consomme cet état dans cette
-  /// tranche. Défaut IMPORTED (jamais READY_FOR_OCR : ce n'est plus l'issue systématique).
+  /// NOT_PROCESSABLE | READY_FOR_ANALYSIS | READY_FOR_ANALYSIS_WITH_WARNINGS
+  /// (domain/dce-document-processing-status.ts, révisé mission P1-3 puis Sprint 3) — les deux
+  /// derniers sont atteints uniquement en miroir d'un DocumentExtraction.status terminal
+  /// (SUCCEEDED/PARTIALLY_SUCCEEDED), jamais directement. Défaut IMPORTED. Protégée par une
+  /// contrainte CHECK (correction P1-05, voir migration Extraction).
   processingStatus String @default("IMPORTED") @map("processing_status") @db.VarChar(32)
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -727,4 +731,132 @@ model DceDocument {
   @@index([organizationId, dceId])
   @@index([organizationId, documentId])
   @@map("dce_documents")
+}
+
+/// Suivi fin d'une extraction documentaire (mission Sprint 3) — jamais l'analyse IA métier
+/// (hors périmètre, module futur distinct). Relation 1:1 avec Document : `documentId` est à la
+/// fois clé primaire et clé étrangère, jamais un id de substitution séparé pour une relation qui
+/// n'existera jamais autrement que 1:1 (même motif que la clé partagée déjà pratiquée ailleurs
+/// dans ce schéma pour des relations stricctement 1:1).
+model DocumentExtraction {
+  documentId String   @id @map("document_id") @db.Uuid
+  document   Document @relation(fields: [documentId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  dceId String @map("dce_id") @db.Uuid
+  dce   Dce    @relation(fields: [dceId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// PENDING | READY | PROCESSING | SUCCEEDED | PARTIALLY_SUCCEEDED | FAILED | NOT_PROCESSABLE
+  /// (domain/document-extraction-status.ts, révisé correction P1-02 — INSPECTING retiré : le
+  /// pipeline passe directement de PENDING/READY à PROCESSING via une réservation atomique
+  /// courte, l'inspection et la détection de stratégie se déroulant hors transaction) — jamais
+  /// confondu avec `DceDocument.processingStatus` (éligibilité grossière, Sprint 2) : ce statut
+  /// est le détail fin du pipeline d'extraction lui-même. Protégé par une contrainte CHECK
+  /// (correction P1-05, voir migration) : une valeur hors de cet ensemble ne peut plus être
+  /// persistée en base, même par un bug applicatif ou un accès direct.
+  status String @db.VarChar(24)
+
+  /// NATIVE_TEXT | OCR | OFFICE_DOCUMENT | SPREADSHEET | UNSUPPORTED
+  /// (domain/document-extraction-strategy.ts) — décidée après inspection réelle, jamais sur la
+  /// seule extension. Protégée par une contrainte CHECK (correction P1-05, voir migration).
+  strategy String? @db.VarChar(20)
+
+  attemptCount Int @default(0) @map("attempt_count")
+
+  pageCount       Int?     @map("page_count")
+  characterCount  Int?     @map("character_count")
+  chunkCount      Int?     @map("chunk_count")
+  language        String?  @db.VarChar(8)
+  warnings        String[] @default([])
+  lastError       String?  @map("last_error")
+  contentChecksum String?  @map("content_checksum") @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  attempts ExtractionAttempt[]
+  chunks   ExtractionChunk[]
+
+  /// Requis par Prisma pour la FK composée ci-dessus (documentId est déjà @id, donc déjà unique
+  /// seul — cette contrainte ne fait que le rendre explicite pour la relation 1:1).
+  @@unique([documentId, organizationId])
+  @@index([organizationId, dceId])
+  /// Correction P1-05 — lectures par statut au sein d'une organisation (ex. futur balayage des
+  /// documents prêts pour l'analyse IA), jamais un scan complet de la table.
+  @@index([organizationId, status])
+  @@map("document_extractions")
+}
+
+/// Trace immuable d'une tentative d'extraction (mission Sprint 3 — historique, jamais réécrit) :
+/// `DocumentExtraction` ne porte que l'état courant, chaque tentative laisse ici une ligne
+/// distincte pour observer un retry sans perdre la trace de l'échec précédent.
+model ExtractionAttempt {
+  id String @id @default(uuid()) @db.Uuid
+
+  documentId         String             @map("document_id") @db.Uuid
+  documentExtraction DocumentExtraction @relation(fields: [documentId], references: [documentId], onDelete: Cascade)
+  organizationId     String             @map("organization_id") @db.Uuid
+
+  attemptNumber Int    @map("attempt_number")
+  /// Protégée par une contrainte CHECK (correction P1-05, voir migration).
+  strategy      String @db.VarChar(20)
+  /// SUCCEEDED | PARTIALLY_SUCCEEDED | FAILED — protégée par une contrainte CHECK (correction
+  /// P1-05, voir migration).
+  outcome       String @db.VarChar(20)
+
+  /// Nom du moteur ayant traité cette tentative (ex. "pdf-parse", "tesseract.js", "mammoth",
+  /// "xlsx") — jamais une clé/secret fournisseur.
+  provider          String? @db.VarChar(60)
+  providerVersion   String? @map("provider_version") @db.VarChar(30)
+  providerRequestId String? @map("provider_request_id") @db.VarChar(120)
+
+  startedAt  DateTime @map("started_at")
+  finishedAt DateTime @map("finished_at")
+  durationMs Int      @map("duration_ms")
+
+  pageCount      Int?     @map("page_count")
+  characterCount Int?     @map("character_count")
+  chunkCount     Int?     @map("chunk_count")
+  language       String?  @db.VarChar(8)
+  warnings       String[] @default([])
+  errorCode      String?  @map("error_code") @db.VarChar(60)
+  errorMessage   String?  @map("error_message")
+
+  /// Correction P1-05 — deux tentatives identiques pour le même document et le même
+  /// `attemptNumber` sont désormais refusées au niveau base : un défaut de coordination
+  /// applicative ne peut plus produire un doublon silencieux dans l'historique.
+  @@unique([documentId, attemptNumber])
+  @@index([organizationId, documentId])
+  @@map("extraction_attempts")
+}
+
+/// Segment de texte exploitable par la future analyse IA (mission Sprint 3) — jamais un
+/// embedding : ce sprint ne branche aucun modèle d'embeddings (hors périmètre explicite).
+model ExtractionChunk {
+  id String @id @default(uuid()) @db.Uuid
+
+  documentId         String             @map("document_id") @db.Uuid
+  documentExtraction DocumentExtraction @relation(fields: [documentId], references: [documentId], onDelete: Cascade)
+  organizationId     String             @map("organization_id") @db.Uuid
+
+  /// Ordre stable au sein du document — jamais recalculé après coup, toujours réattribué en bloc
+  /// par la segmentation qui remplace un jeu de chunks (voir replaceChunks, mission "un retry ne
+  /// doit pas dupliquer les chunks").
+  sequence     Int
+  pageStart    Int?    @map("page_start")
+  pageEnd      Int?    @map("page_end")
+  sheetName    String? @map("sheet_name") @db.VarChar(120)
+  sectionTitle String? @map("section_title") @db.VarChar(300)
+
+  content        String
+  characterCount Int    @map("character_count")
+  tokenEstimate  Int?   @map("token_estimate")
+  checksum       String @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([documentId, sequence])
+  @@index([organizationId, documentId])
+  @@map("extraction_chunks")
 }

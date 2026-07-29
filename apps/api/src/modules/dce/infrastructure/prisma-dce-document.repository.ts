@@ -135,6 +135,19 @@ export class PrismaDceDocumentRepository implements DceDocumentRepository {
     });
   }
 
+  async updateProcessingStatus(input: {
+    organizationId: string;
+    dceId: string;
+    documentId: string;
+    processingStatus: string;
+    updatedAt: Date;
+  }): Promise<void> {
+    await this.prisma.dceDocument.updateMany({
+      where: { dceId: input.dceId, documentId: input.documentId, organizationId: input.organizationId },
+      data: { processingStatus: input.processingStatus, updatedAt: input.updatedAt },
+    });
+  }
+
   async runExclusiveForDce<T>(input: { dceId: string; fn: () => Promise<T> }): Promise<T> {
     return this.prisma.$transaction(async (tx) => {
       // Verrou consultatif Postgres scopé au DCE (mission P1-2) : sérialise tout import concurrent

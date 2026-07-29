@@ -28,6 +28,17 @@ export type { DeleteDocumentCommand } from "./application/use-cases/delete-docum
 export { InternalDocumentCleanupService } from "./application/services/internal-document-cleanup.service";
 export type { PurgeJustCreatedDocumentCommand } from "./application/services/internal-document-cleanup.service";
 
+// Ports bruts, réexportés uniquement pour un usage système interne (mission Sprint 3 — Extraction
+// lit un fichier déjà stocké sans jamais passer par un use case RBAC-protégé comme
+// DownloadDocumentVersionUseCase : l'extraction est un traitement interne autorisé une seule fois,
+// à la frontière HTTP de son propre module, jamais par la permission Documents de l'acteur).
+export { DOCUMENT_REPOSITORY } from "./application/ports/document.repository";
+export type { DocumentRepository } from "./application/ports/document.repository";
+export { DOCUMENT_VERSION_REPOSITORY } from "./application/ports/document-version.repository";
+export type { DocumentVersionRepository } from "./application/ports/document-version.repository";
+export { STORAGE_PROVIDER } from "./application/ports/storage-provider";
+export type { StorageProvider } from "./application/ports/storage-provider";
+
 export type { IncomingFile } from "./application/incoming-file";
 
 export { DocumentOrigin } from "./domain/document-origin";

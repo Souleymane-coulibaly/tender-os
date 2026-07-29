@@ -1,0 +1,30 @@
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import type { ExtractionDispatcher, ExtractionDispatchInput } from "../application/ports/extraction-dispatcher";
+import { ProcessDocumentExtractionUseCase } from "../application/use-cases/process-document-extraction.use-case";
+
+/**
+ * Adaptateur en mémoire (mission Sprint 3 §15 "jamais une architecture distribuée non nécessaire")
+ * — `setImmediate` détache l'exécution de la pile d'appel HTTP courante sans introduire de file
+ * d'attente externe. Ne survit pas à un redémarrage du process : un job interrompu par un crash
+ * reste `PROCESSING` jusqu'à un retry manuel (limite documentée, acceptable pour cette tranche,
+ * voir rapport final §J "risques résiduels").
+ */
+@Injectable()
+export class InProcessExtractionDispatcher implements ExtractionDispatcher {
+  private readonly logger = new Logger(InProcessExtractionDispatcher.name);
+
+  constructor(
+    @Inject(ProcessDocumentExtractionUseCase) private readonly processUseCase: ProcessDocumentExtractionUseCase,
+  ) {}
+
+  dispatch(input: ExtractionDispatchInput): void {
+    setImmediate(() => {
+      this.processUseCase.execute(input).catch((error: unknown) => {
+        this.logger.error(
+          `Unhandled error while processing extraction for document ${input.documentId}: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
+    });
+  }
+}

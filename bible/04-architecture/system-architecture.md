@@ -575,6 +575,43 @@ DocumentReady
 
 Chaque étape doit avoir : un statut ; un nombre de tentatives ; un code d'erreur ; des timestamps ; une possibilité de relance.
 
+### 17bis. Pipeline réellement implémenté (Sprint 3 — module Extraction)
+
+Le schéma ci-dessus (§17) reste la cible long terme. Le module `Extraction` livré au Sprint 3
+implémente le sous-ensemble suivant, réellement construit et testé (voir rapport Sprint 3) :
+
+```text
+DceDocument (déjà importé, module DCE)
+    ↓
+Inspection (PdfInspector — PDF uniquement : texte natif ? scanné ? chiffré ? corrompu ?)
+    ↓
+Détection de stratégie (extension + contenu réel, jamais l'extension seule)
+    ├── NATIVE_TEXT      → pdf-parse (+ OCR ciblé des seules pages sans texte natif, PDF mixte)
+    ├── OCR               → Tesseract.js (images, PDF scannés)
+    ├── OFFICE_DOCUMENT   → mammoth (DOCX)
+    └── SPREADSHEET       → xlsx/SheetJS (XLSX/XLS)
+    ↓
+Représentation intermédiaire commune (ExtractedContent — page/sheet/section, format-agnostique)
+    ↓
+Normalisation (Unicode NFC, espaces/lignes, césures PDF, en-têtes/pieds de page répétés)
+    ↓
+Segmentation déterministe (chunks : ordre, taille max, chevauchement configurable)
+    ↓
+Persistance (DocumentExtraction, ExtractionAttempt, ExtractionChunk — Postgres, texte inclus,
+jamais dans l'object storage pour cette tranche)
+    ↓
+DceDocument.processingStatus → READY_FOR_ANALYSIS | READY_FOR_ANALYSIS_WITH_WARNINGS
+```
+
+**Extraction documentaire ≠ Analyse métier par IA.** Le module `Extraction` produit du texte
+structuré et exploitable (chunks) ; il ne lit jamais ce texte pour en tirer un sens métier
+(clauses, exigences, scoring, mémoire technique). L'analyse IA (futur module distinct, non
+construit dans ce sprint) consommera les `ExtractionChunk` déjà persistés en lecture seule —
+jamais l'inverse, et jamais les deux responsabilités dans le même module.
+
+Hors périmètre Sprint 3 (volontairement non construit) : embeddings, base vectorielle, RAG,
+Company Brain, analyse IA du contenu, export Word/PDF, soumission, veille BOAMP/TED.
+
 ---
 
 ## 18. Architecture IA

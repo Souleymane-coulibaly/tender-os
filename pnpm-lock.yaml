@@ -105,6 +105,9 @@ importers:
       '@types/yauzl':
         specifier: ^3.4.0
         version: 3.4.0
+      jszip:
+        specifier: ^3.10.1
+        version: 3.10.1
       prisma:
         specifier: ^6.2.1
         version: 6.19.3(typescript@5.9.3)
