@@ -319,6 +319,7 @@ model Tender {
   statusHistory        TenderStatusHistoryEntry[]
   documentAssociations DocumentTenderAssociation[]
   dces                 Dce[]
+  analysisJobs         AnalysisJob[]
 
   /// AUDIT-007 : contrainte composite support de la FK composée de TenderLot ci-dessous — garantit
   /// au niveau base de données qu'un TenderLot ne peut jamais référencer un couple
@@ -597,6 +598,7 @@ model Document {
   requestedDocumentReferences TenderRequestedDocument[]
   dceDocuments                DceDocument[]
   documentExtraction          DocumentExtraction?
+  analysisJobs                AnalysisJob[]
 
   /// Support de la FK composée de DceDocument (module DCE) — même motif que TenderLot/AUDIT-007 :
   /// garantit au niveau base qu'un DceDocument ne peut jamais référencer un Document d'une autre
@@ -688,6 +690,7 @@ model Dce {
 
   documents           DceDocument[]
   documentExtractions DocumentExtraction[]
+  analysisJobs        AnalysisJob[]
 
   /// Un Tender ne porte jamais plus d'un DCE (conception §4, mission Sprint 0).
   @@unique([tenderId])
@@ -859,4 +862,131 @@ model ExtractionChunk {
   @@unique([documentId, sequence])
   @@index([organizationId, documentId])
   @@map("extraction_chunks")
+}
+
+/// Job d'analyse IA (mission Sprint 4.1 — socle technique, aucune analyse métier réelle) — jamais
+/// écrasé par un nouveau déclenchement : une nouvelle analyse pour la même cible crée toujours une
+/// nouvelle ligne (`analysisVersion` incrémenté), jamais une mise à jour de l'historique existant.
+/// Un retry explicite (RetryAnalysisUseCase) réutilise en revanche la MÊME ligne (même version).
+model AnalysisJob {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  /// FK composée (tenderId, organizationId) → Tender(id, organizationId) — même motif que
+  /// Dce/TenderLot (AUDIT-007).
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Renseignés uniquement pour `scope = 'DOCUMENT'` — jamais pour `scope = 'TENDER'` (voir
+  /// contrainte CHECK `analysis_jobs_scope_target_check`, migration).
+  dceId String? @map("dce_id") @db.Uuid
+  dce   Dce?    @relation(fields: [dceId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  documentId String?   @map("document_id") @db.Uuid
+  document   Document? @relation(fields: [documentId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Discriminant polymorphe de cible = `documentId` (scope DOCUMENT) ou `tenderId` (scope TENDER)
+  /// — porté en base pour permettre une contrainte d'unicité et un index sur une seule colonne,
+  /// jamais des index partiels dépendant du scope. Cohérence garantie par une contrainte CHECK
+  /// (migration), jamais uniquement par la discipline applicative.
+  targetId String @map("target_id") @db.Uuid
+
+  /// DOCUMENT | TENDER (domain/analysis-scope.ts) — protégé par une contrainte CHECK (migration).
+  scope String @db.VarChar(10)
+
+  /// PENDING | QUEUED | PROCESSING | SUCCEEDED | PARTIALLY_SUCCEEDED | FAILED | CANCELLED
+  /// (domain/analysis-status.ts) — protégé par une contrainte CHECK (migration).
+  status String @db.VarChar(24)
+
+  /// Nom du provider ayant traité la tentative la plus récente (ex. "OPENAI") — jamais une clé/
+  /// secret fournisseur.
+  provider String? @db.VarChar(30)
+  model    String? @db.VarChar(60)
+
+  /// Numéro de version de CETTE analyse pour sa cible — jamais réutilisé, jamais décrémenté
+  /// (mission §"Deux analyses de versions différentes doivent pouvoir coexister").
+  analysisVersion   Int     @map("analysis_version")
+  promptVersion     Int     @map("prompt_version")
+  /// `DocumentAnalysisInput.extractionVersion` au moment de la création (scope DOCUMENT
+  /// uniquement) — capturé une fois, jamais recalculé après coup.
+  extractionVersion Int?    @map("extraction_version")
+  inputChecksum     String? @map("input_checksum") @db.VarChar(64)
+
+  /// Jeton de réservation (compare-and-set, mission §"tentative obsolète") — incrémenté uniquement
+  /// par la réservation atomique courte (Phase 1).
+  attemptCount Int @default(0) @map("attempt_count")
+
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  durationMs  Int?      @map("duration_ms")
+
+  inputTokenCount  Int? @map("input_token_count")
+  outputTokenCount Int? @map("output_token_count")
+  totalTokenCount  Int? @map("total_token_count")
+
+  /// Sortie technique volontairement minimale (mission §"Sortie du provider pour le Sprint 4.1")
+  /// — jamais une structure métier détaillée, jamais le contenu complet du corpus analysé.
+  resultSummary String? @map("result_summary")
+  errorCode     String? @map("error_code") @db.VarChar(60)
+  errorMessage  String? @map("error_message")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @map("updated_at")
+
+  attempts AnalysisAttempt[]
+
+  /// Une seule version donnée ne peut jamais exister deux fois pour la même cible.
+  @@unique([organizationId, scope, targetId, analysisVersion])
+  /// Recherche du job actif (non terminal) d'une cible — mission §"double déclenchement".
+  @@index([organizationId, targetId, status])
+  @@index([organizationId, status])
+  @@map("analysis_jobs")
+}
+
+/// Trace immuable d'une tentative de traitement d'un `AnalysisJob` (mission Sprint 4.1 —
+/// historique append-only, jamais réécrit) : `AnalysisJob` ne porte que l'état courant, chaque
+/// réservation laisse ici une ligne distincte.
+model AnalysisAttempt {
+  id String @id @default(uuid()) @db.Uuid
+
+  jobId String      @map("job_id") @db.Uuid
+  job   AnalysisJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  attemptNumber Int @map("attempt_number")
+
+  /// MANUAL | RETRY | SYSTEM (domain/analysis-trigger.ts) — protégé par une contrainte CHECK
+  /// (migration).
+  trigger String @db.VarChar(10)
+
+  provider String? @db.VarChar(30)
+  model    String? @db.VarChar(60)
+
+  /// SUCCEEDED | PARTIALLY_SUCCEEDED | FAILED — protégé par une contrainte CHECK (migration).
+  outcome String @db.VarChar(20)
+
+  startedAt  DateTime @map("started_at")
+  finishedAt DateTime @map("finished_at")
+  durationMs Int      @map("duration_ms")
+
+  /// Nombre d'appels provider effectués AU SEIN de cette réservation (politique de retry interne,
+  /// mission §"Timeout et retry") — jamais confondu avec `attemptNumber`.
+  retryCount Int @default(0) @map("retry_count")
+
+  inputTokenCount  Int? @map("input_token_count")
+  outputTokenCount Int? @map("output_token_count")
+  totalTokenCount  Int? @map("total_token_count")
+
+  errorCode    String? @map("error_code") @db.VarChar(60)
+  errorMessage String? @map("error_message")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// Deux tentatives identiques pour le même job et le même `attemptNumber` sont refusées au
+  /// niveau base — même motif que `extraction_attempts` (correction P1-05).
+  @@unique([jobId, attemptNumber])
+  @@index([organizationId, jobId])
+  @@map("analysis_attempts")
 }

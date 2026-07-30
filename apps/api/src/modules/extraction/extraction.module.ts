@@ -71,5 +71,10 @@ import { ExtractionController } from "./interfaces/http/extraction.controller";
     // (même motif que DCE_CONFIG).
     { provide: EXTRACTION_CONFIG, useFactory: () => loadExtractionConfig() },
   ],
+  // Dépendance technique strictement nécessaire (mission Sprint 4.1) — sans cet export, aucun
+  // module consommateur ne peut injecter `GetDocumentAnalysisInputUseCase` via le mécanisme de DI
+  // NestJS standard, même en important `ExtractionModule` : le réexport déjà présent dans
+  // `index.ts` (correction P1-04) ne suffit qu'au typage, jamais à la résolution DI runtime.
+  exports: [GetDocumentAnalysisInputUseCase],
 })
 export class ExtractionModule {}

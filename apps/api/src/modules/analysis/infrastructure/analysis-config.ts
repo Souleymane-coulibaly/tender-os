@@ -1,0 +1,58 @@
+export type AnalysisConfig = Readonly<{
+  /** Nom du provider configuré (ex. "OPENAI") — `undefined` si absent : ne fait JAMAIS échouer le
+   *  démarrage de l'application (mission §"Configuration" — "Aucune variable obligatoire ne doit
+   *  faire crasher les modules qui ne déclenchent pas d'analyse"). Résolu paresseusement par
+   *  `AIProviderRegistry.resolve()`, uniquement lorsqu'une analyse démarre réellement. */
+  aiProvider?: string | undefined;
+  aiModel: string;
+  aiTimeoutMs: number;
+  aiMaxRetries: number;
+  aiRetryDelayMs: number;
+  /** Jamais journalisée, jamais exposée par aucun DTO/présenteur (mission §"Sécurité"). */
+  openAiApiKey?: string | undefined;
+}>;
+
+export const ANALYSIS_CONFIG = Symbol("ANALYSIS_CONFIG");
+
+const DEFAULT_AI_MODEL = "gpt-4o-mini";
+const DEFAULT_AI_TIMEOUT_MS = 30_000;
+const DEFAULT_AI_MAX_RETRIES = 2;
+const DEFAULT_AI_RETRY_DELAY_MS = 1_000;
+
+function readPositiveIntegerOrDefault(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
+  const raw = env[name];
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`Invalid environment variable ${name}: "${raw}" must be a positive integer.`);
+  }
+  return value;
+}
+
+function readNonNegativeIntegerOrDefault(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
+  const raw = env[name];
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`Invalid environment variable ${name}: "${raw}" must be a non-negative integer.`);
+  }
+  return value;
+}
+
+/**
+ * Mission §"Configuration" — contrairement à `loadExtractionConfig` (module Extraction, toutes les
+ * variables sont requises au démarrage), AUCUNE variable de cette configuration n'est obligatoire :
+ * TenderOS doit pouvoir démarrer sans la moindre clé IA configurée. Une valeur PRÉSENTE mais
+ * invalide (non numérique, négative) échoue quand même explicitement — jamais une valeur
+ * silencieusement ignorée.
+ */
+export function loadAnalysisConfig(env: NodeJS.ProcessEnv = process.env): AnalysisConfig {
+  return {
+    aiProvider: env.AI_PROVIDER || undefined,
+    aiModel: env.AI_MODEL || DEFAULT_AI_MODEL,
+    aiTimeoutMs: readPositiveIntegerOrDefault(env, "AI_TIMEOUT_MS", DEFAULT_AI_TIMEOUT_MS),
+    aiMaxRetries: readNonNegativeIntegerOrDefault(env, "AI_MAX_RETRIES", DEFAULT_AI_MAX_RETRIES),
+    aiRetryDelayMs: readNonNegativeIntegerOrDefault(env, "AI_RETRY_DELAY_MS", DEFAULT_AI_RETRY_DELAY_MS),
+    openAiApiKey: env.OPENAI_API_KEY || undefined,
+  };
+}
