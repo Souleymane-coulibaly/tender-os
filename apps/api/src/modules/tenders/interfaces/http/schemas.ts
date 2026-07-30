@@ -21,7 +21,7 @@ export const TENDER_COUNTRIES = ["FR", "BE", "DE", "ES", "IT", "LU", "NL", "EU",
 export const TENDER_LANGUAGES = ["fr", "en", "de", "es", "it", "nl"] as const;
 export const TENDER_SOURCES = ["MANUAL", "BOAMP", "TED", "PRIVATE", "OTHER"] as const;
 
-export const CreateTenderBodySchema = z
+const TenderDetailsBodySchema = z
   .object({
     title: z.string().trim().min(1).max(500),
     reference: z.string().trim().min(1).max(255).optional(),
@@ -42,9 +42,15 @@ export const CreateTenderBodySchema = z
     tags: z.array(z.string().trim().min(1).max(60)).optional(),
   })
   .strict();
+
+// Mission Sprint 5.1 §"Tenders" — un client autorisé est obligatoire à la création, jamais
+// modifiable ensuite (§"changer le client d'un appel d'offres... interdit dans ce sprint") :
+// `clientAccountId` n'existe QUE sur le schéma de création, `.strict()` sur `UpdateTenderBodySchema`
+// rejette explicitement toute tentative d'en glisser un dans une modification.
+export const CreateTenderBodySchema = TenderDetailsBodySchema.extend({ clientAccountId: z.string().uuid() });
 export type CreateTenderBody = z.infer<typeof CreateTenderBodySchema>;
 
-export const UpdateTenderBodySchema = CreateTenderBodySchema.partial();
+export const UpdateTenderBodySchema = TenderDetailsBodySchema.partial();
 export type UpdateTenderBody = z.infer<typeof UpdateTenderBodySchema>;
 
 export const ChangeTenderStatusBodySchema = z
@@ -64,6 +70,7 @@ export const ListTendersQuerySchema = z
     limit: z.coerce.number().int().min(1).max(100).optional().default(25),
     status: z.enum(TENDER_STATUSES).optional(),
     internalOwnerId: z.string().uuid().optional(),
+    clientAccountId: z.string().uuid().optional(),
     search: z.string().trim().min(1).max(200).optional(),
     deadlineAfter: z.string().datetime().optional(),
     deadlineBefore: z.string().datetime().optional(),
@@ -78,6 +85,7 @@ export const TenderBoardQuerySchema = z
   .object({
     search: z.string().trim().min(1).max(200).optional(),
     internalOwnerId: z.string().uuid().optional(),
+    clientAccountId: z.string().uuid().optional(),
     limitPerColumn: z.coerce.number().int().min(1).max(200).optional(),
   })
   .strict();

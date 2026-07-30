@@ -10,6 +10,7 @@ vi.mock("../../../actions", () => ({
 const BASE_TENDER: Tender = {
   id: "tender-1",
   organizationId: "org-1",
+  clientAccountId: "client-1",
   title: "Maintenance et support informatique",
   reference: "AO-2026-001",
   buyerName: "Mairie de Lyon",
@@ -52,6 +53,7 @@ describe("EditTenderForm", () => {
     const legacyTender: Tender = {
       id: "tender-legacy",
       organizationId: "org-1",
+      clientAccountId: "client-1",
       title: "Ancien appel d'offres (avant l'ajout des nouveaux champs)",
       status: "DRAFT",
       tags: [],

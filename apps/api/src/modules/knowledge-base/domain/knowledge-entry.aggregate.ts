@@ -7,6 +7,13 @@ export type KnowledgeEntryProps = {
   id: string;
   organizationId: string;
   knowledgeSpaceId: string;
+  /** Mission Sprint 5.1 §"Knowledge Base" — `undefined` = connaissance GLOBALE de l'organisation
+   *  (présentation, méthodologies génériques, certifications, RGPD...), toujours visible selon le
+   *  rôle d'organisation ; une valeur = connaissance SPÉCIFIQUE à ce client (historique, références
+   *  faites pour lui, contrats, contraintes particulières...), visible uniquement à ceux qui ont
+   *  accès à ce client. JAMAIS modifiable après création (mission §"jamais une bascule global/
+   *  client après création") — aucune méthode de mutation n'existe pour ce champ. */
+  clientAccountId?: string | undefined;
   title: string;
   description?: string | undefined;
   category: KnowledgeCategory;
@@ -52,6 +59,7 @@ export class KnowledgeEntry {
     id: string;
     organizationId: string;
     knowledgeSpaceId: string;
+    clientAccountId?: string | undefined;
     title: string;
     description?: string | undefined;
     category: KnowledgeCategory;
@@ -65,6 +73,7 @@ export class KnowledgeEntry {
       id: input.id,
       organizationId: input.organizationId,
       knowledgeSpaceId: input.knowledgeSpaceId,
+      clientAccountId: input.clientAccountId,
       title: input.title,
       description: input.description,
       category: input.category,
@@ -167,6 +176,9 @@ export class KnowledgeEntry {
   }
   get knowledgeSpaceId(): string {
     return this.props.knowledgeSpaceId;
+  }
+  get clientAccountId(): string | undefined {
+    return this.props.clientAccountId;
   }
   get title(): string {
     return this.props.title;

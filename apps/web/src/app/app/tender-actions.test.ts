@@ -44,6 +44,7 @@ describe("createTenderAction", () => {
 
   function buildValidFormData(overrides: Record<string, string> = {}): FormData {
     const data: Record<string, string> = {
+      clientAccountId: "client-1",
       title: "Maintenance et support informatique",
       reference: "AO-2026-001",
       buyerName: "Mairie de Lyon",
@@ -73,6 +74,7 @@ describe("createTenderAction", () => {
     const call = appApiFetchMock.mock.calls[0]!;
     const sentBody = JSON.parse((call[1] as { body: string }).body) as Record<string, unknown>;
     expect(sentBody).toEqual({
+      clientAccountId: "client-1",
       title: "Maintenance et support informatique",
       reference: "AO-2026-001",
       buyerName: "Mairie de Lyon",
@@ -103,6 +105,13 @@ describe("createTenderAction", () => {
     const result = await createTenderAction({}, buildValidFormData({ title: "" }));
 
     expect(result.error).toBe("Le titre est obligatoire.");
+    expect(appApiFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing client (mission Sprint 5.1 — un client autorisé est obligatoire) before ever calling the API", async () => {
+    const result = await createTenderAction({}, buildValidFormData({ clientAccountId: "" }));
+
+    expect(result.error).toBe("Le client est obligatoire.");
     expect(appApiFetchMock).not.toHaveBeenCalled();
   });
 

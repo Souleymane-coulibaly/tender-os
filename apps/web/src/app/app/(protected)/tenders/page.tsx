@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { appApiFetch } from "../../../../lib/app-api-client";
+import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../lib/client-portfolio-types";
 import type { PageResponse, TenderListItem, TenderStatistics as TenderStatisticsData } from "../../../../lib/tenders-types";
 import { ApiErrorState } from "../api-error-state";
 import { TenderFilters } from "./tender-filters";
@@ -15,6 +16,7 @@ type SearchParams = {
   search?: string;
   status?: string;
   internalOwnerId?: string;
+  clientAccountId?: string;
   deadlineAfter?: string;
   deadlineBefore?: string;
   overdue?: string;
@@ -29,6 +31,7 @@ export default async function TendersListPage({ searchParams }: { searchParams: 
   if (params.search) query.set("search", params.search);
   if (params.status) query.set("status", params.status);
   if (params.internalOwnerId) query.set("internalOwnerId", params.internalOwnerId);
+  if (params.clientAccountId) query.set("clientAccountId", params.clientAccountId);
   if (params.deadlineAfter) query.set("deadlineAfter", new Date(params.deadlineAfter).toISOString());
   if (params.deadlineBefore) query.set("deadlineBefore", new Date(params.deadlineBefore).toISOString());
   if (params.overdue === "true") query.set("overdue", "true");
@@ -37,14 +40,18 @@ export default async function TendersListPage({ searchParams }: { searchParams: 
 
   let page: PageResponse<TenderListItem>;
   let stats: TenderStatisticsData;
+  let clients: ClientPortfolioPage<ClientAccountSummary>;
   try {
-    [page, stats] = await Promise.all([
+    [page, stats, clients] = await Promise.all([
       appApiFetch<PageResponse<TenderListItem>>(`/api/v1/tenders?${query.toString()}`),
       appApiFetch<TenderStatisticsData>("/api/v1/tenders/stats"),
+      appApiFetch<ClientPortfolioPage<ClientAccountSummary>>("/api/v1/clients?limit=100"),
     ]);
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
+
+  const clientNameById = new Map(clients.items.map((client) => [client.id, client.name]));
 
   const queryString = new URLSearchParams(
     Object.entries(params).filter((entry): entry is [string, string] => Boolean(entry[1])),
@@ -73,11 +80,13 @@ export default async function TendersListPage({ searchParams }: { searchParams: 
           search: params.search,
           status: params.status as TenderListItem["status"] | undefined,
           internalOwnerId: params.internalOwnerId,
+          clientAccountId: params.clientAccountId,
           deadlineAfter: params.deadlineAfter,
           deadlineBefore: params.deadlineBefore,
           overdue: params.overdue === "true",
         }}
         sorting={{ sort: params.sort ?? "createdAt", sortDirection: params.sortDirection ?? "desc" }}
+        clients={clients.items}
       />
 
       {page.items.length === 0 ? (
@@ -89,6 +98,7 @@ export default async function TendersListPage({ searchParams }: { searchParams: 
               <tr className="border-b border-neutral-200 text-left text-neutral-500">
                 <th className="py-2 pr-4">Reference</th>
                 <th className="py-2 pr-4">Objet</th>
+                <th className="py-2 pr-4">Client</th>
                 <th className="py-2 pr-4">Acheteur</th>
                 <th className="py-2 pr-4">Statut</th>
                 <th className="py-2 pr-4">Date limite</th>
@@ -107,6 +117,13 @@ export default async function TendersListPage({ searchParams }: { searchParams: 
                     <Link href={`/app/tenders/${tender.id}`} className="font-medium text-neutral-900 hover:underline">
                       {tender.title}
                     </Link>
+                  </td>
+                  <td className="py-2 pr-4 text-neutral-600">
+                    {clientNameById.get(tender.clientAccountId) ?? (
+                      <Link href={`/app/clients/${tender.clientAccountId}`} className="hover:underline">
+                        Voir le client
+                      </Link>
+                    )}
                   </td>
                   <td className="py-2 pr-4 text-neutral-600">{tender.buyerName ?? "—"}</td>
                   <td className="py-2 pr-4">

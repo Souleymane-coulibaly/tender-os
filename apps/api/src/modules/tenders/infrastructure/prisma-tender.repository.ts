@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import type { Prisma, Tender as TenderRecord } from "@prisma/client";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
-import type { TenderListFilter, TenderPage, TenderRepository } from "../application/ports/tender.repository";
+import type { TenderCountByStatusFilter, TenderListFilter, TenderPage, TenderRepository } from "../application/ports/tender.repository";
 import { TenderConcurrentModificationError } from "../domain/errors";
 import { TenderStatus } from "../domain/tender-status";
 import type { Tender } from "../domain/tender.aggregate";
@@ -20,6 +20,8 @@ function buildWhere(input: TenderListFilter): Prisma.TenderWhereInput {
   const andConditions: Prisma.TenderWhereInput[] = [];
   if (input.status) andConditions.push({ status: input.status });
   if (input.internalOwnerId) andConditions.push({ internalOwnerId: input.internalOwnerId });
+  if (input.clientAccountId) andConditions.push({ clientAccountId: input.clientAccountId });
+  if (input.restrictToClientAccountIds) andConditions.push({ clientAccountId: { in: [...input.restrictToClientAccountIds] } });
   if (input.idsFilter) andConditions.push({ id: { in: [...input.idsFilter] } });
   if (input.deadlineAfter) andConditions.push({ submissionDeadline: { gte: input.deadlineAfter } });
   if (input.deadlineBefore) andConditions.push({ submissionDeadline: { lte: input.deadlineBefore } });
@@ -89,10 +91,13 @@ export class PrismaTenderRepository implements TenderRepository {
     return this.prisma.tender.count({ where: buildWhere(input) });
   }
 
-  async countByStatus(organizationId: string): Promise<Record<string, number>> {
+  async countByStatus(input: TenderCountByStatusFilter): Promise<Record<string, number>> {
     const groups = await this.prisma.tender.groupBy({
       by: ["status"],
-      where: { organizationId },
+      where: {
+        organizationId: input.organizationId,
+        ...(input.restrictToClientAccountIds ? { clientAccountId: { in: [...input.restrictToClientAccountIds] } } : {}),
+      },
       _count: { _all: true },
     });
 

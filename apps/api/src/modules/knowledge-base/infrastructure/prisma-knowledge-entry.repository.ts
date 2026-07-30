@@ -126,6 +126,14 @@ export class PrismaKnowledgeEntryRepository implements KnowledgeEntryRepository 
     if (filter.createdBefore) andConditions.push({ createdAt: { lte: filter.createdBefore } });
     if (filter.titleSearch) andConditions.push({ title: { contains: filter.titleSearch, mode: "insensitive" } });
     if (!filter.includeArchived) andConditions.push({ archivedAt: null });
+    if (filter.clientAccountId === "GLOBAL") {
+      andConditions.push({ clientAccountId: null });
+    } else if (filter.clientAccountId) {
+      andConditions.push({ clientAccountId: filter.clientAccountId });
+    }
+    if (filter.restrictToClientAccountIdsOrGlobal) {
+      andConditions.push({ OR: [{ clientAccountId: null }, { clientAccountId: { in: [...filter.restrictToClientAccountIdsOrGlobal] } }] });
+    }
 
     const where: Prisma.KnowledgeEntryWhereInput = {
       organizationId: filter.organizationId,

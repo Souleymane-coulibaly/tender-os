@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
-import { TenderNotFoundError } from "../../domain/errors";
+import { AssertClientAccessUseCase } from "../../../client-portfolio";
 import { TenderPermission } from "../../domain/tender-permission";
 import { parseMarketType } from "../../domain/market-type";
 import { parseTenderCountry } from "../../domain/tender-country";
@@ -11,6 +11,7 @@ import { toTenderSummary, type TenderSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
+import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 
 export type UpdateTenderCommand = Readonly<{
   organizationId: string;
@@ -45,19 +46,13 @@ export class UpdateTenderUseCase {
     @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: UpdateTenderCommand): Promise<UpdateTenderResult> {
     assertHasTenderPermission(command.actorRole, TenderPermission.Update);
 
-    const tender = await this.tenderRepository.findById({
-      organizationId: command.organizationId,
-      tenderId: command.tenderId,
-    });
-
-    if (!tender) {
-      throw new TenderNotFoundError();
-    }
+    const tender = await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
 
     tender.updateDetails(
       {

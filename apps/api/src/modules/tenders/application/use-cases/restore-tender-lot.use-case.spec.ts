@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { ClientAccountNotFoundError } from "../../../client-portfolio";
 import {
   DuplicateTenderLotNumberError,
   TenderArchivedError,
@@ -11,6 +12,7 @@ import { TenderLot } from "../../domain/tender-lot.entity";
 import { Tender } from "../../domain/tender.aggregate";
 import { TenderStatus } from "../../domain/tender-status";
 import {
+  createClientPortfolioTestFixture,
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryTenderLotRepository,
@@ -25,6 +27,7 @@ describe("RestoreTenderLotUseCase", () => {
   let tenderRepository: InMemoryTenderRepository;
   let lotRepository: InMemoryTenderLotRepository;
   let restoreAuditLogWriter: InMemoryAuditLogWriter;
+  let clientPortfolio: Awaited<ReturnType<typeof createClientPortfolioTestFixture>>;
   let restoreUseCase: RestoreTenderLotUseCase;
   let deleteUseCase: DeleteTenderLotUseCase;
   let createUseCase: CreateTenderLotUseCase;
@@ -33,20 +36,35 @@ describe("RestoreTenderLotUseCase", () => {
     tenderRepository = new InMemoryTenderRepository();
     lotRepository = new InMemoryTenderLotRepository();
     restoreAuditLogWriter = new InMemoryAuditLogWriter();
-    restoreUseCase = new RestoreTenderLotUseCase(tenderRepository, lotRepository, restoreAuditLogWriter, new FixedClock());
-    deleteUseCase = new DeleteTenderLotUseCase(tenderRepository, lotRepository, new InMemoryAuditLogWriter(), new FixedClock());
+    clientPortfolio = await createClientPortfolioTestFixture("org-1");
+    restoreUseCase = new RestoreTenderLotUseCase(
+      tenderRepository,
+      lotRepository,
+      restoreAuditLogWriter,
+      new FixedClock(),
+      clientPortfolio.assertClientAccessUseCase,
+    );
+    deleteUseCase = new DeleteTenderLotUseCase(
+      tenderRepository,
+      lotRepository,
+      new InMemoryAuditLogWriter(),
+      new FixedClock(),
+      clientPortfolio.assertClientAccessUseCase,
+    );
     createUseCase = new CreateTenderLotUseCase(
       tenderRepository,
       lotRepository,
       new InMemoryAuditLogWriter(),
       new FixedClock(),
       new SequentialIdGenerator(),
+      clientPortfolio.assertClientAccessUseCase,
     );
 
     await tenderRepository.seed(
       Tender.create({
         id: TenderId.from("tender-1"),
         organizationId: "org-1",
+        clientAccountId: "client-1",
         title: "Marche de travaux",
         createdBy: "user-1",
         occurredAt: new Date(),
@@ -194,5 +212,17 @@ describe("RestoreTenderLotUseCase", () => {
       }),
     ).rejects.toThrow(TenderArchivedError);
     expect(restoreAuditLogWriter.entries).toHaveLength(0);
+  });
+
+  it("correction P0 — refuses a MEMBER-tier actor with no assignment on the tender's client, even with tender:update", async () => {
+    await expect(
+      restoreUseCase.execute({
+        organizationId: "org-1",
+        tenderId: "tender-1",
+        lotId: "lot-1",
+        actorId: "user-unaffiliated",
+        actorRole: "BID_MANAGER",
+      }),
+    ).rejects.toBeInstanceOf(ClientAccountNotFoundError);
   });
 });

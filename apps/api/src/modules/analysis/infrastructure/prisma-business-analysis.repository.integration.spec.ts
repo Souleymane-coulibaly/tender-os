@@ -59,10 +59,21 @@ describe("PrismaBusinessAnalysisRepository (PostgreSQL)", () => {
       },
     });
 
+    const clientAccount = await prisma.clientAccount.create({
+      data: {
+        id: randomUUID(),
+        organizationId,
+        name: "Client de test",
+        nameNormalized: "client de test",
+        status: "ACTIVE",
+        createdBy: actorId,
+      },
+    });
+
     tenderId = randomUUID();
     createdTenderIds.push(tenderId);
     await prisma.tender.create({
-      data: { id: tenderId, organizationId, title: "Marché pour tests BusinessAnalysis", status: "DRAFT", tags: [], createdBy: actorId },
+      data: { id: tenderId, organizationId, clientAccountId: clientAccount.id, title: "Marché pour tests BusinessAnalysis", status: "DRAFT", tags: [], createdBy: actorId },
     });
 
     dceId = randomUUID();
@@ -89,6 +100,7 @@ describe("PrismaBusinessAnalysisRepository (PostgreSQL)", () => {
     if (createdTenderIds.length > 0) {
       await prisma.tender.deleteMany({ where: { id: { in: createdTenderIds } } });
     }
+    await prisma.clientAccount.deleteMany({ where: { organizationId } });
     await prisma.organization.deleteMany({ where: { id: { in: [organizationId, otherOrganizationId] } } });
     await prisma.$disconnect();
   });

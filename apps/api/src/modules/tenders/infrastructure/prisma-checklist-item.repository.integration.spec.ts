@@ -22,10 +22,21 @@ describe("PrismaChecklistItemRepository (PostgreSQL)", () => {
         status: "TRIAL",
       },
     });
+    const clientAccount = await prisma.clientAccount.create({
+      data: {
+        id: randomUUID(),
+        organizationId,
+        name: "Client de test",
+        nameNormalized: "client de test",
+        status: "ACTIVE",
+        createdBy: randomUUID(),
+      },
+    });
     await prisma.tender.create({
       data: {
         id: tenderId,
         organizationId,
+        clientAccountId: clientAccount.id,
         title: "Marche pour tests checklist",
         status: "DRAFT",
         tags: [],
@@ -39,6 +50,7 @@ describe("PrismaChecklistItemRepository (PostgreSQL)", () => {
       await prisma.tenderChecklistItem.deleteMany({ where: { id: { in: createdItemIds } } });
     }
     await prisma.tender.delete({ where: { id: tenderId } });
+    await prisma.clientAccount.deleteMany({ where: { organizationId } });
     await prisma.organization.delete({ where: { id: organizationId } });
     await prisma.$disconnect();
   });

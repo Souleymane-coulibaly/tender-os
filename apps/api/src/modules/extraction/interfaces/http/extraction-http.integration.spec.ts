@@ -172,13 +172,34 @@ describe("Extraction — real HTTP + PostgreSQL (NestJS)", () => {
     await addMembership({ organizationId: orgAId, userId: readOnlyA.userId, role: OrganizationRole.ReadOnly });
     await addMembership({ organizationId: orgBId, userId: adminB.userId, role: OrganizationRole.OrganizationAdmin });
 
+    const clientAccountA = await prisma.clientAccount.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgAId,
+        name: "Client de test A",
+        nameNormalized: "client de test a",
+        status: "ACTIVE",
+        createdBy: adminA.userId,
+      },
+    });
+    const clientAccountB = await prisma.clientAccount.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgBId,
+        name: "Client de test B",
+        nameNormalized: "client de test b",
+        status: "ACTIVE",
+        createdBy: adminB.userId,
+      },
+    });
+
     tenderAId = randomUUID();
     await prisma.tender.create({
-      data: { id: tenderAId, organizationId: orgAId, title: "Tender A — Extraction HTTP", status: "DRAFT", tags: [], createdBy: adminA.userId },
+      data: { id: tenderAId, organizationId: orgAId, clientAccountId: clientAccountA.id, title: "Tender A — Extraction HTTP", status: "DRAFT", tags: [], createdBy: adminA.userId },
     });
     tenderBId = randomUUID();
     await prisma.tender.create({
-      data: { id: tenderBId, organizationId: orgBId, title: "Tender B — Extraction HTTP", status: "DRAFT", tags: [], createdBy: adminB.userId },
+      data: { id: tenderBId, organizationId: orgBId, clientAccountId: clientAccountB.id, title: "Tender B — Extraction HTTP", status: "DRAFT", tags: [], createdBy: adminB.userId },
     });
 
     await ensureDce(tenderAId, tokenAdminA, orgAId);
@@ -195,6 +216,7 @@ describe("Extraction — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.document.updateMany({ where: { organizationId: { in: [orgAId, orgBId] } }, data: { currentVersionId: null } });
     await prisma.document.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.tender.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: [orgAId, orgBId] } } } });
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });

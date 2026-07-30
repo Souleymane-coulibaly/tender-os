@@ -41,8 +41,18 @@ describe("PrismaDocumentExtractionRepository (PostgreSQL)", () => {
         status: "TRIAL",
       },
     });
+    const clientAccount = await prisma.clientAccount.create({
+      data: {
+        id: randomUUID(),
+        organizationId,
+        name: "Client de test",
+        nameNormalized: "client de test",
+        status: "ACTIVE",
+        createdBy: actorId,
+      },
+    });
     await prisma.tender.create({
-      data: { id: tenderId, organizationId, title: "Marché pour tests DocumentExtraction", status: "DRAFT", tags: [], createdBy: actorId },
+      data: { id: tenderId, organizationId, clientAccountId: clientAccount.id, title: "Marché pour tests DocumentExtraction", status: "DRAFT", tags: [], createdBy: actorId },
     });
     await prisma.dce.create({
       data: { id: dceId, organizationId, tenderId, status: "IMPORTED", createdByUserId: actorId },
@@ -61,6 +71,7 @@ describe("PrismaDocumentExtractionRepository (PostgreSQL)", () => {
       await prisma.document.deleteMany({ where: { id: { in: createdDocumentIds } } });
     }
     await prisma.tender.delete({ where: { id: tenderId } });
+    await prisma.clientAccount.deleteMany({ where: { organizationId } });
     await prisma.organization.delete({ where: { id: organizationId } });
     await prisma.$disconnect();
   });

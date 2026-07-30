@@ -3,6 +3,7 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
+import { AssertClientAccessUseCase, ClientAccountArchivedError, ClientPermission, GetClientAccountUseCase } from "../../../client-portfolio";
 import { parseKnowledgeCategory } from "../../domain/knowledge-category";
 import { KnowledgeEntry } from "../../domain/knowledge-entry.aggregate";
 import { KnowledgeEntryVersion } from "../../domain/knowledge-entry-version.entity";
@@ -24,6 +25,10 @@ export type CreateKnowledgeEntryCommand = Readonly<{
   language?: string | undefined;
   metadata?: unknown;
   tags?: readonly string[] | undefined;
+  /** Mission Sprint 5.1 §"Knowledge Base" — absent/undefined crée une entrée GLOBALE (organisation),
+   *  une valeur crée une entrée SPÉCIFIQUE à ce client (existence + accès + non-archivé vérifiés ici,
+   *  jamais confiance en une valeur fournie par le client sans validation). */
+  clientAccountId?: string | undefined;
   requestId?: string | undefined;
 }>;
 
@@ -39,10 +44,31 @@ export class CreateKnowledgeEntryUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly getOrCreateDefaultKnowledgeSpaceUseCase: GetOrCreateDefaultKnowledgeSpaceUseCase,
+    private readonly getClientAccountUseCase: GetClientAccountUseCase,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: CreateKnowledgeEntryCommand): Promise<KnowledgeEntrySummary> {
     assertHasKnowledgePermission(command.actorRole, KnowledgePermission.Create);
+
+    if (command.clientAccountId) {
+      const client = await this.getClientAccountUseCase.execute({
+        organizationId: command.organizationId,
+        clientAccountId: command.clientAccountId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+      });
+      if (client.status === "ARCHIVED") {
+        throw new ClientAccountArchivedError();
+      }
+      await this.assertClientAccessUseCase.execute({
+        organizationId: command.organizationId,
+        clientAccountId: command.clientAccountId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        permission: ClientPermission.ManageKnowledge,
+      });
+    }
 
     const category = parseKnowledgeCategory(command.category);
     const metadata = validateKnowledgeMetadata(category, command.metadata);
@@ -53,6 +79,7 @@ export class CreateKnowledgeEntryUseCase {
       id: this.idGenerator.generate(),
       organizationId: command.organizationId,
       knowledgeSpaceId: space.id,
+      clientAccountId: command.clientAccountId,
       title: command.title,
       description: command.description,
       category,
@@ -93,7 +120,7 @@ export class CreateKnowledgeEntryUseCase {
         resourceType: "knowledge_entry",
         resourceId: entry.id,
         requestId: command.requestId,
-        metadata: { category, sourceType: KnowledgeSourceType.Manual },
+        metadata: { category, sourceType: KnowledgeSourceType.Manual, clientAccountId: command.clientAccountId },
       },
     });
 

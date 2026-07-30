@@ -1,3 +1,4 @@
+import type { ClientAccountSummary } from "../../../../lib/client-portfolio-types";
 import { TENDER_STATUS_LABELS, type TenderFiltersState } from "../../../../lib/tenders-types";
 
 /**
@@ -13,12 +14,17 @@ export function TenderFilters({
   basePath,
   values,
   sorting,
+  clients,
 }: {
   basePath: string;
   values: TenderFiltersState;
   /** Le tri n'a de sens que pour la vue Liste — le Kanban trie deja chaque colonne par
    *  echeance et n'affiche pas ce controle. */
   sorting?: { sort: string; sortDirection: string } | undefined;
+  /** Clients ACCESSIBLES a l'acteur (deja filtres cote backend, mission Sprint 5.1
+   *  §"un utilisateur standard ne voit que les clients auxquels il est affecte") — jamais
+   *  une liste complete non filtree. */
+  clients?: ClientAccountSummary[] | undefined;
 }) {
   return (
     <form method="GET" action={basePath} className="flex flex-wrap items-end gap-3 rounded border border-neutral-200 p-3">
@@ -53,6 +59,26 @@ export function TenderFilters({
           ))}
         </select>
       </div>
+      {clients && clients.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="clientAccountId" className="text-xs text-neutral-600">
+            Client
+          </label>
+          <select
+            id="clientAccountId"
+            name="clientAccountId"
+            defaultValue={values.clientAccountId ?? ""}
+            className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          >
+            <option value="">Tous</option>
+            {clients.map((client) => (
+              <option key={client.id} value={client.id}>
+                {client.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-1">
         <label htmlFor="internalOwnerId" className="text-xs text-neutral-600">
           Responsable (ID)

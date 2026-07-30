@@ -38,6 +38,9 @@ export type KnowledgeEntrySummary = {
   id: string;
   organizationId: string;
   knowledgeSpaceId: string;
+  /** `undefined`/absent = connaissance globale de l'organisation, une valeur = spécifique à ce
+   *  client (mission Sprint 5.1 §"Knowledge Base"). */
+  clientAccountId?: string | undefined;
   title: string;
   description?: string | undefined;
   category: string;
@@ -60,6 +63,7 @@ export function toKnowledgeEntrySummary(entry: KnowledgeEntry, tags: readonly Kn
     id: entry.id,
     organizationId: entry.organizationId,
     knowledgeSpaceId: entry.knowledgeSpaceId,
+    clientAccountId: entry.clientAccountId,
     title: entry.title,
     description: entry.description,
     category: entry.category,

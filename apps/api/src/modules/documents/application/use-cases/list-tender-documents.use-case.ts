@@ -6,7 +6,7 @@ import { toDocumentSummary, type DocumentSummary } from "../dtos";
 import { DOCUMENT_REPOSITORY, type DocumentRepository } from "../ports/document.repository";
 import { DOCUMENT_VERSION_REPOSITORY, type DocumentVersionRepository } from "../ports/document-version.repository";
 
-export type ListTenderDocumentsQuery = Readonly<{ organizationId: string; tenderId: string; actorRole: string }>;
+export type ListTenderDocumentsQuery = Readonly<{ organizationId: string; tenderId: string; actorRole: string; actorId: string }>;
 
 /**
  * Vérifie l'existence du Tender dans l'organisation active via le use case public de Tenders
@@ -28,6 +28,7 @@ export class ListTenderDocumentsUseCase {
       organizationId: query.organizationId,
       tenderId: query.tenderId,
       actorRole: query.actorRole,
+      actorId: query.actorId,
     });
 
     const documents = await this.documentRepository.listByTenderId({

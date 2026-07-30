@@ -25,10 +25,21 @@ describe("PrismaTenderLotRepository (PostgreSQL)", () => {
         status: "TRIAL",
       },
     });
+    const otherClientAccount = await prisma.clientAccount.create({
+      data: {
+        id: randomUUID(),
+        organizationId: otherOrganizationId,
+        name: "Client de test (other)",
+        nameNormalized: "client de test (other)",
+        status: "ACTIVE",
+        createdBy: randomUUID(),
+      },
+    });
     await prisma.tender.create({
       data: {
         id: otherTenderId,
         organizationId: otherOrganizationId,
+        clientAccountId: otherClientAccount.id,
         title: "Autre marche, autre organisation",
         status: "DRAFT",
         tags: [],
@@ -44,10 +55,21 @@ describe("PrismaTenderLotRepository (PostgreSQL)", () => {
         status: "TRIAL",
       },
     });
+    const clientAccount = await prisma.clientAccount.create({
+      data: {
+        id: randomUUID(),
+        organizationId,
+        name: "Client de test",
+        nameNormalized: "client de test",
+        status: "ACTIVE",
+        createdBy: randomUUID(),
+      },
+    });
     await prisma.tender.create({
       data: {
         id: tenderId,
         organizationId,
+        clientAccountId: clientAccount.id,
         title: "Marche pour tests de lots",
         status: "DRAFT",
         tags: [],
@@ -61,8 +83,10 @@ describe("PrismaTenderLotRepository (PostgreSQL)", () => {
       await prisma.tenderLot.deleteMany({ where: { id: { in: createdLotIds } } });
     }
     await prisma.tender.delete({ where: { id: tenderId } });
+    await prisma.clientAccount.deleteMany({ where: { organizationId } });
     await prisma.organization.delete({ where: { id: organizationId } });
     await prisma.tender.delete({ where: { id: otherTenderId } });
+    await prisma.clientAccount.deleteMany({ where: { organizationId: otherOrganizationId } });
     await prisma.organization.delete({ where: { id: otherOrganizationId } });
     await prisma.$disconnect();
   });

@@ -1,17 +1,50 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { ClientAccountNotFoundError } from "../../../client-portfolio";
 import { TenderPermissionMissingError } from "../../domain/errors";
-import { FixedClock, InMemoryAuditLogWriter, InMemoryRiskRepository, SequentialIdGenerator } from "../../test-support/fakes";
+import { TenderId } from "../../domain/tender-id.value-object";
+import { Tender } from "../../domain/tender.aggregate";
+import {
+  createClientPortfolioTestFixture,
+  DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+  FixedClock,
+  InMemoryAuditLogWriter,
+  InMemoryRiskRepository,
+  InMemoryTenderRepository,
+  SequentialIdGenerator,
+} from "../../test-support/fakes";
 import { CreateRiskUseCase } from "./create-risk.use-case";
 
 describe("CreateRiskUseCase", () => {
   let riskRepository: InMemoryRiskRepository;
   let auditLogWriter: InMemoryAuditLogWriter;
+  let tenderRepository: InMemoryTenderRepository;
+  let clientPortfolio: Awaited<ReturnType<typeof createClientPortfolioTestFixture>>;
   let useCase: CreateRiskUseCase;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     riskRepository = new InMemoryRiskRepository();
     auditLogWriter = new InMemoryAuditLogWriter();
-    useCase = new CreateRiskUseCase(riskRepository, auditLogWriter, new FixedClock(), new SequentialIdGenerator());
+    tenderRepository = new InMemoryTenderRepository();
+    clientPortfolio = await createClientPortfolioTestFixture("org-1");
+    useCase = new CreateRiskUseCase(
+      riskRepository,
+      auditLogWriter,
+      new FixedClock(),
+      new SequentialIdGenerator(),
+      tenderRepository,
+      clientPortfolio.assertClientAccessUseCase,
+    );
+
+    await tenderRepository.seed(
+      Tender.create({
+        id: TenderId.from("tender-1"),
+        organizationId: "org-1",
+        clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+        title: "Marche de nettoyage",
+        createdBy: "user-1",
+        occurredAt: new Date(),
+      }),
+    );
   });
 
   it("creates an OPEN risk and records an audit entry when the actor can manage risks", async () => {
@@ -41,5 +74,18 @@ describe("CreateRiskUseCase", () => {
     ).rejects.toThrow(TenderPermissionMissingError);
 
     expect(auditLogWriter.entries).toHaveLength(0);
+  });
+
+  it("correction P0 — refuses a MEMBER-tier actor with no assignment on the tender's client, even with tender:manage_risks", async () => {
+    await expect(
+      useCase.execute({
+        organizationId: "org-1",
+        tenderId: "tender-1",
+        actorId: "user-unaffiliated",
+        actorRole: "BID_MANAGER",
+        title: "Delai tres court",
+        severity: "CRITICAL",
+      }),
+    ).rejects.toBeInstanceOf(ClientAccountNotFoundError);
   });
 });

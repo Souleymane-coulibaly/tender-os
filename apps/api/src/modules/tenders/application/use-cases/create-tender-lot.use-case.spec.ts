@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { ClientAccountNotFoundError } from "../../../client-portfolio";
 import {
   DuplicateTenderLotNumberError,
   InvalidLotEstimatedAmountError,
@@ -10,6 +11,7 @@ import { TenderId } from "../../domain/tender-id.value-object";
 import { Tender } from "../../domain/tender.aggregate";
 import { TenderStatus } from "../../domain/tender-status";
 import {
+  createClientPortfolioTestFixture,
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryTenderLotRepository,
@@ -22,24 +24,28 @@ describe("CreateTenderLotUseCase", () => {
   let tenderRepository: InMemoryTenderRepository;
   let lotRepository: InMemoryTenderLotRepository;
   let auditLogWriter: InMemoryAuditLogWriter;
+  let clientPortfolio: Awaited<ReturnType<typeof createClientPortfolioTestFixture>>;
   let useCase: CreateTenderLotUseCase;
 
   beforeEach(async () => {
     tenderRepository = new InMemoryTenderRepository();
     lotRepository = new InMemoryTenderLotRepository();
     auditLogWriter = new InMemoryAuditLogWriter();
+    clientPortfolio = await createClientPortfolioTestFixture("org-1");
     useCase = new CreateTenderLotUseCase(
       tenderRepository,
       lotRepository,
       auditLogWriter,
       new FixedClock(),
       new SequentialIdGenerator(),
+      clientPortfolio.assertClientAccessUseCase,
     );
 
     await tenderRepository.seed(
       Tender.create({
         id: TenderId.from("tender-1"),
         organizationId: "org-1",
+        clientAccountId: "client-1",
         title: "Marche de travaux",
         createdBy: "user-1",
         occurredAt: new Date(),
@@ -169,5 +175,18 @@ describe("CreateTenderLotUseCase", () => {
         estimatedAmount: "not-a-number",
       }),
     ).rejects.toThrow(InvalidLotEstimatedAmountError);
+  });
+
+  it("correction P0 — refuses a MEMBER-tier actor with no assignment on the tender's client, even with tender:update", async () => {
+    await expect(
+      useCase.execute({
+        organizationId: "org-1",
+        tenderId: "tender-1",
+        actorId: "user-unaffiliated",
+        actorRole: "BID_MANAGER",
+        lotNumber: "01",
+        title: "Lot travaux",
+      }),
+    ).rejects.toBeInstanceOf(ClientAccountNotFoundError);
   });
 });

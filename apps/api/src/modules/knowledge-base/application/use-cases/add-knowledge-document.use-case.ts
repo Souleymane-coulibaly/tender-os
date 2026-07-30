@@ -10,6 +10,7 @@ import {
   InternalDocumentCleanupService,
   type IncomingFile,
 } from "../../../documents";
+import { AssertClientAccessUseCase, ClientAccountArchivedError, ClientPermission, GetClientAccountUseCase } from "../../../client-portfolio";
 import { KnowledgeEntryArchivedError, KnowledgeEntryNotFoundError } from "../../domain/errors";
 import { parseKnowledgeCategory } from "../../domain/knowledge-category";
 import { KnowledgeDocument } from "../../domain/knowledge-document.entity";
@@ -42,6 +43,10 @@ export type AddKnowledgeDocumentCommand = Readonly<{
   language?: string | undefined;
   metadata?: unknown;
   tags?: readonly string[] | undefined;
+  /** Mission Sprint 5.1 §"sélection du client à la création" — uniquement pertinent quand une
+   *  NOUVELLE entrée est créée (`knowledgeEntryId` absent) ; ignoré si `knowledgeEntryId` est fourni
+   *  (le client de l'entrée existante est immuable, voir `KnowledgeEntry.clientAccountId`). */
+  clientAccountId?: string | undefined;
   file: IncomingFile;
   maxFileSizeBytes: number;
   requestId?: string | undefined;
@@ -79,6 +84,8 @@ export class AddKnowledgeDocumentUseCase {
     private readonly createDocumentWithFirstVersionUseCase: CreateDocumentWithFirstVersionUseCase,
     private readonly internalDocumentCleanupService: InternalDocumentCleanupService,
     private readonly getOrCreateDefaultKnowledgeSpaceUseCase: GetOrCreateDefaultKnowledgeSpaceUseCase,
+    private readonly getClientAccountUseCase: GetClientAccountUseCase,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: AddKnowledgeDocumentCommand): Promise<KnowledgeEntrySummary> {
@@ -100,12 +107,43 @@ export class AddKnowledgeDocumentUseCase {
       if (existing.status === KnowledgeEntryStatus.Archived) {
         throw new KnowledgeEntryArchivedError();
       }
+      // Mission Sprint 5.1 §"Knowledge Base" — le client d'une entrée existante est immuable
+      // (jamais fourni par `command.clientAccountId` ici) : seul l'accès à CE client, déjà porté
+      // par l'entrée, est vérifié avant d'y ajouter un document.
+      if (existing.clientAccountId) {
+        await this.assertClientAccessUseCase.execute({
+          organizationId: command.organizationId,
+          clientAccountId: existing.clientAccountId,
+          actorId: command.actorId,
+          actorRole: command.actorRole,
+          permission: ClientPermission.ManageKnowledge,
+        });
+      }
       entry = existing;
       isNewEntry = false;
     } else {
       if (!command.title || !command.category) {
         throw new Error("title and category are required to create a new knowledge entry from a document.");
       }
+      if (command.clientAccountId) {
+        const client = await this.getClientAccountUseCase.execute({
+          organizationId: command.organizationId,
+          clientAccountId: command.clientAccountId,
+          actorId: command.actorId,
+          actorRole: command.actorRole,
+        });
+        if (client.status === "ARCHIVED") {
+          throw new ClientAccountArchivedError();
+        }
+        await this.assertClientAccessUseCase.execute({
+          organizationId: command.organizationId,
+          clientAccountId: command.clientAccountId,
+          actorId: command.actorId,
+          actorRole: command.actorRole,
+          permission: ClientPermission.ManageKnowledge,
+        });
+      }
+
       const category = parseKnowledgeCategory(command.category);
       const metadata = validateKnowledgeMetadata(category, command.metadata);
       const space = await this.getOrCreateDefaultKnowledgeSpaceUseCase.getOrCreate(command.organizationId);
@@ -114,6 +152,7 @@ export class AddKnowledgeDocumentUseCase {
         id: this.idGenerator.generate(),
         organizationId: command.organizationId,
         knowledgeSpaceId: space.id,
+        clientAccountId: command.clientAccountId,
         title: command.title,
         description: command.description,
         category,

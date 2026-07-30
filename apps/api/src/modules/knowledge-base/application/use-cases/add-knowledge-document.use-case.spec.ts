@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UuidGenerator } from "../../../../shared-kernel/id-generator";
+import type { AssertClientAccessUseCase, GetClientAccountUseCase } from "../../../client-portfolio";
 import type { CreateDocumentWithFirstVersionUseCase, InternalDocumentCleanupService } from "../../../documents";
 import { KnowledgeEntry } from "../../domain/knowledge-entry.aggregate";
 import { KnowledgeCategory } from "../../domain/knowledge-category";
@@ -23,6 +24,11 @@ const ORG = randomUUID();
 const ACTOR = randomUUID();
 
 const FAKE_FILE = { buffer: Buffer.from("fake-pdf-bytes"), originalFilename: "cv.pdf", mimeType: "application/pdf" };
+
+// Aucun test ci-dessous ne fournit `clientAccountId` ni ne seed une entrée avec un client : les
+// vérifications Client Portfolio restent derrière leurs gardes `if`, jamais déclenchées ici.
+const UNUSED_GET_CLIENT_ACCOUNT_USE_CASE = {} as GetClientAccountUseCase;
+const UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE = {} as AssertClientAccessUseCase;
 
 describe("AddKnowledgeDocumentUseCase", () => {
   let entryRepository: InMemoryKnowledgeEntryRepository;
@@ -58,6 +64,8 @@ describe("AddKnowledgeDocumentUseCase", () => {
       createDocumentWithFirstVersionUseCase as unknown as CreateDocumentWithFirstVersionUseCase,
       internalDocumentCleanupService as unknown as InternalDocumentCleanupService,
       spaceUseCase,
+      UNUSED_GET_CLIENT_ACCOUNT_USE_CASE,
+      UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE,
     );
   });
 

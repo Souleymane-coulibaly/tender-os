@@ -17,6 +17,7 @@ export type TenderStatus =
 export type Tender = {
   id: string;
   organizationId: string;
+  clientAccountId: string;
   title: string;
   reference?: string;
   buyerName?: string;
@@ -294,6 +295,7 @@ export const BOARD_STATUSES: TenderStatus[] = (Object.keys(TENDER_STATUS_LABELS)
 
 export type TenderBoardItem = {
   id: string;
+  clientAccountId: string;
   title: string;
   reference?: string;
   buyerName?: string;
@@ -356,6 +358,7 @@ export type TenderFiltersState = {
   search?: string | undefined;
   status?: TenderStatus | undefined;
   internalOwnerId?: string | undefined;
+  clientAccountId?: string | undefined;
   deadlineAfter?: string | undefined;
   deadlineBefore?: string | undefined;
   overdue?: boolean | undefined;

@@ -2,12 +2,13 @@
 
 import { useActionState, useState } from "react";
 import { createKnowledgeEntryAction, type FormActionState } from "../../../knowledge-actions";
+import type { ClientAccountSummary } from "../../../../../lib/client-portfolio-types";
 import { KNOWLEDGE_CATEGORY_LABELS, type KnowledgeCategory } from "../../../../../lib/knowledge-types";
 import { KnowledgeMetadataFields } from "../knowledge-metadata-fields";
 
 const INITIAL_STATE: FormActionState = {};
 
-export function CreateKnowledgeEntryForm() {
+export function CreateKnowledgeEntryForm({ clients }: { clients: ClientAccountSummary[] }) {
   const [state, formAction, isPending] = useActionState(createKnowledgeEntryAction, INITIAL_STATE);
   const [category, setCategory] = useState<KnowledgeCategory>("OTHER");
 
@@ -18,6 +19,20 @@ export function CreateKnowledgeEntryForm() {
           Titre *
         </label>
         <input id="title" name="title" type="text" required className="rounded border border-neutral-300 px-3 py-2 text-sm" />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="clientAccountId" className="text-sm font-medium text-neutral-700">
+          Portée
+        </label>
+        <select id="clientAccountId" name="clientAccountId" defaultValue="" className="rounded border border-neutral-300 px-3 py-2 text-sm">
+          <option value="">Connaissance globale (organisation)</option>
+          {clients.map((client) => (
+            <option key={client.id} value={client.id}>
+              Spécifique à {client.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="flex flex-col gap-1">

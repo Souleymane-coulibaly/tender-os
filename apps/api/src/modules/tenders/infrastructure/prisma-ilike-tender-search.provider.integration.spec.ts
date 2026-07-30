@@ -11,6 +11,7 @@ describe("PrismaIlikeTenderSearchProvider (PostgreSQL)", () => {
   const tenderRepository = new PrismaTenderRepository(prisma);
   const searchProvider = new PrismaIlikeTenderSearchProvider(prisma);
   const organizationId = randomUUID();
+  const clientAccountId = randomUUID();
   const createdTenderIds: string[] = [];
 
   beforeAll(async () => {
@@ -24,12 +25,23 @@ describe("PrismaIlikeTenderSearchProvider (PostgreSQL)", () => {
         status: "TRIAL",
       },
     });
+    await prisma.clientAccount.create({
+      data: {
+        id: clientAccountId,
+        organizationId,
+        name: "Client de test",
+        nameNormalized: "client de test",
+        status: "ACTIVE",
+        createdBy: randomUUID(),
+      },
+    });
   });
 
   afterAll(async () => {
     if (createdTenderIds.length > 0) {
       await prisma.tender.deleteMany({ where: { id: { in: createdTenderIds } } });
     }
+    await prisma.clientAccount.delete({ where: { id: clientAccountId } });
     await prisma.organization.delete({ where: { id: organizationId } });
     await prisma.$disconnect();
   });
@@ -40,6 +52,7 @@ describe("PrismaIlikeTenderSearchProvider (PostgreSQL)", () => {
     const tender = Tender.create({
       id: TenderId.from(id),
       organizationId,
+      clientAccountId,
       title,
       reference,
       createdBy: randomUUID(),

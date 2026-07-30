@@ -30,6 +30,12 @@ const STATUS_BY_CODE: Record<string, number> = {
   DUPLICATE_KNOWLEDGE_TAG: HttpStatus.CONFLICT,
   KNOWLEDGE_TAG_NOT_FOUND: HttpStatus.NOT_FOUND,
   KNOWLEDGE_PROVENANCE_VALIDATION_FAILED: HttpStatus.UNPROCESSABLE_ENTITY,
+
+  // Mission Sprint 5.1 — CreateKnowledgeEntryUseCase/AddKnowledgeDocumentUseCase délèguent
+  // désormais aussi à Client Portfolio (clientAccountId optionnel).
+  CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,
+  CLIENT_ACCOUNT_ARCHIVED: HttpStatus.CONFLICT,
+  CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
 };
 
 @Catch(DomainError)

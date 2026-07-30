@@ -54,6 +54,7 @@ model User {
   sessions              Session[]
   memberships           OrganizationMembership[]
   platformAdministrator PlatformAdministrator?
+  clientAssignments     ClientAssignment[]
 
   @@map("users")
 }
@@ -106,6 +107,7 @@ model Organization {
   documents       Document[]
   auditLogs       AuditLog[]
   knowledgeSpaces KnowledgeSpace[]
+  clientAccounts  ClientAccount[]
 
   @@map("organizations")
 }
@@ -262,6 +264,14 @@ model Tender {
   organizationId String       @map("organization_id") @db.Uuid
   organization   Organization @relation(fields: [organizationId], references: [id])
 
+  /// Client géré par l'organisation propriétaire de ce Tender (mission Sprint 5.1) — obligatoire
+  /// depuis ce sprint ; les Tenders créés avant cette tranche ont été rattachés au client par
+  /// défaut de leur organisation lors du backfill de migration (jamais modifié rétroactivement
+  /// une fois la migration terminée). Jamais de cascade : un ClientAccount qui porte encore des
+  /// Tenders ne peut pas être supprimé (voir DeleteClientAccountUseCase).
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
   title       String  @db.VarChar(500)
   reference   String? @db.VarChar(255)
   buyerName   String? @map("buyer_name") @db.VarChar(300)
@@ -342,6 +352,8 @@ model Tender {
   @@index([organizationId, internalOwnerId])
   /// Tri "dernière modification" de la vue Liste (mission Kanban & List Views §5, §8).
   @@index([organizationId, updatedAt])
+  /// Filtre "client" (mission Sprint 5.1 §"filtre client") — liste des Tenders d'un client donné.
+  @@index([organizationId, clientAccountId])
   @@map("tenders")
 }
 
@@ -1387,6 +1399,14 @@ model KnowledgeEntry {
   knowledgeSpaceId String         @map("knowledge_space_id") @db.Uuid
   knowledgeSpace   KnowledgeSpace @relation(fields: [knowledgeSpaceId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
+  /// NULL = connaissance GLOBALE de l'organisation (visible selon le rôle d'organisation, jamais
+  /// filtrée par client) ; renseigné = connaissance SPÉCIFIQUE à un client (mission Sprint 5.1
+  /// §"Knowledge Base" — visible uniquement aux acteurs ayant accès à ce client). Jamais de
+  /// bascule global → client ni l'inverse après création (mission §"validation stricte de
+  /// cohérence") — non modifiable par `UpdateKnowledgeEntryUseCase`.
+  clientAccountId String?        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
   title       String  @db.VarChar(500)
   description String?
   category    String  @db.VarChar(40)
@@ -1418,6 +1438,9 @@ model KnowledgeEntry {
   @@index([organizationId, createdAt])
   @@index([organizationId, archivedAt])
   @@index([organizationId, title])
+  /// Filtre "client" (mission Sprint 5.1) — entrées d'un client donné ; `clientAccountId IS NULL`
+  /// (via l'index partiel équivalent côté requêtes) sert au filtre "connaissances globales".
+  @@index([organizationId, clientAccountId])
   @@map("knowledge_entries")
 }
 
@@ -1548,4 +1571,71 @@ model KnowledgeEntryTag {
   @@id([knowledgeEntryId, tagId])
   @@index([organizationId, tagId])
   @@map("knowledge_entry_tags")
+}
+
+/// Client géré par l'organisation (mission Sprint 5.1 §"Client Portfolio Management") — un cabinet
+/// de conseil/ESN/AMO gère plusieurs clients ; `Organization` reste le tenant principal,
+/// `ClientAccount` représente CHACUN de ses clients. `nameNormalized` porte l'unicité tenant-aware
+/// (même motif que `KnowledgeTag.label` — jamais deux clients au nom identique à la casse près).
+model ClientAccount {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  name           String  @db.VarChar(200)
+  nameNormalized String  @map("name_normalized") @db.VarChar(200)
+  legalName      String? @map("legal_name") @db.VarChar(240)
+  reference      String? @db.VarChar(100)
+  sector         String? @db.VarChar(120)
+  country        String? @db.VarChar(10)
+  address        String?
+  website        String? @db.VarChar(2048)
+  notes          String?
+
+  /// ACTIVE | INACTIVE | ARCHIVED — protégée par une contrainte CHECK (migration).
+  status String @db.VarChar(20)
+
+  createdBy String  @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  assignments      ClientAssignment[]
+  tenders          Tender[]
+  knowledgeEntries KnowledgeEntry[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, nameNormalized])
+  @@index([organizationId, status])
+  @@index([organizationId, archivedAt])
+  @@map("client_accounts")
+}
+
+/// Affectation d'un utilisateur à un client (mission Sprint 5.1) — porte le rôle CLIENT, distinct
+/// et complémentaire du rôle d'organisation (`OrganizationMembership.role`, prioritaire — voir
+/// `ClientAccessPolicy`). Un utilisateur ne peut avoir qu'UNE SEULE affectation par client
+/// (contrainte unique ci-dessous) — la modifier remplace le rôle, jamais une seconde ligne.
+model ClientAssignment {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id])
+
+  /// CLIENT_MANAGER | CONTRIBUTOR | VIEWER — protégée par une contrainte CHECK (migration).
+  role String @db.VarChar(30)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, clientAccountId, userId])
+  @@index([organizationId, userId])
+  @@index([organizationId, clientAccountId])
+  @@map("client_assignments")
 }

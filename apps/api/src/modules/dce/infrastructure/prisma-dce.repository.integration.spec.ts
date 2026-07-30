@@ -16,6 +16,8 @@ describe("PrismaDceRepository (PostgreSQL)", () => {
   const actorId = randomUUID();
   const createdDceIds: string[] = [];
   const createdTenderIds: string[] = [];
+  let clientAccountId: string;
+  let otherClientAccountId: string;
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -28,10 +30,23 @@ describe("PrismaDceRepository (PostgreSQL)", () => {
         status: "TRIAL",
       },
     });
+    otherClientAccountId = (
+      await prisma.clientAccount.create({
+        data: {
+          id: randomUUID(),
+          organizationId: otherOrganizationId,
+          name: "Client de test (other)",
+          nameNormalized: "client de test (other)",
+          status: "ACTIVE",
+          createdBy: actorId,
+        },
+      })
+    ).id;
     await prisma.tender.create({
       data: {
         id: otherTenderId,
         organizationId: otherOrganizationId,
+        clientAccountId: otherClientAccountId,
         title: "Autre marche, autre organisation",
         status: "DRAFT",
         tags: [],
@@ -47,6 +62,18 @@ describe("PrismaDceRepository (PostgreSQL)", () => {
         status: "TRIAL",
       },
     });
+    clientAccountId = (
+      await prisma.clientAccount.create({
+        data: {
+          id: randomUUID(),
+          organizationId,
+          name: "Client de test",
+          nameNormalized: "client de test",
+          status: "ACTIVE",
+          createdBy: actorId,
+        },
+      })
+    ).id;
   });
 
   afterAll(async () => {
@@ -56,8 +83,10 @@ describe("PrismaDceRepository (PostgreSQL)", () => {
     if (createdTenderIds.length > 0) {
       await prisma.tender.deleteMany({ where: { id: { in: createdTenderIds } } });
     }
+    await prisma.clientAccount.deleteMany({ where: { organizationId } });
     await prisma.organization.delete({ where: { id: organizationId } });
     await prisma.tender.delete({ where: { id: otherTenderId } });
+    await prisma.clientAccount.deleteMany({ where: { organizationId: otherOrganizationId } });
     await prisma.organization.delete({ where: { id: otherOrganizationId } });
     await prisma.$disconnect();
   });
@@ -69,7 +98,7 @@ describe("PrismaDceRepository (PostgreSQL)", () => {
     const id = randomUUID();
     createdTenderIds.push(id);
     await prisma.tender.create({
-      data: { id, organizationId, title: "Marche pour tests DCE", status: "DRAFT", tags: [], createdBy: actorId },
+      data: { id, organizationId, clientAccountId, title: "Marche pour tests DCE", status: "DRAFT", tags: [], createdBy: actorId },
     });
     return id;
   }

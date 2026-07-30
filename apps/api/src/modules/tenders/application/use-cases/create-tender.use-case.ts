@@ -3,6 +3,7 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
+import { AssertClientAccessUseCase, ClientAccountArchivedError, ClientPermission, GetClientAccountUseCase } from "../../../client-portfolio";
 import { TenderPermission } from "../../domain/tender-permission";
 import { Tender } from "../../domain/tender.aggregate";
 import { TenderId } from "../../domain/tender-id.value-object";
@@ -21,6 +22,7 @@ export type CreateTenderCommand = Readonly<{
   organizationId: string;
   actorId: string;
   actorRole: string;
+  clientAccountId: string;
   title: string;
   reference?: string | undefined;
   buyerName?: string | undefined;
@@ -50,10 +52,33 @@ export class CreateTenderUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    private readonly getClientAccountUseCase: GetClientAccountUseCase,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: CreateTenderCommand): Promise<CreateTenderResult> {
     assertHasTenderPermission(command.actorRole, TenderPermission.Create);
+
+    // Mission Sprint 5.1 §"Tenders" — un client autorisé est obligatoire : existence + appartenance
+    // à l'organisation (`GetClientAccountUseCase`, jamais confiance en un `clientAccountId` fourni
+    // par le client), non archivé, puis autorisation spécifique de créer POUR ce client
+    // (`ClientPermission.CreateTender`, au-delà du simple droit de lecture déjà vérifié ci-dessus).
+    const client = await this.getClientAccountUseCase.execute({
+      organizationId: command.organizationId,
+      clientAccountId: command.clientAccountId,
+      actorId: command.actorId,
+      actorRole: command.actorRole,
+    });
+    if (client.status === "ARCHIVED") {
+      throw new ClientAccountArchivedError();
+    }
+    await this.assertClientAccessUseCase.execute({
+      organizationId: command.organizationId,
+      clientAccountId: command.clientAccountId,
+      actorId: command.actorId,
+      actorRole: command.actorRole,
+      permission: ClientPermission.CreateTender,
+    });
 
     const occurredAt = this.clock.now();
 
@@ -62,6 +87,7 @@ export class CreateTenderUseCase {
     const tender = Tender.create({
       id: TenderId.from(this.idGenerator.generate()),
       organizationId: command.organizationId,
+      clientAccountId: command.clientAccountId,
       title: command.title,
       reference: command.reference,
       buyerName: command.buyerName,

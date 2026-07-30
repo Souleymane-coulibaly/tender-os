@@ -9,6 +9,10 @@ import type { TenderSource } from "./tender-source";
 export type TenderProps = {
   id: TenderId;
   organizationId: string;
+  /** Mission Sprint 5.1 §"Tenders" — obligatoire, jamais modifiable après création (mission
+   *  §"changer le client d'un appel d'offres... interdit dans ce sprint") : aucune méthode de
+   *  mutation n'existe pour ce champ, volontairement absent de `TenderDetailsUpdate`. */
+  clientAccountId: string;
   title: string;
   reference?: string | undefined;
   buyerName?: string | undefined;
@@ -64,6 +68,7 @@ export class Tender {
   static create(input: {
     id: TenderId;
     organizationId: string;
+    clientAccountId: string;
     title: string;
     reference?: string | undefined;
     buyerName?: string | undefined;
@@ -87,6 +92,7 @@ export class Tender {
     return new Tender({
       id: input.id,
       organizationId: input.organizationId,
+      clientAccountId: input.clientAccountId,
       title: input.title,
       reference: input.reference,
       buyerName: input.buyerName,
@@ -176,6 +182,10 @@ export class Tender {
 
   get organizationId(): string {
     return this.props.organizationId;
+  }
+
+  get clientAccountId(): string {
+    return this.props.clientAccountId;
   }
 
   get title(): string {

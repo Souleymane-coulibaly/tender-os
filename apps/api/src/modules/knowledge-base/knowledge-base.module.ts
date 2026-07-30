@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { ClientPortfolioModule } from "../client-portfolio";
 import { DocumentsModule } from "../documents";
 import { ExtractionModule } from "../extraction";
 import { IdentityModule } from "../identity";
@@ -49,7 +50,7 @@ import { PrismaKnowledgeTagRepository } from "./infrastructure/prisma-knowledge-
 import { KnowledgeController } from "./interfaces/http/knowledge.controller";
 
 @Module({
-  imports: [IdentityModule, MembershipsModule, DocumentsModule, ExtractionModule],
+  imports: [IdentityModule, MembershipsModule, DocumentsModule, ExtractionModule, ClientPortfolioModule],
   controllers: [KnowledgeController],
   providers: [
     GetOrCreateDefaultKnowledgeSpaceUseCase,

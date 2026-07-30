@@ -1,12 +1,15 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
+import { AssertClientAccessUseCase } from "../../../client-portfolio";
 import { AlertNotFoundError } from "../../domain/errors";
 import { TenderPermission } from "../../domain/tender-permission";
 import { toAlertSummary, type AlertSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { ALERT_REPOSITORY, type AlertRepository } from "../ports/alert.repository";
+import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
+import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 
 export type ResolveAlertCommand = Readonly<{
   organizationId: string;
@@ -23,10 +26,14 @@ export class ResolveAlertUseCase {
     @Inject(ALERT_REPOSITORY) private readonly alertRepository: AlertRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: ResolveAlertCommand): Promise<AlertSummary> {
     assertHasTenderPermission(command.actorRole, TenderPermission.ManageAlerts);
+
+    await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
 
     const alert = await this.alertRepository.findById({
       organizationId: command.organizationId,

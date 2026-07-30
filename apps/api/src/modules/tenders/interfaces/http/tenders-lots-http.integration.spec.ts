@@ -105,11 +105,23 @@ describe("Tender Lots — isolation HTTP inter-tenant (NestJS + PostgreSQL réel
       }),
     );
 
+    const clientAccountA = await prisma.clientAccount.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgAId,
+        name: "Client de test",
+        nameNormalized: "client de test",
+        status: "ACTIVE",
+        createdBy: userA.userId,
+      },
+    });
+
     tenderAId = randomUUID();
     await prisma.tender.create({
       data: {
         id: tenderAId,
         organizationId: orgAId,
+        clientAccountId: clientAccountA.id,
         title: "Tender A — isolation HTTP",
         status: "DRAFT",
         tags: [],
@@ -128,6 +140,7 @@ describe("Tender Lots — isolation HTTP inter-tenant (NestJS + PostgreSQL réel
   afterAll(async () => {
     await prisma.tenderLot.deleteMany({ where: { tenderId: tenderAId } });
     await prisma.tender.deleteMany({ where: { id: tenderAId } });
+    await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: [orgAId, orgBId] } } } });
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });

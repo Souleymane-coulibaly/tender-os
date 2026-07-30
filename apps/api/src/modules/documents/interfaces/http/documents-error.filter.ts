@@ -25,6 +25,12 @@ const STATUS_BY_CODE: Record<string, number> = {
   FILE_TOO_LARGE: HttpStatus.PAYLOAD_TOO_LARGE,
   UNSUPPORTED_FILE_TYPE: HttpStatus.UNSUPPORTED_MEDIA_TYPE,
   INVALID_FILENAME: HttpStatus.UNPROCESSABLE_ENTITY,
+
+  // Erreurs cross-module réelles (mission Sprint 5.1) — même motif que TENDER_NOT_FOUND
+  // ci-dessus : Client Portfolio (via GetTenderUseCase) laisse ses erreurs remonter telles quelles.
+  CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,
+  CLIENT_ACCOUNT_ARCHIVED: HttpStatus.CONFLICT,
+  CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
 };
 
 @Catch(DomainError)

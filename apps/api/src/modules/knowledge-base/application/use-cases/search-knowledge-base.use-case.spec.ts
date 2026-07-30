@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
+import { ListAccessibleClientsUseCase } from "../../../client-portfolio";
+import { InMemoryClientAssignmentRepository } from "../../../client-portfolio/test-support/fakes";
 import { KnowledgeCategory } from "../../domain/knowledge-category";
 import { KnowledgeEntry } from "../../domain/knowledge-entry.aggregate";
 import { KnowledgeSourceType } from "../../domain/knowledge-source-type";
@@ -11,6 +13,10 @@ const ORG = randomUUID();
 const SPACE = randomUUID();
 const ACTOR = randomUUID();
 const NOW = new Date("2026-07-30T10:00:00Z");
+
+function buildListAccessibleClientsUseCase(): ListAccessibleClientsUseCase {
+  return new ListAccessibleClientsUseCase(new InMemoryClientAssignmentRepository());
+}
 
 describe("SearchKnowledgeBaseUseCase", () => {
   async function seedEntry(entryRepository: InMemoryKnowledgeEntryRepository, title: string): Promise<string> {
@@ -38,9 +44,9 @@ describe("SearchKnowledgeBaseUseCase", () => {
 
     const match: KnowledgeSearchMatch = { knowledgeEntryId: entryId, matchLocation: "CONTENT", snippet: "...expérience cloud...", chunkSequence: 0, knowledgeDocumentId: randomUUID() };
     const searchProvider = new FakeKnowledgeSearchProvider([match]);
-    const useCase = new SearchKnowledgeBaseUseCase(searchProvider, entryRepository, tagRepository);
+    const useCase = new SearchKnowledgeBaseUseCase(searchProvider, entryRepository, tagRepository, buildListAccessibleClientsUseCase());
 
-    const result = await useCase.execute({ organizationId: ORG, actorRole: "CONTRIBUTOR", query: "cloud", limit: 20, offset: 0 });
+    const result = await useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "CONTRIBUTOR", query: "cloud", limit: 20, offset: 0 });
 
     expect(result.items).toHaveLength(1);
     expect(result.items[0]!.title).toBe("CV de Jean Dupont");
@@ -58,9 +64,9 @@ describe("SearchKnowledgeBaseUseCase", () => {
       { knowledgeEntryId: entryId, matchLocation: "CONTENT", snippet: "...cloud..." },
       { knowledgeEntryId: entryId, matchLocation: "CONTENT", snippet: "...azure..." },
     ];
-    const useCase = new SearchKnowledgeBaseUseCase(new FakeKnowledgeSearchProvider(matches), entryRepository, new InMemoryKnowledgeTagRepository());
+    const useCase = new SearchKnowledgeBaseUseCase(new FakeKnowledgeSearchProvider(matches), entryRepository, new InMemoryKnowledgeTagRepository(), buildListAccessibleClientsUseCase());
 
-    const result = await useCase.execute({ organizationId: ORG, actorRole: "CONTRIBUTOR", query: "cloud", limit: 20, offset: 0 });
+    const result = await useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "CONTRIBUTOR", query: "cloud", limit: 20, offset: 0 });
 
     expect(result.items).toHaveLength(3);
     expect(findByIdSpy).toHaveBeenCalledTimes(1);
@@ -69,17 +75,17 @@ describe("SearchKnowledgeBaseUseCase", () => {
   it("silently drops a match whose entry no longer exists — never a phantom result", async () => {
     const entryRepository = new InMemoryKnowledgeEntryRepository();
     const match: KnowledgeSearchMatch = { knowledgeEntryId: randomUUID(), matchLocation: "TITLE", snippet: "x" };
-    const useCase = new SearchKnowledgeBaseUseCase(new FakeKnowledgeSearchProvider([match]), entryRepository, new InMemoryKnowledgeTagRepository());
+    const useCase = new SearchKnowledgeBaseUseCase(new FakeKnowledgeSearchProvider([match]), entryRepository, new InMemoryKnowledgeTagRepository(), buildListAccessibleClientsUseCase());
 
-    const result = await useCase.execute({ organizationId: ORG, actorRole: "CONTRIBUTOR", query: "x", limit: 20, offset: 0 });
+    const result = await useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "CONTRIBUTOR", query: "x", limit: 20, offset: 0 });
     expect(result.items).toHaveLength(0);
   });
 
   it("rejects a role without Search permission", async () => {
     const entryRepository = new InMemoryKnowledgeEntryRepository();
-    const useCase = new SearchKnowledgeBaseUseCase(new FakeKnowledgeSearchProvider([]), entryRepository, new InMemoryKnowledgeTagRepository());
+    const useCase = new SearchKnowledgeBaseUseCase(new FakeKnowledgeSearchProvider([]), entryRepository, new InMemoryKnowledgeTagRepository(), buildListAccessibleClientsUseCase());
     // Aucun rôle réel n'exclut Search parmi ceux définis (Viewer l'inclut) — un rôle totalement
     // inconnu est le seul cas qui la refuse (mission §"Un rôle inconnu ne doit recevoir aucun droit").
-    await expect(useCase.execute({ organizationId: ORG, actorRole: "SOME_UNKNOWN_ROLE", query: "x", limit: 20, offset: 0 })).rejects.toThrow();
+    await expect(useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "SOME_UNKNOWN_ROLE", query: "x", limit: 20, offset: 0 })).rejects.toThrow();
   });
 });

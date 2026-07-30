@@ -10,6 +10,7 @@ import type { TenderEnrichment } from "./tender-enrichment";
  */
 export type TenderBoardItemDto = Readonly<{
   id: string;
+  clientAccountId: string;
   title: string;
   reference?: string | undefined;
   buyerName?: string | undefined;
@@ -29,6 +30,7 @@ export type TenderListItemDto = TenderBoardItemDto & Readonly<{ createdAt: strin
 export function toTenderBoardItemDto(tender: Tender, enrichment: TenderEnrichment): TenderBoardItemDto {
   return {
     id: tender.id.value,
+    clientAccountId: tender.clientAccountId,
     title: tender.title,
     reference: tender.reference,
     buyerName: tender.buyerName,

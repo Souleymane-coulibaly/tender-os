@@ -4,6 +4,8 @@ import { ChecklistItem } from "../../domain/checklist-item.entity";
 import { TenderId } from "../../domain/tender-id.value-object";
 import { Tender } from "../../domain/tender.aggregate";
 import {
+  createClientPortfolioTestFixture,
+  DEFAULT_TEST_CLIENT_ACCOUNT_ID,
   FixedClock,
   InMemoryAlertRepository,
   InMemoryAwardCriterionRepository,
@@ -24,6 +26,7 @@ describe("GetTenderListViewUseCase", () => {
   beforeEach(async () => {
     tenderRepository = new InMemoryTenderRepository();
     checklistRepository = new InMemoryChecklistItemRepository();
+    const clientPortfolio = await createClientPortfolioTestFixture("org-1");
     useCase = new GetTenderListViewUseCase(
       tenderRepository,
       checklistRepository,
@@ -34,12 +37,14 @@ describe("GetTenderListViewUseCase", () => {
       new InMemoryAlertRepository(),
       new InMemoryTenderSearchProvider(tenderRepository),
       new FixedClock(),
+      clientPortfolio.listAccessibleClientsUseCase,
     );
 
     await tenderRepository.seed(
       Tender.create({
         id: TenderId.from("tender-1"),
         organizationId: "org-1",
+        clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
         title: "Marche de nettoyage",
         createdBy: "user-1",
         occurredAt: new Date("2026-01-01T00:00:00Z"),
@@ -59,7 +64,7 @@ describe("GetTenderListViewUseCase", () => {
       }),
     );
 
-    const result = await useCase.execute({ organizationId: "org-1", actorRole: "READ_ONLY", limit: 10 });
+    const result = await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "READ_ONLY", limit: 10 });
 
     expect(result.items[0]?.incompleteChecklistCount).toBe(1);
     expect(result.items[0]?.readinessScore).toBeDefined();
@@ -67,9 +72,9 @@ describe("GetTenderListViewUseCase", () => {
   });
 
   it("refuses when the actor lacks tender:list", async () => {
-    await expect(useCase.execute({ organizationId: "org-1", actorRole: "UNKNOWN_ROLE", limit: 10 })).rejects.toThrow(
-      TenderPermissionMissingError,
-    );
+    await expect(
+      useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "UNKNOWN_ROLE", limit: 10 }),
+    ).rejects.toThrow(TenderPermissionMissingError);
   });
 
   it("scopes rows to the caller's organization only", async () => {
@@ -77,13 +82,14 @@ describe("GetTenderListViewUseCase", () => {
       Tender.create({
         id: TenderId.from("tender-other-org"),
         organizationId: "org-2",
+        clientAccountId: "client-other-org",
         title: "Marche d'une autre organisation",
         createdBy: "user-2",
         occurredAt: new Date(),
       }),
     );
 
-    const result = await useCase.execute({ organizationId: "org-1", actorRole: "READ_ONLY", limit: 10 });
+    const result = await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "READ_ONLY", limit: 10 });
 
     expect(result.items.map((item) => item.id)).not.toContain("tender-other-org");
   });

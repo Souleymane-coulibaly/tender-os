@@ -5,6 +5,7 @@ import { getAppSessionToken } from "../../../lib/app-api-client";
 import { logoutAction } from "../actions";
 
 const NAV_ITEMS = [
+  { href: "/app/clients", label: "Clients" },
   { href: "/app/tenders", label: "Appels d'offres" },
   { href: "/app/documents", label: "Documents" },
   { href: "/app/knowledge", label: "Base de connaissances" },

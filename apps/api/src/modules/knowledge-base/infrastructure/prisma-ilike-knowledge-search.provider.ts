@@ -47,6 +47,14 @@ function buildEntryWhere(criteria: KnowledgeSearchCriteria): Prisma.KnowledgeEnt
   if (criteria.createdAfter) andConditions.push({ createdAt: { gte: criteria.createdAfter } });
   if (criteria.createdBefore) andConditions.push({ createdAt: { lte: criteria.createdBefore } });
   if (!criteria.includeArchived) andConditions.push({ archivedAt: null });
+  if (criteria.clientAccountId === "GLOBAL") {
+    andConditions.push({ clientAccountId: null });
+  } else if (criteria.clientAccountId) {
+    andConditions.push({ clientAccountId: criteria.clientAccountId });
+  }
+  if (criteria.restrictToClientAccountIdsOrGlobal) {
+    andConditions.push({ OR: [{ clientAccountId: null }, { clientAccountId: { in: [...criteria.restrictToClientAccountIdsOrGlobal] } }] });
+  }
 
   return { organizationId: criteria.organizationId, ...(andConditions.length > 0 ? { AND: andConditions } : {}) };
 }
@@ -70,6 +78,20 @@ function buildEntrySqlConditions(criteria: KnowledgeSearchCriteria): Prisma.Sql 
   if (criteria.createdAfter) conditions.push(Prisma.sql`"created_at" >= ${criteria.createdAfter}`);
   if (criteria.createdBefore) conditions.push(Prisma.sql`"created_at" <= ${criteria.createdBefore}`);
   if (!criteria.includeArchived) conditions.push(Prisma.sql`"archived_at" IS NULL`);
+  if (criteria.clientAccountId === "GLOBAL") {
+    conditions.push(Prisma.sql`"client_account_id" IS NULL`);
+  } else if (criteria.clientAccountId) {
+    conditions.push(Prisma.sql`"client_account_id" = ${criteria.clientAccountId}::uuid`);
+  }
+  if (criteria.restrictToClientAccountIdsOrGlobal) {
+    if (criteria.restrictToClientAccountIdsOrGlobal.length === 0) {
+      conditions.push(Prisma.sql`"client_account_id" IS NULL`);
+    } else {
+      conditions.push(
+        Prisma.sql`("client_account_id" IS NULL OR "client_account_id" IN (${Prisma.join(criteria.restrictToClientAccountIdsOrGlobal.map((id) => Prisma.sql`${id}::uuid`))}))`,
+      );
+    }
+  }
   return Prisma.join(conditions, " AND ");
 }
 

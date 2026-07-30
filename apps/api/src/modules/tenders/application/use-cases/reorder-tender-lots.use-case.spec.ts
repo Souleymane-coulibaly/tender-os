@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { ClientAccountNotFoundError } from "../../../client-portfolio";
 import { InvalidLotReorderPayloadError, TenderArchivedError, TenderNotFoundError } from "../../domain/errors";
 import { TenderId } from "../../domain/tender-id.value-object";
 import { TenderLot } from "../../domain/tender-lot.entity";
 import { Tender } from "../../domain/tender.aggregate";
 import { TenderStatus } from "../../domain/tender-status";
 import {
+  createClientPortfolioTestFixture,
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryTenderLotRepository,
@@ -17,6 +19,7 @@ describe("ReorderTenderLotsUseCase", () => {
   let tenderRepository: InMemoryTenderRepository;
   let lotRepository: InMemoryTenderLotRepository;
   let auditLogWriter: InMemoryAuditLogWriter;
+  let clientPortfolio: Awaited<ReturnType<typeof createClientPortfolioTestFixture>>;
   let useCase: ReorderTenderLotsUseCase;
   let deleteUseCase: DeleteTenderLotUseCase;
 
@@ -24,13 +27,27 @@ describe("ReorderTenderLotsUseCase", () => {
     tenderRepository = new InMemoryTenderRepository();
     lotRepository = new InMemoryTenderLotRepository();
     auditLogWriter = new InMemoryAuditLogWriter();
-    useCase = new ReorderTenderLotsUseCase(tenderRepository, lotRepository, auditLogWriter, new FixedClock());
-    deleteUseCase = new DeleteTenderLotUseCase(tenderRepository, lotRepository, new InMemoryAuditLogWriter(), new FixedClock());
+    clientPortfolio = await createClientPortfolioTestFixture("org-1");
+    useCase = new ReorderTenderLotsUseCase(
+      tenderRepository,
+      lotRepository,
+      auditLogWriter,
+      new FixedClock(),
+      clientPortfolio.assertClientAccessUseCase,
+    );
+    deleteUseCase = new DeleteTenderLotUseCase(
+      tenderRepository,
+      lotRepository,
+      new InMemoryAuditLogWriter(),
+      new FixedClock(),
+      clientPortfolio.assertClientAccessUseCase,
+    );
 
     await tenderRepository.seed(
       Tender.create({
         id: TenderId.from("tender-1"),
         organizationId: "org-1",
+        clientAccountId: "client-1",
         title: "Marche de travaux",
         createdBy: "user-1",
         occurredAt: new Date(),
@@ -165,5 +182,17 @@ describe("ReorderTenderLotsUseCase", () => {
       }),
     ).rejects.toThrow(TenderArchivedError);
     expect(auditLogWriter.entries).toHaveLength(0);
+  });
+
+  it("correction P0 — refuses a MEMBER-tier actor with no assignment on the tender's client, even with tender:update", async () => {
+    await expect(
+      useCase.execute({
+        organizationId: "org-1",
+        tenderId: "tender-1",
+        actorId: "user-unaffiliated",
+        actorRole: "BID_MANAGER",
+        orderedLotIds: ["lot-1", "lot-2", "lot-3"],
+      }),
+    ).rejects.toBeInstanceOf(ClientAccountNotFoundError);
   });
 });

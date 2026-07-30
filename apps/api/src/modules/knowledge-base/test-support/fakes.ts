@@ -161,6 +161,15 @@ export class InMemoryKnowledgeEntryRepository implements KnowledgeEntryRepositor
     if (filter.titleSearch) items = items.filter((entry) => entry.title.toLowerCase().includes(filter.titleSearch!.toLowerCase()));
     if (filter.createdAfter) items = items.filter((entry) => entry.createdAt >= filter.createdAfter!);
     if (filter.createdBefore) items = items.filter((entry) => entry.createdAt <= filter.createdBefore!);
+    if (filter.clientAccountId === "GLOBAL") {
+      items = items.filter((entry) => !entry.clientAccountId);
+    } else if (filter.clientAccountId) {
+      items = items.filter((entry) => entry.clientAccountId === filter.clientAccountId);
+    }
+    if (filter.restrictToClientAccountIdsOrGlobal) {
+      const allowed = new Set(filter.restrictToClientAccountIdsOrGlobal);
+      items = items.filter((entry) => !entry.clientAccountId || allowed.has(entry.clientAccountId));
+    }
 
     items = items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     const total = items.length;

@@ -1,5 +1,10 @@
 import type { Clock } from "../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../shared-kernel/id-generator";
+import { AssertClientAccessUseCase, GetClientAccountUseCase, ListAccessibleClientsUseCase } from "../../client-portfolio";
+import { ClientAccount } from "../../client-portfolio/domain/client-account.aggregate";
+import { ClientAssignment } from "../../client-portfolio/domain/client-assignment.entity";
+import { ClientRole } from "../../client-portfolio/domain/client-role";
+import { InMemoryClientAccountRepository, InMemoryClientAssignmentRepository } from "../../client-portfolio/test-support/fakes";
 import type { Alert } from "../domain/alert.entity";
 import type { AwardCriterion } from "../domain/award-criterion.entity";
 import type { ChecklistItem } from "../domain/checklist-item.entity";
@@ -59,10 +64,52 @@ export class InMemoryAuditLogWriter implements AuditLogWriter {
   }
 }
 
+export const DEFAULT_TEST_CLIENT_ACCOUNT_ID = "client-1";
+
+/**
+ * Câblage minimal du module Client Portfolio pour les tests unitaires Tenders (mission Sprint 5.1)
+ * — un seul client ACTIVE (`DEFAULT_TEST_CLIENT_ACCOUNT_ID`) pré-créé dans `organizationId`, avec
+ * "user-1" (l'acteur par défaut de la plupart des tests Tenders déjà existants) affecté en
+ * CLIENT_MANAGER — un rôle MEMBER-tier (ex. BID_MANAGER) a TOUJOURS besoin d'une affectation
+ * explicite (mission §"MEMBER : seulement les clients auxquels il est affecté"), jamais d'un accès
+ * implicite. Réutilise directement les fakes déjà éprouvés du module Client Portfolio
+ * (`InMemoryClientAccountRepository`/`InMemoryClientAssignmentRepository`) plutôt que d'en
+ * dupliquer une seconde implémentation.
+ */
+export async function createClientPortfolioTestFixture(organizationId: string, clientAccountId: string = DEFAULT_TEST_CLIENT_ACCOUNT_ID) {
+  const clientAccountRepository = new InMemoryClientAccountRepository();
+  const clientAssignmentRepository = new InMemoryClientAssignmentRepository();
+  const assertClientAccessUseCase = new AssertClientAccessUseCase(clientAssignmentRepository);
+  const getClientAccountUseCase = new GetClientAccountUseCase(clientAccountRepository, assertClientAccessUseCase);
+  const listAccessibleClientsUseCase = new ListAccessibleClientsUseCase(clientAssignmentRepository);
+
+  const client = ClientAccount.create({ id: clientAccountId, organizationId, name: "Client de test", createdBy: "user-1", occurredAt: FIXED_NOW });
+  await clientAccountRepository.create(client);
+
+  async function assignUser(userId: string, role: ClientRole = ClientRole.ClientManager): Promise<void> {
+    await clientAssignmentRepository.create(
+      ClientAssignment.create({ id: `assignment-${userId}`, organizationId, clientAccountId, userId, role, createdBy: "user-1", occurredAt: FIXED_NOW }),
+    );
+  }
+  await assignUser("user-1");
+
+  return {
+    clientAccountRepository,
+    clientAssignmentRepository,
+    assertClientAccessUseCase,
+    getClientAccountUseCase,
+    listAccessibleClientsUseCase,
+    clientAccountId,
+    assignUser,
+  };
+}
+
 type InMemoryTenderFilter = {
   organizationId: string;
   status?: string | undefined;
   internalOwnerId?: string | undefined;
+  clientAccountId?: string | undefined;
+  restrictToClientAccountIds?: readonly string[] | undefined;
   idsFilter?: readonly string[] | undefined;
   deadlineAfter?: Date | undefined;
   deadlineBefore?: Date | undefined;
@@ -96,6 +143,13 @@ export class InMemoryTenderRepository implements TenderRepository {
     }
     if (input.internalOwnerId) {
       items = items.filter((tender) => tender.internalOwnerId === input.internalOwnerId);
+    }
+    if (input.clientAccountId) {
+      items = items.filter((tender) => tender.clientAccountId === input.clientAccountId);
+    }
+    if (input.restrictToClientAccountIds) {
+      const allowedClients = new Set(input.restrictToClientAccountIds);
+      items = items.filter((tender) => allowedClients.has(tender.clientAccountId));
     }
     if (input.idsFilter) {
       const allowed = new Set(input.idsFilter);
@@ -141,10 +195,12 @@ export class InMemoryTenderRepository implements TenderRepository {
     return this.filtered(input).length;
   }
 
-  async countByStatus(organizationId: string): Promise<Record<string, number>> {
+  async countByStatus(input: { organizationId: string; restrictToClientAccountIds?: readonly string[] | undefined }): Promise<Record<string, number>> {
+    const allowedClients = input.restrictToClientAccountIds ? new Set(input.restrictToClientAccountIds) : undefined;
     const counts: Record<string, number> = {};
     for (const tender of this.tenders.values()) {
-      if (tender.organizationId !== organizationId) continue;
+      if (tender.organizationId !== input.organizationId) continue;
+      if (allowedClients && !allowedClients.has(tender.clientAccountId)) continue;
       counts[tender.status] = (counts[tender.status] ?? 0) + 1;
     }
     return counts;
@@ -263,12 +319,19 @@ export class InMemoryAlertRepository implements AlertRepository {
 export class InMemoryChecklistItemRepository implements ChecklistItemRepository {
   readonly items: ChecklistItem[] = [];
 
-  async findById(): Promise<ChecklistItem | null> {
-    return null;
+  async findById(input: { organizationId: string; tenderId: string; itemId: string }): Promise<ChecklistItem | null> {
+    return (
+      this.items.find(
+        (item) =>
+          item.id === input.itemId && item.organizationId === input.organizationId && item.tenderId === input.tenderId,
+      ) ?? null
+    );
   }
 
-  async listByTender(): Promise<ChecklistItem[]> {
-    return this.items;
+  async listByTender(input: { organizationId: string; tenderId: string }): Promise<ChecklistItem[]> {
+    return this.items.filter(
+      (item) => item.organizationId === input.organizationId && item.tenderId === input.tenderId,
+    );
   }
 
   async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<ChecklistItem[]> {
@@ -276,18 +339,36 @@ export class InMemoryChecklistItemRepository implements ChecklistItemRepository 
     return this.items.filter((item) => item.organizationId === input.organizationId && allowed.has(item.tenderId));
   }
 
-  async save(): Promise<void> {}
+  async save(item: ChecklistItem): Promise<void> {
+    const index = this.items.findIndex((existing) => existing.id === item.id);
+    if (index === -1) {
+      this.items.push(item);
+    } else {
+      this.items[index] = item;
+    }
+  }
 }
 
 export class InMemoryRequestedDocumentRepository implements RequestedDocumentRepository {
   readonly documents: RequestedDocument[] = [];
 
-  async findById(): Promise<RequestedDocument | null> {
-    return null;
+  async findById(input: {
+    organizationId: string;
+    tenderId: string;
+    documentId: string;
+  }): Promise<RequestedDocument | null> {
+    return (
+      this.documents.find(
+        (doc) =>
+          doc.id === input.documentId && doc.organizationId === input.organizationId && doc.tenderId === input.tenderId,
+      ) ?? null
+    );
   }
 
-  async listByTender(): Promise<RequestedDocument[]> {
-    return this.documents;
+  async listByTender(input: { organizationId: string; tenderId: string }): Promise<RequestedDocument[]> {
+    return this.documents.filter(
+      (doc) => doc.organizationId === input.organizationId && doc.tenderId === input.tenderId,
+    );
   }
 
   async listByTenderIds(input: {
@@ -298,20 +379,48 @@ export class InMemoryRequestedDocumentRepository implements RequestedDocumentRep
     return this.documents.filter((doc) => doc.organizationId === input.organizationId && allowed.has(doc.tenderId));
   }
 
-  async save(): Promise<void> {}
+  async save(document: RequestedDocument): Promise<void> {
+    const index = this.documents.findIndex((existing) => existing.id === document.id);
+    if (index === -1) {
+      this.documents.push(document);
+    } else {
+      this.documents[index] = document;
+    }
+  }
 
-  async delete(): Promise<void> {}
+  async delete(input: { organizationId: string; tenderId: string; documentId: string }): Promise<void> {
+    const index = this.documents.findIndex(
+      (doc) =>
+        doc.id === input.documentId && doc.organizationId === input.organizationId && doc.tenderId === input.tenderId,
+    );
+    if (index !== -1) {
+      this.documents.splice(index, 1);
+    }
+  }
 }
 
 export class InMemoryAwardCriterionRepository implements AwardCriterionRepository {
   readonly criteria: AwardCriterion[] = [];
 
-  async findById(): Promise<AwardCriterion | null> {
-    return null;
+  async findById(input: {
+    organizationId: string;
+    tenderId: string;
+    criterionId: string;
+  }): Promise<AwardCriterion | null> {
+    return (
+      this.criteria.find(
+        (criterion) =>
+          criterion.id === input.criterionId &&
+          criterion.organizationId === input.organizationId &&
+          criterion.tenderId === input.tenderId,
+      ) ?? null
+    );
   }
 
-  async listByTender(): Promise<AwardCriterion[]> {
-    return this.criteria;
+  async listByTender(input: { organizationId: string; tenderId: string }): Promise<AwardCriterion[]> {
+    return this.criteria.filter(
+      (criterion) => criterion.organizationId === input.organizationId && criterion.tenderId === input.tenderId,
+    );
   }
 
   async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<AwardCriterion[]> {
@@ -321,9 +430,26 @@ export class InMemoryAwardCriterionRepository implements AwardCriterionRepositor
     );
   }
 
-  async save(): Promise<void> {}
+  async save(criterion: AwardCriterion): Promise<void> {
+    const index = this.criteria.findIndex((existing) => existing.id === criterion.id);
+    if (index === -1) {
+      this.criteria.push(criterion);
+    } else {
+      this.criteria[index] = criterion;
+    }
+  }
 
-  async delete(): Promise<void> {}
+  async delete(input: { organizationId: string; tenderId: string; criterionId: string }): Promise<void> {
+    const index = this.criteria.findIndex(
+      (criterion) =>
+        criterion.id === input.criterionId &&
+        criterion.organizationId === input.organizationId &&
+        criterion.tenderId === input.tenderId,
+    );
+    if (index !== -1) {
+      this.criteria.splice(index, 1);
+    }
+  }
 }
 
 /** Reproduit fidèlement le comportement attendu du repository Prisma réel (conception §D, §E) :
@@ -406,12 +532,21 @@ export class InMemoryTenderLotRepository implements TenderLotRepository {
 export class InMemoryMilestoneRepository implements MilestoneRepository {
   readonly milestones: Milestone[] = [];
 
-  async findById(): Promise<Milestone | null> {
-    return null;
+  async findById(input: { organizationId: string; tenderId: string; milestoneId: string }): Promise<Milestone | null> {
+    return (
+      this.milestones.find(
+        (milestone) =>
+          milestone.id === input.milestoneId &&
+          milestone.organizationId === input.organizationId &&
+          milestone.tenderId === input.tenderId,
+      ) ?? null
+    );
   }
 
-  async listByTender(): Promise<Milestone[]> {
-    return this.milestones;
+  async listByTender(input: { organizationId: string; tenderId: string }): Promise<Milestone[]> {
+    return this.milestones.filter(
+      (milestone) => milestone.organizationId === input.organizationId && milestone.tenderId === input.tenderId,
+    );
   }
 
   async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<Milestone[]> {
@@ -421,7 +556,24 @@ export class InMemoryMilestoneRepository implements MilestoneRepository {
     );
   }
 
-  async save(): Promise<void> {}
+  async save(milestone: Milestone): Promise<void> {
+    const index = this.milestones.findIndex((existing) => existing.id === milestone.id);
+    if (index === -1) {
+      this.milestones.push(milestone);
+    } else {
+      this.milestones[index] = milestone;
+    }
+  }
 
-  async delete(): Promise<void> {}
+  async delete(input: { organizationId: string; tenderId: string; milestoneId: string }): Promise<void> {
+    const index = this.milestones.findIndex(
+      (milestone) =>
+        milestone.id === input.milestoneId &&
+        milestone.organizationId === input.organizationId &&
+        milestone.tenderId === input.tenderId,
+    );
+    if (index !== -1) {
+      this.milestones.splice(index, 1);
+    }
+  }
 }

@@ -10,6 +10,7 @@ import type { TenderLot } from "../domain/tender-lot.entity";
 export type TenderSummary = {
   id: string;
   organizationId: string;
+  clientAccountId: string;
   title: string;
   reference?: string | undefined;
   buyerName?: string | undefined;
@@ -39,6 +40,7 @@ export function toTenderSummary(tender: Tender): TenderSummary {
   return {
     id: tender.id.value,
     organizationId: tender.organizationId,
+    clientAccountId: tender.clientAccountId,
     title: tender.title,
     reference: tender.reference,
     buyerName: tender.buyerName,

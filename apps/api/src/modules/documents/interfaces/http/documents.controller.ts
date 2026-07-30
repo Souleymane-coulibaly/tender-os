@@ -122,6 +122,7 @@ export class DocumentsController {
   @Get(":documentId")
   @HttpCode(HttpStatus.OK)
   async get(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
   ) {
@@ -129,6 +130,7 @@ export class DocumentsController {
       organizationId: membership.organizationId,
       documentId,
       actorRole: membership.role,
+      actorId: actor.userId,
     });
     return presentDocument(result);
   }
@@ -249,25 +251,28 @@ export class DocumentsController {
   @Get(":documentId/download")
   @HttpCode(HttpStatus.OK)
   async downloadCurrent(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
     @Res({ passthrough: true }) res: Response,
   ) {
-    return this.streamDownload(membership, documentId, undefined, res);
+    return this.streamDownload(actor, membership, documentId, undefined, res);
   }
 
   @Get(":documentId/versions/:versionId/download")
   @HttpCode(HttpStatus.OK)
   async downloadVersion(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
     @Param("versionId", new ZodValidationPipe(IdParamSchema)) versionId: string,
     @Res({ passthrough: true }) res: Response,
   ) {
-    return this.streamDownload(membership, documentId, versionId, res);
+    return this.streamDownload(actor, membership, documentId, versionId, res);
   }
 
   private async streamDownload(
+    actor: AuthenticatedActor,
     membership: MembershipContext,
     documentId: string,
     versionId: string | undefined,
@@ -278,6 +283,7 @@ export class DocumentsController {
       documentId,
       versionId,
       actorRole: membership.role,
+      actorId: actor.userId,
     });
 
     if (result.kind === "redirect") {

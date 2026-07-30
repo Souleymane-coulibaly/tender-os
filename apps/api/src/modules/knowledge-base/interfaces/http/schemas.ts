@@ -11,6 +11,7 @@ export const CreateKnowledgeEntryBodySchema = z
     language: z.string().min(2).max(8).optional(),
     metadata: z.unknown().optional(),
     tags: z.array(z.string().min(1).max(60)).max(30).optional(),
+    clientAccountId: z.string().uuid().optional(),
   })
   .strict();
 export type CreateKnowledgeEntryBody = z.infer<typeof CreateKnowledgeEntryBodySchema>;
@@ -37,6 +38,7 @@ export const ListKnowledgeEntriesQuerySchema = z
     createdAfter: z.string().datetime().optional(),
     createdBefore: z.string().datetime().optional(),
     titleSearch: z.string().max(200).optional(),
+    clientAccountId: z.union([z.string().uuid(), z.literal("GLOBAL")]).optional(),
     sort: z.enum(["createdAt", "updatedAt", "title"]).optional(),
     sortDirection: z.enum(["asc", "desc"]).optional(),
   })
@@ -52,6 +54,7 @@ export const SearchKnowledgeBaseQuerySchema = z
     includeArchived: z.coerce.boolean().optional(),
     createdAfter: z.string().datetime().optional(),
     createdBefore: z.string().datetime().optional(),
+    clientAccountId: z.union([z.string().uuid(), z.literal("GLOBAL")]).optional(),
     limit: z.coerce.number().int().min(1).max(100).optional().default(20),
     offset: z.coerce.number().int().min(0).optional().default(0),
   })
@@ -70,6 +73,7 @@ export const AddKnowledgeDocumentBodySchema = z
     language: z.string().min(2).max(8).optional(),
     metadata: z.string().optional(),
     tags: z.string().optional(),
+    clientAccountId: z.string().uuid().optional(),
   })
   .strict();
 export type AddKnowledgeDocumentBody = z.infer<typeof AddKnowledgeDocumentBodySchema>;

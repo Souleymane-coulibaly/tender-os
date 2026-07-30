@@ -10,6 +10,7 @@ function tender(id: string, overrides: Partial<Parameters<typeof Tender.create>[
   return Tender.create({
     id: TenderId.from(id),
     organizationId: "org-1",
+    clientAccountId: "client-1",
     title: `Tender ${id}`,
     createdBy: "user-1",
     occurredAt: NOW,

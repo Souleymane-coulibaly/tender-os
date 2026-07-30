@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { AssertClientAccessUseCase, GetClientAccountUseCase } from "../../../client-portfolio";
 import { PrismaService } from "../../../../shared-kernel/prisma.service";
 import { UuidGenerator } from "../../../../shared-kernel/id-generator";
 import { CreateDocumentWithFirstVersionUseCase, InternalDocumentCleanupService } from "../../../documents";
@@ -29,6 +30,11 @@ import { GetOrCreateDefaultKnowledgeSpaceUseCase } from "./get-or-create-default
  * du stockage (observable) ; (4) un échec de la compensation elle-même ne masque jamais l'erreur
  * d'origine.
  */
+// Aucun test ci-dessous ne fournit `clientAccountId` : les vérifications Client Portfolio restent
+// derrière leurs gardes `if`, jamais déclenchées ici.
+const UNUSED_GET_CLIENT_ACCOUNT_USE_CASE = {} as GetClientAccountUseCase;
+const UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE = {} as AssertClientAccessUseCase;
+
 describe("AddKnowledgeDocumentUseCase — compensation after a real Document/DocumentVersion upload", () => {
   const prisma = new PrismaService();
   const organizationId = randomUUID();
@@ -88,6 +94,8 @@ describe("AddKnowledgeDocumentUseCase — compensation after a real Document/Doc
       createDocumentWithFirstVersionUseCase,
       internalDocumentCleanupService,
       getOrCreateDefaultKnowledgeSpaceUseCase,
+      UNUSED_GET_CLIENT_ACCOUNT_USE_CASE,
+      UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE,
     );
 
     expect(storageProvider.objects.size).toBe(0);
@@ -152,6 +160,8 @@ describe("AddKnowledgeDocumentUseCase — compensation after a real Document/Doc
       createDocumentWithFirstVersionUseCase,
       internalDocumentCleanupService,
       getOrCreateDefaultKnowledgeSpaceUseCase,
+      UNUSED_GET_CLIENT_ACCOUNT_USE_CASE,
+      UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE,
     );
 
     await expect(

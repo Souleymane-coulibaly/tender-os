@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
+import { ListAccessibleClientsUseCase } from "../../../client-portfolio";
 import { TenderPermission } from "../../domain/tender-permission";
 import { TenderStatus } from "../../domain/tender-status";
 import { toTenderBoardItemDto, type TenderBoardDto } from "../board-dtos";
@@ -20,9 +21,11 @@ import { enrichTenders } from "../tender-enrichment";
 
 export type GetTenderBoardQuery = Readonly<{
   organizationId: string;
+  actorId: string;
   actorRole: string;
   search?: string | undefined;
   internalOwnerId?: string | undefined;
+  clientAccountId?: string | undefined;
   limitPerColumn?: number | undefined;
 }>;
 
@@ -53,10 +56,16 @@ export class GetTenderBoardUseCase {
     @Inject(ALERT_REPOSITORY) private readonly alertRepository: AlertRepository,
     @Inject(TENDER_SEARCH_PROVIDER) private readonly searchProvider: TenderSearchProvider,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly listAccessibleClientsUseCase: ListAccessibleClientsUseCase,
   ) {}
 
   async execute(query: GetTenderBoardQuery): Promise<TenderBoardDto> {
     assertHasTenderPermission(query.actorRole, TenderPermission.List);
+
+    const accessible = await this.listAccessibleClientsUseCase.execute(query);
+    if (!accessible.allClients && accessible.clientAccountIds.length === 0) {
+      return { columns: BOARD_STATUSES.map((status) => ({ status, totalCount: 0, items: [] })) };
+    }
 
     const limitPerColumn = query.limitPerColumn ?? DEFAULT_LIMIT_PER_COLUMN;
     const idsFilter = query.search
@@ -67,7 +76,13 @@ export class GetTenderBoardUseCase {
       return { columns: BOARD_STATUSES.map((status) => ({ status, totalCount: 0, items: [] })) };
     }
 
-    const baseFilter = { organizationId: query.organizationId, internalOwnerId: query.internalOwnerId, idsFilter };
+    const baseFilter = {
+      organizationId: query.organizationId,
+      internalOwnerId: query.internalOwnerId,
+      clientAccountId: query.clientAccountId,
+      restrictToClientAccountIds: accessible.allClients ? undefined : accessible.clientAccountIds,
+      idsFilter,
+    };
 
     const columnsData = await Promise.all(
       BOARD_STATUSES.map(async (status) => {

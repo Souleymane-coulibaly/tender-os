@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { ClientAccountNotFoundError } from "../../../client-portfolio";
 import { TenderArchivedError, TenderLotNotFoundError, TenderNotFoundError, TenderPermissionMissingError } from "../../domain/errors";
 import { TenderId } from "../../domain/tender-id.value-object";
 import { TenderLot } from "../../domain/tender-lot.entity";
 import { Tender } from "../../domain/tender.aggregate";
 import { TenderStatus } from "../../domain/tender-status";
 import {
+  createClientPortfolioTestFixture,
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryTenderLotRepository,
@@ -17,6 +19,7 @@ describe("UpdateTenderLotUseCase / DeleteTenderLotUseCase", () => {
   let lotRepository: InMemoryTenderLotRepository;
   let updateAuditLogWriter: InMemoryAuditLogWriter;
   let deleteAuditLogWriter: InMemoryAuditLogWriter;
+  let clientPortfolio: Awaited<ReturnType<typeof createClientPortfolioTestFixture>>;
   let updateUseCase: UpdateTenderLotUseCase;
   let deleteUseCase: DeleteTenderLotUseCase;
 
@@ -25,13 +28,27 @@ describe("UpdateTenderLotUseCase / DeleteTenderLotUseCase", () => {
     lotRepository = new InMemoryTenderLotRepository();
     updateAuditLogWriter = new InMemoryAuditLogWriter();
     deleteAuditLogWriter = new InMemoryAuditLogWriter();
-    updateUseCase = new UpdateTenderLotUseCase(tenderRepository, lotRepository, updateAuditLogWriter, new FixedClock());
-    deleteUseCase = new DeleteTenderLotUseCase(tenderRepository, lotRepository, deleteAuditLogWriter, new FixedClock());
+    clientPortfolio = await createClientPortfolioTestFixture("org-1");
+    updateUseCase = new UpdateTenderLotUseCase(
+      tenderRepository,
+      lotRepository,
+      updateAuditLogWriter,
+      new FixedClock(),
+      clientPortfolio.assertClientAccessUseCase,
+    );
+    deleteUseCase = new DeleteTenderLotUseCase(
+      tenderRepository,
+      lotRepository,
+      deleteAuditLogWriter,
+      new FixedClock(),
+      clientPortfolio.assertClientAccessUseCase,
+    );
 
     await tenderRepository.seed(
       Tender.create({
         id: TenderId.from("tender-1"),
         organizationId: "org-1",
+        clientAccountId: "client-1",
         title: "Marche de travaux",
         createdBy: "user-1",
         occurredAt: new Date(),
@@ -41,6 +58,7 @@ describe("UpdateTenderLotUseCase / DeleteTenderLotUseCase", () => {
       Tender.create({
         id: TenderId.from("tender-2"),
         organizationId: "org-1",
+        clientAccountId: "client-1",
         title: "Autre marche, meme organisation",
         createdBy: "user-1",
         occurredAt: new Date(),
@@ -160,6 +178,19 @@ describe("UpdateTenderLotUseCase / DeleteTenderLotUseCase", () => {
         }),
       ).rejects.toThrow(TenderPermissionMissingError);
     });
+
+    it("correction P0 — refuses a MEMBER-tier actor with no assignment on the tender's client, even with tender:update", async () => {
+      await expect(
+        updateUseCase.execute({
+          organizationId: "org-1",
+          tenderId: "tender-1",
+          lotId: "lot-1",
+          actorId: "user-unaffiliated",
+          actorRole: "BID_MANAGER",
+          title: "x",
+        }),
+      ).rejects.toBeInstanceOf(ClientAccountNotFoundError);
+    });
   });
 
   describe("delete (soft delete)", () => {
@@ -241,6 +272,18 @@ describe("UpdateTenderLotUseCase / DeleteTenderLotUseCase", () => {
         }),
       ).rejects.toThrow(TenderArchivedError);
       expect(deleteAuditLogWriter.entries).toHaveLength(0);
+    });
+
+    it("correction P0 — refuses a MEMBER-tier actor with no assignment on the tender's client, even with tender:update", async () => {
+      await expect(
+        deleteUseCase.execute({
+          organizationId: "org-1",
+          tenderId: "tender-1",
+          lotId: "lot-1",
+          actorId: "user-unaffiliated",
+          actorRole: "BID_MANAGER",
+        }),
+      ).rejects.toBeInstanceOf(ClientAccountNotFoundError);
     });
   });
 });

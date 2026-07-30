@@ -223,6 +223,13 @@ export async function createTenderAction(_prevState: FormActionState, formData: 
     return { error: "Le titre est obligatoire." };
   }
 
+  // Mission Sprint 5.1 §"Tenders" — un client autorisé est obligatoire à la création, jamais
+  // modifiable ensuite (voir updateTenderAction, qui ne lit jamais ce champ).
+  const clientAccountId = formData.get("clientAccountId");
+  if (typeof clientAccountId !== "string" || !clientAccountId.trim()) {
+    return { error: "Le client est obligatoire." };
+  }
+
   const parsed = parseTenderFormFields(formData);
   if ("error" in parsed) {
     return { error: parsed.error };
@@ -234,6 +241,7 @@ export async function createTenderAction(_prevState: FormActionState, formData: 
       method: "POST",
       body: JSON.stringify({
         title: title.trim(),
+        clientAccountId,
         ...parsed.fields,
         // Correction securite : jamais lu depuis formData (voir ParsedTenderFields) — ce
         // formulaire ne cree que des Tenders manuels, quelle que soit la valeur eventuellement

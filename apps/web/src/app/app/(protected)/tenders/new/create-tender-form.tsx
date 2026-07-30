@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { createTenderAction, type FormActionState } from "../../../actions";
+import type { ClientAccountSummary } from "../../../../../lib/client-portfolio-types";
 import {
   DEFAULT_TENDER_COUNTRY,
   DEFAULT_TENDER_CURRENCY,
@@ -20,11 +21,30 @@ import {
 
 const INITIAL_STATE: FormActionState = {};
 
-export function CreateTenderForm() {
+export function CreateTenderForm({ clients }: { clients: ClientAccountSummary[] }) {
   const [state, formAction, isPending] = useActionState(createTenderAction, INITIAL_STATE);
 
   return (
     <form action={formAction} className="flex max-w-xl flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <label htmlFor="clientAccountId" className="text-sm font-medium text-neutral-700">
+          Client *
+        </label>
+        <select
+          id="clientAccountId"
+          name="clientAccountId"
+          required
+          defaultValue={clients[0]?.id ?? ""}
+          className="rounded border border-neutral-300 px-3 py-2 text-sm"
+        >
+          {clients.map((client) => (
+            <option key={client.id} value={client.id}>
+              {client.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="flex flex-col gap-1">
         <label htmlFor="title" className="text-sm font-medium text-neutral-700">
           Titre *

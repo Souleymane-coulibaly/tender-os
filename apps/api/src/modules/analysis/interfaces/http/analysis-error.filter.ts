@@ -9,6 +9,10 @@ const STATUS_BY_CODE: Record<string, number> = {
   // telles quelles — même motif que ExtractionErrorFilter pour TENDER_NOT_FOUND.
   TENDER_NOT_FOUND: HttpStatus.NOT_FOUND,
   TENDER_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
+  // Mission Sprint 5.1 — GetTenderUseCase délègue désormais aussi à Client Portfolio.
+  CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,
+  CLIENT_ACCOUNT_ARCHIVED: HttpStatus.CONFLICT,
+  CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
   EXTRACTION_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
   DOCUMENT_EXTRACTION_NOT_FOUND: HttpStatus.NOT_FOUND,
   EXTRACTION_NOT_READY_FOR_ANALYSIS: HttpStatus.CONFLICT,

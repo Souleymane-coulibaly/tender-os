@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { ListAccessibleClientsUseCase } from "../../../client-portfolio";
 import { parseKnowledgeCategory } from "../../domain/knowledge-category";
 import { KnowledgePermission } from "../../domain/knowledge-permission";
 import { assertHasKnowledgePermission } from "../policies/knowledge-authorization.policy";
@@ -9,6 +10,7 @@ import { toKnowledgeSearchResultDto, type KnowledgeSearchResultDto } from "../dt
 
 export type SearchKnowledgeBaseQuery = Readonly<{
   organizationId: string;
+  actorId: string;
   actorRole: string;
   query: string;
   category?: string | undefined;
@@ -17,6 +19,7 @@ export type SearchKnowledgeBaseQuery = Readonly<{
   includeArchived?: boolean | undefined;
   createdAfter?: string | undefined;
   createdBefore?: string | undefined;
+  clientAccountId?: string | "GLOBAL" | undefined;
   limit: number;
   offset: number;
 }>;
@@ -36,10 +39,16 @@ export class SearchKnowledgeBaseUseCase {
     @Inject(KNOWLEDGE_SEARCH_PROVIDER) private readonly knowledgeSearchProvider: KnowledgeSearchProvider,
     @Inject(KNOWLEDGE_ENTRY_REPOSITORY) private readonly knowledgeEntryRepository: KnowledgeEntryRepository,
     @Inject(KNOWLEDGE_TAG_REPOSITORY) private readonly knowledgeTagRepository: KnowledgeTagRepository,
+    private readonly listAccessibleClientsUseCase: ListAccessibleClientsUseCase,
   ) {}
 
   async execute(query: SearchKnowledgeBaseQuery): Promise<SearchKnowledgeBaseResult> {
     assertHasKnowledgePermission(query.actorRole, KnowledgePermission.Search);
+
+    const accessible = await this.listAccessibleClientsUseCase.execute(query);
+    if (!accessible.allClients && accessible.clientAccountIds.length === 0 && query.clientAccountId !== "GLOBAL" && query.clientAccountId !== undefined) {
+      return { items: [], total: 0 };
+    }
 
     const page = await this.knowledgeSearchProvider.search({
       organizationId: query.organizationId,
@@ -50,6 +59,8 @@ export class SearchKnowledgeBaseUseCase {
       includeArchived: query.includeArchived ?? false,
       createdAfter: query.createdAfter ? new Date(query.createdAfter) : undefined,
       createdBefore: query.createdBefore ? new Date(query.createdBefore) : undefined,
+      clientAccountId: query.clientAccountId,
+      restrictToClientAccountIdsOrGlobal: accessible.allClients ? undefined : accessible.clientAccountIds,
       limit: query.limit,
       offset: query.offset,
     });

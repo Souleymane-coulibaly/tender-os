@@ -1,13 +1,15 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
-import { TenderLotNotFoundError, TenderNotFoundError } from "../../domain/errors";
+import { AssertClientAccessUseCase } from "../../../client-portfolio";
+import { TenderLotNotFoundError } from "../../domain/errors";
 import { TenderPermission } from "../../domain/tender-permission";
 import { toTenderLotSummary, type TenderLotSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { TENDER_LOT_REPOSITORY, type TenderLotRepository } from "../ports/tender-lot.repository";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
+import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 import { assertTenderNotArchivedForLotMutation } from "../policies/tender-lot-mutation.policy";
 
 export type UpdateTenderLotCommand = Readonly<{
@@ -33,18 +35,13 @@ export class UpdateTenderLotUseCase {
     @Inject(TENDER_LOT_REPOSITORY) private readonly lotRepository: TenderLotRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: UpdateTenderLotCommand): Promise<TenderLotSummary> {
     assertHasTenderPermission(command.actorRole, TenderPermission.Update);
 
-    const tender = await this.tenderRepository.findById({
-      organizationId: command.organizationId,
-      tenderId: command.tenderId,
-    });
-    if (!tender) {
-      throw new TenderNotFoundError();
-    }
+    const tender = await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
     assertTenderNotArchivedForLotMutation(tender);
 
     const lot = await this.lotRepository.findById({
@@ -102,18 +99,13 @@ export class DeleteTenderLotUseCase {
     @Inject(TENDER_LOT_REPOSITORY) private readonly lotRepository: TenderLotRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: DeleteTenderLotCommand): Promise<void> {
     assertHasTenderPermission(command.actorRole, TenderPermission.Update);
 
-    const tender = await this.tenderRepository.findById({
-      organizationId: command.organizationId,
-      tenderId: command.tenderId,
-    });
-    if (!tender) {
-      throw new TenderNotFoundError();
-    }
+    const tender = await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
     assertTenderNotArchivedForLotMutation(tender);
 
     const lot = await this.lotRepository.findById({

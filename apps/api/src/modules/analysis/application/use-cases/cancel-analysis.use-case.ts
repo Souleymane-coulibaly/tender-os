@@ -1,9 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
+import { GetTenderUseCase } from "../../../tenders";
 import { AnalysisStatus } from "../../domain/analysis-status";
 import { AnalysisPermission } from "../../domain/analysis-permission";
-import { AnalysisNotCancellableError } from "../../domain/errors";
+import { AnalysisNotCancellableError, AnalysisNotFoundError } from "../../domain/errors";
 import { assertHasAnalysisPermission } from "../policies/analysis-authorization.policy";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { ANALYSIS_JOB_REPOSITORY, type AnalysisJobRepository } from "../ports/analysis-job.repository";
@@ -20,17 +21,32 @@ export type CancelAnalysisCommand = Readonly<{
 const CANCELLABLE_STATUSES = new Set<string>([AnalysisStatus.Pending, AnalysisStatus.Queued, AnalysisStatus.Processing]);
 
 /** Annulation explicite d'un job non terminal (mission §"Cancel Analysis Use Case si cohérent") —
- *  jamais un état terminal (SUCCEEDED/PARTIALLY_SUCCEEDED/FAILED/CANCELLED) ne peut être annulé. */
+ *  jamais un état terminal (SUCCEEDED/PARTIALLY_SUCCEEDED/FAILED/CANCELLED) ne peut être annulé.
+ *  Mission Sprint 5.1 §"Analysis" — même vérification client que `RetryAnalysisUseCase`, voir son
+ *  commentaire de tête pour le motif (relecture de `job.tenderId` puis `GetTenderUseCase`, TOUJOURS
+ *  avant `runExclusiveForJob`). */
 @Injectable()
 export class CancelAnalysisUseCase {
   constructor(
     @Inject(ANALYSIS_JOB_REPOSITORY) private readonly jobRepository: AnalysisJobRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly getTenderUseCase: GetTenderUseCase,
   ) {}
 
   async execute(command: CancelAnalysisCommand): Promise<AnalysisJobSummary> {
     assertHasAnalysisPermission(command.actorRole, AnalysisPermission.Cancel);
+
+    const existingJob = await this.jobRepository.findById({ organizationId: command.organizationId, jobId: command.jobId });
+    if (!existingJob) {
+      throw new AnalysisNotFoundError();
+    }
+    await this.getTenderUseCase.execute({
+      organizationId: command.organizationId,
+      tenderId: existingJob.tenderId,
+      actorRole: command.actorRole,
+      actorId: command.actorId,
+    });
 
     const job = await this.jobRepository.runExclusiveForJob({
       organizationId: command.organizationId,

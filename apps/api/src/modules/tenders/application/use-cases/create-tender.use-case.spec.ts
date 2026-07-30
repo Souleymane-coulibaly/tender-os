@@ -6,7 +6,14 @@ import {
   InvalidTenderSourceError,
   TenderPermissionMissingError,
 } from "../../domain/errors";
-import { FixedClock, InMemoryAuditLogWriter, InMemoryTenderRepository, SequentialIdGenerator } from "../../test-support/fakes";
+import {
+  createClientPortfolioTestFixture,
+  DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+  FixedClock,
+  InMemoryAuditLogWriter,
+  InMemoryTenderRepository,
+  SequentialIdGenerator,
+} from "../../test-support/fakes";
 import { CreateTenderUseCase } from "./create-tender.use-case";
 
 describe("CreateTenderUseCase", () => {
@@ -14,10 +21,18 @@ describe("CreateTenderUseCase", () => {
   let auditLogWriter: InMemoryAuditLogWriter;
   let useCase: CreateTenderUseCase;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     tenderRepository = new InMemoryTenderRepository();
     auditLogWriter = new InMemoryAuditLogWriter();
-    useCase = new CreateTenderUseCase(tenderRepository, auditLogWriter, new FixedClock(), new SequentialIdGenerator());
+    const clientPortfolio = await createClientPortfolioTestFixture("org-1");
+    useCase = new CreateTenderUseCase(
+      tenderRepository,
+      auditLogWriter,
+      new FixedClock(),
+      new SequentialIdGenerator(),
+      clientPortfolio.getClientAccountUseCase,
+      clientPortfolio.assertClientAccessUseCase,
+    );
   });
 
   it("creates a DRAFT tender and records an audit entry when the actor is a Bid Manager", async () => {
@@ -25,6 +40,7 @@ describe("CreateTenderUseCase", () => {
       organizationId: "org-1",
       actorId: "user-1",
       actorRole: "BID_MANAGER",
+      clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
       title: "Marche de nettoyage",
     });
 
@@ -40,6 +56,7 @@ describe("CreateTenderUseCase", () => {
         organizationId: "org-1",
         actorId: "user-1",
         actorRole: "READ_ONLY",
+        clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
         title: "Marche de nettoyage",
       }),
     ).rejects.toThrow(TenderPermissionMissingError);
@@ -52,6 +69,7 @@ describe("CreateTenderUseCase", () => {
       organizationId: "org-1",
       actorId: "user-1",
       actorRole: "BID_MANAGER",
+      clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
       title: "Marche de nettoyage",
     });
 
@@ -67,6 +85,7 @@ describe("CreateTenderUseCase", () => {
       organizationId: "org-1",
       actorId: "user-1",
       actorRole: "BID_MANAGER",
+      clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
       title: "Marche de nettoyage",
       reference: "REF-1",
     });
@@ -81,6 +100,7 @@ describe("CreateTenderUseCase", () => {
       organizationId: "org-1",
       actorId: "user-1",
       actorRole: "BID_MANAGER",
+      clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
       title: "Cloud hosting framework agreement",
       marketType: "PRIVATE",
       country: "DE",
@@ -106,6 +126,7 @@ describe("CreateTenderUseCase", () => {
         organizationId: "org-1",
         actorId: "user-1",
         actorRole: "BID_MANAGER",
+        clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
         title: "Marche de nettoyage",
         marketType: "NOT_A_MARKET_TYPE",
       }),
@@ -118,6 +139,7 @@ describe("CreateTenderUseCase", () => {
         organizationId: "org-1",
         actorId: "user-1",
         actorRole: "BID_MANAGER",
+        clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
         title: "Marche de nettoyage",
         country: "XX",
       }),
@@ -130,6 +152,7 @@ describe("CreateTenderUseCase", () => {
         organizationId: "org-1",
         actorId: "user-1",
         actorRole: "BID_MANAGER",
+        clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
         title: "Marche de nettoyage",
         language: "zz",
       }),
@@ -142,6 +165,7 @@ describe("CreateTenderUseCase", () => {
         organizationId: "org-1",
         actorId: "user-1",
         actorRole: "BID_MANAGER",
+        clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
         title: "Marche de nettoyage",
         source: "NOT_A_SOURCE",
       }),

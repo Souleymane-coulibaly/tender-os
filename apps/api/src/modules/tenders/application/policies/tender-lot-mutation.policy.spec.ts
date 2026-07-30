@@ -9,6 +9,7 @@ function createTender(): Tender {
   return Tender.create({
     id: TenderId.from("tender-1"),
     organizationId: "org-1",
+    clientAccountId: "client-1",
     title: "Marche de travaux",
     createdBy: "user-1",
     occurredAt: new Date(),

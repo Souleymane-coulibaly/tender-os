@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { UuidGenerator } from "../../../../shared-kernel/id-generator";
+import type { AssertClientAccessUseCase, GetClientAccountUseCase } from "../../../client-portfolio";
 import { KnowledgePermissionMissingError } from "../../domain/errors";
 import { GetOrCreateDefaultKnowledgeSpaceUseCase } from "./get-or-create-default-knowledge-space.use-case";
 import { CreateKnowledgeEntryUseCase } from "./create-knowledge-entry.use-case";
@@ -16,6 +17,11 @@ import {
 const ORG = randomUUID();
 const ACTOR = randomUUID();
 
+// Aucun test ci-dessous ne fournit `clientAccountId` : les vérifications Client Portfolio restent
+// derrière un `if (command.clientAccountId)` jamais déclenché — un simple stub suffit ici.
+const UNUSED_GET_CLIENT_ACCOUNT_USE_CASE = {} as GetClientAccountUseCase;
+const UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE = {} as AssertClientAccessUseCase;
+
 describe("CreateKnowledgeEntryUseCase", () => {
   let versionRepository: InMemoryKnowledgeEntryVersionRepository;
   let tagRepository: InMemoryKnowledgeTagRepository;
@@ -29,7 +35,14 @@ describe("CreateKnowledgeEntryUseCase", () => {
     auditLogWriter = new InMemoryAuditLogWriter();
     entryRepository = new InMemoryKnowledgeEntryRepository(versionRepository, tagRepository, auditLogWriter);
     const spaceUseCase = new GetOrCreateDefaultKnowledgeSpaceUseCase(new InMemoryKnowledgeSpaceRepository(), new FixedClock(), new UuidGenerator());
-    useCase = new CreateKnowledgeEntryUseCase(entryRepository, new FixedClock(), new UuidGenerator(), spaceUseCase);
+    useCase = new CreateKnowledgeEntryUseCase(
+      entryRepository,
+      new FixedClock(),
+      new UuidGenerator(),
+      spaceUseCase,
+      UNUSED_GET_CLIENT_ACCOUNT_USE_CASE,
+      UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE,
+    );
   });
 
   it("creates a MANUAL entry immediately READY, with version 1 recorded", async () => {

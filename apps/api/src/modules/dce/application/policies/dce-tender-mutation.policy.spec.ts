@@ -7,6 +7,7 @@ function fakeTenderSummary(overrides: Partial<TenderSummary> = {}): TenderSummar
   return {
     id: "tender-1",
     organizationId: "org-1",
+    clientAccountId: "client-1",
     title: "Marche de travaux",
     status: "DRAFT",
     tags: [],

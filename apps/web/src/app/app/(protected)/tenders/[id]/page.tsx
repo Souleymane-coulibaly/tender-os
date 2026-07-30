@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import { fetchAnalysisSectionData } from "../../../analysis-actions";
 import { canTriggerAnalysis, type AnalysisSectionData } from "../../../../../lib/analysis-types";
@@ -100,6 +101,9 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
             {tender.reference ? `${tender.reference} — ` : null}
             {tender.buyerName ?? "Acheteur non renseigne"}
           </p>
+          <Link href={`/app/clients/${tender.clientAccountId}`} className="text-sm text-neutral-700 hover:underline">
+            Voir le client →
+          </Link>
         </div>
         <div className="flex items-center gap-3">
           <TenderStatusBadge status={tender.status} />

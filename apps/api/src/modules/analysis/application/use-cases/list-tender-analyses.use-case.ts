@@ -10,6 +10,7 @@ export type ListTenderAnalysesQuery = Readonly<{
   organizationId: string;
   tenderId: string;
   actorRole: string;
+  actorId: string;
   limit: number;
   offset: number;
 }>;
@@ -36,6 +37,7 @@ export class ListTenderAnalysesUseCase {
       organizationId: query.organizationId,
       tenderId: query.tenderId,
       actorRole: query.actorRole,
+      actorId: query.actorId,
     });
 
     const page = await this.jobRepository.listByTarget({

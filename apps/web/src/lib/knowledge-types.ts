@@ -27,6 +27,9 @@ export type KnowledgeEntrySummary = {
   id: string;
   organizationId: string;
   knowledgeSpaceId: string;
+  /** Absent = connaissance globale de l'organisation, une valeur = spécifique à ce client
+   *  (mission Sprint 5.1 §"Knowledge Base"). */
+  clientAccountId?: string;
   title: string;
   description?: string;
   category: KnowledgeCategory;

@@ -1,13 +1,16 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
+import { AssertClientAccessUseCase } from "../../../client-portfolio";
 import { RiskNotFoundError } from "../../domain/errors";
 import type { RiskSeverity, RiskStatus } from "../../domain/risk.entity";
 import { TenderPermission } from "../../domain/tender-permission";
 import { toRiskSummary, type RiskSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { RISK_REPOSITORY, type RiskRepository } from "../ports/risk.repository";
+import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
+import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 
 async function loadRisk(
   repository: RiskRepository,
@@ -24,6 +27,7 @@ export type UpdateRiskCommand = Readonly<{
   organizationId: string;
   tenderId: string;
   riskId: string;
+  actorId: string;
   actorRole: string;
   title?: string | undefined;
   description?: string | undefined;
@@ -38,10 +42,14 @@ export class UpdateRiskUseCase {
   constructor(
     @Inject(RISK_REPOSITORY) private readonly riskRepository: RiskRepository,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: UpdateRiskCommand): Promise<RiskSummary> {
     assertHasTenderPermission(command.actorRole, TenderPermission.ManageRisks);
+
+    await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
 
     const risk = await loadRisk(this.riskRepository, {
       organizationId: command.organizationId,
@@ -83,10 +91,14 @@ export class ChangeRiskStatusUseCase {
     @Inject(RISK_REPOSITORY) private readonly riskRepository: RiskRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: ChangeRiskStatusCommand): Promise<RiskSummary> {
     assertHasTenderPermission(command.actorRole, TenderPermission.ManageRisks);
+
+    await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
 
     const risk = await loadRisk(this.riskRepository, {
       organizationId: command.organizationId,

@@ -9,6 +9,11 @@ export type KnowledgeSearchCriteria = Readonly<{
   includeArchived: boolean;
   createdAfter?: Date | undefined;
   createdBefore?: Date | undefined;
+  /** Mission Sprint 5.1 §"recherche tenant-aware+client-aware" — mêmes sémantiques que
+   *  `ListKnowledgeEntriesFilter.clientAccountId`/`restrictToClientAccountIdsOrGlobal` : jamais une
+   *  entrée client dans le résultat de recherche d'un autre client. */
+  clientAccountId?: string | "GLOBAL" | undefined;
+  restrictToClientAccountIdsOrGlobal?: readonly string[] | undefined;
   limit: number;
   offset: number;
 }>;

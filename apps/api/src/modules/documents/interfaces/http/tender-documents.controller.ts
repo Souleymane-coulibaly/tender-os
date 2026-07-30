@@ -1,5 +1,5 @@
 import { Controller, Get, HttpCode, HttpStatus, Param, UseFilters, UseGuards } from "@nestjs/common";
-import { AuthenticatedGuard } from "../../../identity";
+import { AuthenticatedGuard, CurrentActor, type AuthenticatedActor } from "../../../identity";
 import { CurrentMembershipContext, OrganizationMembershipGuard, type MembershipContext } from "../../../memberships";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
 import { ListTenderDocumentsUseCase } from "../../application/use-cases/list-tender-documents.use-case";
@@ -19,6 +19,7 @@ export class TenderDocumentsController {
   @Get()
   @HttpCode(HttpStatus.OK)
   async list(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
   ) {
@@ -26,6 +27,7 @@ export class TenderDocumentsController {
       organizationId: membership.organizationId,
       tenderId,
       actorRole: membership.role,
+      actorId: actor.userId,
     });
     return documents.map(presentDocument);
   }

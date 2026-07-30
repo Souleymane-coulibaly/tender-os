@@ -1,7 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { GetTenderUseCase } from "../../../tenders";
 import { DocumentNotFoundError, DocumentVersionNotFoundError } from "../../domain/errors";
 import { DocumentPermission } from "../../domain/document-permission";
 import { assertHasDocumentPermission } from "../policies/document-authorization.policy";
+import { assertDocumentClientAccess } from "../policies/document-client-access.helper";
+import { DOCUMENT_TENDER_ASSOCIATION_REPOSITORY, type DocumentTenderAssociationRepository } from "../ports/document-tender-association.repository";
 import { DOCUMENT_REPOSITORY, type DocumentRepository } from "../ports/document.repository";
 import { DOCUMENT_VERSION_REPOSITORY, type DocumentVersionRepository } from "../ports/document-version.repository";
 import { STORAGE_PROVIDER, type DocumentDownload, type StorageProvider } from "../ports/storage-provider";
@@ -12,6 +15,7 @@ export type DownloadDocumentVersionQuery = Readonly<{
   /** Version précise à télécharger — par défaut, la version courante du document. */
   versionId?: string | undefined;
   actorRole: string;
+  actorId?: string | undefined;
 }>;
 
 /**
@@ -24,6 +28,8 @@ export class DownloadDocumentVersionUseCase {
     @Inject(DOCUMENT_REPOSITORY) private readonly documentRepository: DocumentRepository,
     @Inject(DOCUMENT_VERSION_REPOSITORY) private readonly versionRepository: DocumentVersionRepository,
     @Inject(STORAGE_PROVIDER) private readonly storageProvider: StorageProvider,
+    @Inject(DOCUMENT_TENDER_ASSOCIATION_REPOSITORY) private readonly associationRepository: DocumentTenderAssociationRepository,
+    private readonly getTenderUseCase: GetTenderUseCase,
   ) {}
 
   async execute(query: DownloadDocumentVersionQuery): Promise<DocumentDownload> {
@@ -35,6 +41,10 @@ export class DownloadDocumentVersionUseCase {
     });
     if (!document) {
       throw new DocumentNotFoundError();
+    }
+
+    if (query.actorId) {
+      await assertDocumentClientAccess(this.associationRepository, this.getTenderUseCase, { ...query, actorId: query.actorId });
     }
 
     const versionId = query.versionId ?? document.currentVersionId;

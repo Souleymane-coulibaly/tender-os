@@ -24,6 +24,7 @@ describe("PrismaAnalysisJobRepository (PostgreSQL)", () => {
   const otherOrganizationId = randomUUID();
   const actorId = randomUUID();
   const createdTenderIds: string[] = [];
+  let clientAccountId: string;
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -45,6 +46,18 @@ describe("PrismaAnalysisJobRepository (PostgreSQL)", () => {
         status: "TRIAL",
       },
     });
+    clientAccountId = (
+      await prisma.clientAccount.create({
+        data: {
+          id: randomUUID(),
+          organizationId,
+          name: "Client de test",
+          nameNormalized: "client de test",
+          status: "ACTIVE",
+          createdBy: actorId,
+        },
+      })
+    ).id;
   });
 
   afterAll(async () => {
@@ -53,6 +66,7 @@ describe("PrismaAnalysisJobRepository (PostgreSQL)", () => {
     if (createdTenderIds.length > 0) {
       await prisma.tender.deleteMany({ where: { id: { in: createdTenderIds } } });
     }
+    await prisma.clientAccount.deleteMany({ where: { organizationId } });
     await prisma.organization.deleteMany({ where: { id: { in: [organizationId, otherOrganizationId] } } });
     await prisma.$disconnect();
   });
@@ -61,7 +75,7 @@ describe("PrismaAnalysisJobRepository (PostgreSQL)", () => {
     const id = randomUUID();
     createdTenderIds.push(id);
     await prisma.tender.create({
-      data: { id, organizationId, title: "Marché pour tests AnalysisJob", status: "DRAFT", tags: [], createdBy: actorId },
+      data: { id, organizationId, clientAccountId, title: "Marché pour tests AnalysisJob", status: "DRAFT", tags: [], createdBy: actorId },
     });
     return id;
   }

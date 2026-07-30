@@ -1,0 +1,18 @@
+export type ClientAuditLogEntry = Readonly<{
+  organizationId: string;
+  actorType: "USER" | "SYSTEM";
+  actorId?: string | undefined;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  requestId?: string | undefined;
+  metadata?: Record<string, unknown> | undefined;
+}>;
+
+/** Écrit dans `audit_logs` (mécanisme canonique déjà établi) — même motif que Knowledge Base/
+ *  Tenders/Documents/Analysis : chaque module possède son propre port + adaptateur Prisma. */
+export interface AuditLogWriter {
+  record(entry: ClientAuditLogEntry): Promise<void>;
+}
+
+export const AUDIT_LOG_WRITER = Symbol("CLIENT_PORTFOLIO_AUDIT_LOG_WRITER");

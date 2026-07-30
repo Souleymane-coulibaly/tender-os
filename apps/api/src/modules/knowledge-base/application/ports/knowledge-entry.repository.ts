@@ -16,6 +16,17 @@ export type ListKnowledgeEntriesFilter = Readonly<{
   /** Mission §11 "filtre pour voir les archives" — `false` par défaut : une entrée archivée est
    *  exclue des listes normales tant que ce drapeau n'est pas explicitement activé. */
   includeArchived: boolean;
+  /** Mission Sprint 5.1 §"filtre client" — restreint aux entrées GLOBALES uniquement
+   *  (`clientAccountId IS NULL`) quand `"GLOBAL"`, aux entrées d'un client précis quand un id est
+   *  fourni ; absent = pas de filtre explicite (toutes les entrées accessibles, voir
+   *  `restrictToClientAccountIdsOrGlobal`). */
+  clientAccountId?: string | "GLOBAL" | undefined;
+  /** Mission Sprint 5.1 §"un utilisateur standard ne voit que les clients auxquels il est affecté"
+   *  — restriction AUTOMATIQUE (jamais fournie par le client) : `undefined` signifie "aucune
+   *  restriction" (OWNER/ADMIN) ; un tableau (même vide) restreint aux entrées GLOBALES
+   *  (`clientAccountId IS NULL`) UNION aux entrées des clients listés ici — jamais une entrée d'un
+   *  client hors de cet ensemble, quel que soit le filtre `clientAccountId` explicite ci-dessus. */
+  restrictToClientAccountIdsOrGlobal?: readonly string[] | undefined;
   createdAfter?: Date | undefined;
   createdBefore?: Date | undefined;
   /** Mission §8/§9 "recherche par titre" — un filtre texte simple sur le titre uniquement (la

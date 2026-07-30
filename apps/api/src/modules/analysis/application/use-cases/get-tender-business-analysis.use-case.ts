@@ -5,7 +5,7 @@ import { TenderBusinessAnalysisNotFoundError } from "../../domain/errors";
 import { assertHasAnalysisPermission } from "../policies/analysis-authorization.policy";
 import { BUSINESS_ANALYSIS_REPOSITORY, type BusinessAnalysisRepository, type TenderAnalysisSummaryRecord } from "../ports/business-analysis.repository";
 
-export type GetTenderBusinessAnalysisQuery = Readonly<{ organizationId: string; tenderId: string; actorRole: string }>;
+export type GetTenderBusinessAnalysisQuery = Readonly<{ organizationId: string; tenderId: string; actorRole: string; actorId: string }>;
 
 /**
  * Consultation de la synthèse métier consolidée la plus récente d'un tender (mission Sprint 4.2
@@ -27,6 +27,7 @@ export class GetTenderBusinessAnalysisUseCase {
       organizationId: query.organizationId,
       tenderId: query.tenderId,
       actorRole: query.actorRole,
+      actorId: query.actorId,
     });
 
     const summary = await this.businessAnalysisRepository.getLatestSummary({

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
+import type { ClientAccountSummary } from "../../../../../lib/client-portfolio-types";
 import {
   KNOWLEDGE_CATEGORY_LABELS,
   KNOWLEDGE_STATUS_LABELS,
@@ -36,6 +38,17 @@ export default async function KnowledgeEntryDetailPage({ params }: { params: Pro
     return <ApiErrorState error={error} />;
   }
 
+  // Mission Sprint 5.1 §"affichage du contexte" — le nom du client n'est resolu que si l'entree
+  // en a un (connaissance globale sinon, jamais d'appel superflu).
+  let client: ClientAccountSummary | undefined;
+  if (entry.clientAccountId) {
+    try {
+      client = await appApiFetch<ClientAccountSummary>(`/api/v1/clients/${entry.clientAccountId}`);
+    } catch {
+      client = undefined;
+    }
+  }
+
   const canEdit = role !== undefined && role !== "READ_ONLY" && role !== "REVIEWER" && role !== "EXECUTIVE" && role !== "EXTERNAL_CONSULTANT";
   const canManageLifecycle = canEdit;
   const canDelete = role !== undefined && ["OWNER", "ORGANIZATION_ADMIN", "BID_MANAGER"].includes(role);
@@ -49,6 +62,21 @@ export default async function KnowledgeEntryDetailPage({ params }: { params: Pro
             {KNOWLEDGE_CATEGORY_LABELS[entry.category]} — v{entry.activeVersionNumber}
             {entry.language ? ` — ${entry.language}` : ""}
           </p>
+          <div className="mt-1">
+            {entry.clientAccountId ? (
+              <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                {client ? (
+                  <Link href={`/app/clients/${entry.clientAccountId}`} className="hover:underline">
+                    {client.name}
+                  </Link>
+                ) : (
+                  "Client"
+                )}
+              </span>
+            ) : (
+              <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">Globale</span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <span className={`rounded px-2 py-1 text-xs font-medium ${knowledgeStatusBadgeClass(entry.status)}`}>

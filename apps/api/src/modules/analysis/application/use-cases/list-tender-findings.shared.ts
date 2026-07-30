@@ -8,6 +8,7 @@ export type ListTenderFindingsQuery = Readonly<{
   organizationId: string;
   tenderId: string;
   actorRole: string;
+  actorId: string;
   analysisVersion?: number | undefined;
   limit: number;
   offset: number;
@@ -42,6 +43,7 @@ export async function executeListTenderFindings<T>(deps: {
     organizationId: deps.query.organizationId,
     tenderId: deps.query.tenderId,
     actorRole: deps.query.actorRole,
+    actorId: deps.query.actorId,
   });
 
   const analysisVersion = await resolveLatestAnalysisVersion(deps.businessAnalysisRepository, {

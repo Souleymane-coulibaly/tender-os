@@ -38,6 +38,7 @@ describe("GetTenderReadinessUseCase", () => {
       Tender.create({
         id: TenderId.from("tender-1"),
         organizationId: "org-1",
+        clientAccountId: "client-1",
         title: "Marche de nettoyage",
         createdBy: "user-1",
         occurredAt: new Date("2026-01-01T00:00:00Z"),

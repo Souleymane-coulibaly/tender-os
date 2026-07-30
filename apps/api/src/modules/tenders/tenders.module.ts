@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { ClientPortfolioModule } from "../client-portfolio";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
@@ -85,7 +86,7 @@ import { TenderLotsController } from "./interfaces/http/tender-lots.controller";
 import { TendersController } from "./interfaces/http/tenders.controller";
 
 @Module({
-  imports: [IdentityModule, MembershipsModule],
+  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule],
   controllers: [TendersController, TenderLotsController],
   providers: [
     CreateTenderUseCase,

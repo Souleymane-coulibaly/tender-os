@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { appApiFetch } from "../../../../lib/app-api-client";
+import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../lib/client-portfolio-types";
 import {
   KNOWLEDGE_CATEGORY_LABELS,
   KNOWLEDGE_STATUS_LABELS,
@@ -22,6 +23,7 @@ type SearchParams = {
   category?: string;
   status?: string;
   includeArchived?: string;
+  clientAccountId?: string;
 };
 
 export default async function KnowledgeBasePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -32,17 +34,22 @@ export default async function KnowledgeBasePage({ searchParams }: { searchParams
   if (params.category) query.set("category", params.category);
   if (params.status) query.set("status", params.status);
   if (params.includeArchived === "true") query.set("includeArchived", "true");
+  if (params.clientAccountId) query.set("clientAccountId", params.clientAccountId);
 
   let page: KnowledgePage<KnowledgeEntrySummary>;
   let tags: KnowledgeTagSummary[];
+  let clients: ClientPortfolioPage<ClientAccountSummary>;
   try {
-    [page, tags] = await Promise.all([
+    [page, tags, clients] = await Promise.all([
       appApiFetch<KnowledgePage<KnowledgeEntrySummary>>(`/api/v1/knowledge/entries?${query.toString()}`),
       appApiFetch<KnowledgeTagSummary[]>("/api/v1/knowledge/tags"),
+      appApiFetch<ClientPortfolioPage<ClientAccountSummary>>("/api/v1/clients?limit=100"),
     ]);
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
+
+  const clientNameById = new Map(clients.items.map((client) => [client.id, client.name]));
 
   const topTags = tags.slice(0, 12);
 
@@ -72,7 +79,9 @@ export default async function KnowledgeBasePage({ searchParams }: { searchParams
           category: params.category as KnowledgeCategory | undefined,
           status: params.status as KnowledgeEntryStatus | undefined,
           includeArchived: params.includeArchived === "true",
+          clientAccountId: params.clientAccountId,
         }}
+        clients={clients.items}
       />
 
       {topTags.length > 0 ? (
@@ -94,6 +103,7 @@ export default async function KnowledgeBasePage({ searchParams }: { searchParams
             <thead>
               <tr className="border-b border-neutral-200 text-left text-neutral-500">
                 <th className="py-2 pr-4">Titre</th>
+                <th className="py-2 pr-4">Portée</th>
                 <th className="py-2 pr-4">Catégorie</th>
                 <th className="py-2 pr-4">Tags</th>
                 <th className="py-2 pr-4">Statut</th>
@@ -109,6 +119,15 @@ export default async function KnowledgeBasePage({ searchParams }: { searchParams
                     <Link href={`/app/knowledge/${entry.id}`} className="font-medium text-neutral-900 hover:underline">
                       {entry.title}
                     </Link>
+                  </td>
+                  <td className="py-2 pr-4">
+                    {entry.clientAccountId ? (
+                      <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                        {clientNameById.get(entry.clientAccountId) ?? "Client"}
+                      </span>
+                    ) : (
+                      <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">Globale</span>
+                    )}
                   </td>
                   <td className="py-2 pr-4 text-neutral-600">{KNOWLEDGE_CATEGORY_LABELS[entry.category]}</td>
                   <td className="py-2 pr-4 text-neutral-600">

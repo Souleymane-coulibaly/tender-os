@@ -141,6 +141,7 @@ export class KnowledgeController {
       language: body.language,
       metadata: body.metadata,
       tags: body.tags,
+      clientAccountId: body.clientAccountId,
       requestId: request.id,
     });
     return presentKnowledgeEntry(result);
@@ -149,10 +150,16 @@ export class KnowledgeController {
   @Get("entries")
   @HttpCode(HttpStatus.OK)
   async listEntries(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Query(new ZodValidationPipe(ListKnowledgeEntriesQuerySchema)) query: ListKnowledgeEntriesQuery,
   ) {
-    const result = await this.listKnowledgeEntriesUseCase.execute({ organizationId: membership.organizationId, actorRole: membership.role, ...query });
+    const result = await this.listKnowledgeEntriesUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      ...query,
+    });
     return { ...presentPage(result.items.map(presentKnowledgeEntry), result.nextCursor), total: result.total };
   }
 
@@ -243,6 +250,7 @@ export class KnowledgeController {
       language: body.language,
       metadata: parseMetadataField(body.metadata),
       tags: parseTagsField(body.tags),
+      clientAccountId: body.clientAccountId,
       file: { buffer: file.buffer, originalFilename: file.originalname, mimeType: file.mimetype },
       maxFileSizeBytes: maxKnowledgeDocumentFileSizeBytes(),
       requestId: request.id,
@@ -316,8 +324,17 @@ export class KnowledgeController {
 
   @Get("search")
   @HttpCode(HttpStatus.OK)
-  async search(@CurrentMembershipContext() membership: MembershipContext, @Query(new ZodValidationPipe(SearchKnowledgeBaseQuerySchema)) query: SearchKnowledgeBaseQuery) {
-    const result = await this.searchKnowledgeBaseUseCase.execute({ organizationId: membership.organizationId, actorRole: membership.role, ...query });
+  async search(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Query(new ZodValidationPipe(SearchKnowledgeBaseQuerySchema)) query: SearchKnowledgeBaseQuery,
+  ) {
+    const result = await this.searchKnowledgeBaseUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      ...query,
+    });
     return { items: result.items.map(presentKnowledgeSearchResult), total: result.total };
   }
 

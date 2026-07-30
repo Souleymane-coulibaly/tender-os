@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { HealthModule } from "./health/health.module";
 import { AnalysisModule } from "./modules/analysis/analysis.module";
+import { ClientPortfolioModule } from "./modules/client-portfolio/client-portfolio.module";
 import { DceModule } from "./modules/dce/dce.module";
 import { DocumentsModule } from "./modules/documents/documents.module";
 import { ExtractionModule } from "./modules/extraction/extraction.module";
@@ -22,6 +23,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     OrganizationsModule,
     MembershipsModule,
     PlatformAdministrationModule,
+    ClientPortfolioModule,
     TendersModule,
     DocumentsModule,
     DceModule,

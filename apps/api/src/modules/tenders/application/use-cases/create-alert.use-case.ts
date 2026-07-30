@@ -3,12 +3,15 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
+import { AssertClientAccessUseCase } from "../../../client-portfolio";
 import { Alert, type AlertSeverity } from "../../domain/alert.entity";
 import { TenderPermission } from "../../domain/tender-permission";
 import { toAlertSummary, type AlertSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { ALERT_REPOSITORY, type AlertRepository } from "../ports/alert.repository";
+import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
+import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 
 export type CreateAlertCommand = Readonly<{
   organizationId: string;
@@ -29,10 +32,14 @@ export class CreateAlertUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: CreateAlertCommand): Promise<AlertSummary> {
     assertHasTenderPermission(command.actorRole, TenderPermission.ManageAlerts);
+
+    await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
 
     const alert = Alert.create({
       id: this.idGenerator.generate(),

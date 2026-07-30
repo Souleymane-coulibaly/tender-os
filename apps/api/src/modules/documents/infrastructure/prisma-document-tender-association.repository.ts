@@ -32,4 +32,12 @@ export class PrismaDocumentTenderAssociationRepository implements DocumentTender
       where: { documentId: input.documentId, tenderId: input.tenderId, organizationId: input.organizationId },
     });
   }
+
+  async listTenderIdsByDocument(input: { organizationId: string; documentId: string }): Promise<readonly string[]> {
+    const records = await this.prisma.documentTenderAssociation.findMany({
+      where: { documentId: input.documentId, organizationId: input.organizationId },
+      select: { tenderId: true },
+    });
+    return records.map((record) => record.tenderId);
+  }
 }

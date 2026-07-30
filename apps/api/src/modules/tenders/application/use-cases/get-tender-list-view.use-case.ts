@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
+import { ListAccessibleClientsUseCase } from "../../../client-portfolio";
 import type { TenderStatus } from "../../domain/tender-status";
 import { TenderPermission } from "../../domain/tender-permission";
 import { toTenderListItemDto, type TenderListItemDto } from "../board-dtos";
@@ -20,11 +21,13 @@ import { enrichTenders } from "../tender-enrichment";
 
 export type GetTenderListViewQuery = Readonly<{
   organizationId: string;
+  actorId: string;
   actorRole: string;
   cursor?: string | undefined;
   limit: number;
   status?: TenderStatus | undefined;
   internalOwnerId?: string | undefined;
+  clientAccountId?: string | undefined;
   search?: string | undefined;
   deadlineAfter?: string | undefined;
   deadlineBefore?: string | undefined;
@@ -53,10 +56,16 @@ export class GetTenderListViewUseCase {
     @Inject(ALERT_REPOSITORY) private readonly alertRepository: AlertRepository,
     @Inject(TENDER_SEARCH_PROVIDER) private readonly searchProvider: TenderSearchProvider,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly listAccessibleClientsUseCase: ListAccessibleClientsUseCase,
   ) {}
 
   async execute(query: GetTenderListViewQuery): Promise<GetTenderListViewResult> {
     assertHasTenderPermission(query.actorRole, TenderPermission.List);
+
+    const accessible = await this.listAccessibleClientsUseCase.execute(query);
+    if (!accessible.allClients && accessible.clientAccountIds.length === 0) {
+      return { items: [], nextCursor: null };
+    }
 
     const idsFilter = query.search
       ? await this.searchProvider.findMatchingTenderIds({ organizationId: query.organizationId, query: query.search })
@@ -68,6 +77,8 @@ export class GetTenderListViewUseCase {
       limit: query.limit,
       status: query.status,
       internalOwnerId: query.internalOwnerId,
+      clientAccountId: query.clientAccountId,
+      restrictToClientAccountIds: accessible.allClients ? undefined : accessible.clientAccountIds,
       idsFilter,
       deadlineAfter: query.deadlineAfter ? new Date(query.deadlineAfter) : undefined,
       deadlineBefore: query.deadlineBefore ? new Date(query.deadlineBefore) : undefined,

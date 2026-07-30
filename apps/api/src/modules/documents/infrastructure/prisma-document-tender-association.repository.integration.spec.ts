@@ -29,10 +29,21 @@ describe("PrismaDocumentTenderAssociationRepository (PostgreSQL)", () => {
         status: "TRIAL",
       },
     });
+    const clientAccount = await prisma.clientAccount.create({
+      data: {
+        id: randomUUID(),
+        organizationId,
+        name: "Client de test",
+        nameNormalized: "client de test",
+        status: "ACTIVE",
+        createdBy: randomUUID(),
+      },
+    });
     await prisma.tender.create({
       data: {
         id: tenderId,
         organizationId,
+        clientAccountId: clientAccount.id,
         title: "Marche pour tests d'association",
         status: "DRAFT",
         tags: [],
@@ -74,6 +85,7 @@ describe("PrismaDocumentTenderAssociationRepository (PostgreSQL)", () => {
     await prisma.documentVersion.deleteMany({ where: { documentId } });
     await prisma.document.delete({ where: { id: documentId } });
     await prisma.tender.delete({ where: { id: tenderId } });
+    await prisma.clientAccount.deleteMany({ where: { organizationId } });
     await prisma.organization.delete({ where: { id: organizationId } });
     await prisma.$disconnect();
   });

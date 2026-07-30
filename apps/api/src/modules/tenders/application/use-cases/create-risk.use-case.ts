@@ -3,12 +3,15 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
+import { AssertClientAccessUseCase } from "../../../client-portfolio";
 import { Risk, type RiskSeverity } from "../../domain/risk.entity";
 import { TenderPermission } from "../../domain/tender-permission";
 import { toRiskSummary, type RiskSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { RISK_REPOSITORY, type RiskRepository } from "../ports/risk.repository";
+import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
+import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 
 export type CreateRiskCommand = Readonly<{
   organizationId: string;
@@ -30,10 +33,14 @@ export class CreateRiskUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: CreateRiskCommand): Promise<RiskSummary> {
     assertHasTenderPermission(command.actorRole, TenderPermission.ManageRisks);
+
+    await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
 
     const risk = Risk.create({
       id: this.idGenerator.generate(),

@@ -55,6 +55,7 @@ export class AttachDocumentToTenderUseCase {
       organizationId: command.organizationId,
       tenderId: command.tenderId,
       actorRole: command.actorRole,
+      actorId: command.actorId,
     });
 
     const alreadyAssociated = await this.associationRepository.exists({

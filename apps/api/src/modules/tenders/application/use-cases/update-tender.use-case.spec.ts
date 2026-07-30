@@ -1,24 +1,33 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { ClientAccountNotFoundError } from "../../../client-portfolio";
 import { InvalidMarketTypeError, TenderNotFoundError, TenderPermissionMissingError } from "../../domain/errors";
 import { TenderId } from "../../domain/tender-id.value-object";
 import { Tender } from "../../domain/tender.aggregate";
-import { FixedClock, InMemoryAuditLogWriter, InMemoryTenderRepository } from "../../test-support/fakes";
+import {
+  createClientPortfolioTestFixture,
+  FixedClock,
+  InMemoryAuditLogWriter,
+  InMemoryTenderRepository,
+} from "../../test-support/fakes";
 import { UpdateTenderUseCase } from "./update-tender.use-case";
 
 describe("UpdateTenderUseCase", () => {
   let tenderRepository: InMemoryTenderRepository;
   let auditLogWriter: InMemoryAuditLogWriter;
+  let clientPortfolio: Awaited<ReturnType<typeof createClientPortfolioTestFixture>>;
   let useCase: UpdateTenderUseCase;
 
   beforeEach(async () => {
     tenderRepository = new InMemoryTenderRepository();
     auditLogWriter = new InMemoryAuditLogWriter();
-    useCase = new UpdateTenderUseCase(tenderRepository, auditLogWriter, new FixedClock());
+    clientPortfolio = await createClientPortfolioTestFixture("org-1");
+    useCase = new UpdateTenderUseCase(tenderRepository, auditLogWriter, new FixedClock(), clientPortfolio.assertClientAccessUseCase);
 
     await tenderRepository.seed(
       Tender.create({
         id: TenderId.from("tender-1"),
         organizationId: "org-1",
+        clientAccountId: "client-1",
         title: "Marche de nettoyage",
         marketType: "PUBLIC",
         country: "FR",
@@ -102,5 +111,30 @@ describe("UpdateTenderUseCase", () => {
         title: "x",
       }),
     ).rejects.toThrow(TenderPermissionMissingError);
+  });
+
+  describe("client isolation (correction P0 — mutations Tenders non client-aware)", () => {
+    it("refuses a MEMBER-tier actor with NO assignment on the tender's client, even with tender:update", async () => {
+      await expect(
+        useCase.execute({
+          organizationId: "org-1",
+          tenderId: "tender-1",
+          actorId: "user-unaffiliated",
+          actorRole: "BID_MANAGER",
+          title: "Tentative non autorisée",
+        }),
+      ).rejects.toBeInstanceOf(ClientAccountNotFoundError);
+    });
+
+    it("OWNER can update a tender for a client it has no explicit assignment on", async () => {
+      const result = await useCase.execute({
+        organizationId: "org-1",
+        tenderId: "tender-1",
+        actorId: "owner-user",
+        actorRole: "OWNER",
+        title: "Mise à jour par le propriétaire",
+      });
+      expect(result.title).toBe("Mise à jour par le propriétaire");
+    });
   });
 });

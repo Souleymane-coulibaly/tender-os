@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
+import { ListAccessibleClientsUseCase } from "../../../client-portfolio";
 import { TenderPermission } from "../../domain/tender-permission";
 import { TenderStatus } from "../../domain/tender-status";
 import type { TenderStatisticsDto } from "../board-dtos";
@@ -17,7 +18,7 @@ import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.reposi
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
 import { enrichTenders } from "../tender-enrichment";
 
-export type GetTenderStatisticsQuery = Readonly<{ organizationId: string; actorRole: string }>;
+export type GetTenderStatisticsQuery = Readonly<{ organizationId: string; actorId: string; actorRole: string }>;
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -39,6 +40,7 @@ export class GetTenderStatisticsUseCase {
     @Inject(RISK_REPOSITORY) private readonly riskRepository: RiskRepository,
     @Inject(ALERT_REPOSITORY) private readonly alertRepository: AlertRepository,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly listAccessibleClientsUseCase: ListAccessibleClientsUseCase,
   ) {}
 
   async execute(query: GetTenderStatisticsQuery): Promise<TenderStatisticsDto> {
@@ -47,15 +49,24 @@ export class GetTenderStatisticsUseCase {
     const now = this.clock.now();
     const organizationId = query.organizationId;
 
+    // Mission Sprint 5.1 §"aucune fuite de données dans les compteurs" — les statistiques ne
+    // doivent jamais agréger les tenders d'un client auquel l'acteur n'est pas affecté.
+    const accessible = await this.listAccessibleClientsUseCase.execute(query);
+    if (!accessible.allClients && accessible.clientAccountIds.length === 0) {
+      return { totalActive: 0, byStatus: {}, deadlinesNext7Days: 0, overdueCount: 0, readyToSubmitCount: 0, atRiskCount: 0, averageReadinessScore: 0 };
+    }
+    const restrictToClientAccountIds = accessible.allClients ? undefined : accessible.clientAccountIds;
+
     const [byStatus, deadlinesNext7Days, overdueCount, activePage] = await Promise.all([
-      this.tenderRepository.countByStatus(organizationId),
+      this.tenderRepository.countByStatus({ organizationId, restrictToClientAccountIds }),
       this.tenderRepository.count({
         organizationId,
+        restrictToClientAccountIds,
         deadlineAfter: now,
         deadlineBefore: new Date(now.getTime() + SEVEN_DAYS_MS),
       }),
-      this.tenderRepository.count({ organizationId, overdue: true }),
-      this.tenderRepository.list({ organizationId, limit: MAX_TENDERS_FOR_RISK_AND_AVERAGE, sort: "createdAt" }),
+      this.tenderRepository.count({ organizationId, restrictToClientAccountIds, overdue: true }),
+      this.tenderRepository.list({ organizationId, restrictToClientAccountIds, limit: MAX_TENDERS_FOR_RISK_AND_AVERAGE, sort: "createdAt" }),
     ]);
 
     const totalActive = Object.entries(byStatus)

@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
-import { TenderNotFoundError } from "../../domain/errors";
+import { AssertClientAccessUseCase } from "../../../client-portfolio";
 import { TenderPermission } from "../../domain/tender-permission";
 import { TenderStatus } from "../../domain/tender-status";
 import { toTenderSummary, type TenderSummary } from "../dtos";
@@ -12,6 +12,7 @@ import {
   type TenderStatusHistoryRepository,
 } from "../ports/tender-status-history.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
+import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 
 export type ArchiveTenderCommand = Readonly<{
   organizationId: string;
@@ -32,19 +33,13 @@ export class ArchiveTenderUseCase {
     private readonly statusHistoryRepository: TenderStatusHistoryRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: ArchiveTenderCommand): Promise<ArchiveTenderResult> {
     assertHasTenderPermission(command.actorRole, TenderPermission.Archive);
 
-    const tender = await this.tenderRepository.findById({
-      organizationId: command.organizationId,
-      tenderId: command.tenderId,
-    });
-
-    if (!tender) {
-      throw new TenderNotFoundError();
-    }
+    const tender = await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
 
     const previousStatus = tender.status;
     const occurredAt = this.clock.now();

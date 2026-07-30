@@ -32,6 +32,7 @@ function buildBoard(): TenderBoard {
         items: [
           {
             id: "tender-1",
+            clientAccountId: "client-1",
             title: "Marche de nettoyage",
             status: "DRAFT",
             readinessScore: 80,

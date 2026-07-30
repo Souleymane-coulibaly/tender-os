@@ -91,6 +91,8 @@ export async function createKnowledgeEntryAction(_prevState: FormActionState, fo
         language: optional(formData.get("language")),
         metadata: collectMetadata(formData),
         tags: optionalTags(formData.get("tags")),
+        // Mission Sprint 5.1 §"sélection du client à la création" — absent = connaissance globale.
+        clientAccountId: optional(formData.get("clientAccountId")),
       }),
     });
   } catch (error) {

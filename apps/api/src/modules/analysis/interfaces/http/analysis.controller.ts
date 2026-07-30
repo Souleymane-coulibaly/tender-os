@@ -142,6 +142,7 @@ export class AnalysisController {
   @Get("tenders/:tenderId/analyses")
   @HttpCode(HttpStatus.OK)
   async listTenderAnalyses(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
@@ -150,6 +151,7 @@ export class AnalysisController {
       organizationId: membership.organizationId,
       tenderId,
       actorRole: membership.role,
+      actorId: actor.userId,
       limit: query.limit,
       offset: query.offset,
     });
@@ -158,6 +160,7 @@ export class AnalysisController {
   @Get("tenders/:tenderId/analysis")
   @HttpCode(HttpStatus.OK)
   async getTenderBusinessAnalysis(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
   ) {
@@ -165,12 +168,14 @@ export class AnalysisController {
       organizationId: membership.organizationId,
       tenderId,
       actorRole: membership.role,
+      actorId: actor.userId,
     });
   }
 
   @Get("tenders/:tenderId/analysis/deadlines")
   @HttpCode(HttpStatus.OK)
   async listTenderDeadlines(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
@@ -179,6 +184,7 @@ export class AnalysisController {
       organizationId: membership.organizationId,
       tenderId,
       actorRole: membership.role,
+      actorId: actor.userId,
       analysisVersion: query.analysisVersion,
       limit: query.limit,
       offset: query.offset,
@@ -188,6 +194,7 @@ export class AnalysisController {
   @Get("tenders/:tenderId/analysis/criteria")
   @HttpCode(HttpStatus.OK)
   async listTenderCriteria(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
@@ -196,6 +203,7 @@ export class AnalysisController {
       organizationId: membership.organizationId,
       tenderId,
       actorRole: membership.role,
+      actorId: actor.userId,
       analysisVersion: query.analysisVersion,
       limit: query.limit,
       offset: query.offset,
@@ -205,6 +213,7 @@ export class AnalysisController {
   @Get("tenders/:tenderId/analysis/clauses")
   @HttpCode(HttpStatus.OK)
   async listTenderClauses(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
@@ -213,6 +222,7 @@ export class AnalysisController {
       organizationId: membership.organizationId,
       tenderId,
       actorRole: membership.role,
+      actorId: actor.userId,
       analysisVersion: query.analysisVersion,
       limit: query.limit,
       offset: query.offset,
@@ -222,6 +232,7 @@ export class AnalysisController {
   @Get("tenders/:tenderId/analysis/requirements")
   @HttpCode(HttpStatus.OK)
   async listTenderRequirements(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
@@ -230,6 +241,7 @@ export class AnalysisController {
       organizationId: membership.organizationId,
       tenderId,
       actorRole: membership.role,
+      actorId: actor.userId,
       analysisVersion: query.analysisVersion,
       limit: query.limit,
       offset: query.offset,
@@ -239,6 +251,7 @@ export class AnalysisController {
   @Get("tenders/:tenderId/analysis/risks")
   @HttpCode(HttpStatus.OK)
   async listTenderRisks(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
@@ -247,6 +260,7 @@ export class AnalysisController {
       organizationId: membership.organizationId,
       tenderId,
       actorRole: membership.role,
+      actorId: actor.userId,
       analysisVersion: query.analysisVersion,
       limit: query.limit,
       offset: query.offset,
@@ -256,6 +270,7 @@ export class AnalysisController {
   @Get("tenders/:tenderId/analysis/questions")
   @HttpCode(HttpStatus.OK)
   async listTenderQuestions(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
@@ -264,6 +279,7 @@ export class AnalysisController {
       organizationId: membership.organizationId,
       tenderId,
       actorRole: membership.role,
+      actorId: actor.userId,
       analysisVersion: query.analysisVersion,
       limit: query.limit,
       offset: query.offset,

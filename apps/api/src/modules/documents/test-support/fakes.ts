@@ -212,6 +212,12 @@ export class InMemoryDocumentTenderAssociationRepository implements DocumentTend
   async delete(input: { organizationId: string; documentId: string; tenderId: string }): Promise<void> {
     this.associations.delete(this.key(input.documentId, input.tenderId));
   }
+
+  async listTenderIdsByDocument(input: { organizationId: string; documentId: string }): Promise<readonly string[]> {
+    return [...this.associations.values()]
+      .filter((association) => association.documentId === input.documentId && association.organizationId === input.organizationId)
+      .map((association) => association.tenderId);
+  }
 }
 
 export class InMemoryStorageProvider implements StorageProvider {

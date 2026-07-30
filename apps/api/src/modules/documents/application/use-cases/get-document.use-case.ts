@@ -1,18 +1,23 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { GetTenderUseCase } from "../../../tenders";
 import { DocumentNotFoundError } from "../../domain/errors";
 import { DocumentPermission } from "../../domain/document-permission";
 import { assertHasDocumentPermission } from "../policies/document-authorization.policy";
+import { assertDocumentClientAccess } from "../policies/document-client-access.helper";
+import { DOCUMENT_TENDER_ASSOCIATION_REPOSITORY, type DocumentTenderAssociationRepository } from "../ports/document-tender-association.repository";
 import { DOCUMENT_REPOSITORY, type DocumentRepository } from "../ports/document.repository";
 import { DOCUMENT_VERSION_REPOSITORY, type DocumentVersionRepository } from "../ports/document-version.repository";
 import { toDocumentSummary, type DocumentSummary } from "../dtos";
 
-export type GetDocumentQuery = Readonly<{ organizationId: string; documentId: string; actorRole: string }>;
+export type GetDocumentQuery = Readonly<{ organizationId: string; documentId: string; actorRole: string; actorId?: string | undefined }>;
 
 @Injectable()
 export class GetDocumentUseCase {
   constructor(
     @Inject(DOCUMENT_REPOSITORY) private readonly documentRepository: DocumentRepository,
     @Inject(DOCUMENT_VERSION_REPOSITORY) private readonly versionRepository: DocumentVersionRepository,
+    @Inject(DOCUMENT_TENDER_ASSOCIATION_REPOSITORY) private readonly associationRepository: DocumentTenderAssociationRepository,
+    private readonly getTenderUseCase: GetTenderUseCase,
   ) {}
 
   async execute(query: GetDocumentQuery): Promise<DocumentSummary> {
@@ -24,6 +29,10 @@ export class GetDocumentUseCase {
     });
     if (!document) {
       throw new DocumentNotFoundError();
+    }
+
+    if (query.actorId) {
+      await assertDocumentClientAccess(this.associationRepository, this.getTenderUseCase, { ...query, actorId: query.actorId });
     }
 
     const currentVersion = document.currentVersionId

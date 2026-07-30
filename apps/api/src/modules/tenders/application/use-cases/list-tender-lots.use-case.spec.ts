@@ -3,7 +3,13 @@ import { TenderNotFoundError } from "../../domain/errors";
 import { TenderId } from "../../domain/tender-id.value-object";
 import { TenderLot } from "../../domain/tender-lot.entity";
 import { Tender } from "../../domain/tender.aggregate";
-import { FixedClock, InMemoryAuditLogWriter, InMemoryTenderLotRepository, InMemoryTenderRepository } from "../../test-support/fakes";
+import {
+  createClientPortfolioTestFixture,
+  FixedClock,
+  InMemoryAuditLogWriter,
+  InMemoryTenderLotRepository,
+  InMemoryTenderRepository,
+} from "../../test-support/fakes";
 import { DeleteTenderLotUseCase } from "./update-tender-lot.use-case";
 import { ListTenderLotsUseCase } from "./list-tender-lots.use-case";
 
@@ -16,13 +22,21 @@ describe("ListTenderLotsUseCase", () => {
   beforeEach(async () => {
     tenderRepository = new InMemoryTenderRepository();
     lotRepository = new InMemoryTenderLotRepository();
+    const clientPortfolio = await createClientPortfolioTestFixture("org-1");
     useCase = new ListTenderLotsUseCase(tenderRepository, lotRepository);
-    deleteUseCase = new DeleteTenderLotUseCase(tenderRepository, lotRepository, new InMemoryAuditLogWriter(), new FixedClock());
+    deleteUseCase = new DeleteTenderLotUseCase(
+      tenderRepository,
+      lotRepository,
+      new InMemoryAuditLogWriter(),
+      new FixedClock(),
+      clientPortfolio.assertClientAccessUseCase,
+    );
 
     await tenderRepository.seed(
       Tender.create({
         id: TenderId.from("tender-1"),
         organizationId: "org-1",
+        clientAccountId: "client-1",
         title: "Marche de travaux",
         createdBy: "user-1",
         occurredAt: new Date(),

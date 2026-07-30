@@ -9,7 +9,7 @@ vi.mock("../../../knowledge-actions", () => ({
 
 describe("CreateKnowledgeEntryForm", () => {
   it("renders the mandatory fields (title, category) and the submit button", () => {
-    render(<CreateKnowledgeEntryForm />);
+    render(<CreateKnowledgeEntryForm clients={[]} />);
 
     expect(screen.getByLabelText("Titre *")).toBeRequired();
     expect(screen.getByLabelText("Catégorie *")).toBeRequired();
@@ -17,7 +17,7 @@ describe("CreateKnowledgeEntryForm", () => {
   });
 
   it("shows no category-specific metadata fields by default (category OTHER)", () => {
-    render(<CreateKnowledgeEntryForm />);
+    render(<CreateKnowledgeEntryForm clients={[]} />);
 
     expect(screen.queryByLabelText("Nom du client")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Nom complet")).not.toBeInTheDocument();
@@ -25,7 +25,7 @@ describe("CreateKnowledgeEntryForm", () => {
 
   it("reveals CLIENT_REFERENCE metadata fields when that category is selected", async () => {
     const user = userEvent.setup();
-    render(<CreateKnowledgeEntryForm />);
+    render(<CreateKnowledgeEntryForm clients={[]} />);
 
     await user.selectOptions(screen.getByLabelText("Catégorie *"), "CLIENT_REFERENCE");
 
@@ -35,7 +35,7 @@ describe("CreateKnowledgeEntryForm", () => {
 
   it("reveals CONSULTANT_PROFILE metadata fields when that category is selected", async () => {
     const user = userEvent.setup();
-    render(<CreateKnowledgeEntryForm />);
+    render(<CreateKnowledgeEntryForm clients={[]} />);
 
     await user.selectOptions(screen.getByLabelText("Catégorie *"), "CONSULTANT_PROFILE");
 

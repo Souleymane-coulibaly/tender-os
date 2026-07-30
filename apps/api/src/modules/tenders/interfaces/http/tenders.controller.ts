@@ -183,6 +183,7 @@ export class TendersController {
   @Get()
   @HttpCode(HttpStatus.OK)
   async list(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Query(new ZodValidationPipe(ListTendersQuerySchema)) query: ListTendersQuery,
   ) {
@@ -191,6 +192,7 @@ export class TendersController {
     // légère (voir list-tenders.use-case.ts) si un futur appelant n'a pas besoin de l'enrichissement.
     const result = await this.getTenderListViewUseCase.execute({
       organizationId: membership.organizationId,
+      actorId: actor.userId,
       actorRole: membership.role,
       ...query,
     });
@@ -200,11 +202,13 @@ export class TendersController {
   @Get("board")
   @HttpCode(HttpStatus.OK)
   async board(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Query(new ZodValidationPipe(TenderBoardQuerySchema)) query: TenderBoardQuery,
   ) {
     const result = await this.getTenderBoardUseCase.execute({
       organizationId: membership.organizationId,
+      actorId: actor.userId,
       actorRole: membership.role,
       ...query,
     });
@@ -213,9 +217,10 @@ export class TendersController {
 
   @Get("stats")
   @HttpCode(HttpStatus.OK)
-  async stats(@CurrentMembershipContext() membership: MembershipContext) {
+  async stats(@CurrentActor() actor: AuthenticatedActor, @CurrentMembershipContext() membership: MembershipContext) {
     const result = await this.getTenderStatisticsUseCase.execute({
       organizationId: membership.organizationId,
+      actorId: actor.userId,
       actorRole: membership.role,
     });
     return presentTenderStatistics(result);
@@ -224,6 +229,7 @@ export class TendersController {
   @Get(":tenderId")
   @HttpCode(HttpStatus.OK)
   async get(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
   ) {
@@ -231,6 +237,7 @@ export class TendersController {
       organizationId: membership.organizationId,
       tenderId,
       actorRole: membership.role,
+      actorId: actor.userId,
     });
     return presentTender(result);
   }
@@ -329,6 +336,7 @@ export class TendersController {
   @Post(":tenderId/checklist")
   @HttpCode(HttpStatus.CREATED)
   async createChecklistItem(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Body(new ZodValidationPipe(CreateChecklistItemBodySchema)) body: CreateChecklistItemBody,
@@ -336,6 +344,7 @@ export class TendersController {
     const result = await this.createChecklistItemUseCase.execute({
       organizationId: membership.organizationId,
       tenderId,
+      actorId: actor.userId,
       actorRole: membership.role,
       ...body,
     });
@@ -359,6 +368,7 @@ export class TendersController {
   @Patch(":tenderId/checklist/:itemId")
   @HttpCode(HttpStatus.OK)
   async updateChecklistItem(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Param("itemId", new ZodValidationPipe(IdParamSchema)) itemId: string,
@@ -368,6 +378,7 @@ export class TendersController {
       organizationId: membership.organizationId,
       tenderId,
       itemId,
+      actorId: actor.userId,
       actorRole: membership.role,
       ...body,
     });
@@ -401,6 +412,7 @@ export class TendersController {
   @Post(":tenderId/criteria")
   @HttpCode(HttpStatus.CREATED)
   async createCriterion(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Body(new ZodValidationPipe(CreateAwardCriterionBodySchema)) body: CreateAwardCriterionBody,
@@ -408,6 +420,7 @@ export class TendersController {
     const result = await this.createAwardCriterionUseCase.execute({
       organizationId: membership.organizationId,
       tenderId,
+      actorId: actor.userId,
       actorRole: membership.role,
       ...body,
     });
@@ -431,6 +444,7 @@ export class TendersController {
   @Patch(":tenderId/criteria/:criterionId")
   @HttpCode(HttpStatus.OK)
   async updateCriterion(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Param("criterionId", new ZodValidationPipe(IdParamSchema)) criterionId: string,
@@ -440,6 +454,7 @@ export class TendersController {
       organizationId: membership.organizationId,
       tenderId,
       criterionId,
+      actorId: actor.userId,
       actorRole: membership.role,
       ...body,
     });
@@ -449,6 +464,7 @@ export class TendersController {
   @Delete(":tenderId/criteria/:criterionId")
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteCriterion(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Param("criterionId", new ZodValidationPipe(IdParamSchema)) criterionId: string,
@@ -457,6 +473,7 @@ export class TendersController {
       organizationId: membership.organizationId,
       tenderId,
       criterionId,
+      actorId: actor.userId,
       actorRole: membership.role,
     });
   }
@@ -466,6 +483,7 @@ export class TendersController {
   @Post(":tenderId/requested-documents")
   @HttpCode(HttpStatus.CREATED)
   async createRequestedDocument(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Body(new ZodValidationPipe(CreateRequestedDocumentBodySchema)) body: CreateRequestedDocumentBody,
@@ -473,6 +491,7 @@ export class TendersController {
     const result = await this.createRequestedDocumentUseCase.execute({
       organizationId: membership.organizationId,
       tenderId,
+      actorId: actor.userId,
       actorRole: membership.role,
       ...body,
     });
@@ -496,6 +515,7 @@ export class TendersController {
   @Patch(":tenderId/requested-documents/:documentId")
   @HttpCode(HttpStatus.OK)
   async updateRequestedDocument(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
@@ -505,6 +525,7 @@ export class TendersController {
       organizationId: membership.organizationId,
       tenderId,
       documentId,
+      actorId: actor.userId,
       actorRole: membership.role,
       ...body,
     });
@@ -514,6 +535,7 @@ export class TendersController {
   @Post(":tenderId/requested-documents/:documentId/status")
   @HttpCode(HttpStatus.OK)
   async changeRequestedDocumentStatus(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
@@ -523,6 +545,7 @@ export class TendersController {
       organizationId: membership.organizationId,
       tenderId,
       documentId,
+      actorId: actor.userId,
       actorRole: membership.role,
       status: body.status,
     });
@@ -532,6 +555,7 @@ export class TendersController {
   @Delete(":tenderId/requested-documents/:documentId")
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteRequestedDocument(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
@@ -540,6 +564,7 @@ export class TendersController {
       organizationId: membership.organizationId,
       tenderId,
       documentId,
+      actorId: actor.userId,
       actorRole: membership.role,
     });
   }
@@ -549,6 +574,7 @@ export class TendersController {
   @Post(":tenderId/milestones")
   @HttpCode(HttpStatus.CREATED)
   async createMilestone(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Body(new ZodValidationPipe(CreateMilestoneBodySchema)) body: CreateMilestoneBody,
@@ -556,6 +582,7 @@ export class TendersController {
     const result = await this.createMilestoneUseCase.execute({
       organizationId: membership.organizationId,
       tenderId,
+      actorId: actor.userId,
       actorRole: membership.role,
       ...body,
     });
@@ -601,6 +628,7 @@ export class TendersController {
   @Post(":tenderId/milestones/:milestoneId/done")
   @HttpCode(HttpStatus.OK)
   async markMilestoneDone(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Param("milestoneId", new ZodValidationPipe(IdParamSchema)) milestoneId: string,
@@ -609,6 +637,7 @@ export class TendersController {
       organizationId: membership.organizationId,
       tenderId,
       milestoneId,
+      actorId: actor.userId,
       actorRole: membership.role,
     });
     return presentMilestone(result);
@@ -617,6 +646,7 @@ export class TendersController {
   @Delete(":tenderId/milestones/:milestoneId")
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteMilestone(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Param("milestoneId", new ZodValidationPipe(IdParamSchema)) milestoneId: string,
@@ -625,6 +655,7 @@ export class TendersController {
       organizationId: membership.organizationId,
       tenderId,
       milestoneId,
+      actorId: actor.userId,
       actorRole: membership.role,
     });
   }
@@ -668,6 +699,7 @@ export class TendersController {
   @Patch(":tenderId/risks/:riskId")
   @HttpCode(HttpStatus.OK)
   async updateRisk(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Param("riskId", new ZodValidationPipe(IdParamSchema)) riskId: string,
@@ -677,6 +709,7 @@ export class TendersController {
       organizationId: membership.organizationId,
       tenderId,
       riskId,
+      actorId: actor.userId,
       actorRole: membership.role,
       ...body,
     });

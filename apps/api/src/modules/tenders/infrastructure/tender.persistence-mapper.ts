@@ -10,6 +10,7 @@ import type { TenderSource } from "../domain/tender-source";
 export type TenderPersistenceData = {
   id: string;
   organizationId: string;
+  clientAccountId: string;
   title: string;
   reference: string | null;
   buyerName: string | null;
@@ -40,6 +41,7 @@ export class TenderPersistenceMapper {
     return Tender.rehydrate({
       id: TenderId.from(record.id),
       organizationId: record.organizationId,
+      clientAccountId: record.clientAccountId,
       title: record.title,
       reference: record.reference ?? undefined,
       buyerName: record.buyerName ?? undefined,
@@ -70,6 +72,7 @@ export class TenderPersistenceMapper {
     return {
       id: tender.id.value,
       organizationId: tender.organizationId,
+      clientAccountId: tender.clientAccountId,
       title: tender.title,
       reference: tender.reference ?? null,
       buyerName: tender.buyerName ?? null,

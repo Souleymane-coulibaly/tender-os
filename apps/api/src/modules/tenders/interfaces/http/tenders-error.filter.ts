@@ -25,6 +25,13 @@ const STATUS_BY_CODE: Record<string, number> = {
   INVALID_TENDER_COUNTRY: HttpStatus.UNPROCESSABLE_ENTITY,
   INVALID_TENDER_LANGUAGE: HttpStatus.UNPROCESSABLE_ENTITY,
   INVALID_TENDER_SOURCE: HttpStatus.UNPROCESSABLE_ENTITY,
+
+  // Erreurs cross-module réelles (mission Sprint 5.1) — Tenders délègue à Client Portfolio
+  // (CreateTenderUseCase, GetTenderUseCase) et laisse ses erreurs remonter telles quelles, même
+  // motif que le réexport de GetTenderUseCase par Documents/Analysis/DCE/Extraction.
+  CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,
+  CLIENT_ACCOUNT_ARCHIVED: HttpStatus.CONFLICT,
+  CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
 };
 
 @Catch(DomainError)
