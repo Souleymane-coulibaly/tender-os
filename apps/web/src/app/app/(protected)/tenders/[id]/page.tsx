@@ -5,6 +5,7 @@ import { canDeleteDceDocument, canImportOrReplaceDceDocument, type DceDocumentSu
 import { canUploadOrEditDocument, type DocumentSummary } from "../../../../../lib/documents-types";
 import {
   TENDER_STATUS_LABELS,
+  canEditTenderDetails,
   canManageTenderLots,
   type Alert,
   type AwardCriterion,
@@ -25,6 +26,7 @@ import { ChecklistSection } from "./checklist-section";
 import { CriteriaSection } from "./criteria-section";
 import { DceSection } from "./dce-section";
 import { DocumentsSection } from "./documents-section";
+import { EditTenderForm } from "./edit-tender-form";
 import { LotsSection } from "./lots-section";
 import { MilestonesSection } from "./milestones-section";
 import { RequestedDocumentsSection } from "./requested-documents-section";
@@ -101,6 +103,17 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       </div>
 
       {tender.status !== "ARCHIVED" ? <StatusChangeForm tenderId={tender.id} status={tender.status} /> : null}
+
+      {canEditTenderDetails(role) ? (
+        <details className="rounded border border-neutral-200 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-neutral-700">
+            Modifier les informations de l&apos;appel d&apos;offres
+          </summary>
+          <div className="mt-4">
+            <EditTenderForm tender={tender} />
+          </div>
+        </details>
+      ) : null}
 
       <section className="rounded border border-neutral-200 p-4">
         <div className="flex items-center justify-between">
