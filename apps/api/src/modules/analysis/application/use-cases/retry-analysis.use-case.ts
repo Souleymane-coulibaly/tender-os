@@ -42,7 +42,7 @@ export class RetryAnalysisUseCase {
       jobId: command.jobId,
       fn: async (job) => {
         assertAnalysisIsRetryable(job, this.config.aiMaxRetries);
-        job.resetForRetry(this.clock.now());
+        job.resetForRetry({ triggeredByRole: command.actorRole }, this.clock.now());
         return job;
       },
     });

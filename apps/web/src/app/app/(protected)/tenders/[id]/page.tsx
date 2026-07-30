@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
+import { fetchAnalysisSectionData } from "../../../analysis-actions";
+import { canTriggerAnalysis, type AnalysisSectionData } from "../../../../../lib/analysis-types";
 import { fetchDceSectionData } from "../../../dce-actions";
 import { canDeleteDceDocument, canImportOrReplaceDceDocument, type DceDocumentSummary, type DceSummary } from "../../../../../lib/dce-types";
 import { canUploadOrEditDocument, type DocumentSummary } from "../../../../../lib/documents-types";
@@ -21,6 +23,7 @@ import {
 import { ApiErrorState } from "../../api-error-state";
 import { TenderStatusBadge } from "../tender-status-badge";
 import { AlertsSection } from "./alerts-section";
+import { AnalysisSection } from "./analysis-section";
 import { ArchiveButton } from "./archive-button";
 import { ChecklistSection } from "./checklist-section";
 import { CriteriaSection } from "./criteria-section";
@@ -63,10 +66,11 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   let history: StatusHistoryEntry[];
   let documents: DocumentSummary[];
   let dceSection: { dce: DceSummary | null; documents: DceDocumentSummary[] };
+  let analysisData: AnalysisSectionData;
   let role: string | undefined;
 
   try {
-    [tender, lots, checklistItems, criteria, requestedDocuments, milestones, risks, alerts, readiness, history, documents, dceSection, role] =
+    [tender, lots, checklistItems, criteria, requestedDocuments, milestones, risks, alerts, readiness, history, documents, dceSection, analysisData, role] =
       await Promise.all([
         appApiFetch<Tender>(`/api/v1/tenders/${id}`),
         appApiFetch<TenderLot[]>(`/api/v1/tenders/${id}/lots`),
@@ -80,6 +84,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         appApiFetch<StatusHistoryEntry[]>(`/api/v1/tenders/${id}/history`),
         appApiFetch<DocumentSummary[]>(`/api/v1/tenders/${id}/documents`),
         fetchDceSectionData(id),
+        fetchAnalysisSectionData(id),
         getCurrentMembershipRole(),
       ]);
   } catch (error) {
@@ -149,6 +154,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         <MilestonesSection tenderId={tender.id} milestones={milestones} />
         <RisksSection tenderId={tender.id} risks={risks} />
         <AlertsSection tenderId={tender.id} alerts={alerts} />
+        <AnalysisSection tenderId={tender.id} initialData={analysisData} canTrigger={canTriggerAnalysis(role)} />
 
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-neutral-700">Historique</h2>

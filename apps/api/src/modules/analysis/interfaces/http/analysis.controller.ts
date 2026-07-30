@@ -1,16 +1,24 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Post, Req, UseFilters, UseGuards } from "@nestjs/common";
+import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Req, UseFilters, UseGuards } from "@nestjs/common";
 import { AuthenticatedGuard, CurrentActor, type AuthenticatedActor } from "../../../identity";
 import { CurrentMembershipContext, OrganizationMembershipGuard, type MembershipContext } from "../../../memberships";
 import type { RequestWithId } from "../../../../shared-kernel/request-id.middleware";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
 import { CancelAnalysisUseCase } from "../../application/use-cases/cancel-analysis.use-case";
 import { GetAnalysisUseCase } from "../../application/use-cases/get-analysis.use-case";
+import { GetTenderBusinessAnalysisUseCase } from "../../application/use-cases/get-tender-business-analysis.use-case";
+import { ListTenderAnalysesUseCase } from "../../application/use-cases/list-tender-analyses.use-case";
+import { ListTenderClausesUseCase } from "../../application/use-cases/list-tender-clauses.use-case";
+import { ListTenderCriteriaUseCase } from "../../application/use-cases/list-tender-criteria.use-case";
+import { ListTenderDeadlinesUseCase } from "../../application/use-cases/list-tender-deadlines.use-case";
+import { ListTenderQuestionsUseCase } from "../../application/use-cases/list-tender-questions.use-case";
+import { ListTenderRequirementsUseCase } from "../../application/use-cases/list-tender-requirements.use-case";
+import { ListTenderRisksUseCase } from "../../application/use-cases/list-tender-risks.use-case";
 import { RetryAnalysisUseCase } from "../../application/use-cases/retry-analysis.use-case";
 import { StartDocumentAnalysisUseCase } from "../../application/use-cases/start-document-analysis.use-case";
 import { StartTenderAnalysisUseCase } from "../../application/use-cases/start-tender-analysis.use-case";
 import { AnalysisErrorFilter } from "./analysis-error.filter";
 import { presentAnalysisJob } from "./presenters";
-import { IdParamSchema } from "./schemas";
+import { BusinessAnalysisListQuerySchema, IdParamSchema, type BusinessAnalysisListQuery } from "./schemas";
 
 /** Socle technique minimal (mission Sprint 4.1 §"API HTTP minimale") — jamais d'UI complète, jamais
  *  de lecture du contenu du corpus analysé ni de la réponse brute du provider. Deux routes de
@@ -27,6 +35,14 @@ export class AnalysisController {
     private readonly getAnalysisUseCase: GetAnalysisUseCase,
     private readonly retryAnalysisUseCase: RetryAnalysisUseCase,
     private readonly cancelAnalysisUseCase: CancelAnalysisUseCase,
+    private readonly listTenderAnalysesUseCase: ListTenderAnalysesUseCase,
+    private readonly getTenderBusinessAnalysisUseCase: GetTenderBusinessAnalysisUseCase,
+    private readonly listTenderDeadlinesUseCase: ListTenderDeadlinesUseCase,
+    private readonly listTenderCriteriaUseCase: ListTenderCriteriaUseCase,
+    private readonly listTenderClausesUseCase: ListTenderClausesUseCase,
+    private readonly listTenderRequirementsUseCase: ListTenderRequirementsUseCase,
+    private readonly listTenderRisksUseCase: ListTenderRisksUseCase,
+    private readonly listTenderQuestionsUseCase: ListTenderQuestionsUseCase,
   ) {}
 
   @Post("tenders/:tenderId/analyses")
@@ -115,5 +131,142 @@ export class AnalysisController {
       requestId: request.id,
     });
     return presentAnalysisJob(result);
+  }
+
+  // Lectures métier Sprint 4.2 — nichées sous /tenders/:tenderId/analysis(...) plutôt que sur des
+  // segments plats (/tenders/:tenderId/risks, /criteria) : ces chemins existent déjà dans le module
+  // Tenders pour les entités utilisateur TenderRisk/TenderAwardCriterion (Sprint 2/3), qui ont un
+  // cycle de vie totalement différent des findings IA — jamais casser ce contrat public existant
+  // (mission §"Ne casse aucun contrat public existant").
+
+  @Get("tenders/:tenderId/analyses")
+  @HttpCode(HttpStatus.OK)
+  async listTenderAnalyses(
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
+  ) {
+    return this.listTenderAnalysesUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorRole: membership.role,
+      limit: query.limit,
+      offset: query.offset,
+    });
+  }
+
+  @Get("tenders/:tenderId/analysis")
+  @HttpCode(HttpStatus.OK)
+  async getTenderBusinessAnalysis(
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    return this.getTenderBusinessAnalysisUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorRole: membership.role,
+    });
+  }
+
+  @Get("tenders/:tenderId/analysis/deadlines")
+  @HttpCode(HttpStatus.OK)
+  async listTenderDeadlines(
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
+  ) {
+    return this.listTenderDeadlinesUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorRole: membership.role,
+      analysisVersion: query.analysisVersion,
+      limit: query.limit,
+      offset: query.offset,
+    });
+  }
+
+  @Get("tenders/:tenderId/analysis/criteria")
+  @HttpCode(HttpStatus.OK)
+  async listTenderCriteria(
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
+  ) {
+    return this.listTenderCriteriaUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorRole: membership.role,
+      analysisVersion: query.analysisVersion,
+      limit: query.limit,
+      offset: query.offset,
+    });
+  }
+
+  @Get("tenders/:tenderId/analysis/clauses")
+  @HttpCode(HttpStatus.OK)
+  async listTenderClauses(
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
+  ) {
+    return this.listTenderClausesUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorRole: membership.role,
+      analysisVersion: query.analysisVersion,
+      limit: query.limit,
+      offset: query.offset,
+    });
+  }
+
+  @Get("tenders/:tenderId/analysis/requirements")
+  @HttpCode(HttpStatus.OK)
+  async listTenderRequirements(
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
+  ) {
+    return this.listTenderRequirementsUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorRole: membership.role,
+      analysisVersion: query.analysisVersion,
+      limit: query.limit,
+      offset: query.offset,
+    });
+  }
+
+  @Get("tenders/:tenderId/analysis/risks")
+  @HttpCode(HttpStatus.OK)
+  async listTenderRisks(
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
+  ) {
+    return this.listTenderRisksUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorRole: membership.role,
+      analysisVersion: query.analysisVersion,
+      limit: query.limit,
+      offset: query.offset,
+    });
+  }
+
+  @Get("tenders/:tenderId/analysis/questions")
+  @HttpCode(HttpStatus.OK)
+  async listTenderQuestions(
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Query(new ZodValidationPipe(BusinessAnalysisListQuerySchema)) query: BusinessAnalysisListQuery,
+  ) {
+    return this.listTenderQuestionsUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorRole: membership.role,
+      analysisVersion: query.analysisVersion,
+      limit: query.limit,
+      offset: query.offset,
+    });
   }
 }

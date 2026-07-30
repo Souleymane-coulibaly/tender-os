@@ -5,6 +5,13 @@ export type AnalysisConfig = Readonly<{
    *  `AIProviderRegistry.resolve()`, uniquement lorsqu'une analyse démarre réellement. */
   aiProvider?: string | undefined;
   aiModel: string;
+  /** Mission Sprint 4.2 §"Pas de modèle codé en dur dans le domaine" — configuration PAR TYPE DE
+   *  TÂCHE (stratégie volontairement simple : une variable d'environnement par tâche, retombant sur
+   *  `aiModel` si absente), jamais un moteur d'arbitrage complexe. Consommée uniquement par
+   *  `ProcessAnalysisJobUseCase` (jamais par le domaine — `AnalysisJob` ne connaît aucun nom de
+   *  modèle avant que le provider n'ait répondu). */
+  aiModelForDocumentAnalysis: string;
+  aiModelForTenderConsolidation: string;
   aiTimeoutMs: number;
   aiMaxRetries: number;
   aiRetryDelayMs: number;
@@ -47,9 +54,12 @@ function readNonNegativeIntegerOrDefault(env: NodeJS.ProcessEnv, name: string, f
  * silencieusement ignorée.
  */
 export function loadAnalysisConfig(env: NodeJS.ProcessEnv = process.env): AnalysisConfig {
+  const aiModel = env.AI_MODEL || DEFAULT_AI_MODEL;
   return {
     aiProvider: env.AI_PROVIDER || undefined,
-    aiModel: env.AI_MODEL || DEFAULT_AI_MODEL,
+    aiModel,
+    aiModelForDocumentAnalysis: env.AI_MODEL_DOCUMENT_ANALYSIS || aiModel,
+    aiModelForTenderConsolidation: env.AI_MODEL_TENDER_CONSOLIDATION || aiModel,
     aiTimeoutMs: readPositiveIntegerOrDefault(env, "AI_TIMEOUT_MS", DEFAULT_AI_TIMEOUT_MS),
     aiMaxRetries: readNonNegativeIntegerOrDefault(env, "AI_MAX_RETRIES", DEFAULT_AI_MAX_RETRIES),
     aiRetryDelayMs: readNonNegativeIntegerOrDefault(env, "AI_RETRY_DELAY_MS", DEFAULT_AI_RETRY_DELAY_MS),

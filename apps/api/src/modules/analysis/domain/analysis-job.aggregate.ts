@@ -25,6 +25,13 @@ export type AnalysisJobProps = {
    *  uniquement) — capturé une fois, jamais recalculé après coup. */
   extractionVersion?: number | undefined;
   inputChecksum?: string | undefined;
+  /** Rôle RÉEL de l'acteur ayant déclenché la réservation COURANTE (création initiale ou dernier
+   *  retry) — mission Sprint 4.2 §"Phase 2 sans acteur HTTP vivant" : le traitement en arrière-plan
+   *  (`ProcessAnalysisJobUseCase`) doit pouvoir légitimement appeler le contrat RBAC-gated
+   *  `GetDocumentAnalysisInputUseCase` (Sprint 3) sans jamais fabriquer un rôle. Toujours renseigné
+   *  à la création (voir `Start*AnalysisUseCase`) et mis à jour à chaque retry (voir
+   *  `RetryAnalysisUseCase`) — jamais un rôle par défaut arbitraire. */
+  triggeredByRole?: string | undefined;
   /** Jeton de réservation (mission "tentative obsolète") — incrémenté uniquement par `reserve()`,
    *  comparé lors de la finalisation (voir `AnalysisJobRepository.finalizeAttempt`). */
   attemptCount: number;
@@ -89,6 +96,7 @@ export class AnalysisJob {
     promptVersion: number;
     extractionVersion?: number | undefined;
     inputChecksum?: string | undefined;
+    triggeredByRole?: string | undefined;
     occurredAt: Date;
   }): AnalysisJob {
     return new AnalysisJob({
@@ -104,6 +112,7 @@ export class AnalysisJob {
       promptVersion: input.promptVersion,
       extractionVersion: input.extractionVersion,
       inputChecksum: input.inputChecksum,
+      triggeredByRole: input.triggeredByRole,
       attemptCount: 0,
       createdAt: input.occurredAt,
       updatedAt: input.occurredAt,
@@ -169,10 +178,11 @@ export class AnalysisJob {
    *  toujours déclenchée par `RetryAnalysisUseCase`. Cible toujours QUEUED : la même version, le
    *  même job, un nouvel `attemptCount` à la prochaine réservation — jamais une nouvelle ligne
    *  (voir `StartDocumentAnalysisUseCase` pour la création d'une nouvelle version). */
-  resetForRetry(occurredAt: Date): void {
+  resetForRetry(input: { triggeredByRole: string }, occurredAt: Date): void {
     this.transitionTo(AnalysisStatus.Queued, occurredAt);
     this.props.errorCode = undefined;
     this.props.errorMessage = undefined;
+    this.props.triggeredByRole = input.triggeredByRole;
   }
 
   get id(): string {
@@ -216,6 +226,9 @@ export class AnalysisJob {
   }
   get inputChecksum(): string | undefined {
     return this.props.inputChecksum;
+  }
+  get triggeredByRole(): string | undefined {
+    return this.props.triggeredByRole;
   }
   get attemptCount(): number {
     return this.props.attemptCount;

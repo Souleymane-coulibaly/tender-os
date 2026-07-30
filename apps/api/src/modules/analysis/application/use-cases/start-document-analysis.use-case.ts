@@ -11,7 +11,7 @@ import { assertHasAnalysisPermission } from "../policies/analysis-authorization.
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { ANALYSIS_DISPATCHER, type AnalysisDispatcher } from "../ports/analysis-dispatcher";
 import { ANALYSIS_JOB_REPOSITORY, type AnalysisJobRepository } from "../ports/analysis-job.repository";
-import { CURRENT_PROMPT_VERSION } from "../ports/prompt-template.port";
+import { PROMPT_VERSIONS, PromptKey } from "../ports/prompt-template.port";
 import { toAnalysisJobSummary, type AnalysisJobSummary } from "../dtos";
 
 export type StartDocumentAnalysisCommand = Readonly<{
@@ -92,9 +92,10 @@ export class StartDocumentAnalysisUseCase {
           documentId: command.documentId,
           scope: AnalysisScope.Document,
           analysisVersion,
-          promptVersion: CURRENT_PROMPT_VERSION,
+          promptVersion: PROMPT_VERSIONS[PromptKey.AnalyzeDocument],
           extractionVersion: input.extractionVersion,
           inputChecksum: computeInputChecksum(input),
+          triggeredByRole: command.actorRole,
           occurredAt: now,
         });
         created.queue(now);

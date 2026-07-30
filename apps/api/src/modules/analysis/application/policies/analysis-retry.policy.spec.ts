@@ -39,7 +39,7 @@ describe("assertAnalysisIsRetryable", () => {
     job.queue(NOW);
     job.reserve(NOW); // attemptCount = 1
     job.fail({ errorCode: "AI_TIMEOUT", errorMessage: "boom" }, NOW);
-    job.resetForRetry(NOW);
+    job.resetForRetry({ triggeredByRole: "OWNER" }, NOW);
     job.reserve(NOW); // attemptCount = 2 (1 + maxRetries with maxRetries=1)
     job.fail({ errorCode: "AI_TIMEOUT", errorMessage: "boom" }, NOW);
 

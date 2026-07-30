@@ -42,6 +42,7 @@ const SEED_ORGANIZATIONS: SeedOrganization[] = [
     slug: "tenderos-demo",
     name: "TenderOS Demo",
     users: [
+      { email: "owner@tenderos.local", password: "Owner123!", displayName: "Owner Demo", role: OrganizationRole.Owner },
       { email: "admin@tenderos.local", password: "Admin123!", displayName: "Admin Demo", role: OrganizationRole.OrganizationAdmin },
       { email: "user@tenderos.local", password: "User123!", displayName: "User Demo", role: OrganizationRole.Contributor },
       { email: "viewer@tenderos.local", password: "Viewer123!", displayName: "Viewer Demo", role: OrganizationRole.ReadOnly },

@@ -21,8 +21,14 @@ const CONTRIBUTOR_PERMISSIONS: readonly ExtractionPermission[] = [
 const ADMIN_PERMISSIONS: readonly ExtractionPermission[] = Object.values(ExtractionPermission);
 
 /** Parité avec ROLE_DCE_PERMISSIONS : Admin = ORGANIZATION_ADMIN, BID_MANAGER ; Contributor =
- *  CONTRIBUTOR ; Viewer = REVIEWER, EXECUTIVE, EXTERNAL_CONSULTANT, READ_ONLY. */
+ *  CONTRIBUTOR ; Viewer = REVIEWER, EXECUTIVE, EXTERNAL_CONSULTANT, READ_ONLY.
+ *  OWNER (correction réaudit Codex Sprint 4.1 P1-01-R) — superset strict de ORGANIZATION_ADMIN,
+ *  même motif que ROLE_TENDER_PERMISSIONS/ROLE_ANALYSIS_PERMISSIONS : sans cette entrée,
+ *  `GetDocumentAnalysisInputUseCase` (appelé par StartDocumentAnalysisUseCase) rejetait tout
+ *  propriétaire d'organisation avec `EXTRACTION_PERMISSION_MISSING`, même une fois la matrice
+ *  Analysis elle-même corrigée. */
 export const ROLE_EXTRACTION_PERMISSIONS: Record<string, readonly ExtractionPermission[]> = {
+  OWNER: ADMIN_PERMISSIONS,
   ORGANIZATION_ADMIN: ADMIN_PERMISSIONS,
   BID_MANAGER: ADMIN_PERMISSIONS,
   CONTRIBUTOR: CONTRIBUTOR_PERMISSIONS,

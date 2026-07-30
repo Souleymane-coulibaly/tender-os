@@ -11,7 +11,7 @@ import { assertHasAnalysisPermission } from "../policies/analysis-authorization.
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { ANALYSIS_DISPATCHER, type AnalysisDispatcher } from "../ports/analysis-dispatcher";
 import { ANALYSIS_JOB_REPOSITORY, type AnalysisJobRepository } from "../ports/analysis-job.repository";
-import { CURRENT_PROMPT_VERSION } from "../ports/prompt-template.port";
+import { PROMPT_VERSIONS, PromptKey } from "../ports/prompt-template.port";
 import { toAnalysisJobSummary, type AnalysisJobSummary } from "../dtos";
 
 export type StartTenderAnalysisCommand = Readonly<{
@@ -74,7 +74,8 @@ export class StartTenderAnalysisUseCase {
           tenderId: command.tenderId,
           scope: AnalysisScope.Tender,
           analysisVersion,
-          promptVersion: CURRENT_PROMPT_VERSION,
+          promptVersion: PROMPT_VERSIONS[PromptKey.ConsolidateTenderAnalysis],
+          triggeredByRole: command.actorRole,
           occurredAt: now,
         });
         created.queue(now);

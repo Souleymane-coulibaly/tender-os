@@ -9,8 +9,10 @@ import type {
   AnalysisJobRepository,
   ExclusiveTargetContext,
   FinalizeAttemptOutcome,
+  ListAnalysesByTargetResult,
   ReservationOutcome,
 } from "../application/ports/analysis-job.repository";
+import type { PrismaTx } from "../application/ports/business-analysis.repository";
 import { toDomain, toPersistence } from "./analysis-job.persistence-mapper";
 
 /** Transactions volontairement COURTES (même motif que `PrismaDocumentExtractionRepository`,
@@ -37,6 +39,21 @@ export class PrismaAnalysisJobRepository implements AnalysisJobRepository {
   async save(job: AnalysisJob): Promise<void> {
     const data = toPersistence(job);
     await this.prisma.analysisJob.update({ where: { id: data.id }, data });
+  }
+
+  async listByTarget(input: {
+    organizationId: string;
+    scope: AnalysisScope;
+    targetId: string;
+    limit: number;
+    offset: number;
+  }): Promise<ListAnalysesByTargetResult> {
+    const where = { organizationId: input.organizationId, scope: input.scope, targetId: input.targetId };
+    const [records, total] = await Promise.all([
+      this.prisma.analysisJob.findMany({ where, orderBy: { analysisVersion: "desc" }, take: input.limit, skip: input.offset }),
+      this.prisma.analysisJob.count({ where }),
+    ]);
+    return { items: records.map(toDomain), total };
   }
 
   async reserveForProcessing(input: {
@@ -79,6 +96,7 @@ export class PrismaAnalysisJobRepository implements AnalysisJobRepository {
     outcome: FinalizeAttemptOutcome;
     trigger: string;
     retryCount: number;
+    onSuccessTx?: ((tx: PrismaTx) => Promise<void>) | undefined;
   }): Promise<{ applied: boolean }> {
     const outcome = input.outcome;
 
@@ -158,6 +176,13 @@ export class PrismaAnalysisJobRepository implements AnalysisJobRepository {
       }
 
       await tx.analysisAttempt.create({ data: attemptData });
+
+      // Mission Sprint 4.2 — le résultat métier structuré est persisté DANS CETTE MÊME
+      // transaction : si `onSuccessTx` lève, la transaction entière est annulée (job + attempt
+      // inclus), jamais un job SUCCEEDED silencieusement dépourvu de résultat métier.
+      if (input.onSuccessTx) {
+        await input.onSuccessTx(tx);
+      }
 
       return { applied: true };
     }, SHORT_TX_OPTIONS);

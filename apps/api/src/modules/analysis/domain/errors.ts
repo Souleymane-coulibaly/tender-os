@@ -145,3 +145,50 @@ export class AiSchemaValidationFailedError extends DomainError {
     super(`AI provider response failed schema validation: ${input.reason}.`);
   }
 }
+
+/** Correction Sprint 4.2 §"Validation déterministe de provenance" — une réponse peut respecter le
+ *  schéma Zod (structurellement valide) tout en affirmant une provenance fabriquée : un
+ *  `documentId` hors du corpus consolidé, un `chunkSequence` inexistant, une `citation` introuvable
+ *  dans le chunk cité, ou un `pageStart`/`pageEnd`/`sheetName`/`sectionTitle` qui contredit le
+ *  chunk réellement connu. Un score de confiance déclaré par le modèle ne suffit jamais à lui seul
+ *  (mission §"un score de confiance ne doit jamais être utilisé seul") — cette erreur est le
+ *  résultat de la vérification déterministe correspondante, distincte d'une erreur de forme JSON
+ *  (`AiSchemaValidationFailedError`), jamais persistée, jamais retryée automatiquement. */
+export class AiProvenanceValidationFailedError extends DomainError {
+  readonly code = "AI_PROVENANCE_VALIDATION_FAILED";
+  constructor(input: { reason: string }) {
+    super(`AI-reported provenance failed deterministic validation: ${input.reason}.`);
+  }
+}
+
+/** Mission Sprint 4.2 §"Consolidation Tender" — une consolidation ne doit jamais être envoyée au
+ *  provider IA sans au moins une analyse documentaire réussie à consolider (jamais demander à
+ *  l'IA d'halluciner une synthèse à partir de rien). Traité comme un échec de job normal
+ *  (récupérable par retry une fois au moins un document analysé avec succès). */
+export class NoDocumentAnalysesAvailableError extends DomainError {
+  readonly code = "NO_DOCUMENT_ANALYSES_AVAILABLE";
+  constructor() {
+    super("No successfully analyzed document is available yet for this tender's consolidation.");
+  }
+}
+
+/** Mission Sprint 4.2 §"GET .../analysis" — aucune consolidation Tender n'a encore jamais réussi
+ *  pour ce tender (aucune `TenderAnalysisSummary` persistée) — jamais confondu avec
+ *  `AnalysisNotFoundError` (job introuvable), un job peut très bien exister sans avoir encore
+ *  produit de résultat consultable. */
+export class TenderBusinessAnalysisNotFoundError extends DomainError {
+  readonly code = "TENDER_BUSINESS_ANALYSIS_NOT_FOUND";
+  constructor() {
+    super("No tender business analysis is available yet for this tender.");
+  }
+}
+
+/** Mission Sprint 4.2 §"Phase 2 sans acteur HTTP vivant" — un `AnalysisJob` ne devrait jamais
+ *  atteindre la Phase 2 sans `triggeredByRole` (toujours renseigné à la création/au retry) ; si
+ *  c'est le cas (donnée historique/bug), on refuse explicitement plutôt que de fabriquer un rôle. */
+export class AnalysisJobMissingTriggeredByRoleError extends DomainError {
+  readonly code = "ANALYSIS_JOB_MISSING_TRIGGERED_BY_ROLE";
+  constructor() {
+    super("Analysis job is missing the triggeredByRole captured at creation/retry time.");
+  }
+}

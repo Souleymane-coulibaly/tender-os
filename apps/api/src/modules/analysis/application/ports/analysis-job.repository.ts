@@ -1,6 +1,7 @@
 import type { AnalysisScope } from "../../domain/analysis-scope";
 import type { AnalysisStatus } from "../../domain/analysis-status";
 import type { AnalysisJob } from "../../domain/analysis-job.aggregate";
+import type { PrismaTx } from "./business-analysis.repository";
 
 /**
  * Vue de lecture/écriture scopée à une transaction Postgres courte protégée par un verrou
@@ -46,9 +47,24 @@ export type FinalizeAttemptOutcome =
       errorMessage: string;
     };
 
+export type ListAnalysesByTargetResult = Readonly<{ items: readonly AnalysisJob[]; total: number }>;
+
 export interface AnalysisJobRepository {
   findById(input: { organizationId: string; jobId: string }): Promise<AnalysisJob | null>;
   save(job: AnalysisJob): Promise<void>;
+
+  /** Historique complet des versions d'analyse d'une cible (mission §"GET .../analyses") — jamais
+   *  filtré par statut : une version FAILED/CANCELLED reste visible dans l'historique, seule
+   *  `getLatestSummary` (BusinessAnalysisRepository) ignore les versions non réussies pour résoudre
+   *  "la dernière analyse consultable". Ordonné par `analysisVersion` décroissant (le plus récent
+   *  d'abord), jamais un ordre dépendant de l'implémentation. */
+  listByTarget(input: {
+    organizationId: string;
+    scope: AnalysisScope;
+    targetId: string;
+    limit: number;
+    offset: number;
+  }): Promise<ListAnalysesByTargetResult>;
 
   /** Réservation atomique COURTE (Phase 1) — QUEUED → PROCESSING, incrément de `attemptCount`.
    *  Retourne `not_startable` sans rien modifier si le statut n'est plus QUEUED au moment de
@@ -82,6 +98,16 @@ export interface AnalysisJobRepository {
     trigger: string;
     /** Nombre d'appels provider internes à cette réservation (voir `AnalysisAttempt.retryCount`). */
     retryCount: number;
+    /**
+     * Mission Sprint 4.2 §"Persistance atomique du résultat métier" — invoquée DANS LA MÊME
+     * transaction courte que la mise à jour du job et l'écriture de `AnalysisAttempt`, UNIQUEMENT
+     * si le compare-and-set réussit (jamais si `applied: false`, jamais hors transaction). Permet à
+     * `BusinessAnalysisRepository.persistDocumentAnalysis`/`persistTenderConsolidation` d'écrire le
+     * résultat métier structuré sans jamais laisser un job atteindre un état terminal SUCCEEDED sans
+     * son résultat métier correspondant (même garantie que P1-02 pour `AnalysisAttempt`). Si elle
+     * lève, toute la transaction est annulée : le job reste PROCESSING, récupérable par retry.
+     */
+    onSuccessTx?: ((tx: PrismaTx) => Promise<void>) | undefined;
   }): Promise<{ applied: boolean }>;
 
   /** Verrou court scopé à la CIBLE (documentId ou tenderId) — réservé à la création idempotente

@@ -18,6 +18,7 @@ export type AnalysisJobPersistenceData = {
   promptVersion: number;
   extractionVersion: number | null;
   inputChecksum: string | null;
+  triggeredByRole: string | null;
   attemptCount: number;
   startedAt: Date | null;
   completedAt: Date | null;
@@ -48,6 +49,7 @@ export function toDomain(record: AnalysisJobRecord): AnalysisJob {
     promptVersion: record.promptVersion,
     extractionVersion: record.extractionVersion ?? undefined,
     inputChecksum: record.inputChecksum ?? undefined,
+    triggeredByRole: record.triggeredByRole ?? undefined,
     attemptCount: record.attemptCount,
     startedAt: record.startedAt ?? undefined,
     completedAt: record.completedAt ?? undefined,
@@ -79,6 +81,7 @@ export function toPersistence(job: AnalysisJob): AnalysisJobPersistenceData {
     promptVersion: job.promptVersion,
     extractionVersion: job.extractionVersion ?? null,
     inputChecksum: job.inputChecksum ?? null,
+    triggeredByRole: job.triggeredByRole ?? null,
     attemptCount: job.attemptCount,
     startedAt: job.startedAt ?? null,
     completedAt: job.completedAt ?? null,

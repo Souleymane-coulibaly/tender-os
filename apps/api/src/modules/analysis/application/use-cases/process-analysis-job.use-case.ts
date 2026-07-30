@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
+import type { AnalysisJob } from "../../domain/analysis-job.aggregate";
+import { AnalysisScope } from "../../domain/analysis-scope";
 import { AnalysisTrigger } from "../../domain/analysis-trigger";
 import { AiTimeoutError } from "../../domain/errors";
 import { isRetryableAiError } from "../policies/ai-error-classification";
@@ -8,12 +10,15 @@ import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer
 import { AI_PROVIDER_REGISTRY, type AIProviderRegistry } from "../ports/ai-provider-registry";
 import type { AIProvider, AIProviderRequest, AIProviderResult } from "../ports/ai-provider";
 import {
+  ANALYSIS_CONTENT_RESOLVER,
+  type AnalysisContentResolver,
+} from "../ports/analysis-content-resolver";
+import {
   ANALYSIS_JOB_REPOSITORY,
   type AnalysisJobRepository,
   type FinalizeAttemptOutcome,
 } from "../ports/analysis-job.repository";
-import { PROMPT_TEMPLATE, PromptKey, type PromptTemplatePort } from "../ports/prompt-template.port";
-import { parseAnalysisOutput } from "../schemas/analysis-output.schema";
+import type { PrismaTx } from "../ports/business-analysis.repository";
 import { ANALYSIS_CONFIG, type AnalysisConfig } from "../../infrastructure/analysis-config";
 
 export type ProcessAnalysisJobCommand = Readonly<{
@@ -23,8 +28,20 @@ export type ProcessAnalysisJobCommand = Readonly<{
 }>;
 
 type Phase2Result =
-  | { outcome: FinalizeAttemptOutcome & { kind: "succeeded" | "partially_succeeded" }; retryCount: number }
-  | { outcome: FinalizeAttemptOutcome & { kind: "failed" }; retryCount: number };
+  | {
+      outcome: FinalizeAttemptOutcome & { kind: "succeeded" | "partially_succeeded" };
+      retryCount: number;
+      onSuccessTx?: ((tx: PrismaTx) => Promise<void>) | undefined;
+    }
+  | { outcome: FinalizeAttemptOutcome & { kind: "failed" }; retryCount: number; onSuccessTx?: undefined };
+
+/** Mission Sprint 4.2 §"Pas de modèle codé en dur dans le domaine" — stratégie simple par type de
+ *  tâche, jamais un moteur d'arbitrage : un scope DOCUMENT et un scope TENDER peuvent utiliser des
+ *  modèles différents (ex. un modèle moins coûteux pour l'extraction par document, un modèle plus
+ *  capable pour la consolidation), configurés via `AnalysisConfig`, jamais en dur ici. */
+function resolveModelForScope(config: AnalysisConfig, scope: AnalysisScope): string {
+  return scope === AnalysisScope.Document ? config.aiModelForDocumentAnalysis : config.aiModelForTenderConsolidation;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -52,7 +69,7 @@ export class ProcessAnalysisJobUseCase {
   constructor(
     @Inject(ANALYSIS_JOB_REPOSITORY) private readonly jobRepository: AnalysisJobRepository,
     @Inject(AI_PROVIDER_REGISTRY) private readonly providerRegistry: AIProviderRegistry,
-    @Inject(PROMPT_TEMPLATE) private readonly promptTemplate: PromptTemplatePort,
+    @Inject(ANALYSIS_CONTENT_RESOLVER) private readonly contentResolver: AnalysisContentResolver,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(ANALYSIS_CONFIG) private readonly config: AnalysisConfig,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -75,7 +92,7 @@ export class ProcessAnalysisJobUseCase {
     const startedAt = reservedAt;
     const trigger = job.attemptCount === 1 ? AnalysisTrigger.Manual : AnalysisTrigger.Retry;
 
-    const { outcome, retryCount } = await this.runPhase2(job.model ?? this.config.aiModel);
+    const { outcome, retryCount, onSuccessTx } = await this.runPhase2(job, resolveModelForScope(this.config, job.scope));
 
     let finalizeResult: { applied: boolean };
     try {
@@ -88,6 +105,7 @@ export class ProcessAnalysisJobUseCase {
         outcome,
         trigger,
         retryCount,
+        onSuccessTx,
       });
     } catch (error) {
       // Correction P1-02 — l'écriture atomique (job + AnalysisAttempt) a échoué : le job n'a été
@@ -112,9 +130,11 @@ export class ProcessAnalysisJobUseCase {
   }
 
   /** Intégralement hors transaction Prisma (mission §"Pas de transaction longue") — résolution du
-   *  provider, rendu du prompt, appel réseau avec timeout et retry bornés, validation du schéma de
-   *  sortie. Ne touche jamais la base. */
-  private async runPhase2(model: string): Promise<Phase2Result> {
+   *  provider et du contenu métier réel (`AnalysisContentResolver`, mission Sprint 4.2), appel
+   *  réseau avec timeout et retry bornés, validation stricte du schéma de sortie. Ne touche jamais
+   *  la base : `onSuccessTx` n'est qu'une fonction préparée, invoquée plus tard par
+   *  `finalizeAttempt`. */
+  private async runPhase2(job: AnalysisJob, model: string): Promise<Phase2Result> {
     let provider: AIProvider;
     try {
       provider = this.providerRegistry.resolve();
@@ -122,19 +142,28 @@ export class ProcessAnalysisJobUseCase {
       return { outcome: this.toFailureOutcome(error), retryCount: 0 };
     }
 
-    const rendered = this.promptTemplate.render(PromptKey.TechnicalValidationPlaceholder, {});
+    let prepared: Awaited<ReturnType<AnalysisContentResolver["prepare"]>>;
+    try {
+      prepared = await this.contentResolver.prepare(job);
+    } catch (error) {
+      return { outcome: this.toFailureOutcome(error, provider.name, model), retryCount: 0 };
+    }
+
     const maxAttempts = 1 + this.config.aiMaxRetries;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const result = await this.callWithTimeout(provider, {
           model,
-          systemPrompt: rendered.systemPrompt,
-          userPrompt: rendered.userPrompt,
-          responseSchemaName: "AnalysisOutputSchema",
+          systemPrompt: prepared.systemPrompt,
+          userPrompt: prepared.userPrompt,
+          responseSchemaName: prepared.responseSchemaName,
           timeoutMs: this.config.aiTimeoutMs,
         });
-        const parsed = parseAnalysisOutput(result.content);
+        // La validation stricte (Zod) se produit ici, hors transaction (mission §"Sorties
+        // structurées") — une réponse invalide échoue immédiatement, jamais un retry ciblé
+        // automatique au-delà des retries réseau déjà en cours.
+        const success = await this.contentResolver.handleSuccess(job, result.content);
         return {
           outcome: {
             kind: "succeeded",
@@ -144,9 +173,10 @@ export class ProcessAnalysisJobUseCase {
             inputTokenCount: result.usage.inputTokens,
             outputTokenCount: result.usage.outputTokens,
             totalTokenCount: result.usage.totalTokens,
-            resultSummary: parsed.output.summary,
+            resultSummary: success.resultSummary,
           },
           retryCount: attempt - 1,
+          onSuccessTx: success.persist,
         };
       } catch (error) {
         const isLastAttempt = attempt === maxAttempts;

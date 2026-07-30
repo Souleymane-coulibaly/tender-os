@@ -27,8 +27,15 @@ export type TenderPermission = (typeof TenderPermission)[keyof typeof TenderPerm
  * description des rôles (`permissions.md` §4) et de la matrice de lecture existante (§26) :
  * Bid Manager pilote les Tenders (tout) ; Contributor produit le contenu (lecture + checklist) ;
  * Reviewer/Executive/External/ReadOnly restent en lecture seule dans cette tranche.
+ * OWNER (correction réaudit Codex Sprint 4.1 P1-01-R) — superset strict de ORGANIZATION_ADMIN
+ * (même motif que ROLE_PERMISSIONS dans memberships/domain/organization-permission.ts et
+ * ROLE_ANALYSIS_PERMISSIONS) : le propriétaire d'organisation ne doit jamais se retrouver sans
+ * permission Tenders (y compris `tender:read`, requis par `GetTenderUseCase`, lui-même appelé par
+ * StartTenderAnalysisUseCase/StartDocumentAnalysisUseCase — sans cette entrée, OWNER ne pouvait
+ * déclencher aucune analyse malgré une matrice Analysis correcte).
  */
 export const ROLE_TENDER_PERMISSIONS: Record<string, readonly TenderPermission[]> = {
+  OWNER: Object.values(TenderPermission),
   ORGANIZATION_ADMIN: Object.values(TenderPermission),
   BID_MANAGER: Object.values(TenderPermission),
   CONTRIBUTOR: [TenderPermission.Read, TenderPermission.List, TenderPermission.ManageChecklist],

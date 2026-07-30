@@ -10,7 +10,14 @@ import { RetryAnalysisUseCase } from "./retry-analysis.use-case";
 const ORG = randomUUID();
 const NOW = new Date("2026-07-29T14:00:00Z");
 
-const CONFIG: AnalysisConfig = { aiModel: "m", aiTimeoutMs: 1000, aiMaxRetries: 1, aiRetryDelayMs: 0 };
+const CONFIG: AnalysisConfig = {
+  aiModel: "m",
+  aiModelForDocumentAnalysis: "m",
+  aiModelForTenderConsolidation: "m",
+  aiTimeoutMs: 1000,
+  aiMaxRetries: 1,
+  aiRetryDelayMs: 0,
+};
 
 function buildFailedJob(): AnalysisJob {
   const job = AnalysisJob.create({
@@ -52,11 +59,14 @@ describe("RetryAnalysisUseCase", () => {
     expect(result.status).toBe("QUEUED");
     expect(result.analysisVersion).toBe(1);
     expect(dispatcher.dispatched).toHaveLength(1);
+
+    const stored = await jobRepository.findById({ organizationId: ORG, jobId: job.id });
+    expect(stored?.triggeredByRole).toBe("CONTRIBUTOR");
   });
 
   it("refuses to retry a job that is not FAILED", async () => {
     const job = buildFailedJob();
-    job.resetForRetry(NOW); // -> QUEUED
+    job.resetForRetry({ triggeredByRole: "OWNER" }, NOW); // -> QUEUED
     await jobRepository.save(job);
 
     const useCase = buildUseCase();

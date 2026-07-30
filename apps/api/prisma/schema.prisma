@@ -309,17 +309,25 @@ model Tender {
   /// Concurrence optimiste (docs/04-architecture/DATABASE_DESIGN.md §23 — Tender y figure explicitement).
   version Int @default(1)
 
-  lots                 TenderLot[]
-  checklistItems       TenderChecklistItem[]
-  awardCriteria        TenderAwardCriterion[]
-  requestedDocuments   TenderRequestedDocument[]
-  milestones           TenderMilestone[]
-  risks                TenderRisk[]
-  alerts               TenderAlert[]
-  statusHistory        TenderStatusHistoryEntry[]
-  documentAssociations DocumentTenderAssociation[]
-  dces                 Dce[]
-  analysisJobs         AnalysisJob[]
+  lots                     TenderLot[]
+  checklistItems           TenderChecklistItem[]
+  awardCriteria            TenderAwardCriterion[]
+  requestedDocuments       TenderRequestedDocument[]
+  milestones               TenderMilestone[]
+  risks                    TenderRisk[]
+  alerts                   TenderAlert[]
+  statusHistory            TenderStatusHistoryEntry[]
+  documentAssociations     DocumentTenderAssociation[]
+  dces                     Dce[]
+  analysisJobs             AnalysisJob[]
+  documentBusinessAnalyses DocumentBusinessAnalysis[]
+  deadlineFindings         TenderDeadlineFinding[]
+  criterionFindings        TenderCriterionFinding[]
+  requirementFindings      TenderRequirementFinding[]
+  clauseFindings           TenderClauseFinding[]
+  riskFindings             TenderRiskFinding[]
+  questionFindings         TenderQuestionFinding[]
+  analysisSummaries        TenderAnalysisSummary[]
 
   /// AUDIT-007 : contrainte composite support de la FK composée de TenderLot ci-dessous — garantit
   /// au niveau base de données qu'un TenderLot ne peut jamais référencer un couple
@@ -599,6 +607,7 @@ model Document {
   dceDocuments                DceDocument[]
   documentExtraction          DocumentExtraction?
   analysisJobs                AnalysisJob[]
+  businessAnalyses            DocumentBusinessAnalysis[]
 
   /// Support de la FK composée de DceDocument (module DCE) — même motif que TenderLot/AUDIT-007 :
   /// garantit au niveau base qu'un DceDocument ne peut jamais référencer un Document d'une autre
@@ -691,6 +700,7 @@ model Dce {
   documents           DceDocument[]
   documentExtractions DocumentExtraction[]
   analysisJobs        AnalysisJob[]
+  businessAnalyses    DocumentBusinessAnalysis[]
 
   /// Un Tender ne porte jamais plus d'un DCE (conception §4, mission Sprint 0).
   @@unique([tenderId])
@@ -917,6 +927,17 @@ model AnalysisJob {
   /// par la réservation atomique courte (Phase 1).
   attemptCount Int @default(0) @map("attempt_count")
 
+  /// Rôle de l'acteur ayant déclenché ou (re)lancé la tentative en cours (mission Sprint 4.2) —
+  /// nullable pour rester compatible avec les jobs Sprint 4.1 déjà existants (créés avant ce
+  /// champ). Jamais un rôle fabriqué : c'est TOUJOURS le rôle réel d'un acteur HTTP authentifié
+  /// (StartDocumentAnalysisUseCase/StartTenderAnalysisUseCase/RetryAnalysisUseCase), capturé pour
+  /// permettre à `ProcessAnalysisJobUseCase` (traitement en tâche de fond, Phase 2, hors
+  /// transaction) de ré-appeler `GetDocumentAnalysisInputUseCase` (contrat public Sprint 3, exige
+  /// `ExtractionPermission.Read`) sans jamais inventer un rôle qui n'existe pas dans ce contexte
+  /// (même principe que Sprint 3 §"une opération système ne doit jamais dépendre d'un rôle
+  /// d'acteur qui n'existe pas dans ce contexte").
+  triggeredByRole String? @map("triggered_by_role") @db.VarChar(40)
+
   startedAt   DateTime? @map("started_at")
   completedAt DateTime? @map("completed_at")
   durationMs  Int?      @map("duration_ms")
@@ -935,6 +956,18 @@ model AnalysisJob {
   updatedAt DateTime @map("updated_at")
 
   attempts AnalysisAttempt[]
+
+  /// Mission Sprint 4.2 — résultats métier produits par ce job (jamais renseignés pour la
+  /// tranche technique placeholder Sprint 4.1, uniquement quand ce job a réellement produit une
+  /// analyse métier structurée).
+  documentBusinessAnalyses DocumentBusinessAnalysis[]
+  deadlineFindings         TenderDeadlineFinding[]
+  criterionFindings        TenderCriterionFinding[]
+  requirementFindings      TenderRequirementFinding[]
+  clauseFindings           TenderClauseFinding[]
+  riskFindings             TenderRiskFinding[]
+  questionFindings         TenderQuestionFinding[]
+  analysisSummaries        TenderAnalysisSummary[]
 
   /// Une seule version donnée ne peut jamais exister deux fois pour la même cible.
   @@unique([organizationId, scope, targetId, analysisVersion])
@@ -989,4 +1022,330 @@ model AnalysisAttempt {
   @@unique([jobId, attemptNumber])
   @@index([organizationId, jobId])
   @@map("analysis_attempts")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Sprint 4.2 — AI Business Analysis
+//
+// Nommage volontairement distinct de TenderRisk/TenderAwardCriterion/TenderRequestedDocument/
+// TenderMilestone (déjà existants ci-dessus, Sprint 2/3, gérés manuellement par l'utilisateur,
+// mutables, sans versionnement) : les tables ci-dessous portent le suffixe "Finding" pour ne
+// jamais laisser croire qu'il s'agit du même concept. Une trouvaille IA n'écrase jamais un
+// enregistrement utilisateur existant et n'est jamais éditée en place — chaque nouvelle analyse
+// crée un nouveau jeu de lignes (nouvel `analysisVersion`), l'ancien restant intact pour
+// l'historique (mission §"Historisation").
+// ---------------------------------------------------------------------------------------------
+
+/// Résultat structuré de l'analyse d'UN document (étape 1 de la mission, "Analyse documentaire")
+/// — produit par un `AnalysisJob` de scope DOCUMENT. Intermédiaire : consommé par l'étape 2
+/// (consolidation Tender), jamais exposé tel quel par l'API publique (voir `TenderAnalysisSummary`
+/// et les tables Finding ci-dessous pour les résultats consolidés réellement exposés).
+model DocumentBusinessAnalysis {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  analysisJobId   String      @map("analysis_job_id") @db.Uuid
+  analysisJob     AnalysisJob @relation(fields: [analysisJobId], references: [id], onDelete: Cascade)
+  analysisVersion Int         @map("analysis_version")
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  dceId String @map("dce_id") @db.Uuid
+  dce   Dce    @relation(fields: [dceId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  documentId String   @map("document_id") @db.Uuid
+  document   Document @relation(fields: [documentId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Version de l'extraction Sprint 3 effectivement analysée (`DocumentAnalysisInput.extractionVersion`)
+  /// — jamais recalculée après coup, capturée telle que lue au moment de l'analyse.
+  extractionVersion Int @map("extraction_version")
+
+  /// RC | CCTP | CCAP | AE | BPU | DPGF | ANNEX | UNKNOWN — classification déterminée par le
+  /// modèle IA à partir du contenu réel, distincte de `DceDocument.category` (classification
+  /// déterministe Sprint 2 par extension/nom de fichier, voir dce-document-classifier.ts) :
+  /// jamais fusionnées, jamais l'une n'écrase l'autre. Protégée par une contrainte CHECK (migration).
+  documentType String @map("document_type") @db.VarChar(20)
+  /// Langue détectée du document (mission §"Langues" — fr/en au minimum) — les citations
+  /// conservent cette langue, jamais traduites.
+  language     String @db.VarChar(8)
+
+  /// Informations générales (mission §1) — objet technique minimal, jamais dupliqué dans des
+  /// colonnes dédiées : ce résultat est un intermédiaire consommé par la consolidation (étape 2),
+  /// jamais lu directement par l'API publique.
+  metadata     Json     @default("{}")
+  /// Tableaux de `DocumentDeadlineFinding`/`DocumentCriterionFinding`/... (mission §2-5), au format
+  /// validé par `document-analysis-output.schema.ts` avant persistance — jamais un JSON brut non
+  /// validé (mission §"Sorties structurées").
+  deadlines    Json     @default("[]")
+  criteria     Json     @default("[]")
+  requirements Json     @default("[]")
+  clauses      Json     @default("[]")
+  warnings     String[] @default([])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, documentId, analysisVersion])
+  @@index([organizationId, tenderId])
+  @@map("document_business_analyses")
+}
+
+/// Provenance commune à toutes les tables Finding ci-dessous (mission §"Provenance obligatoire")
+/// — `documentId`/`chunkSequence` ne portent jamais de contrainte FK stricte : ce sont des
+/// affirmations du modèle IA, vérifiées applicativement (le chunk cité doit réellement exister
+/// parmi les chunks fournis en entrée) avant persistance, jamais une garantie base de données
+/// (une trouvaille reste consultable même si le document source est supprimé plus tard).
+
+/// Échéance consolidée (mission §2 "Dates et échéances").
+model TenderDeadlineFinding {
+  id              String      @id @default(uuid()) @db.Uuid
+  organizationId  String      @map("organization_id") @db.Uuid
+  tenderId        String      @map("tender_id") @db.Uuid
+  tender          Tender      @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  analysisJobId   String      @map("analysis_job_id") @db.Uuid
+  analysisJob     AnalysisJob @relation(fields: [analysisJobId], references: [id], onDelete: Cascade)
+  analysisVersion Int         @map("analysis_version")
+
+  /// PUBLICATION | SUBMISSION | QUESTIONS | ANSWER | VISIT | START_ESTIMATED | VALIDITY_PERIOD |
+  /// INTERMEDIATE | CONTRACTUAL | OTHER — protégée par une contrainte CHECK (migration).
+  kind    String    @db.VarChar(30)
+  label   String    @db.VarChar(300)
+  /// Normalisée (mission §"Chaque date doit être normalisée dans un format stable") — absente
+  /// uniquement si le texte source ne permet aucune normalisation fiable (`rawText` porte alors
+  /// le texte brut, jamais une date devinée).
+  date    DateTime?
+  rawText String?   @map("raw_text")
+
+  documentId    String? @map("document_id") @db.Uuid
+  chunkSequence Int?    @map("chunk_sequence")
+  pageStart     Int?    @map("page_start")
+  pageEnd       Int?    @map("page_end")
+  sheetName     String? @map("sheet_name") @db.VarChar(120)
+  sectionTitle  String? @map("section_title") @db.VarChar(300)
+  citation      String? @db.VarChar(500)
+  /// Mission §"Si une information est déduite, indiquer explicitement qu'il s'agit d'une
+  /// inférence" — jamais une déduction présentée comme une citation directe.
+  isInferred    Boolean @default(false) @map("is_inferred")
+  /// Score de confiance déclaré par le modèle (mission §"Score de confiance") — jamais utilisé
+  /// seul, voir les validations déterministes appliquées par `TenderConsolidationOutputSchema`
+  /// avant persistance.
+  confidence    Float   @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, tenderId, analysisVersion])
+  @@map("tender_deadline_findings")
+}
+
+/// Critère d'attribution consolidé (mission §3 "Critères d'attribution").
+model TenderCriterionFinding {
+  id              String      @id @default(uuid()) @db.Uuid
+  organizationId  String      @map("organization_id") @db.Uuid
+  tenderId        String      @map("tender_id") @db.Uuid
+  tender          Tender      @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  analysisJobId   String      @map("analysis_job_id") @db.Uuid
+  analysisJob     AnalysisJob @relation(fields: [analysisJobId], references: [id], onDelete: Cascade)
+  analysisVersion Int         @map("analysis_version")
+
+  name          String  @db.VarChar(300)
+  /// Pondération en pourcentage (0-100) — nullable : certains documents ne chiffrent pas
+  /// systématiquement la pondération (mission §"Vérifier autant que possible... total proche de
+  /// 100 %" — appliqué au niveau de la consolidation, jamais bloquant pour un seul critère).
+  weight        Float?
+  /// Sous-critères `[{ name, weight }]` — jamais une table séparée : toujours lus/écrits comme un
+  /// tout avec leur critère parent, jamais interrogés indépendamment.
+  subCriteria   Json?   @map("sub_criteria")
+  scoringMethod String? @map("scoring_method")
+  priceFormula  String? @map("price_formula")
+  threshold     String?
+  isEliminatory Boolean @default(false) @map("is_eliminatory")
+
+  documentId    String? @map("document_id") @db.Uuid
+  chunkSequence Int?    @map("chunk_sequence")
+  pageStart     Int?    @map("page_start")
+  pageEnd       Int?    @map("page_end")
+  sheetName     String? @map("sheet_name") @db.VarChar(120)
+  sectionTitle  String? @map("section_title") @db.VarChar(300)
+  citation      String? @db.VarChar(500)
+  isInferred    Boolean @default(false) @map("is_inferred")
+  confidence    Float   @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, tenderId, analysisVersion])
+  @@map("tender_criterion_findings")
+}
+
+/// Exigence / pièce demandée consolidée (mission §4 "Exigences et pièces demandées").
+model TenderRequirementFinding {
+  id              String      @id @default(uuid()) @db.Uuid
+  organizationId  String      @map("organization_id") @db.Uuid
+  tenderId        String      @map("tender_id") @db.Uuid
+  tender          Tender      @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  analysisJobId   String      @map("analysis_job_id") @db.Uuid
+  analysisJob     AnalysisJob @relation(fields: [analysisJobId], references: [id], onDelete: Cascade)
+  analysisVersion Int         @map("analysis_version")
+
+  /// ADMINISTRATIVE | TECHNICAL_MEMO | REFERENCES | CV | CERTIFICATION | INSURANCE |
+  /// FINANCIAL_CAPACITY | TECHNICAL_CAPACITY | HUMAN_RESOURCES | MATERIAL_RESOURCES | METHODOLOGY |
+  /// PLANNING | SIGNATURE | OTHER — protégée par une contrainte CHECK (migration).
+  category       String  @db.VarChar(30)
+  label          String  @db.VarChar(300)
+  expectedFormat String? @map("expected_format")
+  isMandatory    Boolean @default(true) @map("is_mandatory")
+
+  documentId    String? @map("document_id") @db.Uuid
+  chunkSequence Int?    @map("chunk_sequence")
+  pageStart     Int?    @map("page_start")
+  pageEnd       Int?    @map("page_end")
+  sheetName     String? @map("sheet_name") @db.VarChar(120)
+  sectionTitle  String? @map("section_title") @db.VarChar(300)
+  citation      String? @db.VarChar(500)
+  isInferred    Boolean @default(false) @map("is_inferred")
+  confidence    Float   @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, tenderId, analysisVersion])
+  @@map("tender_requirement_findings")
+}
+
+/// Clause contractuelle consolidée (mission §5 "Clauses contractuelles").
+model TenderClauseFinding {
+  id              String      @id @default(uuid()) @db.Uuid
+  organizationId  String      @map("organization_id") @db.Uuid
+  tenderId        String      @map("tender_id") @db.Uuid
+  tender          Tender      @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  analysisJobId   String      @map("analysis_job_id") @db.Uuid
+  analysisJob     AnalysisJob @relation(fields: [analysisJobId], references: [id], onDelete: Cascade)
+  analysisVersion Int         @map("analysis_version")
+
+  /// PENALTY | WARRANTY | INSURANCE | DEADLINE | CONFIDENTIALITY | IP | SECURITY | CYBERSECURITY |
+  /// REVERSIBILITY | SUBCONTRACTING | CONSORTIUM | ADVANCE_PAYMENT | RETENTION_GUARANTEE | PAYMENT |
+  /// INVOICING | TERMINATION | RENEWAL | LIABILITY | GDPR | HOSTING | ENVIRONMENTAL_SOCIAL | OTHER
+  /// — protégée par une contrainte CHECK (migration).
+  category String @db.VarChar(30)
+  summary  String
+
+  documentId    String? @map("document_id") @db.Uuid
+  chunkSequence Int?    @map("chunk_sequence")
+  pageStart     Int?    @map("page_start")
+  pageEnd       Int?    @map("page_end")
+  sheetName     String? @map("sheet_name") @db.VarChar(120)
+  sectionTitle  String? @map("section_title") @db.VarChar(300)
+  citation      String? @db.VarChar(500)
+  isInferred    Boolean @default(false) @map("is_inferred")
+  confidence    Float   @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, tenderId, analysisVersion])
+  @@map("tender_clause_findings")
+}
+
+/// Risque détecté par l'IA (mission §6 "Risques") — distinct de `TenderRisk` (Sprint 2/3, géré
+/// manuellement par l'utilisateur, mutable, sans provenance ni score de confiance).
+model TenderRiskFinding {
+  id              String      @id @default(uuid()) @db.Uuid
+  organizationId  String      @map("organization_id") @db.Uuid
+  tenderId        String      @map("tender_id") @db.Uuid
+  tender          Tender      @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  analysisJobId   String      @map("analysis_job_id") @db.Uuid
+  analysisJob     AnalysisJob @relation(fields: [analysisJobId], references: [id], onDelete: Cascade)
+  analysisVersion Int         @map("analysis_version")
+
+  title          String @db.VarChar(300)
+  category       String @db.VarChar(60)
+  /// LOW | MEDIUM | HIGH | CRITICAL — protégée par une contrainte CHECK (migration).
+  severity       String @db.VarChar(20)
+  probability    Float?
+  explanation    String
+  recommendation String
+
+  documentId    String? @map("document_id") @db.Uuid
+  chunkSequence Int?    @map("chunk_sequence")
+  pageStart     Int?    @map("page_start")
+  pageEnd       Int?    @map("page_end")
+  sheetName     String? @map("sheet_name") @db.VarChar(120)
+  sectionTitle  String? @map("section_title") @db.VarChar(300)
+  citation      String? @db.VarChar(500)
+  isInferred    Boolean @default(false) @map("is_inferred")
+  confidence    Float   @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, tenderId, analysisVersion])
+  @@index([organizationId, tenderId, severity])
+  @@map("tender_risk_findings")
+}
+
+/// Question à poser à l'acheteur, générée par l'IA (mission §7 "Questions à poser à l'acheteur").
+model TenderQuestionFinding {
+  id              String      @id @default(uuid()) @db.Uuid
+  organizationId  String      @map("organization_id") @db.Uuid
+  tenderId        String      @map("tender_id") @db.Uuid
+  tender          Tender      @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  analysisJobId   String      @map("analysis_job_id") @db.Uuid
+  analysisJob     AnalysisJob @relation(fields: [analysisJobId], references: [id], onDelete: Cascade)
+  analysisVersion Int         @map("analysis_version")
+
+  question      String
+  justification String
+  /// LOW | MEDIUM | HIGH — protégée par une contrainte CHECK (migration).
+  priority      String @db.VarChar(20)
+  theme         String @db.VarChar(120)
+
+  documentId    String? @map("document_id") @db.Uuid
+  chunkSequence Int?    @map("chunk_sequence")
+  pageStart     Int?    @map("page_start")
+  pageEnd       Int?    @map("page_end")
+  sheetName     String? @map("sheet_name") @db.VarChar(120)
+  sectionTitle  String? @map("section_title") @db.VarChar(300)
+  citation      String? @db.VarChar(500)
+  isInferred    Boolean @default(false) @map("is_inferred")
+  confidence    Float   @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, tenderId, analysisVersion])
+  @@map("tender_question_findings")
+}
+
+/// Synthèse métier structurée (mission §8 "Synthèse métier structurée") — une ligne par tender et
+/// par version d'analyse consolidée, jamais écrasée par la version suivante.
+model TenderAnalysisSummary {
+  id              String      @id @default(uuid()) @db.Uuid
+  organizationId  String      @map("organization_id") @db.Uuid
+  tenderId        String      @map("tender_id") @db.Uuid
+  tender          Tender      @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  analysisJobId   String      @map("analysis_job_id") @db.Uuid
+  analysisJob     AnalysisJob @relation(fields: [analysisJobId], references: [id], onDelete: Cascade)
+  analysisVersion Int         @map("analysis_version")
+
+  opportunitySummary String @map("opportunity_summary")
+  /// LOW | MEDIUM | HIGH — protégée par une contrainte CHECK (migration).
+  complexityLevel    String @map("complexity_level") @db.VarChar(20)
+
+  mainCriteria    Json @default("[]") @map("main_criteria")
+  mainRisks       Json @default("[]") @map("main_risks")
+  mainObligations Json @default("[]") @map("main_obligations")
+  missingElements Json @default("[]") @map("missing_elements")
+  pointsToClarify Json @default("[]") @map("points_to_clarify")
+  /// Contradictions détectées entre documents (mission §"TenderAnalysisConflict") — repliées ici
+  /// plutôt qu'une table séparée : toujours lues avec la synthèse qui les explique, jamais
+  /// interrogées indépendamment (structure plus cohérente pour cette tranche, voir rapport §B).
+  conflicts       Json @default("[]")
+
+  /// GO | GO_WITH_RESERVATIONS | NO_GO | INSUFFICIENT_DATA — protégée par une contrainte CHECK
+  /// (migration). Mission §"IMPORTANT" : une aide à la décision, JAMAIS une décision automatique
+  /// définitive — porté explicitement par `goNoGoRationale` et par le frontend (mise en garde
+  /// affichée systématiquement à côté de cette valeur).
+  goNoGoRecommendation String @map("go_no_go_recommendation") @db.VarChar(30)
+  goNoGoRationale      String @map("go_no_go_rationale")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, tenderId, analysisVersion])
+  @@map("tender_analysis_summaries")
 }

@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { CreateTenderForm } from "./create-tender-form";
 
@@ -55,7 +56,7 @@ describe("CreateTenderForm", () => {
 
   it("displays the backend validation error message returned by the server action", async () => {
     render(<CreateTenderForm />);
-    const user = (await import("@testing-library/user-event")).default.setup();
+    const user = userEvent.setup();
 
     await user.type(screen.getByLabelText("Titre *"), "x");
     await user.click(screen.getByRole("button", { name: "Creer l'appel d'offres" }));

@@ -9,6 +9,16 @@ describe("roleHasTenderPermission", () => {
     }
   });
 
+  /** Correction réaudit Codex Sprint 4.1 (P1-01-R) — OWNER était absent de
+   *  ROLE_TENDER_PERMISSIONS, ce qui bloquait indirectement StartTenderAnalysisUseCase/
+   *  StartDocumentAnalysisUseCase (via GetTenderUseCase, qui exige TenderPermission.Read) pour un
+   *  propriétaire d'organisation, malgré une matrice Analysis elle-même correcte. */
+  it("grants OWNER the same full permission set as ORGANIZATION_ADMIN, including tender:read", () => {
+    for (const permission of Object.values(TenderPermission)) {
+      expect(roleHasTenderPermission("OWNER", permission)).toBe(true);
+    }
+  });
+
   it("limits Contributor to read, list, and checklist management", () => {
     expect(roleHasTenderPermission("CONTRIBUTOR", TenderPermission.Read)).toBe(true);
     expect(roleHasTenderPermission("CONTRIBUTOR", TenderPermission.ManageChecklist)).toBe(true);

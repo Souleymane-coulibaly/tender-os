@@ -95,16 +95,17 @@ describe("AnalysisJob", () => {
     job.reserve(NOW);
     job.fail({ errorCode: "AI_TIMEOUT", errorMessage: "boom" }, LATER);
 
-    job.resetForRetry(LATER);
+    job.resetForRetry({ triggeredByRole: "OWNER" }, LATER);
     expect(job.status).toBe(AnalysisStatus.Queued);
     expect(job.errorCode).toBeUndefined();
     expect(job.errorMessage).toBeUndefined();
+    expect(job.triggeredByRole).toBe("OWNER");
   });
 
   it("resetForRetry rejects a non-FAILED job", () => {
     const job = createDocumentJob();
     job.queue(NOW);
-    expect(() => job.resetForRetry(NOW)).toThrow(InvalidAnalysisStatusTransitionError);
+    expect(() => job.resetForRetry({ triggeredByRole: "OWNER" }, NOW)).toThrow(InvalidAnalysisStatusTransitionError);
   });
 
   it("cancel() works from PENDING, QUEUED and PROCESSING but never from a terminal status", () => {

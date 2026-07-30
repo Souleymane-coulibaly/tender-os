@@ -16,7 +16,28 @@ import type {
   FinalizeAttemptOutcome,
   ReservationOutcome,
 } from "../application/ports/analysis-job.repository";
-import { CURRENT_PROMPT_VERSION, PromptKey, type PromptTemplatePort, type PromptVariables, type RenderedPrompt } from "../application/ports/prompt-template.port";
+import { PROMPT_VERSIONS, PromptKey, type PromptTemplatePort, type PromptVariables, type RenderedPrompt } from "../application/ports/prompt-template.port";
+import type {
+  BusinessAnalysisRepository,
+  ClauseFindingRecord,
+  CriterionFindingRecord,
+  DeadlineFindingRecord,
+  DocumentAnalysisRecord,
+  ListPage,
+  PageResult,
+  PersistDocumentAnalysisInput,
+  PersistTenderConsolidationInput,
+  PrismaTx,
+  QuestionFindingRecord,
+  RequirementFindingRecord,
+  RiskFindingRecord,
+  TenderAnalysisSummaryRecord,
+} from "../application/ports/business-analysis.repository";
+import type {
+  AnalysisContentResolver,
+  AnalysisSuccessResult,
+  PreparedAnalysisRequest,
+} from "../application/ports/analysis-content-resolver";
 
 export const FIXED_NOW = new Date("2026-07-29T14:00:00Z");
 
@@ -45,11 +66,49 @@ export class RecordingAnalysisDispatcher implements AnalysisDispatcher {
 }
 
 export class StaticPromptTemplate implements PromptTemplatePort {
-  render(_key: PromptKey, _variables: PromptVariables): RenderedPrompt {
+  render(key: PromptKey, _variables: PromptVariables): RenderedPrompt {
     return {
-      version: CURRENT_PROMPT_VERSION,
+      version: PROMPT_VERSIONS[key],
       systemPrompt: "system",
       userPrompt: "user",
+    };
+  }
+}
+
+export type FakeContentResolverBehavior =
+  | { kind: "success"; resultSummary?: string; persistThrows?: boolean }
+  | { kind: "prepare_error"; error: unknown }
+  | { kind: "handle_error"; error: unknown };
+
+/** Double de test pour `AnalysisContentResolver` (mission Sprint 4.2) — découple les tests de
+ *  `ProcessAnalysisJobUseCase` (cycle de vie/atomicité du job) de la logique réelle de résolution
+ *  de contenu métier (testée séparément via `BusinessAnalysisContentResolver`) — même motif que
+ *  `StaticPromptTemplate` pour `PromptTemplatePort`. */
+export class FakeAnalysisContentResolver implements AnalysisContentResolver {
+  readonly persistCalls: string[] = [];
+
+  constructor(private readonly behavior: FakeContentResolverBehavior = { kind: "success" }) {}
+
+  async prepare(_job: AnalysisJob): Promise<PreparedAnalysisRequest> {
+    if (this.behavior.kind === "prepare_error") {
+      throw this.behavior.error;
+    }
+    return { systemPrompt: "system", userPrompt: "user", responseSchemaName: "FakeSchema" };
+  }
+
+  async handleSuccess(_job: AnalysisJob, rawContent: string): Promise<AnalysisSuccessResult> {
+    if (this.behavior.kind === "handle_error") {
+      throw this.behavior.error;
+    }
+    const behavior = this.behavior;
+    return {
+      resultSummary: behavior.kind === "success" ? (behavior.resultSummary ?? "fake result summary") : "fake result summary",
+      persist: async (_tx) => {
+        if (behavior.kind === "success" && behavior.persistThrows) {
+          throw new Error("Simulated business result persistence failure (test-only)");
+        }
+        this.persistCalls.push(rawContent);
+      },
     };
   }
 }
@@ -126,6 +185,19 @@ export class InMemoryAnalysisJobRepository implements AnalysisJobRepository {
     this.byId.set(job.id, job);
   }
 
+  async listByTarget(input: {
+    organizationId: string;
+    scope: AnalysisScope;
+    targetId: string;
+    limit: number;
+    offset: number;
+  }): Promise<{ items: readonly AnalysisJob[]; total: number }> {
+    const matching = [...this.byId.values()]
+      .filter((job) => job.organizationId === input.organizationId && job.scope === input.scope && job.targetId === input.targetId)
+      .sort((a, b) => b.analysisVersion - a.analysisVersion);
+    return { items: matching.slice(input.offset, input.offset + input.limit), total: matching.length };
+  }
+
   async reserveForProcessing(input: {
     organizationId: string;
     jobId: string;
@@ -150,6 +222,7 @@ export class InMemoryAnalysisJobRepository implements AnalysisJobRepository {
     outcome: FinalizeAttemptOutcome;
     trigger: string;
     retryCount: number;
+    onSuccessTx?: ((tx: PrismaTx) => Promise<void>) | undefined;
   }): Promise<{ applied: boolean }> {
     const job = await this.findById(input);
     if (!job || job.attemptCount !== input.expectedAttemptCount || job.status !== AnalysisStatus.Processing) {
@@ -157,6 +230,16 @@ export class InMemoryAnalysisJobRepository implements AnalysisJobRepository {
     }
 
     const outcome = input.outcome;
+
+    // Mission Sprint 4.2 — invoqué AVANT l'écriture de l'AnalysisAttempt : dans la vraie
+    // transaction Prisma, `onSuccessTx` et `attemptStore.create` (ci-dessous) sont TOUS DEUX annulés
+    // ensemble si l'un des deux échoue ; ce fake en mémoire n'a pas de rollback réel, donc l'ordre
+    // "le plus risqué d'abord" reproduit la même garantie observable — si `onSuccessTx` lève, aucune
+    // tentative n'est même construite/poussée, le job stocké reste totalement intact (PROCESSING).
+    if (input.onSuccessTx) {
+      await input.onSuccessTx({} as PrismaTx);
+    }
+
     // Écrit la tentative AVANT toute mutation du job (correction P1-02) : si `create()` échoue
     // (ex. `failNextCreate`), le job stocké dans `byId` reste totalement intact — jamais un état
     // terminal sans historique correspondant, même dans ce fake en mémoire.
@@ -200,6 +283,7 @@ export class InMemoryAnalysisJobRepository implements AnalysisJobRepository {
         input.occurredAt,
       );
     }
+
     await this.save(job);
     return { applied: true };
   }
@@ -272,5 +356,129 @@ export class InMemoryAnalysisAttemptRepository implements AnalysisAttemptReposit
 
   async listByJobId(input: { organizationId: string; jobId: string }): Promise<AnalysisAttempt[]> {
     return this.attempts.filter((attempt) => attempt.organizationId === input.organizationId && attempt.jobId === input.jobId);
+  }
+}
+
+type StoredDocumentAnalysis = DocumentAnalysisRecord & { organizationId: string; tenderId: string };
+type StoredFinding<T> = T & { organizationId: string; tenderId: string; analysisVersion: number };
+
+/** Double de test pour `BusinessAnalysisRepository` (mission Sprint 4.2) — même motif que les
+ *  autres fakes en mémoire de ce module : aucune transaction réelle (mono-thread), mais reproduit
+ *  fidèlement la sémantique de pagination/filtrage par `analysisVersion` du repository Prisma. */
+export class InMemoryBusinessAnalysisRepository implements BusinessAnalysisRepository {
+  private readonly documentAnalyses: StoredDocumentAnalysis[] = [];
+  private readonly deadlines: StoredFinding<DeadlineFindingRecord>[] = [];
+  private readonly criteria: StoredFinding<CriterionFindingRecord>[] = [];
+  private readonly requirements: StoredFinding<RequirementFindingRecord>[] = [];
+  private readonly clauses: StoredFinding<ClauseFindingRecord>[] = [];
+  private readonly risks: StoredFinding<RiskFindingRecord>[] = [];
+  private readonly questions: StoredFinding<QuestionFindingRecord>[] = [];
+  private readonly summaries: (TenderAnalysisSummaryRecord & { organizationId: string; tenderId: string })[] = [];
+
+  async persistDocumentAnalysis(_tx: PrismaTx, input: PersistDocumentAnalysisInput): Promise<void> {
+    this.documentAnalyses.push({
+      organizationId: input.organizationId,
+      tenderId: input.tenderId,
+      documentId: input.documentId,
+      analysisVersion: input.analysisVersion,
+      documentType: input.output.documentType,
+      language: input.output.language,
+      metadata: input.output.metadata,
+      deadlines: input.output.deadlines,
+      criteria: input.output.criteria,
+      requirements: input.output.requirements,
+      clauses: input.output.clauses,
+      warnings: input.output.warnings,
+    });
+  }
+
+  async persistTenderConsolidation(_tx: PrismaTx, input: PersistTenderConsolidationInput): Promise<void> {
+    const base = { organizationId: input.organizationId, tenderId: input.tenderId, analysisVersion: input.analysisVersion };
+    const now = new Date().toISOString();
+    for (const item of input.output.deadlines) {
+      this.deadlines.push({ id: randomUUID(), createdAt: now, ...item, ...base });
+    }
+    for (const item of input.output.criteria) {
+      this.criteria.push({ id: randomUUID(), createdAt: now, ...item, ...base });
+    }
+    for (const item of input.output.requirements) {
+      this.requirements.push({ id: randomUUID(), createdAt: now, ...item, ...base });
+    }
+    for (const item of input.output.clauses) {
+      this.clauses.push({ id: randomUUID(), createdAt: now, ...item, ...base });
+    }
+    for (const item of input.output.risks) {
+      this.risks.push({ id: randomUUID(), createdAt: now, ...item, ...base });
+    }
+    for (const item of input.output.questions) {
+      this.questions.push({ id: randomUUID(), createdAt: now, ...item, ...base });
+    }
+    this.summaries.push({ ...base, ...input.output.summary, createdAt: now });
+  }
+
+  async findLatestDocumentAnalyses(input: { organizationId: string; tenderId: string }): Promise<DocumentAnalysisRecord[]> {
+    const byDocument = new Map<string, StoredDocumentAnalysis>();
+    for (const analysis of this.documentAnalyses) {
+      if (analysis.organizationId !== input.organizationId || analysis.tenderId !== input.tenderId) continue;
+      const existing = byDocument.get(analysis.documentId);
+      if (!existing || analysis.analysisVersion > existing.analysisVersion) {
+        byDocument.set(analysis.documentId, analysis);
+      }
+    }
+    return [...byDocument.values()];
+  }
+
+  private paginate<T>(items: readonly T[], page: ListPage): PageResult<T> {
+    return { items: items.slice(page.offset, page.offset + page.limit), total: items.length };
+  }
+
+  private scoped<T extends { organizationId: string; tenderId: string; analysisVersion: number }>(
+    items: readonly T[],
+    input: { organizationId: string; tenderId: string; analysisVersion: number },
+  ): T[] {
+    return items.filter(
+      (item) => item.organizationId === input.organizationId && item.tenderId === input.tenderId && item.analysisVersion === input.analysisVersion,
+    );
+  }
+
+  async listDeadlines(input: { organizationId: string; tenderId: string; analysisVersion: number } & ListPage): Promise<PageResult<DeadlineFindingRecord>> {
+    return this.paginate(this.scoped(this.deadlines, input), input);
+  }
+
+  async listCriteria(input: { organizationId: string; tenderId: string; analysisVersion: number } & ListPage): Promise<PageResult<CriterionFindingRecord>> {
+    return this.paginate(this.scoped(this.criteria, input), input);
+  }
+
+  async listRequirements(
+    input: { organizationId: string; tenderId: string; analysisVersion: number } & ListPage,
+  ): Promise<PageResult<RequirementFindingRecord>> {
+    return this.paginate(this.scoped(this.requirements, input), input);
+  }
+
+  async listClauses(input: { organizationId: string; tenderId: string; analysisVersion: number } & ListPage): Promise<PageResult<ClauseFindingRecord>> {
+    return this.paginate(this.scoped(this.clauses, input), input);
+  }
+
+  async listRisks(input: { organizationId: string; tenderId: string; analysisVersion: number } & ListPage): Promise<PageResult<RiskFindingRecord>> {
+    return this.paginate(this.scoped(this.risks, input), input);
+  }
+
+  async listQuestions(input: { organizationId: string; tenderId: string; analysisVersion: number } & ListPage): Promise<PageResult<QuestionFindingRecord>> {
+    return this.paginate(this.scoped(this.questions, input), input);
+  }
+
+  async getSummary(input: { organizationId: string; tenderId: string; analysisVersion: number }): Promise<TenderAnalysisSummaryRecord | null> {
+    return (
+      this.summaries.find(
+        (summary) =>
+          summary.organizationId === input.organizationId && summary.tenderId === input.tenderId && summary.analysisVersion === input.analysisVersion,
+      ) ?? null
+    );
+  }
+
+  async getLatestSummary(input: { organizationId: string; tenderId: string }): Promise<TenderAnalysisSummaryRecord | null> {
+    const matching = this.summaries.filter((summary) => summary.organizationId === input.organizationId && summary.tenderId === input.tenderId);
+    if (matching.length === 0) return null;
+    return matching.reduce((latest, current) => (current.analysisVersion > latest.analysisVersion ? current : latest));
   }
 }
