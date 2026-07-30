@@ -10,3 +10,15 @@ export type {
   DocumentAnalysisInput,
   GetDocumentAnalysisInputQuery,
 } from "./application/use-cases/get-document-analysis-input.use-case";
+
+// Contrat public Sprint 5 — seul point d'entrée que le module Knowledge Base doit utiliser pour
+// extraire le texte/chunks d'un document déjà stocké (module Documents) : jamais lié à un
+// Tender/DCE, jamais un accès direct aux tables internes de ce module (DocumentExtraction/
+// ExtractionChunk, intrinsèquement FK-ées à un DCE) — même motif que GetDocumentAnalysisInputUseCase
+// pour le module Analysis (Sprint 4).
+export { ExtractDocumentContentUseCase } from "./application/use-cases/extract-document-content.use-case";
+export type {
+  ExtractDocumentContentCommand,
+  ExtractDocumentContentResult,
+  ExtractedDocumentContentChunk,
+} from "./application/use-cases/extract-document-content.use-case";

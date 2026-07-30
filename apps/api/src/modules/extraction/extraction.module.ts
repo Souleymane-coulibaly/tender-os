@@ -18,6 +18,7 @@ import { PDF_RASTERIZER } from "./application/ports/pdf-rasterizer";
 import { SPREADSHEET_EXTRACTOR } from "./application/ports/spreadsheet-extractor";
 import { TEXT_SEGMENTER } from "./application/ports/text-segmenter";
 
+import { ExtractDocumentContentUseCase } from "./application/use-cases/extract-document-content.use-case";
 import { GetDocumentAnalysisInputUseCase } from "./application/use-cases/get-document-analysis-input.use-case";
 import { GetDocumentExtractionUseCase } from "./application/use-cases/get-document-extraction.use-case";
 import { ProcessDocumentExtractionUseCase } from "./application/use-cases/process-document-extraction.use-case";
@@ -52,6 +53,9 @@ import { ExtractionController } from "./interfaces/http/extraction.controller";
     // (Sprint 4) doit utiliser pour lire le corpus de chunks ; jamais un accès direct à
     // l'infrastructure de ce module.
     GetDocumentAnalysisInputUseCase,
+    // Contrat public Sprint 5 — extraction générique de contenu, sans Tender ni DCE (voir
+    // extract-document-content.use-case.ts) : consommé par le module Knowledge Base.
+    ExtractDocumentContentUseCase,
 
     { provide: DOCUMENT_EXTRACTION_REPOSITORY, useClass: PrismaDocumentExtractionRepository },
     { provide: EXTRACTION_ATTEMPT_REPOSITORY, useClass: PrismaExtractionAttemptRepository },
@@ -75,6 +79,6 @@ import { ExtractionController } from "./interfaces/http/extraction.controller";
   // module consommateur ne peut injecter `GetDocumentAnalysisInputUseCase` via le mécanisme de DI
   // NestJS standard, même en important `ExtractionModule` : le réexport déjà présent dans
   // `index.ts` (correction P1-04) ne suffit qu'au typage, jamais à la résolution DI runtime.
-  exports: [GetDocumentAnalysisInputUseCase],
+  exports: [GetDocumentAnalysisInputUseCase, ExtractDocumentContentUseCase],
 })
 export class ExtractionModule {}

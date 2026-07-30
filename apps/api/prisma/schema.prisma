@@ -101,10 +101,11 @@ model Organization {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  memberships OrganizationMembership[]
-  tenders     Tender[]
-  documents   Document[]
-  auditLogs   AuditLog[]
+  memberships     OrganizationMembership[]
+  tenders         Tender[]
+  documents       Document[]
+  auditLogs       AuditLog[]
+  knowledgeSpaces KnowledgeSpace[]
 
   @@map("organizations")
 }
@@ -608,6 +609,7 @@ model Document {
   documentExtraction          DocumentExtraction?
   analysisJobs                AnalysisJob[]
   businessAnalyses            DocumentBusinessAnalysis[]
+  knowledgeDocuments          KnowledgeDocument[]
 
   /// Support de la FK composée de DceDocument (module DCE) — même motif que TenderLot/AUDIT-007 :
   /// garantit au niveau base qu'un DceDocument ne peut jamais référencer un Document d'une autre
@@ -1348,4 +1350,202 @@ model TenderAnalysisSummary {
 
   @@unique([organizationId, tenderId, analysisVersion])
   @@map("tender_analysis_summaries")
+}
+
+/// Espace de connaissances organisationnel (mission Sprint 5 §1) — un seul espace principal par
+/// organisation dans cette tranche (`(organizationId, name)` unique, résolu de manière idempotente
+/// par `GetOrCreateDefaultKnowledgeSpaceUseCase`), architecture prête pour une extension future vers
+/// plusieurs espaces nommés sans migration de rupture.
+model KnowledgeSpace {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  name        String  @db.VarChar(200)
+  description String?
+  /// ACTIVE | ARCHIVED — protégée par une contrainte CHECK (migration).
+  status      String  @default("ACTIVE") @db.VarChar(20)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  entries KnowledgeEntry[]
+
+  @@unique([organizationId, name])
+  @@unique([id, organizationId])
+  @@map("knowledge_spaces")
+}
+
+/// Entrée de connaissance (mission Sprint 5 §2) — peut exister sans document (MANUAL, READY
+/// immédiat) ou être adossée à un import (DOCUMENT_IMPORT, DRAFT puis transite via
+/// KnowledgeDocument). `category`/`sourceType`/`status` sont typés et validés côté domaine, jamais
+/// une chaîne libre non contrôlée (protégés par des contraintes CHECK, migration).
+model KnowledgeEntry {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  knowledgeSpaceId String         @map("knowledge_space_id") @db.Uuid
+  knowledgeSpace   KnowledgeSpace @relation(fields: [knowledgeSpaceId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  title       String  @db.VarChar(500)
+  description String?
+  category    String  @db.VarChar(40)
+  sourceType  String  @map("source_type") @db.VarChar(30)
+  status      String  @db.VarChar(20)
+  language    String? @db.VarChar(8)
+  /// Validé par `application/schemas/metadata` selon `category` avant persistance (mission §5
+  /// "Toute donnée JSON doit être validée") — jamais un JSON brut non contrôlé.
+  metadata    Json    @default("{}")
+
+  /// Version active de cette entrée (mission §10) — incrémentée uniquement par les mutations
+  /// substantielles, jamais par un ajout/retrait de tag.
+  activeVersionNumber Int @default(1) @map("active_version_number")
+
+  createdByUserId String  @map("created_by_user_id") @db.Uuid
+  updatedByUserId String? @map("updated_by_user_id") @db.Uuid
+
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  versions  KnowledgeEntryVersion[]
+  documents KnowledgeDocument[]
+  entryTags KnowledgeEntryTag[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, category])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, archivedAt])
+  @@index([organizationId, title])
+  @@map("knowledge_entries")
+}
+
+/// Version immuable d'une entrée (mission Sprint 5 §10 "Versionnement") — même motif que
+/// `DocumentVersion` : aucune mutation possible après création, une restauration crée toujours une
+/// NOUVELLE ligne (voir `RestoreKnowledgeVersionUseCase`), jamais un rollback destructif.
+model KnowledgeEntryVersion {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  knowledgeEntryId String         @map("knowledge_entry_id") @db.Uuid
+  knowledgeEntry   KnowledgeEntry @relation(fields: [knowledgeEntryId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  versionNumber Int     @map("version_number")
+  /// Motif court facultatif (mission §10 "motif éventuel") — ex. "Métadonnées mises à jour",
+  /// "Nouveau document importé", "Restauration de la version 2".
+  reason        String?
+  /// Instantané des champs métier au moment de cette version (title/description/category/
+  /// language/metadata/knowledgeDocumentId) — jamais un diff, un instantané complet.
+  snapshot      Json
+
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, knowledgeEntryId, versionNumber])
+  @@map("knowledge_entry_versions")
+}
+
+/// Document lié à une entrée (mission Sprint 5 §6/§7) — porte SON PROPRE cycle de traitement,
+/// jamais partagé avec le module Extraction (Sprint 3, intrinsèquement lié à un DCE) : le fichier
+/// physique lui-même reste stocké par le module Documents (`documentId`, `domain: KNOWLEDGE`),
+/// jamais dupliqué ici.
+model KnowledgeDocument {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  knowledgeEntryId String         @map("knowledge_entry_id") @db.Uuid
+  knowledgeEntry   KnowledgeEntry @relation(fields: [knowledgeEntryId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  documentId String   @map("document_id") @db.Uuid
+  document   Document @relation(fields: [documentId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Version de l'entrée à laquelle ce document appartient (mission §10) — un document remplacé
+  /// crée une nouvelle ligne rattachée à la nouvelle version, jamais une mise à jour en place.
+  versionNumber Int      @map("version_number")
+  /// PENDING | PROCESSING | READY | PARTIALLY_READY | FAILED — protégée par une contrainte CHECK
+  /// (migration).
+  status        String   @db.VarChar(20)
+  language      String?  @db.VarChar(8)
+  warnings      String[] @default([])
+  errorMessage  String?  @map("error_message")
+  /// Jeton de réservation (même motif que `DocumentExtraction.attemptCount`, module Extraction).
+  attemptCount  Int      @default(0) @map("attempt_count")
+
+  processedAt DateTime? @map("processed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  chunks KnowledgeChunk[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, knowledgeEntryId])
+  @@index([organizationId, documentId])
+  @@map("knowledge_documents")
+}
+
+/// Segment de texte exploitable par la recherche (mission Sprint 5 §7/§8) — même motif que
+/// `ExtractionChunk` (module Extraction), volontairement une table DISTINCTE : jamais de dépendance
+/// vers un `DocumentExtraction` lié à un DCE/Tender. `knowledgeEntryId` est dénormalisé (redondant
+/// avec `knowledgeDocument.knowledgeEntryId`) uniquement pour indexer "tous les chunks d'une
+/// entrée" sans jointure — jamais une source de vérité indépendante.
+model KnowledgeChunk {
+  id               String @id @default(uuid()) @db.Uuid
+  organizationId   String @map("organization_id") @db.Uuid
+  knowledgeEntryId String @map("knowledge_entry_id") @db.Uuid
+
+  knowledgeDocumentId String            @map("knowledge_document_id") @db.Uuid
+  knowledgeDocument   KnowledgeDocument @relation(fields: [knowledgeDocumentId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  sequence       Int
+  pageStart      Int?    @map("page_start")
+  pageEnd        Int?    @map("page_end")
+  sheetName      String? @map("sheet_name") @db.VarChar(120)
+  sectionTitle   String? @map("section_title") @db.VarChar(300)
+  content        String
+  characterCount Int     @map("character_count")
+  tokenEstimate  Int?    @map("token_estimate")
+  checksum       String
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, knowledgeEntryId])
+  @@index([organizationId, knowledgeDocumentId, sequence])
+  @@map("knowledge_chunks")
+}
+
+/// Tag d'organisation (mission Sprint 5 §4) — `label` normalisé porte l'unicité tenant-aware ("pas
+/// de doublons liés à la casse"), `displayLabel` ne sert qu'à l'affichage.
+model KnowledgeTag {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  label        String @db.VarChar(60)
+  displayLabel String @map("display_label") @db.VarChar(60)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  entryTags KnowledgeEntryTag[]
+
+  @@unique([organizationId, label])
+  @@unique([id, organizationId])
+  @@map("knowledge_tags")
+}
+
+/// Association plusieurs-à-plusieurs entrée/tag (mission §4) — la suppression d'un tag (cascade)
+/// ne supprime jamais l'entrée elle-même, seulement cette association.
+model KnowledgeEntryTag {
+  organizationId String @map("organization_id") @db.Uuid
+
+  knowledgeEntryId String         @map("knowledge_entry_id") @db.Uuid
+  knowledgeEntry   KnowledgeEntry @relation(fields: [knowledgeEntryId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  tagId String       @map("tag_id") @db.Uuid
+  tag   KnowledgeTag @relation(fields: [tagId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([knowledgeEntryId, tagId])
+  @@index([organizationId, tagId])
+  @@map("knowledge_entry_tags")
 }

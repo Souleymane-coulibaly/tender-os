@@ -38,8 +38,16 @@ const ADMIN_PERMISSIONS: readonly DocumentPermission[] = Object.values(DocumentP
  * Admin = ORGANIZATION_ADMIN, BID_MANAGER (parité avec leur périmètre complet sur Tenders) ;
  * Contributor = CONTRIBUTOR ;
  * Viewer = REVIEWER, EXECUTIVE, EXTERNAL_CONSULTANT, READ_ONLY.
+ * OWNER (correction Sprint 5 — même motif que la correction d'audit Codex P1-01 déjà appliquée à
+ * Tenders/Extraction/Analysis) — superset strict de ORGANIZATION_ADMIN : sans cette entrée, un
+ * propriétaire d'organisation ne pouvait pas importer de document pour la base de connaissances
+ * (`CreateKnowledgeEntryUseCase`/`AddKnowledgeDocumentUseCase` délèguent à
+ * `CreateDocumentWithFirstVersionUseCase`, qui vérifie `DocumentPermission.Create` avec le rôle
+ * réel de l'acteur) — nécessité technique démontrée par ce Sprint, jamais une modification
+ * opportuniste.
  */
 export const ROLE_DOCUMENT_PERMISSIONS: Record<string, readonly DocumentPermission[]> = {
+  OWNER: ADMIN_PERMISSIONS,
   ORGANIZATION_ADMIN: ADMIN_PERMISSIONS,
   BID_MANAGER: ADMIN_PERMISSIONS,
   CONTRIBUTOR: CONTRIBUTOR_PERMISSIONS,

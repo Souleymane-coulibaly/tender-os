@@ -7,6 +7,7 @@ import { logoutAction } from "../actions";
 const NAV_ITEMS = [
   { href: "/app/tenders", label: "Appels d'offres" },
   { href: "/app/documents", label: "Documents" },
+  { href: "/app/knowledge", label: "Base de connaissances" },
 ];
 
 export default async function AppLayout({ children }: { children: ReactNode }) {

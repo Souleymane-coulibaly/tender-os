@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { DocumentPermission, roleHasDocumentPermission } from "./document-permission";
 
 describe("roleHasDocumentPermission", () => {
-  it("grants Admin-tier roles (ORGANIZATION_ADMIN, BID_MANAGER) every permission", () => {
+  it("grants Admin-tier roles (OWNER, ORGANIZATION_ADMIN, BID_MANAGER) every permission", () => {
     for (const permission of Object.values(DocumentPermission)) {
+      expect(roleHasDocumentPermission("OWNER", permission)).toBe(true);
       expect(roleHasDocumentPermission("ORGANIZATION_ADMIN", permission)).toBe(true);
       expect(roleHasDocumentPermission("BID_MANAGER", permission)).toBe(true);
     }
