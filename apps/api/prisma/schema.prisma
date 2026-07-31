@@ -102,12 +102,16 @@ model Organization {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  memberships     OrganizationMembership[]
-  tenders         Tender[]
-  documents       Document[]
-  auditLogs       AuditLog[]
-  knowledgeSpaces KnowledgeSpace[]
-  clientAccounts  ClientAccount[]
+  memberships          OrganizationMembership[]
+  tenders              Tender[]
+  documents            Document[]
+  auditLogs            AuditLog[]
+  knowledgeSpaces      KnowledgeSpace[]
+  clientAccounts       ClientAccount[]
+  benchmarkRuns        BenchmarkRun[]
+  modelRecommendations ModelRecommendation[]
+  routingPolicies      RoutingPolicy[]
+  routingDecisions     RoutingDecision[]
 
   @@map("organizations")
 }
@@ -1638,4 +1642,406 @@ model ClientAssignment {
   @@index([organizationId, userId])
   @@index([organizationId, clientAccountId])
   @@map("client_assignments")
+}
+
+/// Registre global des modèles IA autorisés (Sprint 5.2 §"Registre des modèles") — jamais scopé à
+/// une organisation : lecture partagée par toutes, mutation réservée à OWNER/ORGANIZATION_ADMIN
+/// (voir AiBenchmarkPermission). Le couple (provider, modelKey) doit appartenir à la liste blanche
+/// applicative `ALLOWED_MODEL_CATALOG` avant toute création — jamais un identifiant arbitraire
+/// fourni par le frontend.
+model AiModel {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// OPENAI | ANTHROPIC | MISTRAL | AZURE_OPENAI (analysis/domain/analysis-provider.ts, réutilisé).
+  provider String @db.VarChar(30)
+  modelKey String @map("model_key") @db.VarChar(60)
+
+  displayName String @map("display_name") @db.VarChar(200)
+
+  /// ENABLED | DISABLED — protégée par une contrainte CHECK (migration).
+  status String @default("ENABLED") @db.VarChar(10)
+
+  capabilitiesStructuredOutput Boolean @default(false) @map("capabilities_structured_output")
+  capabilitiesToolCalling      Boolean @default(false) @map("capabilities_tool_calling")
+  capabilitiesVision           Boolean @default(false) @map("capabilities_vision")
+
+  maxContextTokens Int? @map("max_context_tokens")
+
+  /// Indépendants l'un de l'autre (mission §"un modèle benchmark-only ne doit pas être utilisé en
+  /// production" / "un modèle production-only peut être exclu des benchmarks") — jamais déduits.
+  enabledForBenchmark  Boolean @default(false) @map("enabled_for_benchmark")
+  enabledForProduction Boolean @default(false) @map("enabled_for_production")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  pricingSnapshots AiModelPricingSnapshot[]
+  runModels        BenchmarkRunModel[]
+
+  @@unique([provider, modelKey])
+  @@index([status])
+  @@map("ai_models")
+}
+
+/// Tarif d'un AiModel valable sur une période (Sprint 5.2 §"Les tarifs doivent être versionnés ou
+/// configurables" + "une mise à jour de tarif ne doit pas modifier rétroactivement les coûts
+/// historiques") — immuable une fois `effectiveTo` renseigné. Au plus UN snapshot courant
+/// (`effectiveTo IS NULL`) par modèle, garanti par un index unique partiel (migration) — jamais
+/// uniquement par la discipline applicative.
+model AiModelPricingSnapshot {
+  id String @id @default(uuid()) @db.Uuid
+
+  aiModelId String  @map("ai_model_id") @db.Uuid
+  aiModel   AiModel @relation(fields: [aiModelId], references: [id], onDelete: Cascade)
+
+  inputPricePerMillionTokens  Decimal @map("input_price_per_million_tokens") @db.Decimal(12, 6)
+  outputPricePerMillionTokens Decimal @map("output_price_per_million_tokens") @db.Decimal(12, 6)
+  currency                    String  @db.VarChar(3)
+
+  effectiveFrom DateTime  @map("effective_from")
+  effectiveTo   DateTime? @map("effective_to")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  runModels BenchmarkRunModel[]
+
+  @@index([aiModelId, effectiveFrom])
+  @@map("ai_model_pricing_snapshots")
+}
+
+/// Suite de benchmark versionnée (Sprint 5.2 §"Corpus de benchmark") — globale (corpus strictement
+/// synthétique, jamais de donnée tenant réelle, voir BenchmarkCase). Toujours liée à exactement UN
+/// PromptKey réel du module Analysis (ANALYZE_DOCUMENT | CONSOLIDATE_TENDER_ANALYSIS) — décision de
+/// granularité de routing déjà validée : jamais une tâche métier fine. Immuable une fois PUBLISHED —
+/// toute évolution crée une nouvelle version (nouvelle ligne), jamais une réécriture.
+model BenchmarkSuite {
+  id String @id @default(uuid()) @db.Uuid
+
+  name    String @db.VarChar(200)
+  version Int
+
+  /// ANALYZE_DOCUMENT | CONSOLIDATE_TENDER_ANALYSIS — protégée par une contrainte CHECK (migration).
+  promptKey String @map("prompt_key") @db.VarChar(40)
+
+  /// DRAFT | PUBLISHED — protégée par une contrainte CHECK (migration).
+  status String @default("DRAFT") @db.VarChar(10)
+
+  description String?
+
+  createdByUserId String @map("created_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cases BenchmarkCase[]
+
+  @@unique([name, version])
+  @@map("benchmark_suites")
+}
+
+/// Cas de référence d'une suite (Sprint 5.2 §"Benchmark case") — immuable une fois créé, jamais
+/// modifiable après publication de la suite parente (voir BenchmarkSuite.assertMutable). Contenu
+/// strictement synthétique/fictif (mission §"aucun DCE réel confidentiel dans Git", et ici même en
+/// base : ce corpus n'est jamais un extrait de document client réel).
+model BenchmarkCase {
+  id String @id @default(uuid()) @db.Uuid
+
+  suiteId String         @map("suite_id") @db.Uuid
+  suite   BenchmarkSuite @relation(fields: [suiteId], references: [id], onDelete: Cascade)
+
+  inputVariables     Json  @map("input_variables")
+  expectedOutput     Json  @map("expected_output")
+  expectedProvenance Json? @map("expected_provenance")
+
+  /// EASY | MEDIUM | HARD — protégée par une contrainte CHECK (migration).
+  difficulty String @db.VarChar(10)
+
+  /// FR | EN — protégée par une contrainte CHECK (migration).
+  language String @db.VarChar(2)
+
+  /// Étiquette de reporting purement descriptive (jamais un second point de dispatch) — nullable :
+  /// tous les cas n'ont pas vocation à être classés par sous-catégorie métier.
+  businessCategory String? @map("business_category") @db.VarChar(20)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([suiteId])
+  @@map("benchmark_cases")
+}
+
+/// Exécution d'un benchmark (Sprint 5.2 §"Exécution du benchmark") — scopée à l'organisation qui
+/// l'a lancée (le registre de modèles/corpus est global, mais le lancement et son coût le sont pas).
+model BenchmarkRun {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  suiteId      String @map("suite_id") @db.Uuid
+  suiteVersion Int    @map("suite_version")
+
+  /// PENDING | RUNNING | SUCCEEDED | PARTIALLY_SUCCEEDED | FAILED | CANCELLED — CHECK (migration).
+  status String @default("PENDING") @db.VarChar(20)
+
+  repetitions      Int
+  concurrencyLimit Int @map("concurrency_limit")
+
+  estimatedCostAmount   Decimal  @map("estimated_cost_amount") @db.Decimal(14, 6)
+  estimatedCostCurrency String   @map("estimated_cost_currency") @db.VarChar(3)
+  costCeilingAmount     Decimal? @map("cost_ceiling_amount") @db.Decimal(14, 6)
+
+  launchedByUserId  String    @map("launched_by_user_id") @db.Uuid
+  launchedAt        DateTime  @map("launched_at")
+  startedAt         DateTime? @map("started_at")
+  completedAt       DateTime? @map("completed_at")
+  cancelRequestedAt DateTime? @map("cancel_requested_at")
+  cancelledByUserId String?   @map("cancelled_by_user_id") @db.Uuid
+
+  /// Audit Codex P1-3 — dernier code d'erreur connu pour ce run (échec réel ou récupération
+  /// stale), jamais écrasé par un succès (mission "traçabilité minimale de la dernière anomalie").
+  lastErrorCode String? @map("last_error_code") @db.VarChar(60)
+
+  /// Audit Codex P1-3 — nombre de fois où ce run a été repris depuis un état RUNNING "stale"
+  /// (crash/redéploiement présumé, détecté via `updatedAt`). Jamais incrémenté par un retry
+  /// manuel explicite (CancelBenchmarkRunUseCase + relance), uniquement par la récupération
+  /// automatique (`RecoverStaleBenchmarkRunsUseCase`).
+  staleRecoveryAttempts Int @default(0) @map("stale_recovery_attempts")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  runModels   BenchmarkRunModel[]
+  caseResults BenchmarkCaseResult[]
+
+  @@index([organizationId, status])
+  @@index([status, updatedAt])
+  @@map("benchmark_runs")
+}
+
+/// Sélection d'un modèle pour un run (Sprint 5.2) — capture le snapshot tarifaire utilisé pour
+/// L'ESTIMATION au lancement. Audit Codex P1-2 : les montants ci-dessous sont FIGÉS à cet instant
+/// (copie défensive, jamais recalculée) — `ExecuteBenchmarkRunUseCase` les utilise directement,
+/// il ne recharge JAMAIS le tarif courant du modèle pour un run déjà lancé, même après un
+/// nouveau tarif ajouté ou une reprise (stale recovery/retry).
+model BenchmarkRunModel {
+  id String @id @default(uuid()) @db.Uuid
+
+  runId String       @map("run_id") @db.Uuid
+  run   BenchmarkRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  aiModelId String  @map("ai_model_id") @db.Uuid
+  aiModel   AiModel @relation(fields: [aiModelId], references: [id])
+
+  /// Référence de traçabilité vers le snapshot d'origine — JAMAIS relu pour recalculer un coût
+  /// (voir les colonnes figées ci-dessous, qui sont la seule source de vérité pour ce run).
+  pricingSnapshotId String                 @map("pricing_snapshot_id") @db.Uuid
+  pricingSnapshot   AiModelPricingSnapshot @relation(fields: [pricingSnapshotId], references: [id])
+
+  /// Copie figée du tarif au lancement (audit Codex P1-2) — un nouveau AiModelPricingSnapshot créé
+  /// après ce run ne modifie jamais ces valeurs ni le coût déjà calculé/à calculer pour ce run.
+  pricingCurrency                         String   @map("pricing_currency") @db.VarChar(3)
+  pricingInputPricePerMillionTokens       Decimal  @map("pricing_input_price_per_million_tokens") @db.Decimal(14, 6)
+  pricingOutputPricePerMillionTokens      Decimal  @map("pricing_output_price_per_million_tokens") @db.Decimal(14, 6)
+  /// Toujours NULL dans cette tranche : AiModelPricingSnapshot ne modélise pas encore de tarif de
+  /// cache différencié — colonne prête pour une extension future sans nouvelle migration.
+  pricingCachedInputPricePerMillionTokens Decimal? @map("pricing_cached_input_price_per_million_tokens") @db.Decimal(14, 6)
+  pricingEffectiveFrom                    DateTime @map("pricing_effective_from")
+  pricingSource                           String   @default("PRICING_SNAPSHOT") @map("pricing_source") @db.VarChar(30)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([runId, aiModelId])
+  @@map("benchmark_run_models")
+}
+
+/// Résultat d'UNE tentative (cas × modèle × répétition), append-only (Sprint 5.2 §"Répétitions").
+model BenchmarkCaseResult {
+  id String @id @default(uuid()) @db.Uuid
+
+  runId String       @map("run_id") @db.Uuid
+  run   BenchmarkRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  caseId String @map("case_id") @db.Uuid
+
+  aiModelId String @map("ai_model_id") @db.Uuid
+
+  /// Snapshot tarifaire RÉELLEMENT utilisé pour le coût de cette tentative (mission §"le coût réel
+  /// utilise un pricing snapshot") — peut différer de celui de BenchmarkRunModel (estimation) si le
+  /// tarif a changé pendant l'exécution du run. Nullable : une tentative en échec avant tout appel
+  /// provider n'a pas de coût réel.
+  pricingSnapshotId String? @map("pricing_snapshot_id") @db.Uuid
+
+  repetitionIndex Int @map("repetition_index")
+
+  provider String? @db.VarChar(30)
+  model    String? @db.VarChar(60)
+
+  /// Bornée en taille par l'application avant persistance (mission §"aucune duplication de gros
+  /// inputs") — jamais un blob non borné.
+  rawOutput String? @map("raw_output")
+
+  inputTokenCount  Int? @map("input_token_count")
+  outputTokenCount Int? @map("output_token_count")
+  totalTokenCount  Int? @map("total_token_count")
+  durationMs       Int? @map("duration_ms")
+
+  actualCostAmount Decimal? @map("actual_cost_amount") @db.Decimal(14, 6)
+
+  evaluationPassed  Boolean @map("evaluation_passed")
+  evaluationScore   Decimal @map("evaluation_score") @db.Decimal(5, 4)
+  evaluationDetails Json    @default("{}") @map("evaluation_details")
+
+  /// TENANT_LEAKAGE | INVALID_PROVENANCE | CRITICAL_HALLUCINATION | INVALID_JSON_RATE_TOO_HIGH |
+  /// FAILURE_RATE_TOO_HIGH | QUALITY_BELOW_THRESHOLD — calculé à l'agrégation par modèle, jamais
+  /// stocké ici (une élimination se juge sur l'ensemble des tentatives d'un modèle, pas une seule).
+  criticalHallucinationFlag Boolean @default(false) @map("critical_hallucination_flag")
+  invalidProvenanceFlag     Boolean @default(false) @map("invalid_provenance_flag")
+
+  errorCode    String? @map("error_code") @db.VarChar(60)
+  errorMessage String? @map("error_message")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([runId, caseId, aiModelId, repetitionIndex])
+  @@index([runId, aiModelId])
+  @@index([runId, caseId])
+  @@map("benchmark_case_results")
+}
+
+/// Recommandation de modèle par tâche IA (Sprint 5.2 §"Recommandations") — reste DRAFT jusqu'à une
+/// décision explicite (approve/reject) : jamais activée automatiquement en routing.
+model ModelRecommendation {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  /// ANALYZE_DOCUMENT | CONSOLIDATE_TENDER_ANALYSIS — CHECK (migration).
+  promptKey String @map("prompt_key") @db.VarChar(40)
+
+  runId String @map("run_id") @db.Uuid
+
+  primaryAiModelId    String  @map("primary_ai_model_id") @db.Uuid
+  escalationAiModelId String? @map("escalation_ai_model_id") @db.Uuid
+
+  score           Decimal @db.Decimal(5, 4)
+  avgCostAmount   Decimal @map("avg_cost_amount") @db.Decimal(14, 6)
+  avgCostCurrency String  @map("avg_cost_currency") @db.VarChar(3)
+  avgLatencyMs    Int     @map("avg_latency_ms")
+  confidence      Decimal @db.Decimal(5, 4)
+
+  reasons     Json @default("[]")
+  limitations Json @default("[]")
+
+  /// DRAFT | APPROVED | REJECTED — CHECK (migration).
+  status String @default("DRAFT") @db.VarChar(10)
+
+  generatedAt     DateTime  @map("generated_at")
+  decidedByUserId String?   @map("decided_by_user_id") @db.Uuid
+  decidedAt       DateTime? @map("decided_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, promptKey])
+  @@map("model_recommendations")
+}
+
+/// Politique de routage versionnée par (organisation, tâche IA) — Sprint 5.2 §"Routing Policy".
+/// Au plus UNE version ACTIVE par (organizationId, promptKey), garanti par un index unique partiel
+/// `WHERE status = 'ACTIVE'` (migration) — jamais uniquement par la discipline applicative.
+model RoutingPolicy {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  /// ANALYZE_DOCUMENT | CONSOLIDATE_TENDER_ANALYSIS — CHECK (migration).
+  promptKey String @map("prompt_key") @db.VarChar(40)
+  version   Int
+
+  /// DRAFT | ACTIVE | ARCHIVED — CHECK (migration).
+  status String @default("DRAFT") @db.VarChar(10)
+
+  primaryAiModelId    String  @map("primary_ai_model_id") @db.Uuid
+  escalationAiModelId String? @map("escalation_ai_model_id") @db.Uuid
+
+  confidenceThreshold Decimal? @map("confidence_threshold") @db.Decimal(5, 4)
+  provenanceRequired  Boolean  @default(true) @map("provenance_required")
+  timeoutMs           Int      @map("timeout_ms")
+  maxRetries          Int      @map("max_retries")
+
+  /// Tableau de EscalationCondition (INVALID_JSON, UNKNOWN_SOURCE, ...) — validé applicativement.
+  escalationConditions Json @default("[]") @map("escalation_conditions")
+
+  sourceRecommendationId String? @map("source_recommendation_id") @db.Uuid
+
+  authorUserId  String    @map("author_user_id") @db.Uuid
+  effectiveFrom DateTime? @map("effective_from")
+  archivedAt    DateTime? @map("archived_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, promptKey, version])
+  @@map("routing_policies")
+}
+
+/// Audit Codex P1-4 — décision de routage DURABLE pour un job d'analyse réel (distinct du journal
+/// d'audit best-effort, insuffisant seul). Une ligne par tentative d'`AnalysisJob.execute()` :
+/// créée en IN_PROGRESS avant/au tout début de l'appel provider, mise à jour une seule fois à la
+/// fin (succès ou échec). Reste lisible même si la RoutingPolicy change de version, si le modèle
+/// est désactivé, ou si le tarif change ensuite — aucune colonne ici n'est un JOIN "état actuel".
+/// Jamais de prompt/document complet ni de clé API : uniquement des métadonnées d'exécution.
+model RoutingDecision {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  /// Best-effort, résolu via Tender.clientAccountId au moment de la création — non applicable
+  /// (NULL) si l'analyse ne porte pas sur un tender rattaché à un client, ou si la résolution
+  /// échoue (ne doit jamais faire échouer la décision elle-même ni l'analyse).
+  clientAccountId String? @map("client_account_id") @db.Uuid
+
+  tenderId   String? @map("tender_id") @db.Uuid
+  analysisId String  @map("analysis_id") @db.Uuid
+
+  /// ANALYZE_DOCUMENT | CONSOLIDATE_TENDER_ANALYSIS — même vocabulaire que RoutingPolicy.promptKey.
+  promptKey String @map("prompt_key") @db.VarChar(40)
+
+  /// NULL = chemin legacy (aucune RoutingPolicy consultée, résolution par variable d'environnement
+  /// statique Sprint 4.1/4.2) — jamais une valeur fabriquée.
+  routingPolicyId      String? @map("routing_policy_id") @db.Uuid
+  routingPolicyVersion Int?    @map("routing_policy_version")
+
+  recommendedAiModelId String? @map("recommended_ai_model_id") @db.Uuid
+
+  primaryProvider  String  @map("primary_provider") @db.VarChar(30)
+  primaryModel     String  @map("primary_model") @db.VarChar(60)
+  selectedProvider String? @map("selected_provider") @db.VarChar(30)
+  selectedModel    String? @map("selected_model") @db.VarChar(60)
+
+  /// 0 = résultat retenu vient de la tentative principale ; 1 = de l'unique palier d'escalade
+  /// (Sprint 5.2 §"Fallback simple" — jamais plus d'un palier dans cette tranche).
+  fallbackLevel    Int @default(0) @map("fallback_level")
+  fallbackAttempts Int @default(0) @map("fallback_attempts")
+
+  inputTokenCount     Int?     @map("input_token_count")
+  outputTokenCount    Int?     @map("output_token_count")
+  estimatedCostAmount Decimal? @map("estimated_cost_amount") @db.Decimal(14, 6)
+  actualCostAmount    Decimal? @map("actual_cost_amount") @db.Decimal(14, 6)
+  currency            String?  @db.VarChar(3)
+  latencyMs           Int?     @map("latency_ms")
+
+  /// IN_PROGRESS | SUCCEEDED | FAILED — CHECK (migration).
+  status        String  @default("IN_PROGRESS") @db.VarChar(20)
+  failureReason String? @map("failure_reason") @db.VarChar(60)
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+
+  @@index([organizationId, analysisId])
+  @@index([organizationId, promptKey, createdAt])
+  @@map("routing_decisions")
 }

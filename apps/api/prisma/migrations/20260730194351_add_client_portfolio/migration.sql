@@ -133,13 +133,26 @@ ALTER TABLE "knowledge_entries" ADD CONSTRAINT "knowledge_entries_client_account
 --                                             -> VIEWER          (lecture seule, jamais d'écriture
 --                                                                  nouvellement accordée)
 -- Les NOUVEAUX clients créés après cette migration démarrent, eux, sans affectation implicite.
+-- Correction P0 (Sprint 5.2, chaîne de migrations) : "organization_memberships" n'a jamais eu de
+-- colonne "role" — le rôle d'une Membership passe exclusivement par la table de jonction
+-- "membership_roles"/"roles" (docs/04-architecture/DATABASE_DESIGN.md §6.1, même lecture que
+-- organization-membership.persistence-mapper.ts). La référence originale à om."role" ne pouvait
+-- réussir que sur une base ayant déjà dévié de ce schéma ; corrigée ici pour que la chaîne de
+-- migrations rejoue proprement sur une base fraîche (shadow database Prisma incluse), sans changer
+-- la logique métier de correspondance de rôles décrite ci-dessus.
 INSERT INTO "client_assignments" ("id", "organization_id", "client_account_id", "user_id", "role", "created_by", "created_at", "updated_at")
 SELECT
   gen_random_uuid(),
   om."organization_id",
   ca."id",
   om."user_id",
-  CASE om."role"
+  CASE (
+    SELECT r."code"
+    FROM "membership_roles" mr
+    JOIN "roles" r ON r."id" = mr."role_id"
+    WHERE mr."membership_id" = om."id"
+    LIMIT 1
+  )
     WHEN 'OWNER' THEN 'CLIENT_MANAGER'
     WHEN 'ORGANIZATION_ADMIN' THEN 'CLIENT_MANAGER'
     WHEN 'BID_MANAGER' THEN 'CLIENT_MANAGER'

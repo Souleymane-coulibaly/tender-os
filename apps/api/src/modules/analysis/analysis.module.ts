@@ -73,5 +73,9 @@ import { AnalysisController } from "./interfaces/http/analysis.controller";
     // qu'au moment de démarrer une analyse réelle, AI_PROVIDER_NOT_CONFIGURED).
     { provide: ANALYSIS_CONFIG, useFactory: () => loadAnalysisConfig() },
   ],
+  // AI_PROVIDER_REGISTRY/PROMPT_TEMPLATE exportés pour le module ai-benchmark (Sprint 5.2) —
+  // réutilise le port et l'adapter existants pour exécuter des benchmarks avec le MÊME prompt que
+  // la production, jamais un second chemin d'appel provider ou une réimplémentation de prompt.
+  exports: [AI_PROVIDER_REGISTRY, PROMPT_TEMPLATE],
 })
 export class AnalysisModule {}

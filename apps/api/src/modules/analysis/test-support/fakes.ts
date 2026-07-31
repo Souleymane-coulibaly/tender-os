@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Clock } from "../../../shared-kernel/clock";
+import type { IdGenerator } from "../../../shared-kernel/id-generator";
 import { AnalysisJob } from "../domain/analysis-job.aggregate";
 import type { AnalysisScope } from "../domain/analysis-scope";
 import { AnalysisStatus } from "../domain/analysis-status";
@@ -17,6 +18,12 @@ import type {
   ReservationOutcome,
 } from "../application/ports/analysis-job.repository";
 import { PROMPT_VERSIONS, PromptKey, type PromptTemplatePort, type PromptVariables, type RenderedPrompt } from "../application/ports/prompt-template.port";
+import type { ActiveRoutingDecision, RoutingPolicyResolver } from "../application/ports/routing-policy-resolver";
+import type {
+  CompleteRoutingDecisionInput,
+  CreateRoutingDecisionInput,
+  RoutingDecisionWriter,
+} from "../application/ports/routing-decision-writer";
 import type {
   BusinessAnalysisRepository,
   ClauseFindingRecord,
@@ -161,6 +168,56 @@ export class FakeAIProviderRegistry implements AIProviderRegistry {
 
   resolve(): AIProvider {
     return typeof this.provider === "function" ? this.provider() : this.provider;
+  }
+}
+
+/** Jamais un appel réel (mission §"aucun appel réel payant n'est requis en CI") — simule le pont
+ *  ai-benchmark (Sprint 5.2 §"Intégration Analysis") sans dépendre de ce module : `analysis` ne
+ *  connaît que le port qu'il consomme (`RoutingPolicyResolver`), jamais l'implémentation réelle. */
+export class FakeRoutingPolicyResolver implements RoutingPolicyResolver {
+  constructor(private readonly decision: ActiveRoutingDecision | null | (() => ActiveRoutingDecision | null) = null) {}
+
+  async resolveActive(): Promise<ActiveRoutingDecision | null> {
+    return typeof this.decision === "function" ? this.decision() : this.decision;
+  }
+}
+
+export class ThrowingRoutingPolicyResolver implements RoutingPolicyResolver {
+  async resolveActive(): Promise<ActiveRoutingDecision | null> {
+    throw new Error("Simulated routing policy resolution failure (test-only)");
+  }
+}
+
+export class SequentialIdGenerator implements IdGenerator {
+  private counter = 0;
+  generate(): string {
+    this.counter += 1;
+    return `id-${this.counter}`;
+  }
+}
+
+/** Enregistre chaque appel `create`/`complete` (audit Codex P1-4) — permet aux tests d'affirmer
+ *  qu'une décision de routage a bien été créée AVANT le premier appel provider et complétée
+ *  exactement une fois, sans dépendre d'une base réelle. */
+export class RecordingRoutingDecisionWriter implements RoutingDecisionWriter {
+  readonly created: CreateRoutingDecisionInput[] = [];
+  readonly completed: CompleteRoutingDecisionInput[] = [];
+
+  async create(input: CreateRoutingDecisionInput): Promise<void> {
+    this.created.push(input);
+  }
+
+  async complete(input: CompleteRoutingDecisionInput): Promise<void> {
+    this.completed.push(input);
+  }
+}
+
+export class ThrowingRoutingDecisionWriter implements RoutingDecisionWriter {
+  async create(): Promise<void> {
+    throw new Error("Simulated routing decision write failure (test-only)");
+  }
+  async complete(): Promise<void> {
+    throw new Error("Simulated routing decision write failure (test-only)");
   }
 }
 

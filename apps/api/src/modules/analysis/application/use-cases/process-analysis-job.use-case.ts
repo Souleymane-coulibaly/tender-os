@@ -1,10 +1,12 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
+import type { IdGenerator } from "../../../../shared-kernel/id-generator";
+import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import type { AnalysisJob } from "../../domain/analysis-job.aggregate";
-import { AnalysisScope } from "../../domain/analysis-scope";
 import { AnalysisTrigger } from "../../domain/analysis-trigger";
 import { AiTimeoutError } from "../../domain/errors";
+import { evaluateEscalationConditions, type EscalationSignals } from "../../domain/evaluate-escalation-conditions";
 import { isRetryableAiError } from "../policies/ai-error-classification";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { AI_PROVIDER_REGISTRY, type AIProviderRegistry } from "../ports/ai-provider-registry";
@@ -18,8 +20,11 @@ import {
   type AnalysisJobRepository,
   type FinalizeAttemptOutcome,
 } from "../ports/analysis-job.repository";
+import { ROUTING_POLICY_RESOLVER, type RoutingPolicyResolver } from "../ports/routing-policy-resolver";
+import { ROUTING_DECISION_WRITER, type RoutingDecisionWriter } from "../ports/routing-decision-writer";
 import type { PrismaTx } from "../ports/business-analysis.repository";
 import { ANALYSIS_CONFIG, type AnalysisConfig } from "../../infrastructure/analysis-config";
+import { mapScopeToPromptKey, resolveModelForAnalysis, type ResolvedModelForAnalysis } from "../services/model-routing-resolver";
 
 export type ProcessAnalysisJobCommand = Readonly<{
   organizationId: string;
@@ -34,14 +39,6 @@ type Phase2Result =
       onSuccessTx?: ((tx: PrismaTx) => Promise<void>) | undefined;
     }
   | { outcome: FinalizeAttemptOutcome & { kind: "failed" }; retryCount: number; onSuccessTx?: undefined };
-
-/** Mission Sprint 4.2 §"Pas de modèle codé en dur dans le domaine" — stratégie simple par type de
- *  tâche, jamais un moteur d'arbitrage : un scope DOCUMENT et un scope TENDER peuvent utiliser des
- *  modèles différents (ex. un modèle moins coûteux pour l'extraction par document, un modèle plus
- *  capable pour la consolidation), configurés via `AnalysisConfig`, jamais en dur ici. */
-function resolveModelForScope(config: AnalysisConfig, scope: AnalysisScope): string {
-  return scope === AnalysisScope.Document ? config.aiModelForDocumentAnalysis : config.aiModelForTenderConsolidation;
-}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -73,6 +70,16 @@ export class ProcessAnalysisJobUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(ANALYSIS_CONFIG) private readonly config: AnalysisConfig,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    // Optionnel (Sprint 5.2 §"Intégration Analysis") — si aucun pont ai-benchmark n'est câblé
+    // (`RoutingPolicyResolver` absent), l'injection résout `undefined` et ce use case se comporte
+    // EXACTEMENT comme en Sprint 4.1/4.2 (résolution du modèle par variable d'environnement) :
+    // l'absence de routing ne doit jamais faire échouer une analyse.
+    @Optional() @Inject(ROUTING_POLICY_RESOLVER) private readonly routingPolicyResolver?: RoutingPolicyResolver,
+    // Optionnel (audit Codex P1-4) — même discipline : absent, la décision n'est simplement pas
+    // persistée durablement (seul le meilleur-effort de `recordAuditLog` subsiste), jamais une
+    // cause d'échec de l'analyse elle-même.
+    @Optional() @Inject(ROUTING_DECISION_WRITER) private readonly routingDecisionWriter?: RoutingDecisionWriter,
   ) {}
 
   async execute(command: ProcessAnalysisJobCommand): Promise<void> {
@@ -92,7 +99,50 @@ export class ProcessAnalysisJobUseCase {
     const startedAt = reservedAt;
     const trigger = job.attemptCount === 1 ? AnalysisTrigger.Manual : AnalysisTrigger.Retry;
 
-    const { outcome, retryCount, onSuccessTx } = await this.runPhase2(job, resolveModelForScope(this.config, job.scope));
+    const resolution = await resolveModelForAnalysis({
+      scope: job.scope,
+      organizationId: command.organizationId,
+      config: this.config,
+      routingPolicyResolver: this.routingPolicyResolver,
+      onRoutingResolutionError: (error) =>
+        this.logger.warn(
+          `Routing policy resolution failed for job ${command.jobId}, falling back to the static model configuration: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        ),
+    });
+
+    // Audit Codex P1-4 — la décision est créée AVANT le premier appel provider (mission "la
+    // décision doit être créée avant ou au début de l'appel"), pour rester lisible même si le
+    // process crashe pendant l'appel. Best-effort : jamais une cause d'échec de l'analyse, mais
+    // jamais silencieuse non plus (voir `createRoutingDecision`).
+    const routingDecisionId = this.idGenerator.generate();
+    await this.createRoutingDecision({ id: routingDecisionId, command, job, resolution });
+
+    let { outcome, retryCount, onSuccessTx } = await this.runPhase2(job, resolution);
+    let escalated = false;
+    let escalationReason: string | undefined;
+
+    // Escalade (Sprint 5.2 §"Fallback simple") — UNE seule tentative supplémentaire avec le modèle
+    // d'escalade de la policy, uniquement si la tentative principale a échoué pour une raison
+    // couverte par les conditions configurées. Jamais de boucle : au plus un second appel provider
+    // par job, jamais un second appel si celui-ci est lui-même déjà une escalade.
+    if (outcome.kind === "failed" && resolution.escalationModel) {
+      const reason = evaluateEscalationConditions(this.toEscalationSignals(outcome.errorCode), resolution.escalationConditions);
+      if (reason) {
+        this.logger.warn(`Analysis job ${command.jobId} escalating to fallback model after "${reason}".`);
+        const escalationResult = await this.runPhase2(job, {
+          provider: resolution.escalationModel.provider,
+          model: resolution.escalationModel.modelKey,
+        });
+        outcome = escalationResult.outcome;
+        retryCount = retryCount + escalationResult.retryCount;
+        onSuccessTx = escalationResult.onSuccessTx;
+        escalated = true;
+        escalationReason = reason;
+      }
+    }
+
+    await this.completeRoutingDecision({ id: routingDecisionId, outcome, escalated });
 
     let finalizeResult: { applied: boolean };
     try {
@@ -126,18 +176,26 @@ export class ProcessAnalysisJobUseCase {
       return;
     }
 
-    await this.recordAuditLog(command, outcome);
+    await this.recordAuditLog(command, outcome, {
+      routingPolicyVersion: resolution.routingPolicyVersion,
+      escalated,
+      escalationReason,
+    });
   }
 
   /** Intégralement hors transaction Prisma (mission §"Pas de transaction longue") — résolution du
    *  provider et du contenu métier réel (`AnalysisContentResolver`, mission Sprint 4.2), appel
    *  réseau avec timeout et retry bornés, validation stricte du schéma de sortie. Ne touche jamais
    *  la base : `onSuccessTx` n'est qu'une fonction préparée, invoquée plus tard par
-   *  `finalizeAttempt`. */
-  private async runPhase2(job: AnalysisJob, model: string): Promise<Phase2Result> {
+   *  `finalizeAttempt`. Appelée une seconde fois pour l'escalade (Sprint 5.2) avec un sélecteur de
+   *  modèle différent — `selector.provider` n'est fourni que lorsqu'une RoutingPolicy est active ;
+   *  `undefined` retombe sur `AIProviderRegistry.resolve()` sans argument (comportement Sprint
+   *  4.1/4.2 inchangé). */
+  private async runPhase2(job: AnalysisJob, selector: { provider?: string | undefined; model: string }): Promise<Phase2Result> {
+    const model = selector.model;
     let provider: AIProvider;
     try {
-      provider = this.providerRegistry.resolve();
+      provider = this.providerRegistry.resolve(selector.provider ? { provider: selector.provider } : undefined);
     } catch (error) {
       return { outcome: this.toFailureOutcome(error), retryCount: 0 };
     }
@@ -228,12 +286,41 @@ export class ProcessAnalysisJobUseCase {
     return "AI_INVALID_RESPONSE";
   }
 
+  /** Traduit le code d'erreur normalisé d'une tentative échouée en signaux déterministes pour
+   *  `evaluateEscalationConditions` (Sprint 5.2 §"Fallback simple") — jamais le score auto-déclaré
+   *  du modèle : uniquement des codes d'erreur déjà normalisés par `domain/errors.ts`. */
+  private toEscalationSignals(errorCode: string): EscalationSignals {
+    return {
+      jsonValid: errorCode !== "AI_SCHEMA_VALIDATION_FAILED" && errorCode !== "AI_INVALID_RESPONSE",
+      provenanceStatus: errorCode === "AI_PROVENANCE_VALIDATION_FAILED" ? "CITATION_NOT_FOUND" : "NOT_APPLICABLE",
+      complete: true,
+      providerErrorOccurred:
+        errorCode === "AI_PROVIDER_UNAVAILABLE" ||
+        errorCode === "AI_RATE_LIMITED" ||
+        errorCode === "AI_AUTHENTICATION_FAILED" ||
+        errorCode === "AI_PROVIDER_NOT_CONFIGURED",
+      timedOut: errorCode === "AI_TIMEOUT",
+    };
+  }
+
   /** Best-effort, hors transaction (mission §"Observabilité") — l'écriture de l'AnalysisAttempt
    *  n'est plus journalisée ici (correction P1-02 : elle est désormais atomique avec la
    *  finalisation du job, voir `AnalysisJobRepository.finalizeAttempt`). Seul l'audit log reste
-   *  best-effort : sa perte éventuelle n'affecte jamais le résultat métier déjà acquis. */
-  private async recordAuditLog(command: ProcessAnalysisJobCommand, outcome: FinalizeAttemptOutcome): Promise<void> {
+   *  best-effort : sa perte éventuelle n'affecte jamais le résultat métier déjà acquis.
+   *
+   *  Traçabilité minimale du routage (Sprint 5.2) — `routingPolicyVersion`/`escalated`/
+   *  `escalationReason` ne sont ajoutés au `metadata` QUE lorsqu'une RoutingPolicy a réellement été
+   *  consultée : `undefined` = chemin legacy, jamais une valeur fabriquée. */
+  private async recordAuditLog(
+    command: ProcessAnalysisJobCommand,
+    outcome: FinalizeAttemptOutcome,
+    routing: { routingPolicyVersion?: number | undefined; escalated: boolean; escalationReason?: string | undefined },
+  ): Promise<void> {
     try {
+      const routingMetadata =
+        routing.routingPolicyVersion !== undefined
+          ? { routingPolicyVersion: routing.routingPolicyVersion, escalated: routing.escalated, escalationReason: routing.escalationReason }
+          : {};
       await this.auditLogWriter.record({
         organizationId: command.organizationId,
         actorType: "SYSTEM",
@@ -243,13 +330,76 @@ export class ProcessAnalysisJobUseCase {
         requestId: command.requestId,
         metadata:
           outcome.kind === "failed"
-            ? { errorCode: outcome.errorCode }
-            : { outcome: outcome.kind, totalTokenCount: outcome.totalTokenCount },
+            ? { errorCode: outcome.errorCode, ...routingMetadata }
+            : { outcome: outcome.kind, totalTokenCount: outcome.totalTokenCount, ...routingMetadata },
       });
     } catch (auditError) {
       this.logger.error(
         `Analysis job ${command.jobId} reached a final state (${outcome.kind}) but the audit log write failed: ` +
           `${auditError instanceof Error ? auditError.message : String(auditError)}`,
+      );
+    }
+  }
+
+  /** Audit Codex P1-4 — persistance DURABLE de la décision de routage, distincte du journal
+   *  d'audit best-effort (`recordAuditLog`). Créée avant le premier appel provider. Une erreur ici
+   *  ne fait jamais échouer l'analyse (même discipline que le reste de l'observabilité), mais n'est
+   *  JAMAIS silencieuse : journalisée en ERROR, jamais en DEBUG/ignorée (mission "une erreur de
+   *  persistance de la décision ne doit pas être silencieusement ignorée"). Absente de tout prompt/
+   *  document/clé API — uniquement des métadonnées d'exécution. */
+  private async createRoutingDecision(input: {
+    id: string;
+    command: ProcessAnalysisJobCommand;
+    job: AnalysisJob;
+    resolution: ResolvedModelForAnalysis;
+  }): Promise<void> {
+    if (!this.routingDecisionWriter) return;
+    try {
+      await this.routingDecisionWriter.create({
+        id: input.id,
+        organizationId: input.command.organizationId,
+        tenderId: input.job.tenderId,
+        analysisId: input.job.id,
+        promptKey: mapScopeToPromptKey(input.job.scope),
+        routingPolicyId: input.resolution.routingPolicyId,
+        routingPolicyVersion: input.resolution.routingPolicyVersion,
+        primaryProvider: input.resolution.provider ?? this.config.aiProvider ?? "UNKNOWN",
+        primaryModel: input.resolution.model,
+        occurredAt: this.clock.now(),
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to persist routing decision ${input.id} for analysis job ${input.job.id} (analysis continues normally): ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /** Audit Codex P1-4 — mise à jour finale (une seule fois), qu'il y ait eu escalade ou non. */
+  private async completeRoutingDecision(input: {
+    id: string;
+    outcome: FinalizeAttemptOutcome;
+    escalated: boolean;
+  }): Promise<void> {
+    if (!this.routingDecisionWriter) return;
+    try {
+      await this.routingDecisionWriter.complete({
+        id: input.id,
+        selectedProvider: input.outcome.provider,
+        selectedModel: input.outcome.model,
+        fallbackLevel: input.escalated ? 1 : 0,
+        fallbackAttempts: input.escalated ? 1 : 0,
+        inputTokenCount: input.outcome.kind === "failed" ? undefined : input.outcome.inputTokenCount,
+        outputTokenCount: input.outcome.kind === "failed" ? undefined : input.outcome.outputTokenCount,
+        latencyMs: input.outcome.kind === "failed" ? undefined : input.outcome.durationMs,
+        status: input.outcome.kind === "failed" ? "FAILED" : "SUCCEEDED",
+        failureReason: input.outcome.kind === "failed" ? input.outcome.errorCode : undefined,
+        occurredAt: this.clock.now(),
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to complete routing decision ${input.id} (analysis result already acquired, unaffected): ` +
+          `${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

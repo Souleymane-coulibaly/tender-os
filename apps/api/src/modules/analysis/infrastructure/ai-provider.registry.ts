@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { AnalysisProvider } from "../domain/analysis-provider";
 import { AiProviderNotConfiguredError } from "../domain/errors";
 import type { AIProvider } from "../application/ports/ai-provider";
-import type { AIProviderRegistry } from "../application/ports/ai-provider-registry";
+import type { AIProviderRegistry, AIProviderSelector } from "../application/ports/ai-provider-registry";
 import { ANALYSIS_CONFIG, type AnalysisConfig } from "./analysis-config";
 import { OpenAiProvider } from "./openai.ai-provider";
 
@@ -18,12 +18,13 @@ import { OpenAiProvider } from "./openai.ai-provider";
 export class DefaultAIProviderRegistry implements AIProviderRegistry {
   constructor(@Inject(ANALYSIS_CONFIG) private readonly config: AnalysisConfig) {}
 
-  resolve(): AIProvider {
-    if (!this.config.aiProvider) {
+  resolve(selector?: AIProviderSelector): AIProvider {
+    const provider = selector?.provider ?? this.config.aiProvider;
+    if (!provider) {
       throw new AiProviderNotConfiguredError({ reason: "no AI_PROVIDER configured" });
     }
 
-    switch (this.config.aiProvider) {
+    switch (provider) {
       case AnalysisProvider.OpenAi: {
         if (!this.config.openAiApiKey) {
           throw new AiProviderNotConfiguredError({ reason: "OPENAI_API_KEY is not set" });
@@ -38,7 +39,7 @@ export class DefaultAIProviderRegistry implements AIProviderRegistry {
       case AnalysisProvider.AzureOpenAi:
       default:
         throw new AiProviderNotConfiguredError({
-          reason: `no adapter registered for provider "${this.config.aiProvider}"`,
+          reason: `no adapter registered for provider "${provider}"`,
         });
     }
   }

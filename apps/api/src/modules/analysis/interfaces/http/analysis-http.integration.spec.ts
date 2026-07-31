@@ -242,6 +242,10 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
   }, 60000);
 
   afterAll(async () => {
+    // Audit Codex P1-4 — RoutingPolicyBridgeModule est câblé dans l'app réelle : une décision de
+    // routage durable est créée pour chaque job traité par ces tests, jamais nettoyée par les
+    // suppressions "métier" ci-dessous (routing_decisions n'est référencée par aucune d'elles).
+    await prisma.routingDecision.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.analysisAttempt.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.analysisJob.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.extractionChunk.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
