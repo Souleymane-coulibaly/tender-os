@@ -76,6 +76,19 @@ import { AnalysisController } from "./interfaces/http/analysis.controller";
   // AI_PROVIDER_REGISTRY/PROMPT_TEMPLATE exportés pour le module ai-benchmark (Sprint 5.2) —
   // réutilise le port et l'adapter existants pour exécuter des benchmarks avec le MÊME prompt que
   // la production, jamais un second chemin d'appel provider ou une réimplémentation de prompt.
-  exports: [AI_PROVIDER_REGISTRY, PROMPT_TEMPLATE],
+  // Les 7 use cases de lecture ci-dessous sont exportés pour Generation (Sprint 6), qui a besoin
+  // des constats d'analyse réels (exigences/critères/risques/échéances/clauses/questions) pour
+  // construire son contexte de génération — jamais une seconde lecture directe de ces tables.
+  exports: [
+    AI_PROVIDER_REGISTRY,
+    PROMPT_TEMPLATE,
+    GetTenderBusinessAnalysisUseCase,
+    ListTenderCriteriaUseCase,
+    ListTenderRequirementsUseCase,
+    ListTenderRisksUseCase,
+    ListTenderDeadlinesUseCase,
+    ListTenderClausesUseCase,
+    ListTenderQuestionsUseCase,
+  ],
 })
 export class AnalysisModule {}

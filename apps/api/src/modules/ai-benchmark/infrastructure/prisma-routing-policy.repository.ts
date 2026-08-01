@@ -5,7 +5,6 @@ import type { RoutingPolicyRepository } from "../application/ports/routing-polic
 import { RoutingPolicyStatus } from "../domain/routing-policy-status";
 import { RoutingPolicyActivationConflictError } from "../domain/errors";
 import type { RoutingPolicy } from "../domain/routing-policy.aggregate";
-import type { PromptKey } from "../../analysis";
 import { toDomain, toPersistence } from "./routing-policy.persistence-mapper";
 
 function isUniqueConstraintViolation(error: unknown): boolean {
@@ -21,14 +20,14 @@ export class PrismaRoutingPolicyRepository implements RoutingPolicyRepository {
     return record ? toDomain(record) : null;
   }
 
-  async findActive(input: { organizationId: string; promptKey: PromptKey }): Promise<RoutingPolicy | null> {
+  async findActive(input: { organizationId: string; promptKey: string }): Promise<RoutingPolicy | null> {
     const record = await this.prisma.routingPolicy.findFirst({
       where: { organizationId: input.organizationId, promptKey: input.promptKey, status: RoutingPolicyStatus.Active },
     });
     return record ? toDomain(record) : null;
   }
 
-  async findLatestVersion(input: { organizationId: string; promptKey: PromptKey }): Promise<RoutingPolicy | null> {
+  async findLatestVersion(input: { organizationId: string; promptKey: string }): Promise<RoutingPolicy | null> {
     const record = await this.prisma.routingPolicy.findFirst({
       where: { organizationId: input.organizationId, promptKey: input.promptKey },
       orderBy: { version: "desc" },

@@ -10,7 +10,10 @@ export { ListAccessibleClientsUseCase } from "./application/use-cases/list-acces
 export type { ListAccessibleClientsQuery, ListAccessibleClientsResult } from "./application/use-cases/list-accessible-clients.use-case";
 export { GetClientAccountUseCase } from "./application/use-cases/get-client-account.use-case";
 
-export { ClientPermission } from "./domain/client-permission";
+export { ClientPermission, roleHasClientPortfolioPermission } from "./domain/client-permission";
+// Réexporté pour permettre à Generation (Sprint 6) de typer sa "règle simple MEMBER" (validation)
+// contre les vraies valeurs de rôle client, jamais des chaînes magiques dupliquées.
+export { ClientRole, isClientRole } from "./domain/client-role";
 export { ClientAccountStatus } from "./domain/client-account-status";
 export {
   ClientAccountArchivedError,

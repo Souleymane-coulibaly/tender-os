@@ -95,9 +95,39 @@ const ESCALATION_CONDITIONS = [
   "TIMEOUT",
 ] as const;
 
+/** Correctif Sprint 6 (audit Codex, routing dormant) — liste DÉLIBÉRÉMENT SÉPARÉE de `PROMPT_KEYS`
+ *  (qui reste réservée à `CreateBenchmarkSuiteBodySchema`, jamais élargie : un benchmark ne doit
+ *  jamais pouvoir cibler un type de tâche Generation, hors périmètre de ce correctif). Liste à plat
+ *  des 2 `PromptKey` d'Analysis + des 17 `GenerationTaskType` — valeurs recopiées littéralement,
+ *  jamais un import du module Generation (ai-benchmark ne doit dépendre d'aucun module qui le
+ *  consomme). Ajouter un nouveau type de tâche routable côté Generation nécessite d'ajouter sa
+ *  valeur ici aussi — coût de couplage assumé et documenté, préférable à une dépendance inversée.
+ */
+const ROUTABLE_TASK_KEYS = [
+  "ANALYZE_DOCUMENT",
+  "CONSOLIDATE_TENDER_ANALYSIS",
+  "EXECUTIVE_SUMMARY",
+  "NEED_UNDERSTANDING",
+  "CRITERION_RESPONSE",
+  "METHODOLOGY",
+  "ORGANIZATION",
+  "GOVERNANCE",
+  "HUMAN_RESOURCES",
+  "TECHNICAL_RESOURCES",
+  "PLANNING",
+  "RISK_MANAGEMENT",
+  "QUALITY",
+  "SECURITY",
+  "CSR",
+  "REFERENCES",
+  "SECTION_SUMMARY",
+  "REPHRASING",
+  "CONTENT_IMPROVEMENT",
+] as const;
+
 export const CreateRoutingPolicyBodySchema = z
   .object({
-    promptKey: z.enum(PROMPT_KEYS),
+    promptKey: z.enum(ROUTABLE_TASK_KEYS),
     primaryAiModelId: z.string().uuid(),
     escalationAiModelId: z.string().uuid().optional(),
     confidenceThreshold: z.number().min(0).max(1).optional(),

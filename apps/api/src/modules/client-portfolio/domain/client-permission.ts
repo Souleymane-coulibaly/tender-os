@@ -25,6 +25,12 @@ export const ClientPermission = {
    *  `CLIENT_READ_KNOWLEDGE` documenté dans la liste d'exemples de la mission, nécessaire pour
    *  distinguer lecture et écriture (mission §"CLIENT_MANAGER : consulter ET MODIFIER"). */
   ManageKnowledge: "CLIENT_MANAGE_KNOWLEDGE",
+  /** Sprint 6 (Generation) — lire/lancer-éditer-régénérer/valider une génération IA pour ce client,
+   *  même motif additif que `ManageKnowledge` : distingue lecture, écriture, et validation plutôt
+   *  que de réutiliser une permission existante sémantiquement différente. */
+  ReadGeneration: "CLIENT_READ_GENERATION",
+  ManageGeneration: "CLIENT_MANAGE_GENERATION",
+  ValidateGeneration: "CLIENT_VALIDATE_GENERATION",
 } as const;
 
 export type ClientPermission = (typeof ClientPermission)[keyof typeof ClientPermission];
@@ -56,6 +62,9 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ReadAnalysis,
   ClientPermission.ReadKnowledge,
   ClientPermission.ManageKnowledge,
+  ClientPermission.ReadGeneration,
+  ClientPermission.ManageGeneration,
+  ClientPermission.ValidateGeneration,
 ];
 
 export const ROLE_CLIENT_PORTFOLIO_PERMISSIONS: Record<string, readonly ClientPermission[]> = {
@@ -87,6 +96,9 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadAnalysis,
     ClientPermission.ReadKnowledge,
     ClientPermission.ManageKnowledge,
+    ClientPermission.ReadGeneration,
+    ClientPermission.ManageGeneration,
+    ClientPermission.ValidateGeneration,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -97,6 +109,12 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadAnalysis,
     ClientPermission.ReadKnowledge,
     ClientPermission.ManageKnowledge,
+    ClientPermission.ReadGeneration,
+    ClientPermission.ManageGeneration,
+    /** "Règle simple" (mission Sprint 6 §"Validation") — présent ici comme porte grossière ("ce
+     *  rôle peut valider AU MOINS ses propres générations") ; la restriction fine "uniquement ses
+     *  propres générations" est appliquée par `generation-validate.policy.ts`, jamais ici. */
+    ClientPermission.ValidateGeneration,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -104,6 +122,7 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadDocuments,
     ClientPermission.ReadAnalysis,
     ClientPermission.ReadKnowledge,
+    ClientPermission.ReadGeneration,
   ],
 };
 

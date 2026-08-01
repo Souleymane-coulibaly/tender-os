@@ -1,10 +1,11 @@
 import type { RoutingPolicy } from "../../domain/routing-policy.aggregate";
-import type { PromptKey } from "../../../analysis";
 
 export interface RoutingPolicyRepository {
   findById(input: { organizationId: string; policyId: string }): Promise<RoutingPolicy | null>;
-  findActive(input: { organizationId: string; promptKey: PromptKey }): Promise<RoutingPolicy | null>;
-  findLatestVersion(input: { organizationId: string; promptKey: PromptKey }): Promise<RoutingPolicy | null>;
+  /** `promptKey` est un identifiant de tâche routable brut (Analysis ou Generation, voir
+   *  `RoutingPolicy.promptKey`) — jamais un type fermé importé d'un module consommateur ici. */
+  findActive(input: { organizationId: string; promptKey: string }): Promise<RoutingPolicy | null>;
+  findLatestVersion(input: { organizationId: string; promptKey: string }): Promise<RoutingPolicy | null>;
   list(input: { organizationId: string }): Promise<readonly RoutingPolicy[]>;
   create(policy: RoutingPolicy): Promise<void>;
   save(policy: RoutingPolicy): Promise<void>;

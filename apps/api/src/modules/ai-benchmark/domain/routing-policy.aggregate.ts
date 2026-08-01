@@ -1,11 +1,16 @@
-import type { EscalationCondition, PromptKey } from "../../analysis";
+import type { EscalationCondition } from "../../analysis";
 import { ALLOWED_ROUTING_POLICY_TRANSITIONS, RoutingPolicyStatus } from "./routing-policy-status";
 import { InvalidRoutingPolicyStatusTransitionError } from "./errors";
 
 export type RoutingPolicyProps = {
   id: string;
   organizationId: string;
-  promptKey: PromptKey;
+  /** Identifiant de tâche routable — Analysis (`PromptKey`, 2 valeurs historiques) ou Generation
+   *  (`GenerationTaskType`, Sprint 6). Volontairement un `string` brut, jamais un import du type
+   *  fermé d'un module consommateur : ai-benchmark ne doit dépendre ni d'Analysis ni de Generation
+   *  pour cette valeur, seule la couche HTTP (`ROUTABLE_TASK_KEYS`) contrôle les valeurs acceptées à
+   *  la création (voir rapport correctif Sprint 6 §Routing). */
+  promptKey: string;
   version: number;
   status: RoutingPolicyStatus;
   primaryAiModelId: string;
@@ -37,7 +42,7 @@ export class RoutingPolicy {
   static create(input: {
     id: string;
     organizationId: string;
-    promptKey: PromptKey;
+    promptKey: string;
     version: number;
     primaryAiModelId: string;
     escalationAiModelId?: string | undefined;
@@ -99,7 +104,7 @@ export class RoutingPolicy {
   get organizationId(): string {
     return this.props.organizationId;
   }
-  get promptKey(): PromptKey {
+  get promptKey(): string {
     return this.props.promptKey;
   }
   get version(): number {

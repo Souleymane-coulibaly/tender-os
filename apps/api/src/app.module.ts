@@ -1,10 +1,12 @@
 import { Module } from "@nestjs/common";
 import { HealthModule } from "./health/health.module";
+import { AiBenchmarkModule, RoutingPolicyBridgeModule } from "./modules/ai-benchmark";
 import { AnalysisModule } from "./modules/analysis/analysis.module";
 import { ClientPortfolioModule } from "./modules/client-portfolio/client-portfolio.module";
 import { DceModule } from "./modules/dce/dce.module";
 import { DocumentsModule } from "./modules/documents/documents.module";
 import { ExtractionModule } from "./modules/extraction/extraction.module";
+import { GenerationModule } from "./modules/generation";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { KnowledgeBaseModule } from "./modules/knowledge-base/knowledge-base.module";
 import { MembershipsModule } from "./modules/memberships/memberships.module";
@@ -30,6 +32,9 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     ExtractionModule,
     AnalysisModule,
     KnowledgeBaseModule,
+    RoutingPolicyBridgeModule,
+    AiBenchmarkModule,
+    GenerationModule,
   ],
 })
 export class AppModule {}

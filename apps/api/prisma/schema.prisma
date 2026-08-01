@@ -112,6 +112,7 @@ model Organization {
   modelRecommendations ModelRecommendation[]
   routingPolicies      RoutingPolicy[]
   routingDecisions     RoutingDecision[]
+  promptTemplates      PromptTemplate[]
 
   @@map("organizations")
 }
@@ -343,6 +344,7 @@ model Tender {
   riskFindings             TenderRiskFinding[]
   questionFindings         TenderQuestionFinding[]
   analysisSummaries        TenderAnalysisSummary[]
+  generations              Generation[]
 
   /// AUDIT-007 : contrainte composite support de la FK composée de TenderLot ci-dessous — garantit
   /// au niveau base de données qu'un TenderLot ne peut jamais référencer un couple
@@ -1609,6 +1611,7 @@ model ClientAccount {
   assignments      ClientAssignment[]
   tenders          Tender[]
   knowledgeEntries KnowledgeEntry[]
+  generations      Generation[]
 
   @@unique([id, organizationId])
   @@unique([organizationId, nameNormalized])
@@ -2004,10 +2007,19 @@ model RoutingDecision {
   /// échoue (ne doit jamais faire échouer la décision elle-même ni l'analyse).
   clientAccountId String? @map("client_account_id") @db.Uuid
 
-  tenderId   String? @map("tender_id") @db.Uuid
-  analysisId String  @map("analysis_id") @db.Uuid
+  tenderId String? @map("tender_id") @db.Uuid
 
-  /// ANALYZE_DOCUMENT | CONSOLIDATE_TENDER_ANALYSIS — même vocabulaire que RoutingPolicy.promptKey.
+  /// Correctif Sprint 6 (audit Codex P1 — "fausse routingDecisionId") : `analysisId` devient
+  /// nullable et `generationId` est ajouté — une RoutingDecision sert désormais EXACTEMENT UNE
+  /// cible, Analysis OU Generation, jamais aucune ni les deux (voir la contrainte CHECK ajoutée en
+  /// migration, `routing_decisions_analysis_or_generation_check`). Aucune FK Prisma déclarée sur
+  /// ces deux colonnes (même discipline que l'`analysisId` d'origine, jamais garantie qu'au niveau
+  /// applicatif) — uniquement des index pour la recherche par cible.
+  analysisId   String? @map("analysis_id") @db.Uuid
+  generationId String? @map("generation_id") @db.Uuid
+
+  /// ANALYZE_DOCUMENT | CONSOLIDATE_TENDER_ANALYSIS (Analysis) ou l'un des 17 GenerationTaskType
+  /// (Sprint 6) — même vocabulaire que RoutingPolicy.promptKey, jamais un type fermé importé ici.
   promptKey String @map("prompt_key") @db.VarChar(40)
 
   /// NULL = chemin legacy (aucune RoutingPolicy consultée, résolution par variable d'environnement
@@ -2041,7 +2053,214 @@ model RoutingDecision {
   createdAt   DateTime  @default(now()) @map("created_at")
   completedAt DateTime? @map("completed_at")
 
+  generations Generation[]
+
+  /// Support de la FK composée `Generation.routingDecisionId` (AUDIT-007, voir modèle Generation).
+  @@unique([id, organizationId])
   @@index([organizationId, analysisId])
+  @@index([organizationId, generationId])
   @@index([organizationId, promptKey, createdAt])
   @@map("routing_decisions")
+}
+
+/// Sprint 6 §"Prompt Management" — un template par (organisation, type de tâche de génération),
+/// jamais de variantes concurrentes en MVP. Système entièrement séparé du placeholder statique
+/// d'Analysis (`PromptTemplatePort`/`PromptKey`, Sprint 4.1/4.2) — aucun vocabulaire partagé,
+/// aucun fichier d'Analysis modifié pour ce sprint (voir rapport final §C).
+model PromptTemplate {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  /// EXECUTIVE_SUMMARY | NEED_UNDERSTANDING | CRITERION_RESPONSE | METHODOLOGY | ORGANIZATION |
+  /// GOVERNANCE | HUMAN_RESOURCES | TECHNICAL_RESOURCES | PLANNING | RISK_MANAGEMENT | QUALITY |
+  /// SECURITY | CSR | REFERENCES | SECTION_SUMMARY | REPHRASING | CONTENT_IMPROVEMENT — 17 valeurs,
+  /// catalogue fermé — CHECK (migration), voir generation-task-type.ts (domaine) pour la même liste.
+  taskType String @map("task_type") @db.VarChar(40)
+
+  name        String  @db.VarChar(200)
+  description String?
+
+  /// FREE_TEXT | STRUCTURED — CHECK (migration).
+  outputMode          String  @map("output_mode") @db.VarChar(12)
+  /// Requis uniquement si outputMode = STRUCTURED ; clé dans le registre Zod applicatif de
+  /// Generation (`structured-output-registry.ts`) — jamais une contrainte DB, le registre de
+  /// schémas vit en code.
+  structuredSchemaKey String? @map("structured_schema_key") @db.VarChar(60)
+
+  archivedAt DateTime? @map("archived_at")
+  createdBy  String    @map("created_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  versions    PromptVersion[]
+  generations Generation[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, taskType])
+  @@map("prompt_templates")
+}
+
+model PromptVersion {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// Dénormalisé depuis PromptTemplate — jamais de relation directe à Organization ici (même motif
+  /// qu'AnalysisJob.organizationId/TenderLot.organizationId, AUDIT-007) : la cohérence est garantie
+  /// par la FK composée ci-dessous, pas par une seconde relation redondante.
+  organizationId String @map("organization_id") @db.Uuid
+
+  promptTemplateId String         @map("prompt_template_id") @db.Uuid
+  promptTemplate   PromptTemplate @relation(fields: [promptTemplateId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  version Int
+
+  /// DRAFT | ACTIVE | ARCHIVED — CHECK (migration).
+  status String @default("DRAFT") @db.VarChar(10)
+
+  systemPrompt       String @map("system_prompt")
+  userPromptTemplate String @map("user_prompt_template")
+  /// Placeholders `{{nom}}` attendus — aide à l'édition admin ; un placeholder manquant au RENDU
+  /// (pas à l'écriture) échoue explicitement, jamais un gap silencieux (voir PromptRenderer).
+  requiredVariables  Json   @default("[]") @map("required_variables")
+
+  authorUserId  String    @map("author_user_id") @db.Uuid
+  effectiveFrom DateTime? @map("effective_from")
+  archivedAt    DateTime? @map("archived_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  generations Generation[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, promptTemplateId, version])
+  /// Invariant "une seule version ACTIVE par template" — non exprimable en DSL Prisma (pas d'index
+  /// partiel natif) : index unique partiel ajouté À LA MAIN en fin de migration, jamais généré par
+  /// `prisma migrate dev` — même discipline que RoutingPolicy (voir
+  /// 20260731124812_p1_audit_fixes/migration.sql, "routing_policies_org_prompt_key_active_key").
+  /// `activateAtomically` (transaction applicative) reste la première ligne de défense ; cet index
+  /// est le filet de sécurité de dernier recours.
+  @@map("prompt_versions")
+}
+
+/// Sprint 6 §"Génération" — une ligne PAR VERSION (jamais un remplacement silencieux). La version 1
+/// d'un fil a `parentGenerationId = NULL` ; toute version suivante pointe TOUJOURS vers la version 1
+/// (jamais vers la version immédiatement précédente). `routingDecisionId` est une VRAIE FK vers
+/// `ai_benchmark.routing_decisions` (correctif Sprint 6, audit Codex P1 — la génération d'origine
+/// utilisait un UUID local fabriqué, jamais persisté nulle part ailleurs ; `RoutingDecision.analysisId`
+/// est désormais nullable et `RoutingDecision.generationId` a été ajouté pour accueillir cette
+/// relation, voir modèle RoutingDecision). NULL tant que la décision réelle n'a pas encore été
+/// créée par `ProcessGenerationUseCase` (avant le premier appel provider) — jamais une valeur
+/// fabriquée en son absence.
+model Generation {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// Dénormalisé — même motif qu'AnalysisJob.organizationId (AUDIT-007) : aucune relation directe
+  /// à Organization, la cohérence passe par les FK composées ci-dessous.
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  taskType  String  @map("task_type") @db.VarChar(40)
+  /// Ancrage métier optionnel (ex. l'id d'un TenderAwardCriterion pour CRITERION_RESPONSE) —
+  /// chaîne libre bornée plutôt qu'une FK par cible possible, validée applicativement par taskType.
+  targetRef String? @map("target_ref") @db.VarChar(200)
+
+  /// NULL = cette ligne EST la version 1 (racine) de son fil.
+  parentGenerationId String?      @map("parent_generation_id") @db.Uuid
+  parentGeneration   Generation?  @relation("GenerationVersions", fields: [parentGenerationId], references: [id], onDelete: Cascade)
+  childVersions      Generation[] @relation("GenerationVersions")
+  /// = id si version 1, = parentGenerationId sinon — porté en base pour permettre une contrainte
+  /// d'unicité (rootGenerationId, version) sans remontée récursive (même motif qu'
+  /// AnalysisJob.targetId, "porté en base pour permettre une contrainte d'unicité... jamais des
+  /// index partiels dépendant du scope").
+  rootGenerationId   String       @map("root_generation_id") @db.Uuid
+  version            Int
+
+  /// PENDING | GENERATING | GENERATED | FAILED | CANCELLED — CHECK (migration).
+  status       String @db.VarChar(12)
+  /// Jeton de réservation (compare-and-set) — même motif qu'AnalysisJob.attemptCount.
+  attemptCount Int    @default(0) @map("attempt_count")
+
+  promptTemplateId    String         @map("prompt_template_id") @db.Uuid
+  promptTemplate      PromptTemplate @relation(fields: [promptTemplateId, organizationId], references: [id, organizationId])
+  promptVersionId     String         @map("prompt_version_id") @db.Uuid
+  promptVersion       PromptVersion  @relation(fields: [promptVersionId, organizationId], references: [id, organizationId])
+  /// Gelé au moment de la génération — jamais recalculé même si le PromptVersion est archivé ou
+  /// qu'une nouvelle version est activée ensuite (mission §"une génération passée doit refléter à
+  /// jamais la version exacte utilisée").
+  promptVersionNumber Int            @map("prompt_version_number")
+
+  /// NULL uniquement si la génération a échoué AVANT qu'une décision ait pu être créée (ex. aucune
+  /// RoutingPolicy active pour ce taskType — la génération échoue alors explicitement, voir
+  /// `NoActiveRoutingPolicyError`, jamais un repli silencieux sur un modèle codé en dur).
+  routingPolicyId      String?          @map("routing_policy_id") @db.Uuid
+  routingPolicyVersion Int?             @map("routing_policy_version")
+  /// VRAIE FK vers RoutingDecision — voir docstring du modèle. Composée avec organizationId
+  /// (AUDIT-007) pour interdire structurellement qu'une génération référence la décision d'une
+  /// autre organisation.
+  routingDecisionId    String?          @map("routing_decision_id") @db.Uuid
+  routingDecision      RoutingDecision? @relation(fields: [routingDecisionId, organizationId], references: [id, organizationId])
+  modelProvider        String?          @map("model_provider") @db.VarChar(30)
+  modelKey             String?          @map("model_key") @db.VarChar(60)
+  fallbackLevel        Int              @default(0) @map("fallback_level")
+
+  generatedContent  String? @map("generated_content")
+  structuredContent Json?   @map("structured_content")
+
+  editedContent           String?   @map("edited_content")
+  editedStructuredContent Json?     @map("edited_structured_content")
+  editedBy                String?   @map("edited_by") @db.Uuid
+  editedAt                DateTime? @map("edited_at")
+
+  inputTokenCount     Int?     @map("input_token_count")
+  outputTokenCount    Int?     @map("output_token_count")
+  totalTokenCount     Int?     @map("total_token_count")
+  /// Estimation informative (tarif statique `GENERATION_MODEL_RATES`) — JAMAIS une source de
+  /// facturation (mission hors périmètre §"pricing commercial", voir rapport final §H).
+  estimatedCostAmount Decimal? @map("estimated_cost_amount") @db.Decimal(14, 6)
+  currency            String?  @db.VarChar(3)
+  latencyMs           Int?     @map("latency_ms")
+
+  errorCode    String? @map("error_code") @db.VarChar(60)
+  /// Toujours assaini — jamais un message brut de provider, jamais un extrait de prompt/contenu
+  /// client (même discipline qu'AnalysisJob.errorMessage).
+  errorMessage String? @map("error_message")
+
+  createdBy     String    @map("created_by") @db.Uuid
+  /// Rôle RÉEL de l'acteur ayant lancé cette génération — même motif qu'AnalysisJob.triggeredByRole
+  /// (mission Sprint 4.2 §"Phase 2 sans acteur HTTP vivant") : le traitement en arrière-plan
+  /// (ProcessGenerationUseCase) doit pouvoir reconstruire un contexte via des use cases RBAC-gated
+  /// sans jamais fabriquer un rôle. Toujours renseigné à la création, jamais un rôle par défaut.
+  createdByRole String?   @map("created_by_role") @db.VarChar(30)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  completedAt   DateTime? @map("completed_at")
+
+  validatedBy String?   @map("validated_by") @db.Uuid
+  validatedAt DateTime? @map("validated_at")
+
+  /// Correctif Sprint 6 (réaudit Codex P1 — "le rejet d'une génération est absent") — même motif
+  /// que validatedBy/validatedAt : un FAIT sur la ligne terminale GENERATED, jamais une transition.
+  /// Mutuellement exclusif avec validatedAt (voir Generation.reject()/.validate() — CHECK ajouté en
+  /// migration, generations_validated_or_rejected_check).
+  rejectedBy      String?   @map("rejected_by") @db.Uuid
+  rejectedAt      DateTime? @map("rejected_at")
+  /// Assaini côté application (longueur bornée) — jamais un extrait de contenu client/prompt.
+  rejectionReason String?   @map("rejection_reason") @db.VarChar(1000)
+
+  @@unique([rootGenerationId, version])
+  @@index([organizationId, tenderId, taskType])
+  @@index([organizationId, clientAccountId])
+  @@index([organizationId, status])
+  @@index([rootGenerationId])
+  /// Garde-fou "double génération en vol" — non exprimable en DSL Prisma (index partiel) : ajouté
+  /// à la main en fin de migration, voir "generations_org_tender_tasktype_target_inflight_key".
+  /// `reserveForGenerating`/le use case Launch restent la première ligne de défense applicative ;
+  /// cet index est le filet de sécurité de dernier recours (même discipline que PromptVersion
+  /// ci-dessus et que RoutingPolicy, Sprint 5.2).
+  @@map("generations")
 }

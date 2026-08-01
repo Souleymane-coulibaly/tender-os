@@ -1,5 +1,5 @@
 import type { RoutingPolicy as RoutingPolicyRecord, Prisma } from "@prisma/client";
-import type { EscalationCondition, PromptKey } from "../../analysis";
+import type { EscalationCondition } from "../../analysis";
 import { RoutingPolicy } from "../domain/routing-policy.aggregate";
 import type { RoutingPolicyStatus } from "../domain/routing-policy-status";
 
@@ -7,7 +7,7 @@ export function toDomain(record: RoutingPolicyRecord): RoutingPolicy {
   return RoutingPolicy.rehydrate({
     id: record.id,
     organizationId: record.organizationId,
-    promptKey: record.promptKey as PromptKey,
+    promptKey: record.promptKey,
     version: record.version,
     status: record.status as RoutingPolicyStatus,
     primaryAiModelId: record.primaryAiModelId,

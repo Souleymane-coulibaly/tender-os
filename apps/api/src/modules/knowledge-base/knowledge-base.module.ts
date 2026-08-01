@@ -85,5 +85,9 @@ import { KnowledgeController } from "./interfaces/http/knowledge.controller";
     { provide: KNOWLEDGE_DISPATCHER, useClass: InProcessKnowledgeDispatcher },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
   ],
+  // SearchKnowledgeBaseUseCase exporté pour le module Generation (Sprint 6) — réutilise la
+  // recherche déjà scopée par client via ListAccessibleClientsUseCase, jamais une seconde
+  // implémentation de recherche.
+  exports: [SearchKnowledgeBaseUseCase],
 })
 export class KnowledgeBaseModule {}

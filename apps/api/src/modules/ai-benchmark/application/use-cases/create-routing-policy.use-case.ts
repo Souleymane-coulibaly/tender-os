@@ -3,7 +3,7 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
-import type { EscalationCondition, PromptKey } from "../../../analysis";
+import type { EscalationCondition } from "../../../analysis";
 import { AiBenchmarkPermission } from "../../domain/ai-benchmark-permission";
 import { RoutingPolicy } from "../../domain/routing-policy.aggregate";
 import { assertHasAiBenchmarkPermission } from "../policies/ai-benchmark-authorization.policy";
@@ -15,7 +15,9 @@ export type CreateRoutingPolicyCommand = Readonly<{
   organizationId: string;
   actorId: string;
   actorRole: string;
-  promptKey: PromptKey;
+  /** Identifiant de tâche routable — voir `RoutingPolicy.promptKey`, validé à la frontière HTTP par
+   *  `ROUTABLE_TASK_KEYS` (jamais ici, jamais un type fermé importé). */
+  promptKey: string;
   primaryAiModelId: string;
   escalationAiModelId?: string | undefined;
   confidenceThreshold?: number | undefined;
