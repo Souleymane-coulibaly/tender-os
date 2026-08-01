@@ -9,9 +9,11 @@ import {
 } from "../../../../../lib/client-portfolio-types";
 import type { PageResponse, TenderListItem } from "../../../../../lib/tenders-types";
 import type { KnowledgePage, KnowledgeEntrySummary } from "../../../../../lib/knowledge-types";
+import type { ClientCostSummary } from "../../../../../lib/pricing-types";
 import { ApiErrorState } from "../../api-error-state";
 import { ClientAssignmentsSection } from "./client-assignments-section";
 import { ClientLifecycleActions } from "./client-lifecycle-actions";
+import { ClientPricingSection } from "./client-pricing-section";
 import { ClientTendersSection } from "./client-tenders-section";
 import { EditClientAccountForm } from "./edit-client-account-form";
 import type { AssignableUser } from "./assign-user-form";
@@ -37,15 +39,17 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   let members: PageResponse<OrganizationMemberResponse>;
   let tenders: PageResponse<TenderListItem>;
   let knowledge: KnowledgePage<KnowledgeEntrySummary>;
+  let pricing: ClientCostSummary;
   let actorRole: string | undefined;
 
   try {
-    [client, assignments, members, tenders, knowledge, actorRole] = await Promise.all([
+    [client, assignments, members, tenders, knowledge, pricing, actorRole] = await Promise.all([
       appApiFetch<ClientAccountSummary>(`/api/v1/clients/${id}`),
       appApiFetch<ClientAssignmentView[]>(`/api/v1/clients/${id}/assignments`),
       appApiFetch<PageResponse<OrganizationMemberResponse>>("/api/v1/organization-memberships?limit=100"),
       appApiFetch<PageResponse<TenderListItem>>(`/api/v1/tenders?clientAccountId=${id}&limit=5`),
       appApiFetch<KnowledgePage<KnowledgeEntrySummary>>(`/api/v1/knowledge/entries?clientAccountId=${id}&limit=1`),
+      appApiFetch<ClientCostSummary>(`/api/v1/clients/${id}/pricing/summary`),
       getCurrentMembershipRole(),
     ]);
   } catch (error) {
@@ -88,6 +92,11 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
       <section className="rounded border border-neutral-200 p-4">
         <ClientTendersSection clientId={client.id} tenders={tenders.items} hasMore={tenders.pageInfo.hasNextPage} />
+      </section>
+
+      <section className="rounded border border-neutral-200 p-4">
+        <h2 className="mb-3 text-sm font-semibold text-neutral-900">Pricing &amp; prévisions</h2>
+        <ClientPricingSection summary={pricing} />
       </section>
 
       <section className="rounded border border-neutral-200 p-4">

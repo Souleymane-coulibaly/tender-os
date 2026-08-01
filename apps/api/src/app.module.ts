@@ -12,6 +12,7 @@ import { KnowledgeBaseModule } from "./modules/knowledge-base/knowledge-base.mod
 import { MembershipsModule } from "./modules/memberships/memberships.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { PlatformAdministrationModule } from "./modules/platform-administration/platform-administration.module";
+import { PricingModule } from "./modules/pricing/pricing.module";
 import { TendersModule } from "./modules/tenders/tenders.module";
 import { DatabaseModule } from "./shared-kernel/database.module";
 import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
@@ -35,6 +36,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     RoutingPolicyBridgeModule,
     AiBenchmarkModule,
     GenerationModule,
+    PricingModule,
   ],
 })
 export class AppModule {}

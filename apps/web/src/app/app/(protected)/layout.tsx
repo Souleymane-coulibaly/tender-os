@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { href: "/app/tenders", label: "Appels d'offres" },
   { href: "/app/documents", label: "Documents" },
   { href: "/app/knowledge", label: "Base de connaissances" },
+  { href: "/app/pricing", label: "Pricing organisation" },
   { href: "/app/ai-configuration/models", label: "Configuration IA" },
 ];
 

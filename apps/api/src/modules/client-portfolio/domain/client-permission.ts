@@ -31,6 +31,11 @@ export const ClientPermission = {
   ReadGeneration: "CLIENT_READ_GENERATION",
   ManageGeneration: "CLIENT_MANAGE_GENERATION",
   ValidateGeneration: "CLIENT_VALIDATE_GENERATION",
+  /** Sprint 7 (AI Pricing & Prévisions) — même motif additif que `ReadGeneration`/`ManageGeneration` :
+   *  consulter le coût/les estimations d'un Tender ou d'un client vs. créer/recalculer/archiver une
+   *  estimation, deux capacités distinctes plutôt qu'une seule permission ambiguë. */
+  ReadPricing: "CLIENT_READ_PRICING",
+  ManagePricing: "CLIENT_MANAGE_PRICING",
 } as const;
 
 export type ClientPermission = (typeof ClientPermission)[keyof typeof ClientPermission];
@@ -65,6 +70,8 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ReadGeneration,
   ClientPermission.ManageGeneration,
   ClientPermission.ValidateGeneration,
+  ClientPermission.ReadPricing,
+  ClientPermission.ManagePricing,
 ];
 
 export const ROLE_CLIENT_PORTFOLIO_PERMISSIONS: Record<string, readonly ClientPermission[]> = {
@@ -99,6 +106,8 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadGeneration,
     ClientPermission.ManageGeneration,
     ClientPermission.ValidateGeneration,
+    ClientPermission.ReadPricing,
+    ClientPermission.ManagePricing,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -115,6 +124,8 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
      *  rôle peut valider AU MOINS ses propres générations") ; la restriction fine "uniquement ses
      *  propres générations" est appliquée par `generation-validate.policy.ts`, jamais ici. */
     ClientPermission.ValidateGeneration,
+    ClientPermission.ReadPricing,
+    ClientPermission.ManagePricing,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -123,6 +134,7 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadAnalysis,
     ClientPermission.ReadKnowledge,
     ClientPermission.ReadGeneration,
+    ClientPermission.ReadPricing,
   ],
 };
 

@@ -345,6 +345,7 @@ model Tender {
   questionFindings         TenderQuestionFinding[]
   analysisSummaries        TenderAnalysisSummary[]
   generations              Generation[]
+  pricingEstimates         PricingEstimate[]
 
   /// AUDIT-007 : contrainte composite support de la FK composée de TenderLot ci-dessous — garantit
   /// au niveau base de données qu'un TenderLot ne peut jamais référencer un couple
@@ -1612,6 +1613,7 @@ model ClientAccount {
   tenders          Tender[]
   knowledgeEntries KnowledgeEntry[]
   generations      Generation[]
+  pricingEstimates PricingEstimate[]
 
   @@unique([id, organizationId])
   @@unique([organizationId, nameNormalized])
@@ -2220,8 +2222,13 @@ model Generation {
   inputTokenCount     Int?     @map("input_token_count")
   outputTokenCount    Int?     @map("output_token_count")
   totalTokenCount     Int?     @map("total_token_count")
-  /// Estimation informative (tarif statique `GENERATION_MODEL_RATES`) — JAMAIS une source de
-  /// facturation (mission hors périmètre §"pricing commercial", voir rapport final §H).
+  /// Correctif Sprint 6 (réaudit Codex P2-3) : coût RÉEL calculé à partir du pricing snapshot
+  /// Sprint 5.2 du modèle effectivement utilisé quand disponible (voir
+  /// `PrismaGenerationRoutingDecisionWriter.complete()`) ; ne retombe sur l'estimation statique
+  /// (`GENERATION_MODEL_RATES`) que si aucun snapshot n'est résolvable. Malgré son nom
+  /// (conservé pour compatibilité), N'EST PLUS purement informatif depuis ce correctif — Sprint 7
+  /// (Pricing) le lit comme le coût technique IA de référence d'une génération terminée, jamais
+  /// recalculé rétroactivement.
   estimatedCostAmount Decimal? @map("estimated_cost_amount") @db.Decimal(14, 6)
   currency            String?  @db.VarChar(3)
   latencyMs           Int?     @map("latency_ms")
@@ -2263,4 +2270,123 @@ model Generation {
   /// cet index est le filet de sécurité de dernier recours (même discipline que PromptVersion
   /// ci-dessus et que RoutingPolicy, Sprint 5.2).
   @@map("generations")
+}
+
+/// Sprint 7 (AI Pricing & Prévisions) — en-tête stable d'une estimation. Ne porte jamais de montant
+/// ni de détail : ceux-ci vivent exclusivement sur `PricingEstimateVersion` (mission
+/// "ne jamais modifier rétroactivement une version historique"). `organizationId` reste une colonne
+/// dénormalisée, sans relation Prisma directe vers `Organization` — même motif que `Generation`
+/// ci-dessus ("aucune relation directe... la cohérence passe par les FK composées").
+model PricingEstimate {
+  id String @id @default(uuid()) @db.Uuid
+
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// Au moins l'un de clientAccountId/tenderId doit être renseigné pour un type scopé — vérifié par
+  /// le domaine (`PricingEstimate.create`), jamais par une contrainte DB (dépend du `type`).
+  clientAccountId String?        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String? @map("tender_id") @db.Uuid
+  tender   Tender? @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// AI_TECHNICAL_COST | GENERATION_ESTIMATE | TENDER_ESTIMATE | CLIENT_COST_SUMMARY |
+  /// ORGANIZATION_COST_SUMMARY | PRODUCTION_ESTIMATE | COMMERCIAL_PREVIEW — CHECK (migration).
+  type String @db.VarChar(30)
+
+  /// DRAFT | CALCULATED | PARTIAL | UNKNOWN | SUPERSEDED | ARCHIVED — CHECK (migration).
+  status String @db.VarChar(12)
+
+  /// Pointe TOUJOURS vers la version de référence la plus récente — jamais une relation Prisma
+  /// formelle vers PricingEstimateVersion (créée APRÈS l'estimation elle-même, éviterait un cycle
+  /// de création) : simple UUID + numéro, résolus applicativement.
+  currentVersionId     String? @map("current_version_id") @db.Uuid
+  currentVersionNumber Int     @default(0) @map("current_version_number")
+
+  createdBy  String    @map("created_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at")
+  archivedAt DateTime? @map("archived_at")
+
+  versions PricingEstimateVersion[]
+
+  /// Support de la FK composée `PricingEstimateVersion.estimateId` (AUDIT-007).
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId])
+  @@index([organizationId, clientAccountId])
+  @@index([organizationId, type])
+  @@map("pricing_estimates")
+}
+
+/// Sprint 7 — UNE version figée d'une estimation (mission "chaque modification significative doit
+/// créer une nouvelle version... jamais modifier rétroactivement une version historique"). Jamais
+/// de mise à jour de `amountValue`/`assumptions` après création — seul `status`/`supersededAt`
+/// changent, au moment où une version suivante est créée.
+model PricingEstimateVersion {
+  id String @id @default(uuid()) @db.Uuid
+
+  estimateId     String          @map("estimate_id") @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  estimate       PricingEstimate @relation(fields: [estimateId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  version Int
+
+  /// DRAFT | CALCULATED | PARTIAL | UNKNOWN | SUPERSEDED — CHECK (migration). Jamais ARCHIVED : ce
+  /// statut ne s'applique qu'à l'estimation entière (`PricingEstimate.status`), jamais à une version
+  /// précise.
+  status String @db.VarChar(12)
+
+  amountValue    Decimal @map("amount_value") @db.Decimal(14, 6)
+  amountCurrency String  @map("amount_currency") @db.VarChar(3)
+
+  /// Sérialisation de `PricingAssumptions` (domaine) — Json plutôt qu'une table dédiée : structure
+  /// simple, 1:1 avec sa version, extensible sans migration à chaque nouvelle hypothèse (mission
+  /// "suffisamment simple pour la V1, mais extensible pour le Sprint 18").
+  assumptions Json
+
+  /// Fige la version du texte légal en vigueur au moment du calcul (voir domaine `disclaimer.ts`)
+  /// — jamais recalculée si le texte de référence évolue plus tard.
+  disclaimerVersion Int    @map("disclaimer_version")
+  /// Provenance du calcul, ex. "MANUAL" | "HISTORICAL_AVERAGE" — chaîne bornée, jamais un enum
+  /// fermé prématurément (mission "ne construis pas un moteur universel spéculatif").
+  source            String @db.VarChar(40)
+
+  createdBy           String    @map("created_by") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at")
+  supersededAt        DateTime? @map("superseded_at")
+  recalculationReason String?   @map("recalculation_reason") @db.VarChar(500)
+
+  breakdownLines PricingBreakdownLine[]
+
+  @@unique([estimateId, version])
+  @@index([organizationId])
+  @@map("pricing_estimate_versions")
+}
+
+/// Sprint 7 — une ligne du détail d'une estimation (mission "Breakdown"). Jamais modifiée après
+/// création — un recalcul produit un nouveau jeu de lignes sous une nouvelle version.
+model PricingBreakdownLine {
+  id String @id @default(uuid()) @db.Uuid
+
+  estimateVersionId String                 @map("estimate_version_id") @db.Uuid
+  estimateVersion   PricingEstimateVersion @relation(fields: [estimateVersionId], references: [id], onDelete: Cascade)
+
+  type  String @db.VarChar(40)
+  label String @db.VarChar(200)
+
+  quantity Decimal? @db.Decimal(14, 6)
+  unit     String?  @db.VarChar(30)
+
+  unitPriceValue    Decimal? @map("unit_price_value") @db.Decimal(14, 6)
+  unitPriceCurrency String?  @map("unit_price_currency") @db.VarChar(3)
+
+  amountValue    Decimal @map("amount_value") @db.Decimal(14, 6)
+  amountCurrency String  @map("amount_currency") @db.VarChar(3)
+
+  /// ACTUAL | ESTIMATED — CHECK (migration). Jamais mélangées dans une même estimation sans que
+  /// chaque ligne ne précise sa propre nature (mission "Ne jamais fusionner ces quatre notions").
+  source       String @db.VarChar(10)
+  displayOrder Int    @map("display_order")
+
+  @@index([estimateVersionId])
+  @@map("pricing_breakdown_lines")
 }

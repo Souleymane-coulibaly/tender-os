@@ -3,11 +3,15 @@ import { ROUTING_POLICY_RESOLVER } from "../../analysis/application/ports/routin
 import { ROUTING_DECISION_WRITER } from "../../analysis/application/ports/routing-decision-writer";
 import { ROUTING_POLICY_RESOLVER as GENERATION_ROUTING_POLICY_RESOLVER } from "../../generation/application/ports/routing-policy-resolver";
 import { GENERATION_ROUTING_DECISION_WRITER } from "../../generation/application/ports/routing-decision-writer";
+import { PRICING_SNAPSHOT_READER } from "../../pricing/application/ports/pricing-snapshot-reader";
+import { ROUTING_MODEL_READER } from "../../pricing/application/ports/routing-model-reader";
 import { AI_MODEL_REPOSITORY } from "../application/ports/ai-model.repository";
 import { PRICING_SNAPSHOT_REPOSITORY } from "../application/ports/pricing-snapshot.repository";
 import { ROUTING_POLICY_REPOSITORY } from "../application/ports/routing-policy.repository";
 import { PrismaAiModelRepository } from "./prisma-ai-model.repository";
 import { PrismaPricingSnapshotRepository } from "./prisma-pricing-snapshot.repository";
+import { PrismaPricingSnapshotReader } from "./prisma-pricing-snapshot-reader";
+import { PrismaRoutingModelReader } from "./prisma-routing-model-reader";
 import { PrismaRoutingPolicyRepository } from "./prisma-routing-policy.repository";
 import { PrismaRoutingPolicyResolver } from "./prisma-routing-policy-resolver";
 import { PrismaRoutingDecisionWriter } from "./prisma-routing-decision.writer";
@@ -33,6 +37,13 @@ import { PrismaGenerationRoutingDecisionWriter } from "./prisma-generation-routi
  * lié à `PrismaGenerationRoutingDecisionWriter`, qui persiste une VRAIE `RoutingDecision`
  * (`generationId` renseigné, `analysisId` laissé `null`) et calcule son coût réel via
  * `PRICING_SNAPSHOT_REPOSITORY` (correctif P2-3) — jamais une configuration statique.
+ *
+ * Sprint 7 (AI Pricing & Prévisions) — extension additive : `ROUTING_MODEL_READER`/
+ * `PRICING_SNAPSHOT_READER` (ports PROPRES à `pricing`, jamais un import des ports internes déjà
+ * liés ci-dessus) permettent à `PreviewGenerationCostUseCase`/`CreatePricingEstimateUseCase` de
+ * savoir quel modèle serait routé pour un `taskType` et son tarif COURANT — uniquement pour une
+ * prévision, jamais pour recalculer un coût technique déjà figé (voir `GenerationCostReader`,
+ * propre à `pricing`, qui lit directement `Generation` sans passer par ce pont).
  */
 @Global()
 @Module({
@@ -44,12 +55,16 @@ import { PrismaGenerationRoutingDecisionWriter } from "./prisma-generation-routi
     { provide: ROUTING_DECISION_WRITER, useClass: PrismaRoutingDecisionWriter },
     { provide: GENERATION_ROUTING_POLICY_RESOLVER, useClass: PrismaRoutingPolicyResolver },
     { provide: GENERATION_ROUTING_DECISION_WRITER, useClass: PrismaGenerationRoutingDecisionWriter },
+    { provide: ROUTING_MODEL_READER, useClass: PrismaRoutingModelReader },
+    { provide: PRICING_SNAPSHOT_READER, useClass: PrismaPricingSnapshotReader },
   ],
   exports: [
     ROUTING_POLICY_RESOLVER,
     ROUTING_DECISION_WRITER,
     GENERATION_ROUTING_POLICY_RESOLVER,
     GENERATION_ROUTING_DECISION_WRITER,
+    ROUTING_MODEL_READER,
+    PRICING_SNAPSHOT_READER,
   ],
 })
 export class RoutingPolicyBridgeModule {}
