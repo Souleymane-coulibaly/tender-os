@@ -353,6 +353,9 @@ model Tender {
   signatories              Signatory[]
   signatureTransactions    SignatureTransaction[]
   submissionPackages       SubmissionPackage[]
+  deliverables             Deliverable[]
+  deliverableTemplates     DeliverableTemplate[]
+  documentThemes           DocumentTheme[]
 
   /// AUDIT-007 : contrainte composite support de la FK composée de TenderLot ci-dessous — garantit
   /// au niveau base de données qu'un TenderLot ne peut jamais référencer un couple
@@ -1628,6 +1631,9 @@ model ClientAccount {
   signatories           Signatory[]
   signatureTransactions SignatureTransaction[]
   submissionPackages    SubmissionPackage[]
+  deliverables          Deliverable[]
+  deliverableTemplates  DeliverableTemplate[]
+  documentThemes        DocumentTheme[]
 
   @@unique([id, organizationId])
   @@unique([organizationId, nameNormalized])
@@ -2556,6 +2562,12 @@ model ExportSectionSelection {
   /// sélection antérieure à cette correction, jamais un défaut implicite pour une nouvelle.
   pricingEstimateVersionNumber Int?    @map("pricing_estimate_version_number")
   manualContent                String? @map("manual_content")
+  /// Mission Sprint 8A.1 §7/§9/§12 — équivalent structuré (RenderableBlock[]) de `manualContent`,
+  /// utilisé par Deliverables pour préserver la mise en forme (gras/italique/liens/listes/tableaux)
+  /// d'une révision de Mémoire technique à travers le pipeline de rendu DOCX/PDF du Sprint 8A,
+  /// jamais un second moteur de rendu. Absent = comportement Sprint 8A inchangé (repli sur
+  /// `manualContent` en texte brut, un seul paragraphe).
+  manualBlocks                 Json?   @map("manual_blocks")
 
   /// VALIDATED | NOT_VALIDATED | UNKNOWN — CHECK (migration). Cliché au moment de la sélection
   /// (mission §20 "validationStatus") — jamais recalculé rétroactivement pour un export historique.
@@ -2565,6 +2577,12 @@ model ExportSectionSelection {
   selectedAt DateTime @map("selected_at")
   order      Int
   notes      String?
+
+  /// Correctif audit Codex P1-001 — provenance explicite (deliverableId/deliverableSectionId/
+  /// deliverableRevisionId/revisionNumber/validationStatus/selectedBy/selectedAt) quand cette
+  /// section MANUAL/ANNEX origine d'une révision Deliverables déjà sélectionnée pour l'export.
+  /// Absent pour une section Sprint 8A qui n'origine pas de Deliverables (comportement inchangé).
+  deliverableProvenance Json? @map("deliverable_provenance")
 
   @@unique([exportJobId, sectionId])
   @@index([organizationId, exportJobId])
@@ -3012,4 +3030,526 @@ model PackageFile {
   @@unique([submissionPackageId, archivePath])
   @@index([organizationId, submissionPackageId])
   @@map("package_files")
+}
+
+// ============================================================================
+// Sprint 8A.1 — Espace Livrables, Mémoire technique IA et édition humaine.
+//
+// Portée retenue (mission "Créer uniquement les modèles nécessaires") : profondeur COMPLÈTE
+// (structure, template, génération IA, édition humaine, révisions immuables, revue, sélection
+// export) uniquement pour TECHNICAL_MEMO et EXECUTIVE_SUMMARY — les deux seuls livrables décrits
+// par la mission comme des documents structurés éditables section par section. Les autres
+// livrables : COMPLIANCE_MATRIX/CHECKLIST/ANNEXES reçoivent un overlay éditable LÉGER dédié
+// (ComplianceMatrixEntry/ChecklistPieceEntry/DeliverableAnnex, sans révision/génération IA — la
+// mission ne les décrit jamais avec ce vocabulaire) ; VALIDATION_REPORT/COST_REPORT/
+// SIGNATURE_DOCUMENTS/SUBMISSION_PACKAGE restent des vues en LECTURE SEULE assemblées à la volée
+// depuis Validation/Pricing/Signature/SubmissionPackage (mission §14 "construit depuis les
+// données du Sprint 8A" / "Ne développe pas l'intégration Universign réelle" / "assurée par le
+// Sprint 8A bis") — la ligne `Deliverable` existe pour ces quatre types uniquement pour le
+// statut/la navigation, jamais un second stockage de contenu déjà possédé par un autre module.
+// ============================================================================
+
+/// Mission §5 — hiérarchie de templates TENDER > CLIENT > ORGANIZATION (un template "imposé par
+/// l'acheteur" reste un template de portée TENDER, créé manuellement après lecture du DCE — jamais
+/// une détection automatique inventée ; un template "système" dégénère en template ORGANIZATION,
+/// chaque organisation doit posséder le sien, jamais un seed global inter-tenant). La priorité
+/// RÉELLEMENT utilisée est conservée sur `Deliverable.templateSourceLevel` (mission "aucune fusion
+/// silencieuse incohérente").
+model DeliverableTemplate {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// TENDER | CLIENT | ORGANIZATION — CHECK (migration).
+  scopeLevel String @map("scope_level") @db.VarChar(12)
+
+  clientAccountId String?        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String? @map("tender_id") @db.Uuid
+  tender   Tender? @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// TECHNICAL_MEMO | EXECUTIVE_SUMMARY — CHECK.
+  documentType String  @map("document_type") @db.VarChar(20)
+  name         String  @db.VarChar(200)
+  description  String?
+  /// Note libre — ex. "imposé par l'acheteur, voir RC p.12" (mission §5), jamais évaluée
+  /// automatiquement.
+  note         String?
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  versions DeliverableTemplateVersion[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, documentType, scopeLevel])
+  @@index([organizationId, clientAccountId])
+  @@index([organizationId, tenderId])
+  @@map("deliverable_templates")
+}
+
+/// Mission §5 — une version de template, versionnée comme `ExportTemplateVersion` (Sprint 8A) :
+/// DRAFT → ACTIVE → ARCHIVED, une seule ACTIVE à la fois par template (index unique partiel,
+/// migration).
+model DeliverableTemplateVersion {
+  id                    String              @id @default(uuid()) @db.Uuid
+  organizationId        String              @map("organization_id") @db.Uuid
+  deliverableTemplateId String              @map("deliverable_template_id") @db.Uuid
+  deliverableTemplate   DeliverableTemplate @relation(fields: [deliverableTemplateId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  version Int
+  /// DRAFT | ACTIVE | ARCHIVED — CHECK.
+  status  String @default("DRAFT") @db.VarChar(8)
+
+  createdBy   String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  activatedAt DateTime? @map("activated_at")
+  archivedAt  DateTime? @map("archived_at")
+
+  sections DeliverableTemplateSection[]
+
+  @@unique([id, organizationId])
+  @@unique([deliverableTemplateId, version])
+  @@index([organizationId, deliverableTemplateId])
+  @@map("deliverable_template_versions")
+}
+
+/// Mission §5 — une section de template : code, titre, ordre, niveau de titre, obligation,
+/// condition d'affichage (texte libre, jamais un DSL évalué), longueur recommandée, instructions
+/// rédactionnelles, `taskType` IA (le `PromptVersion` ACTIF du Sprint 6 pour ce `taskType` est
+/// résolu ENTIÈREMENT côté Generation, jamais une référence de version figée ici).
+model DeliverableTemplateSection {
+  id                           String                     @id @default(uuid()) @db.Uuid
+  organizationId               String                     @map("organization_id") @db.Uuid
+  deliverableTemplateVersionId String                     @map("deliverable_template_version_id") @db.Uuid
+  deliverableTemplateVersion   DeliverableTemplateVersion @relation(fields: [deliverableTemplateVersionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  code         String  @db.VarChar(80)
+  title        String  @db.VarChar(300)
+  description  String?
+  order        Int
+  /// 1 | 2 | 3 (H1/H2/H3) — CHECK.
+  headingLevel Int     @default(1) @map("heading_level")
+
+  /// MANDATORY | OPTIONAL | CONDITIONAL — CHECK.
+  requirement      String  @default("OPTIONAL") @db.VarChar(12)
+  displayCondition String? @map("display_condition")
+
+  recommendedLength Int?    @map("recommended_length")
+  maxCharacters     Int?    @map("max_characters")
+  maxPages          Int?    @map("max_pages")
+  instructions      String?
+  styleHint         String? @map("style_hint")
+
+  /// GenerationTaskType du Sprint 6 (dénormalisé, LECTURE SEULE — validité vérifiée par
+  /// l'application au moment de la génération, jamais par une FK inter-module).
+  taskType           String? @map("task_type") @db.VarChar(30)
+  allowedVariables   Json    @default("[]") @map("allowed_variables")
+  validationRequired Boolean @default(true) @map("validation_required")
+  pageBreakBefore    Boolean @default(false) @map("page_break_before")
+
+  @@unique([id, organizationId])
+  @@unique([deliverableTemplateVersionId, code])
+  @@index([organizationId, deliverableTemplateVersionId])
+  @@map("deliverable_template_sections")
+}
+
+/// Mission §6 — identité documentaire versionnée, hiérarchie TENDER > CLIENT > ORGANIZATION (même
+/// motif que `DeliverableTemplate`). Enregistrée sur chaque export (`Deliverable.themeVersionId`)
+/// — une version déjà utilisée dans un export final est immuable (mission §6).
+model DocumentTheme {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// TENDER | CLIENT | ORGANIZATION — CHECK.
+  scopeLevel String @map("scope_level") @db.VarChar(12)
+
+  clientAccountId String?        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String? @map("tender_id") @db.Uuid
+  tender   Tender? @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  name String @db.VarChar(200)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  versions DocumentThemeVersion[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, scopeLevel])
+  @@index([organizationId, clientAccountId])
+  @@index([organizationId, tenderId])
+  @@map("document_themes")
+}
+
+/// Mission §6 — une version d'identité documentaire. `config` (JSON validé applicativement,
+/// jamais un template exécutable, même discipline que `ExportTemplateConfig`) porte marges,
+/// styles H1/H2/H3, en-tête/pied de page, pagination, coordonnées, mentions légales, convention de
+/// nommage. `fontFamily` reste un NOM de police standard uniquement (jamais un chemin de fichier
+/// arbitraire — même garde que `ALLOWED_LOCAL_FONT_NAMES` dans `PdfmakeDocumentRenderer`).
+model DocumentThemeVersion {
+  id              String        @id @default(uuid()) @db.Uuid
+  organizationId  String        @map("organization_id") @db.Uuid
+  documentThemeId String        @map("document_theme_id") @db.Uuid
+  documentTheme   DocumentTheme @relation(fields: [documentThemeId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  version Int
+  /// DRAFT | ACTIVE | ARCHIVED — CHECK.
+  status  String @default("DRAFT") @db.VarChar(8)
+
+  logoStorageKey String? @map("logo_storage_key") @db.VarChar(500)
+  accentColor    String? @map("accent_color") @db.VarChar(7)
+  fontFamily     String? @map("font_family") @db.VarChar(100)
+  config         Json    @default("{}")
+
+  createdBy   String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  activatedAt DateTime? @map("activated_at")
+  archivedAt  DateTime? @map("archived_at")
+
+  @@unique([id, organizationId])
+  @@unique([documentThemeId, version])
+  @@index([organizationId, documentThemeId])
+  @@map("document_theme_versions")
+}
+
+/// Mission §3/§15 — le livrable racine, un par (Tender, type). `status` est calculé et contrôlé
+/// CÔTÉ BACKEND uniquement (mission §15 "jamais fixé librement par le frontend").
+model Deliverable {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// TECHNICAL_MEMO | EXECUTIVE_SUMMARY | COMPLIANCE_MATRIX | CHECKLIST | VALIDATION_REPORT |
+  /// COST_REPORT | ANNEXES | SIGNATURE_DOCUMENTS | SUBMISSION_PACKAGE — CHECK.
+  type String @db.VarChar(20)
+
+  /// NOT_STARTED | DRAFT | IN_PROGRESS | READY_FOR_REVIEW | CHANGES_REQUESTED | VALIDATED |
+  /// APPROVED | EXPORTED | BLOCKED — CHECK.
+  status String @default("NOT_STARTED") @db.VarChar(20)
+
+  /// Uniquement pour TECHNICAL_MEMO/EXECUTIVE_SUMMARY — dénormalisé en LECTURE SEULE.
+  templateVersionId   String? @map("template_version_id") @db.Uuid
+  templateSourceLevel String? @map("template_source_level") @db.VarChar(12)
+
+  themeVersionId   String?   @map("theme_version_id") @db.Uuid
+  themeSourceLevel String?   @map("theme_source_level") @db.VarChar(12)
+  themeSelectedBy  String?   @map("theme_selected_by") @db.Uuid
+  themeSelectedAt  DateTime? @map("theme_selected_at")
+
+  /// Mission §15 — fait explicite déclenché par `ApproveDeliverableUseCase` (jamais déduit
+  /// automatiquement des seules sections) : uniquement lorsque toutes les sections visibles sont
+  /// VALIDÉES. `status = EXPORTED` reste calculé dynamiquement à la lecture depuis les exports
+  /// FINAUX déjà COMPLETED du Tender (Sprint 8A, jamais un second stockage figé ici).
+  approvedBy String?   @map("approved_by") @db.Uuid
+  approvedAt DateTime? @map("approved_at")
+
+  /// Correctif audit Codex P1-002 — uniquement pour COST_REPORT : référence EXPLICITE et IMMUABLE
+  /// (une fois posée) vers une version Sprint 7 figée, dénormalisée en LECTURE SEULE (jamais de FK
+  /// inter-module, même motif que `pricingEstimateId` sur `ExportSectionSelection`). Un recalcul
+  /// Sprint 7 ultérieur ne modifie jamais ces colonnes.
+  costReportPricingEstimateId            String?   @map("cost_report_pricing_estimate_id") @db.Uuid
+  costReportPricingEstimateVersionNumber Int?      @map("cost_report_pricing_estimate_version_number")
+  costReportSelectedBy                   String?   @map("cost_report_selected_by") @db.Uuid
+  costReportSelectedAt                   DateTime? @map("cost_report_selected_at")
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sections                DeliverableSection[]
+  comments                DeliverableComment[]
+  complianceMatrixEntries ComplianceMatrixEntry[]
+  checklistPieceEntries   ChecklistPieceEntry[]
+  annexes                 DeliverableAnnex[]
+
+  @@unique([id, organizationId])
+  @@unique([tenderId, type])
+  @@index([organizationId, tenderId])
+  @@map("deliverables")
+}
+
+/// Mission §4/§16 — un emplacement de section dans un livrable structuré (copié depuis
+/// `DeliverableTemplateSection.code` à la création — garde sa propre existence même si le
+/// template change ensuite, mission "verrouillée").
+model DeliverableSection {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  deliverableId String      @map("deliverable_id") @db.Uuid
+  deliverable   Deliverable @relation(fields: [deliverableId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  code         String  @db.VarChar(80)
+  title        String  @db.VarChar(300)
+  order        Int
+  headingLevel Int     @default(1) @map("heading_level")
+  mandatory    Boolean @default(false)
+
+  hidden Boolean @default(false)
+  locked Boolean @default(false)
+
+  /// NOT_STARTED | DRAFT | IN_PROGRESS | READY_FOR_REVIEW | CHANGES_REQUESTED | VALIDATED —
+  /// CHECK. Dérivé de la révision courante, persisté pour un listing rapide (mission §16).
+  status String @default("NOT_STARTED") @db.VarChar(20)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  revisions       DeliverableRevision[]
+  exportSelection DeliverableExportSelection?
+  comments        DeliverableComment[]
+
+  @@unique([id, organizationId])
+  @@unique([deliverableId, code])
+  @@index([organizationId, deliverableId])
+  @@map("deliverable_sections")
+}
+
+/// Mission §10 — une révision immuable DÈS QU'ELLE QUITTE `DRAFT` (mission "une ancienne révision
+/// ne doit jamais être écrasée"). `sourceGenerationId` est une référence dénormalisée en LECTURE
+/// SEULE vers un `Generation` du Sprint 6 (jamais une seconde écriture sur cette table, même motif
+/// que `pricingEstimateId` dans Export). `editVersion` porte le verrou optimiste de la mission §18
+/// — n'a de sens que tant que `status = DRAFT`.
+model DeliverableRevision {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  deliverableSectionId String             @map("deliverable_section_id") @db.Uuid
+  deliverableSection   DeliverableSection @relation(fields: [deliverableSectionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  revisionNumber     Int     @map("revision_number")
+  previousRevisionId String? @map("previous_revision_id") @db.Uuid
+
+  /// AI_GENERATED | MANUAL | RESTORED — CHECK.
+  sourceType                    String  @map("source_type") @db.VarChar(12)
+  sourceGenerationId            String? @map("source_generation_id") @db.Uuid
+  sourceGenerationVersionNumber Int?    @map("source_generation_version_number")
+
+  /// Correctif audit Codex P2-001 — snapshot d'audit minimal, IMMUABLE, capturé UNIQUEMENT à la
+  /// création d'une révision AI_GENERATED (jamais mis à jour ensuite), dénormalisé en LECTURE
+  /// SEULE (jamais de FK inter-module, même motif que `pricingEstimateId`). `aiContextFingerprint`
+  /// est un hash SHA-256 du contenu généré, jamais le contexte brut dupliqué.
+  aiTaskType           String?   @map("ai_task_type") @db.VarChar(40)
+  aiPromptVersionId    String?   @map("ai_prompt_version_id") @db.Uuid
+  aiModelProvider      String?   @map("ai_model_provider") @db.VarChar(40)
+  aiModelName          String?   @map("ai_model_name") @db.VarChar(80)
+  aiRoutingDecisionId  String?   @map("ai_routing_decision_id") @db.Uuid
+  aiContextFingerprint String?   @map("ai_context_fingerprint") @db.VarChar(64)
+  aiGeneratedAt        DateTime? @map("ai_generated_at")
+
+  /// RenderableBlock[]-like structuré (mission §9 "jamais du HTML arbitraire").
+  contentStructured Json   @map("content_structured")
+  contentText       String @map("content_text")
+  characterCount    Int    @map("character_count")
+
+  /// DRAFT | READY_FOR_REVIEW | CHANGES_REQUESTED | VALIDATED | REJECTED | ARCHIVED — CHECK.
+  status String @default("DRAFT") @db.VarChar(18)
+
+  editVersion Int @default(0) @map("edit_version")
+
+  createdBy     String   @map("created_by") @db.Uuid
+  createdByRole String   @map("created_by_role") @db.VarChar(30)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  changeNote    String?  @map("change_note")
+
+  reviews          DeliverableReview[]
+  comments         DeliverableComment[]
+  exportSelections DeliverableExportSelection[]
+
+  @@unique([id, organizationId])
+  @@unique([deliverableSectionId, revisionNumber])
+  @@index([organizationId, deliverableSectionId])
+  @@map("deliverable_revisions")
+}
+
+/// Mission §13 — une décision de revue simple, toujours liée à une révision EXACTE (mission "une
+/// décision porte toujours sur une révision exacte").
+model DeliverableReview {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  deliverableRevisionId String              @map("deliverable_revision_id") @db.Uuid
+  deliverableRevision   DeliverableRevision @relation(fields: [deliverableRevisionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// APPROVED | CHANGES_REQUESTED | REJECTED — CHECK.
+  decision String  @db.VarChar(18)
+  comment  String?
+
+  decidedBy     String   @map("decided_by") @db.Uuid
+  decidedByRole String   @map("decided_by_role") @db.VarChar(30)
+  decidedAt     DateTime @default(now()) @map("decided_at")
+
+  @@index([organizationId, deliverableRevisionId])
+  @@map("deliverable_reviews")
+}
+
+/// Mission §13 — un commentaire simple, lié à un livrable et, optionnellement, une section ou une
+/// révision précise (mission "sans collaboration temps réel", "le workflow collaboratif avancé
+/// reste réservé au Sprint 11").
+model DeliverableComment {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  deliverableId String      @map("deliverable_id") @db.Uuid
+  deliverable   Deliverable @relation(fields: [deliverableId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  deliverableSectionId String?             @map("deliverable_section_id") @db.Uuid
+  deliverableSection   DeliverableSection? @relation(fields: [deliverableSectionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  deliverableRevisionId String?              @map("deliverable_revision_id") @db.Uuid
+  deliverableRevision   DeliverableRevision? @relation(fields: [deliverableRevisionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  content String
+
+  authorId  String   @map("author_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// OPEN | RESOLVED — CHECK.
+  status     String    @default("OPEN") @db.VarChar(8)
+  resolvedBy String?   @map("resolved_by") @db.Uuid
+  resolvedAt DateTime? @map("resolved_at")
+
+  @@index([organizationId, deliverableId])
+  @@index([organizationId, deliverableSectionId])
+  @@index([organizationId, deliverableRevisionId])
+  @@map("deliverable_comments")
+}
+
+/// Mission §11 — pour chaque section, AU PLUS UNE révision sélectionnée pour l'export (règle
+/// absolue : "Révision validée explicitement sélectionnée → utilisée dans l'export final",
+/// "Dernier brouillon non validé → jamais utilisé automatiquement" — vérifié par l'application,
+/// jamais par une contrainte DB sur `status`, une révision ARCHIVED restant sélectionnable par
+/// exception documentée). Une ligne PAR section (mise à jour, jamais dupliquée) : l'historique
+/// complet reste porté par `DeliverableRevision`, jamais reconstruit ici.
+model DeliverableExportSelection {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  deliverableSectionId String             @map("deliverable_section_id") @db.Uuid
+  deliverableSection   DeliverableSection @relation(fields: [deliverableSectionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  deliverableRevisionId String              @map("deliverable_revision_id") @db.Uuid
+  deliverableRevision   DeliverableRevision @relation(fields: [deliverableRevisionId, organizationId], references: [id, organizationId])
+
+  selectedBy    String   @map("selected_by") @db.Uuid
+  selectedAt    DateTime @default(now()) @map("selected_at")
+  justification String?
+
+  @@unique([deliverableSectionId, organizationId])
+  @@map("deliverable_export_selections")
+}
+
+/// Mission §14 "Matrice de conformité" — overlay éditable léger (pas de révision/génération IA,
+/// la mission ne les décrit jamais pour ce livrable). `requirementId` dénormalise en LECTURE SEULE
+/// une exigence du Sprint 4 (Analysis).
+model ComplianceMatrixEntry {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  deliverableId String      @map("deliverable_id") @db.Uuid
+  deliverable   Deliverable @relation(fields: [deliverableId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  requirementId String? @map("requirement_id") @db.Uuid
+  source        String  @db.VarChar(300)
+  mandatory     Boolean @default(true)
+  /// LOW | MEDIUM | HIGH | CRITICAL — CHECK.
+  criticality   String  @default("MEDIUM") @db.VarChar(8)
+
+  response              String?
+  deliverableSectionRef String? @map("deliverable_section_ref") @db.VarChar(80)
+  proofReference        String? @map("proof_reference")
+
+  /// COVERED | PARTIALLY_COVERED | NOT_COVERED | NOT_APPLICABLE | TO_CONFIRM — CHECK.
+  coverageStatus String    @default("TO_CONFIRM") @map("coverage_status") @db.VarChar(18)
+  validated      Boolean   @default(false)
+  validatedBy    String?   @map("validated_by") @db.Uuid
+  validatedAt    DateTime? @map("validated_at")
+
+  order Int @default(0)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, deliverableId])
+  @@map("compliance_matrix_entries")
+}
+
+/// Mission §14 "Checklist des pièces" — overlay éditable léger, même motif que
+/// `ComplianceMatrixEntry`. `documentId` dénormalise en LECTURE SEULE un `Document` existant.
+model ChecklistPieceEntry {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  deliverableId String      @map("deliverable_id") @db.Uuid
+  deliverable   Deliverable @relation(fields: [deliverableId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  name      String  @db.VarChar(300)
+  source    String? @db.VarChar(300)
+  mandatory Boolean @default(true)
+  format    String? @db.VarChar(60)
+
+  documentId        String?   @map("document_id") @db.Uuid
+  version           String?   @db.VarChar(40)
+  /// Correctif audit Codex P1-003 — référence de version IMMUABLE dérivée d'un document VÉRIFIÉ via
+  /// `GetDocumentUseCase` (jamais fournie par le client), dénormalisée en LECTURE SEULE (jamais de
+  /// FK inter-module, même motif que `pricingEstimateId` sur `ExportSectionSelection`).
+  documentVersionId String?   @map("document_version_id") @db.Uuid
+  documentChecksum  String?   @map("document_checksum") @db.VarChar(128)
+  documentFileName  String?   @map("document_file_name") @db.VarChar(300)
+  documentMimeType  String?   @map("document_mime_type") @db.VarChar(120)
+  expiresAt         DateTime? @map("expires_at")
+
+  signatureRequired Boolean @default(false) @map("signature_required")
+
+  /// MISSING | PROVIDED | EXPIRED | REJECTED | VALID — CHECK.
+  status            String  @default("MISSING") @db.VarChar(10)
+  responsibleUserId String? @map("responsible_user_id") @db.Uuid
+
+  order Int @default(0)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, deliverableId])
+  @@map("checklist_piece_entries")
+}
+
+/// Mission §14 "Annexes" — overlay éditable léger. `documentId` dénormalise en LECTURE SEULE un
+/// `Document` existant.
+model DeliverableAnnex {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  deliverableId String      @map("deliverable_id") @db.Uuid
+  deliverable   Deliverable @relation(fields: [deliverableId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  label             String  @db.VarChar(300)
+  source            String? @db.VarChar(300)
+  documentId        String? @map("document_id") @db.Uuid
+  version           String? @db.VarChar(40)
+  /// Correctif audit Codex P1-003 — même motif que `ChecklistPieceEntry`.
+  documentVersionId String? @map("document_version_id") @db.Uuid
+  documentChecksum  String? @map("document_checksum") @db.VarChar(128)
+  documentFileName  String? @map("document_file_name") @db.VarChar(300)
+  documentMimeType  String? @map("document_mime_type") @db.VarChar(120)
+
+  /// PENDING | PROVIDED | VALIDATED — CHECK.
+  status String @default("PENDING") @db.VarChar(10)
+  order  Int    @default(0)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, deliverableId])
+  @@map("deliverable_annexes")
 }

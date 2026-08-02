@@ -40,6 +40,8 @@ import { ValidationController } from "./interfaces/http/validation.controller";
   ],
   // Réexportés pour permettre à Package (Sprint 8A bis) de vérifier l'approbation active et le
   // dernier run avant de créer un package — jamais une seconde écriture sur ces tables.
-  exports: [GetReadinessStatusUseCase, FINAL_APPROVAL_REPOSITORY, VALIDATION_RUN_REPOSITORY],
+  // `GetValidationRunUseCase` réexporté en plus pour Sprint 8A.1 (Deliverables) — vue LECTURE SEULE
+  // "Rapport de validation" (contrôles/blocages/avertissements du dernier run).
+  exports: [GetReadinessStatusUseCase, GetValidationRunUseCase, FINAL_APPROVAL_REPOSITORY, VALIDATION_RUN_REPOSITORY],
 })
 export class ValidationModule {}

@@ -54,6 +54,8 @@ import { PricingController } from "./interfaces/http/pricing.controller";
   // Réexporté pour permettre au module Export (Sprint 8A) d'inclure un rapport de coûts figé sur
   // une version PRÉCISE d'estimation — jamais un recalcul à l'export (mission Sprint 8A §17).
   // Reste RBAC-gated en interne (ClientPermission.ReadPricing).
-  exports: [GetPricingEstimateUseCase],
+  // `ListPricingEstimatesUseCase` réexporté en plus pour Sprint 8A.1 (Deliverables) — retrouver
+  // l'estimation la plus récente d'un Tender pour la vue LECTURE SEULE "Rapport financier".
+  exports: [GetPricingEstimateUseCase, ListPricingEstimatesUseCase],
 })
 export class PricingModule {}

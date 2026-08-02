@@ -12,6 +12,12 @@ export type { SignatureTransactionRepository, SignatureTransactionWithDetails } 
 
 export { GetSignatureTransactionUseCase } from "./application/use-cases/get-signature-transaction.use-case";
 export { DownloadSignatureArtifactUseCase } from "./application/use-cases/download-signature-artifact.use-case";
+// Réexportés pour Sprint 8A.1 (Deliverables) — vue LECTURE SEULE "Documents à signer" (mission
+// §14), jamais une seconde écriture ni une intégration Universign réelle redéveloppée.
+export { ListSignatureRequirementsUseCase } from "./application/use-cases/list-signature-requirements.use-case";
+export type { ListSignatureRequirementsQuery } from "./application/use-cases/list-signature-requirements.use-case";
+export { ListSignatureTransactionsUseCase } from "./application/use-cases/list-signature-transactions.use-case";
+export type { ListSignatureTransactionsQuery } from "./application/use-cases/list-signature-transactions.use-case";
 
 export type { SignatureTransactionSummary, SignatorySummary, SignatureRequirementSummary, SignatureArtifactSummary } from "./application/dtos";
 

@@ -6,5 +6,9 @@ export { PricingModule } from "./pricing.module";
 // partiel/inconnu, les hypothèses, la date"). Reste RBAC-gated en interne (ReadPricing).
 export { GetPricingEstimateUseCase } from "./application/use-cases/get-pricing-estimate.use-case";
 export type { GetPricingEstimateQuery } from "./application/use-cases/get-pricing-estimate.use-case";
+// Réexporté pour Sprint 8A.1 (Deliverables) — retrouver l'estimation la plus récente d'un Tender
+// pour la vue LECTURE SEULE "Rapport financier" (mission §14), jamais un recalcul.
+export { ListPricingEstimatesUseCase } from "./application/use-cases/list-pricing-estimates.use-case";
+export type { ListPricingEstimatesQuery, ListPricingEstimatesResult } from "./application/use-cases/list-pricing-estimates.use-case";
 export type { PricingEstimateSummary, PricingEstimateVersionSummary, BreakdownLineSummary } from "./application/dtos";
 export { ESTIMATE_DISCLAIMER_TEXT } from "./domain/disclaimer";

@@ -2,6 +2,11 @@ export { ValidationModule } from "./validation.module";
 
 export { GetReadinessStatusUseCase } from "./application/use-cases/get-readiness-status.use-case";
 export type { ReadinessStatusResult } from "./application/use-cases/get-readiness-status.use-case";
+// Réexporté pour Sprint 8A.1 (Deliverables) — vue LECTURE SEULE "Rapport de validation" (mission
+// §14 "contrôles/blocages/avertissements/anomalies/résolutions/approbateur/date"), jamais une
+// seconde écriture sur ces tables.
+export { GetValidationRunUseCase } from "./application/use-cases/get-validation-run.use-case";
+export type { GetValidationRunQuery } from "./application/use-cases/get-validation-run.use-case";
 
 export { FINAL_APPROVAL_REPOSITORY } from "./application/ports/final-approval.repository";
 export type { FinalApprovalRepository } from "./application/ports/final-approval.repository";

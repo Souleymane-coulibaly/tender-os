@@ -3,9 +3,10 @@ import { GetGenerationUseCase } from "../../../generation";
 import { GetPricingEstimateUseCase } from "../../../pricing";
 import { ESTIMATE_DISCLAIMER_TEXT } from "../../../pricing";
 import { CrossClientContentError, InvalidSectionSelectionError } from "../../domain/errors";
-import { ExportSectionSelection, ExportSectionValidationStatus } from "../../domain/export-section-selection";
+import { ExportSectionSelection, ExportSectionValidationStatus, type ExportSectionDeliverableProvenance } from "../../domain/export-section-selection";
 import { ExportSectionSource } from "../../domain/export-section-source";
 import type { ResolvedSectionContent } from "./export-assembly.service";
+import type { RenderableBlock } from "./renderable-document";
 
 export type SectionSelectionInput = Readonly<{
   sectionId: string;
@@ -15,8 +16,22 @@ export type SectionSelectionInput = Readonly<{
   pricingEstimateId?: string | undefined;
   pricingEstimateVersionNumber?: number | undefined;
   manualContent?: string | undefined;
+  /** Mission Sprint 8A.1 §7/§9/§12 — contenu structuré riche (Deliverables), prioritaire sur
+   *  `manualContent` au rendu ; `manualContent` reste toujours renseigné en parallèle comme
+   *  équivalent texte brut (recherche, audit). */
+  manualBlocks?: readonly RenderableBlock[] | undefined;
   notes?: string | undefined;
+  /** Correctif audit Codex P1-001 — provenance explicite quand cette section MANUAL/ANNEX origine
+   *  d'une révision Deliverables déjà sélectionnée pour l'export (jamais reconstruite ensuite). */
+  deliverableProvenance?: ExportSectionDeliverableProvenance | undefined;
 }>;
+
+/** Correctif audit Codex P1-001 — traduit le statut réel d'une révision Deliverables (mission §15,
+ *  ex. "VALIDATED"/"DRAFT"/"READY_FOR_REVIEW") vers le vocabulaire d'Export, sans jamais affirmer
+ *  VALIDATED pour autre chose qu'une révision réellement validée par le domaine appelant. */
+function mapDeliverableValidationStatus(deliverableRevisionStatus: string): ExportSectionValidationStatus {
+  return deliverableRevisionStatus === "VALIDATED" ? ExportSectionValidationStatus.Validated : ExportSectionValidationStatus.NotValidated;
+}
 
 /**
  * Mission Sprint 8A §16/§17/§20 — construit les `ExportSectionSelection` ET résout leur contenu
@@ -118,14 +133,23 @@ export class SectionContentResolverService {
             sectionId: selection.sectionId,
             sourceType: selection.sourceType,
             manualContent: selection.manualContent,
-            validationStatus: ExportSectionValidationStatus.Unknown,
+            manualBlocks: selection.manualBlocks,
+            // Correctif audit Codex P1-001 — si la provenance Deliverables porte déjà un
+            // `validationStatus` (VALIDATED/DRAFT/...), on la reflète ici plutôt que le générique
+            // UNKNOWN, jamais une affirmation "VALIDATED" non prouvée par le domaine appelant.
+            validationStatus: selection.deliverableProvenance ? mapDeliverableValidationStatus(selection.deliverableProvenance.validationStatus) : ExportSectionValidationStatus.Unknown,
             selectedBy: input.selectedBy,
             selectedAt: input.occurredAt,
             order: index,
             notes: selection.notes,
+            deliverableProvenance: selection.deliverableProvenance,
           }),
         );
-        resolvedContent.set(selection.sectionId, { text: selection.manualContent, missing: !selection.manualContent });
+        resolvedContent.set(selection.sectionId, {
+          text: selection.manualContent,
+          blocks: selection.manualBlocks,
+          missing: !selection.manualContent && !selection.manualBlocks?.length,
+        });
       } else {
         throw new InvalidSectionSelectionError(`section "${selection.sectionId}" has an unsupported or incomplete sourceType "${selection.sourceType}"`);
       }
@@ -174,7 +198,11 @@ export class SectionContentResolverService {
         const rows = estimate.currentVersion.breakdown.map((line) => [line.label, `${line.amount} ${line.currency}`]);
         resolvedContent.set(section.sectionId, { table: { headerRow: ["Poste", "Montant"], rows }, notice: ESTIMATE_DISCLAIMER_TEXT });
       } else {
-        resolvedContent.set(section.sectionId, { text: section.manualContent, missing: !section.manualContent });
+        resolvedContent.set(section.sectionId, {
+          text: section.manualContent,
+          blocks: section.manualBlocks,
+          missing: !section.manualContent && !section.manualBlocks?.length,
+        });
       }
     }
 

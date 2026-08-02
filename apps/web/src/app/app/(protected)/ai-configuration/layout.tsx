@@ -8,6 +8,8 @@ const SUB_NAV_ITEMS = [
   { href: "/app/ai-configuration/routing-policies", label: "Routing" },
   { href: "/app/ai-configuration/prompts", label: "Prompts" },
   { href: "/app/ai-configuration/export-templates", label: "Templates d'export" },
+  { href: "/app/ai-configuration/deliverable-templates", label: "Templates de mémoire" },
+  { href: "/app/ai-configuration/document-themes", label: "Identité documentaire" },
 ];
 
 /** Sous-navigation locale à la section Configuration IA (Sprint 5.2) — un seul NAV_ITEMS de haut

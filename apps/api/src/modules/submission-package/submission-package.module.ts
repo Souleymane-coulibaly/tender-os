@@ -38,5 +38,9 @@ import { SubmissionPackageController } from "./interfaces/http/submission-packag
     { provide: SUBMISSION_PACKAGE_REPOSITORY, useClass: PrismaSubmissionPackageRepository },
     { provide: ZIP_ARCHIVE_PORT, useClass: JszipArchiveAdapter },
   ],
+  // `ListSubmissionPackagesUseCase` réexporté pour Sprint 8A.1 (Deliverables) — vue LECTURE SEULE
+  // "Package final" (mission §14), jamais une seconde écriture ni une recréation physique du package
+  // (mission "la création physique du package reste assurée par le Sprint 8A bis").
+  exports: [ListSubmissionPackagesUseCase],
 })
 export class SubmissionPackageModule {}

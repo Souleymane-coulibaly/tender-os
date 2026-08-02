@@ -1,3 +1,4 @@
+import type { RenderableBlock } from "../application/services/renderable-document";
 import { InvalidSectionSelectionError } from "./errors";
 import { ExportSectionSource, isExportSectionSource } from "./export-section-source";
 
@@ -7,6 +8,21 @@ export const ExportSectionValidationStatus = {
   Unknown: "UNKNOWN",
 } as const;
 export type ExportSectionValidationStatus = (typeof ExportSectionValidationStatus)[keyof typeof ExportSectionValidationStatus];
+
+/** Correctif audit Codex P1-001 — provenance explicite d'une section exportée depuis une révision
+ *  du module Deliverables (mémoire technique/synthèse exécutive). Optionnelle : absente pour une
+ *  section MANUAL/ANNEX qui n'origine pas d'un `DeliverableRevision` (mission Sprint 8A, inchangée).
+ *  Permet de prouver après coup qu'un DOCX/PDF correspond exactement à la révision sélectionnée —
+ *  jamais reconstruite à partir des logs, portée par le manifest lui-même. */
+export type ExportSectionDeliverableProvenance = Readonly<{
+  deliverableId: string;
+  deliverableSectionId: string;
+  deliverableRevisionId: string;
+  revisionNumber: number;
+  validationStatus: string;
+  selectedBy: string;
+  selectedAt: Date;
+}>;
 
 export type ExportSectionSelectionProps = Readonly<{
   sectionId: string;
@@ -25,11 +41,16 @@ export type ExportSectionSelectionProps = Readonly<{
    *  de la sélection, explicitement, jamais un défaut implicite silencieux. */
   pricingEstimateVersionNumber?: number | undefined;
   manualContent?: string | undefined;
+  /** Mission Sprint 8A.1 §7/§9/§12 — équivalent structuré de `manualContent`, réutilisé tel quel
+   *  par Deliverables pour préserver la mise en forme d'une révision à travers ce même pipeline de
+   *  rendu (jamais un second moteur). Absent = comportement Sprint 8A inchangé. */
+  manualBlocks?: readonly RenderableBlock[] | undefined;
   validationStatus: ExportSectionValidationStatus;
   selectedBy: string;
   selectedAt: Date;
   order: number;
   notes?: string | undefined;
+  deliverableProvenance?: ExportSectionDeliverableProvenance | undefined;
 }>;
 
 /**
@@ -84,6 +105,9 @@ export class ExportSectionSelection {
   get manualContent(): string | undefined {
     return this.props.manualContent;
   }
+  get manualBlocks(): readonly RenderableBlock[] | undefined {
+    return this.props.manualBlocks;
+  }
   get validationStatus(): ExportSectionValidationStatus {
     return this.props.validationStatus;
   }
@@ -98,5 +122,8 @@ export class ExportSectionSelection {
   }
   get notes(): string | undefined {
     return this.props.notes;
+  }
+  get deliverableProvenance(): ExportSectionDeliverableProvenance | undefined {
+    return this.props.deliverableProvenance;
   }
 }

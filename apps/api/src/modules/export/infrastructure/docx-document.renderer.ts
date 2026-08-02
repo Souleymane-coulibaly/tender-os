@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import {
   AlignmentType,
   Document,
+  ExternalHyperlink,
   Footer,
   Header,
   HeadingLevel,
@@ -17,7 +18,7 @@ import {
   WidthType,
 } from "docx";
 import type { DocumentRendererPort } from "../application/ports/document-renderer";
-import type { RenderableBlock, RenderableDocument } from "../application/services/renderable-document";
+import type { RenderableBlock, RenderableDocument, RichTextRun } from "../application/services/renderable-document";
 
 const HEADING_LEVELS = [HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3] as const;
 
@@ -114,16 +115,13 @@ function renderBlock(block: RenderableBlock): (Paragraph | Table)[] {
       return [new Paragraph({ text: block.text, heading: level })];
     }
     case "paragraph":
-      return [new Paragraph({ text: block.text })];
+      return [block.runs && block.runs.length > 0 ? new Paragraph({ children: buildRuns(block.runs) }) : new Paragraph({ text: block.text })];
     case "list":
-      return block.items.map(
-        (item) =>
-          new Paragraph(
-            block.ordered
-              ? { text: item, numbering: { reference: "export-numbered-list", level: 0 } }
-              : { text: item, bullet: { level: 0 } },
-          ),
-      );
+      return block.items.map((item, index) => {
+        const runs = block.itemRuns?.[index];
+        const layout = block.ordered ? { numbering: { reference: "export-numbered-list", level: 0 } } : { bullet: { level: 0 } };
+        return runs && runs.length > 0 ? new Paragraph({ children: buildRuns(runs), ...layout }) : new Paragraph({ text: item, ...layout });
+      });
     case "table": {
       const rows: TableRow[] = [];
       if (block.headerRow) {
@@ -145,4 +143,18 @@ function renderBlock(block: RenderableBlock): (Paragraph | Table)[] {
     default:
       return [];
   }
+}
+
+/** Mission Sprint 8A.1 §9 — un `href` déjà validé (`http(s)://` uniquement) par le domaine
+ *  Deliverables devient un `ExternalHyperlink` réel ; jamais une navigation locale/relative. */
+function buildRuns(runs: readonly RichTextRun[]): (TextRun | ExternalHyperlink)[] {
+  return runs.map((run) => {
+    const textRun = new TextRun({
+      text: run.text,
+      ...(run.bold ? { bold: true } : {}),
+      ...(run.italic ? { italics: true } : {}),
+      ...(run.href ? { style: "Hyperlink" } : {}),
+    });
+    return run.href ? new ExternalHyperlink({ link: run.href, children: [textRun] }) : textRun;
+  });
 }

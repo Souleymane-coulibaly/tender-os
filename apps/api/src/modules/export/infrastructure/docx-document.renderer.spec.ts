@@ -114,4 +114,80 @@ describe("DocxDocumentRenderer", () => {
     const zip = await JSZip.loadAsync(buffer);
     expect(Object.keys(zip.files).some((name) => name.includes("vbaProject"))).toBe(false);
   });
+
+  // Mission Sprint 8A.1 §9 — extension additive de l'IR (runs gras/italique/lien) pour l'éditeur du
+  // Mémoire technique : preuve que le renderer DOCX du Sprint 8A honore ces runs sans régression sur
+  // le chemin `text` seul déjà couvert ci-dessus.
+  it("renders bold and italic runs as real OOXML formatting properties", async () => {
+    const renderer = new DocxDocumentRenderer();
+    const buffer = await renderer.render(
+      baseDocument({
+        sections: [
+          {
+            id: "S1",
+            label: "S1",
+            blocks: [
+              {
+                kind: "paragraph",
+                text: "Fallback texte brut",
+                runs: [{ text: "Texte en gras" as const, bold: true }, { text: " et en italique", italic: true }],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const zip = await JSZip.loadAsync(buffer);
+    const documentXml = await zip.files["word/document.xml"]!.async("string");
+    expect(documentXml).toContain("Texte en gras");
+    expect(documentXml).toMatch(/<w:b\/>|<w:b\s/);
+    expect(documentXml).toMatch(/<w:i\/>|<w:i\s/);
+  });
+
+  it("renders a run with an href as a real external hyperlink relationship", async () => {
+    const renderer = new DocxDocumentRenderer();
+    const buffer = await renderer.render(
+      baseDocument({
+        sections: [
+          {
+            id: "S1",
+            label: "S1",
+            blocks: [{ kind: "paragraph", text: "fallback", runs: [{ text: "voir la référence", href: "https://example.org/preuve" }] }],
+          },
+        ],
+      }),
+    );
+    const zip = await JSZip.loadAsync(buffer);
+    const documentXml = await zip.files["word/document.xml"]!.async("string");
+    const relsXml = await zip.files["word/_rels/document.xml.rels"]!.async("string");
+    expect(documentXml).toContain("voir la référence");
+    expect(documentXml).toContain("<w:hyperlink");
+    expect(relsXml).toContain("https://example.org/preuve");
+  });
+
+  it("renders list items with runs, falling back to plain text when itemRuns is absent for an item", async () => {
+    const renderer = new DocxDocumentRenderer();
+    const buffer = await renderer.render(
+      baseDocument({
+        sections: [
+          {
+            id: "S1",
+            label: "S1",
+            blocks: [
+              {
+                kind: "list",
+                ordered: false,
+                items: ["Item avec mise en forme", "Item simple"],
+                itemRuns: [[{ text: "Item avec mise en forme", bold: true }]],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const zip = await JSZip.loadAsync(buffer);
+    const documentXml = await zip.files["word/document.xml"]!.async("string");
+    expect(documentXml).toContain("Item avec mise en forme");
+    expect(documentXml).toContain("Item simple");
+  });
 });

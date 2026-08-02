@@ -1,6 +1,5 @@
 import type { ExportTemplateConfig } from "../../domain/export-template-config";
 import type { ExportSectionSelection } from "../../domain/export-section-selection";
-import { ExportSectionSource } from "../../domain/export-section-source";
 import type { RenderableBlock, RenderableDocument, RenderableSection } from "./renderable-document";
 
 export type ResolvedSectionContent = Readonly<{
@@ -9,6 +8,11 @@ export type ResolvedSectionContent = Readonly<{
    *  reçoit une CHAÎNE, jamais un fragment XML/HTML pré-construit (mission "empêcher les
    *  injections XML/HTML"). */
   text?: string | undefined;
+  /** Mission Sprint 8A.1 §7/§9/§12 — contenu structuré déjà mis en forme (gras/italique/liens/
+   *  listes/tableaux), prioritaire sur `text` quand présent. Réutilisé tel quel par Deliverables
+   *  pour préserver la mise en forme d'une révision de Mémoire technique — jamais un second moteur
+   *  d'assemblage. Absent = comportement Sprint 8A inchangé (repli sur `text`). */
+  blocks?: readonly RenderableBlock[] | undefined;
   /** Tableau simple optionnel (mission §20 "gérer les tableaux simples") — utilisé pour le
    *  rapport de coûts (Sprint 7). */
   table?: Readonly<{ headerRow?: readonly string[] | undefined; rows: readonly (readonly string[])[] }> | undefined;
@@ -60,11 +64,17 @@ export function assembleExportDocument(input: AssembleExportDocumentInput): Rend
       blocks.push({ kind: "notice", text: "Contenu manquant pour cette section." });
       return { id: selection.sectionId, label, blocks };
     }
-    if (resolved.text) {
+    // Mission Sprint 8A.1 §7/§9/§12 (correctif) — `resolved.blocks` prévaut quand présent (contenu
+    // structuré riche, ex. Deliverables), sinon repli sur `resolved.text` en paragraphes simples.
+    // Pour une source MANUAL/ANNEX, `resolved.text` porte déjà `selection.manualContent` (posé par
+    // `SectionContentResolverService`) : un second branchement dédié à `selection.manualContent`
+    // aurait dupliqué CE MÊME contenu une seconde fois — bug réel préexistant, jamais couvert par
+    // un test (aucun test Sprint 8A n'exerçait `assembleExportDocument` sur une source MANUAL),
+    // corrigé ici en supprimant ce second branchement redondant.
+    if (resolved.blocks && resolved.blocks.length > 0) {
+      blocks.push(...resolved.blocks);
+    } else if (resolved.text) {
       blocks.push(...toParagraphBlocks(resolved.text));
-    }
-    if (selection.sourceType === ExportSectionSource.Manual && selection.manualContent) {
-      blocks.push(...toParagraphBlocks(selection.manualContent));
     }
     if (resolved.table) {
       blocks.push({ kind: "table", headerRow: resolved.table.headerRow, rows: resolved.table.rows });

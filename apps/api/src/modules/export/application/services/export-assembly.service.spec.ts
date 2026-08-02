@@ -124,6 +124,46 @@ describe("assembleExportDocument", () => {
     expect(previewDoc.watermarkText).toBe("APERÇU");
   });
 
+  it("prefers resolved.blocks (rich structured content) over resolved.text when both are present", () => {
+    const doc = assembleExportDocument({
+      documentTitle: "Mémoire",
+      config: config(),
+      sections: [section("SUMMARY", 0, { sourceType: ExportSectionSource.Manual, generationId: undefined, manualContent: "texte brut de repli" })],
+      resolvedContent: new Map([
+        [
+          "SUMMARY",
+          {
+            text: "texte brut de repli",
+            blocks: [{ kind: "paragraph", text: "Contenu riche", runs: [{ text: "Contenu riche", bold: true }] }],
+          },
+        ],
+      ]),
+      version: 1,
+      date: NOW,
+      isPreview: false,
+    });
+    const paragraphs = doc.sections[0]!.blocks.filter((b) => b.kind === "paragraph");
+    // Mission Sprint 8A.1 §7/§9/§12 (correctif) — exactement UNE fois, jamais dupliqué avec le
+    // texte brut de repli (bug réel préexistant sur une source MANUAL, corrigé en même temps que
+    // l'ajout de `resolved.blocks`).
+    expect(paragraphs).toHaveLength(1);
+    expect(paragraphs[0]).toMatchObject({ text: "Contenu riche" });
+  });
+
+  it("MANUAL source with only resolved.text (no blocks) renders the content exactly once — regression guard for the pre-existing duplication bug", () => {
+    const doc = assembleExportDocument({
+      documentTitle: "Mémoire",
+      config: config(),
+      sections: [section("SUMMARY", 0, { sourceType: ExportSectionSource.Manual, generationId: undefined, manualContent: "Contenu manuel." })],
+      resolvedContent: new Map([["SUMMARY", { text: "Contenu manuel." }]]),
+      version: 1,
+      date: NOW,
+      isPreview: false,
+    });
+    const paragraphs = doc.sections[0]!.blocks.filter((b) => b.kind === "paragraph");
+    expect(paragraphs).toHaveLength(1);
+  });
+
   it("never sets a watermark for a final export", () => {
     const doc = assembleExportDocument({
       documentTitle: "Mémoire",

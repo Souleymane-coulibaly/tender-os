@@ -138,6 +138,8 @@ const signatureWebhookVerifierProvider: Provider = {
   // Réexportés pour permettre à SubmissionPackage (Sprint 8A bis) de vérifier, en LECTURE SEULE,
   // que les exigences de signature d'un Tender sont satisfaites avant de constituer un package —
   // jamais une seconde écriture sur ces tables (même motif que EXPORT_JOB_REPOSITORY par Export).
-  exports: [SIGNATURE_REQUIREMENT_REPOSITORY, SIGNATURE_TRANSACTION_REPOSITORY, GetSignatureTransactionUseCase],
+  // `ListSignatureRequirementsUseCase`/`ListSignatureTransactionsUseCase` réexportés en plus pour
+  // Sprint 8A.1 (Deliverables) — vue LECTURE SEULE "Documents à signer".
+  exports: [SIGNATURE_REQUIREMENT_REPOSITORY, SIGNATURE_TRANSACTION_REPOSITORY, GetSignatureTransactionUseCase, ListSignatureRequirementsUseCase, ListSignatureTransactionsUseCase],
 })
 export class SignatureModule {}

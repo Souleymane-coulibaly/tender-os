@@ -61,6 +61,16 @@ import { ExportTemplatesController } from "./interfaces/http/export-templates.co
   // Réexportés pour permettre à Validation/Signature/Package (Sprint 8A bis) de lire les exports
   // finaux et de déclencher un figeage FINAL après approbation — jamais une seconde écriture sur
   // ces tables (même motif que le réexport de `GetTenderUseCase` par Tenders).
-  exports: [GetExportJobUseCase, ListExportHistoryUseCase, DownloadExportArtifactUseCase, GenerateFinalExportUseCase, EXPORT_JOB_REPOSITORY, EXPORT_TEMPLATE_REPOSITORY],
+  // `PreviewExportUseCase` réexporté en plus pour Sprint 8A.1 (Deliverables) — assembler l'aperçu
+  // d'un Mémoire technique via le MÊME pipeline de rendu, jamais un second chemin d'aperçu.
+  exports: [
+    GetExportJobUseCase,
+    ListExportHistoryUseCase,
+    DownloadExportArtifactUseCase,
+    GenerateFinalExportUseCase,
+    PreviewExportUseCase,
+    EXPORT_JOB_REPOSITORY,
+    EXPORT_TEMPLATE_REPOSITORY,
+  ],
 })
 export class ExportModule {}

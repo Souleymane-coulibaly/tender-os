@@ -47,6 +47,10 @@ export class PrismaExportJobRepository implements ExportJobRepository {
           pricingEstimateId: section.pricingEstimateId ?? null,
           pricingEstimateVersionNumber: section.pricingEstimateVersionNumber ?? null,
           manualContent: section.manualContent ?? null,
+          ...(section.manualBlocks ? { manualBlocks: section.manualBlocks as Prisma.InputJsonValue } : {}),
+          ...(section.deliverableProvenance
+            ? { deliverableProvenance: { ...section.deliverableProvenance, selectedAt: section.deliverableProvenance.selectedAt.toISOString() } as Prisma.InputJsonValue }
+            : {}),
           validationStatus: section.validationStatus,
           selectedBy: section.selectedBy,
           selectedAt: section.selectedAt,

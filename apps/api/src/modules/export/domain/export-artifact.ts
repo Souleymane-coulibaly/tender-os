@@ -18,6 +18,20 @@ export type ExportManifest = Readonly<{
     pricingEstimateVersionNumber?: number | undefined;
     validationStatus: string;
     order: number;
+    /** Correctif audit Codex P1-001 — provenance Deliverables figée dans le manifest lui-même
+     *  (jamais uniquement dans les logs), pour prouver après coup qu'un DOCX/PDF correspond
+     *  exactement à la révision sélectionnée. */
+    deliverableProvenance?:
+      | Readonly<{
+          deliverableId: string;
+          deliverableSectionId: string;
+          deliverableRevisionId: string;
+          revisionNumber: number;
+          validationStatus: string;
+          selectedBy: string;
+          selectedAt: string;
+        }>
+      | undefined;
   }>[];
   createdBy: string;
   createdAt: string;

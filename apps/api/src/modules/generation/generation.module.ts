@@ -94,6 +94,8 @@ import { PromptTemplatesController } from "./interfaces/http/prompt-templates.co
   // table `generations` (même motif que le réexport de `GetTenderUseCase` par Tenders pour
   // Documents/Pricing). Ces use cases restent RBAC-gated (`ClientPermission.ReadGeneration`) :
   // Export ne contourne rien, il consomme le même chemin qu'un acteur humain.
-  exports: [GetGenerationUseCase, ListTenderGenerationsUseCase, ListGenerationVersionsUseCase],
+  // `LaunchGenerationUseCase` réexporté en plus pour Sprint 8A.1 (Deliverables) — déclencher la
+  // génération IA d'une section de Mémoire technique en réutilisant CE moteur tel quel.
+  exports: [GetGenerationUseCase, ListTenderGenerationsUseCase, ListGenerationVersionsUseCase, LaunchGenerationUseCase],
 })
 export class GenerationModule {}

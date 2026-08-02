@@ -21,6 +21,16 @@ export { EXPORT_TEMPLATE_REPOSITORY } from "./application/ports/export-template.
 export type { ExportTemplateRepository } from "./application/ports/export-template.repository";
 export type { ExportTemplateConfig, ExportTemplateSectionConfig } from "./domain/export-template-config";
 
+// Réexportés pour Sprint 8A.1 (Deliverables) — `DeliverableRevision.contentStructured` réutilise
+// DIRECTEMENT cette IR (jamais une IR dupliquée) pour son contenu structuré éditable, et
+// `PreviewExportUseCase`/`GenerateFinalExportUseCase` (déjà réexportés ci-dessus) pour assembler
+// l'export d'un Deliverable via le MÊME pipeline de rendu DOCX/PDF que le Sprint 8A.
+export type { RenderableBlock, RenderableDocument, RenderableSection, RichTextRun } from "./application/services/renderable-document";
+export { PreviewExportUseCase } from "./application/use-cases/preview-export.use-case";
+export type { PreviewExportCommand } from "./application/use-cases/preview-export.use-case";
+export type { SectionSelectionInput } from "./application/services/section-content-resolver.service";
+export { ExportSectionSource } from "./domain/export-section-source";
+
 export { ExportMode } from "./domain/export-mode";
 export { ExportStatus } from "./domain/export-status";
 export { ExportJobNotFoundError, ExportArtifactNotFoundError } from "./domain/errors";

@@ -6,10 +6,21 @@
  * tout risque d'injection XML/HTML (mission §20/§71) : chaque renderer passe ces chaînes à une
  * bibliothèque de construction de document (jamais un template-string assemblé à la main).
  */
+/**
+ * Mission Sprint 8A.1 §9 — formatage en ligne contrôlé (gras, italique, lien) pour l'éditeur du
+ * Mémoire technique : extension ADDITIVE de l'IR existante (jamais une réécriture du moteur DOCX/
+ * PDF du Sprint 8A — chaque renderer gagne une branche supplémentaire, l'ancien comportement
+ * `text` seul reste inchangé et testé). `href` est validé en amont par le domaine Deliverables
+ * (`http(s)://` uniquement, mission "liens contrôlés") — jamais par le renderer lui-même.
+ */
+export type RichTextRun = Readonly<{ text: string; bold?: boolean | undefined; italic?: boolean | undefined; href?: string | undefined }>;
+
 export type RenderableBlock =
   | { kind: "heading"; level: 1 | 2 | 3; text: string }
-  | { kind: "paragraph"; text: string }
-  | { kind: "list"; items: readonly string[]; ordered: boolean }
+  /** `runs`, si présent, prévaut sur `text` au rendu — `text` reste toujours l'équivalent texte
+   *  brut (recherche, comptage de caractères, aperçu sans mise en forme). */
+  | { kind: "paragraph"; text: string; runs?: readonly RichTextRun[] | undefined }
+  | { kind: "list"; items: readonly string[]; ordered: boolean; itemRuns?: readonly (readonly RichTextRun[])[] | undefined }
   | { kind: "table"; headerRow?: readonly string[] | undefined; rows: readonly (readonly string[])[] }
   | { kind: "pageBreak" }
   /** Bloc visuellement distinct — disclaimer financier, avertissement, mention "coût non

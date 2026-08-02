@@ -123,6 +123,17 @@ export class ExportRenderPipelineService {
           pricingEstimateVersionNumber: section.pricingEstimateVersionNumber,
           validationStatus: section.validationStatus,
           order: section.order,
+          deliverableProvenance: section.deliverableProvenance
+            ? {
+                deliverableId: section.deliverableProvenance.deliverableId,
+                deliverableSectionId: section.deliverableProvenance.deliverableSectionId,
+                deliverableRevisionId: section.deliverableProvenance.deliverableRevisionId,
+                revisionNumber: section.deliverableProvenance.revisionNumber,
+                validationStatus: section.deliverableProvenance.validationStatus,
+                selectedBy: section.deliverableProvenance.selectedBy,
+                selectedAt: section.deliverableProvenance.selectedAt.toISOString(),
+              }
+            : undefined,
         })),
         createdBy: input.createdBy,
         createdAt: input.occurredAt.toISOString(),

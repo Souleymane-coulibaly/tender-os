@@ -2,7 +2,7 @@ import { ExportArtifact, type ExportManifest } from "../domain/export-artifact";
 import type { ExportFormat } from "../domain/export-format";
 import { ExportJob } from "../domain/export-job.aggregate";
 import type { ExportMode } from "../domain/export-mode";
-import { ExportSectionSelection, type ExportSectionValidationStatus } from "../domain/export-section-selection";
+import { ExportSectionSelection, type ExportSectionDeliverableProvenance, type ExportSectionValidationStatus } from "../domain/export-section-selection";
 import type { ExportSectionSource } from "../domain/export-section-source";
 import type { ExportStatus } from "../domain/export-status";
 
@@ -14,11 +14,13 @@ export type PersistedExportSection = {
   pricingEstimateId: string | null;
   pricingEstimateVersionNumber: number | null;
   manualContent: string | null;
+  manualBlocks: unknown;
   validationStatus: string;
   selectedBy: string;
   selectedAt: Date;
   order: number;
   notes: string | null;
+  deliverableProvenance: unknown;
 };
 
 export type PersistedExportJob = {
@@ -58,6 +60,30 @@ export type PersistedExportArtifact = {
   createdAt: Date;
 };
 
+type PersistedDeliverableProvenance = {
+  deliverableId: string;
+  deliverableSectionId: string;
+  deliverableRevisionId: string;
+  revisionNumber: number;
+  validationStatus: string;
+  selectedBy: string;
+  selectedAt: string;
+};
+
+function toDomainDeliverableProvenance(value: unknown): ExportSectionDeliverableProvenance | undefined {
+  if (!value) return undefined;
+  const record = value as PersistedDeliverableProvenance;
+  return {
+    deliverableId: record.deliverableId,
+    deliverableSectionId: record.deliverableSectionId,
+    deliverableRevisionId: record.deliverableRevisionId,
+    revisionNumber: record.revisionNumber,
+    validationStatus: record.validationStatus,
+    selectedBy: record.selectedBy,
+    selectedAt: new Date(record.selectedAt),
+  };
+}
+
 export function toDomainSection(record: PersistedExportSection): ExportSectionSelection {
   return ExportSectionSelection.create({
     sectionId: record.sectionId,
@@ -67,11 +93,13 @@ export function toDomainSection(record: PersistedExportSection): ExportSectionSe
     pricingEstimateId: record.pricingEstimateId ?? undefined,
     pricingEstimateVersionNumber: record.pricingEstimateVersionNumber ?? undefined,
     manualContent: record.manualContent ?? undefined,
+    manualBlocks: (record.manualBlocks as ExportSectionSelection["manualBlocks"]) ?? undefined,
     validationStatus: record.validationStatus as ExportSectionValidationStatus,
     selectedBy: record.selectedBy,
     selectedAt: record.selectedAt,
     order: record.order,
     notes: record.notes ?? undefined,
+    deliverableProvenance: toDomainDeliverableProvenance(record.deliverableProvenance),
   });
 }
 

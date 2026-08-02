@@ -106,6 +106,65 @@ describe("PdfmakeDocumentRenderer", () => {
     expect(buffer.subarray(0, 5).toString("latin1")).toBe("%PDF-");
   });
 
+  // Mission Sprint 8A.1 §9 — même extension additive de l'IR que le renderer DOCX, preuve
+  // équivalente côté PDF : le contenu des runs reste extractible et le lien devient une annotation
+  // PDF réelle (jamais un simple texte), sans casser le chemin `text` seul existant.
+  it("renders bold/italic run text as extractable content", async () => {
+    const renderer = new PdfmakeDocumentRenderer();
+    const buffer = await renderer.render(
+      baseDocument({
+        sections: [
+          {
+            id: "S1",
+            label: "S1",
+            blocks: [{ kind: "paragraph", text: "fallback", runs: [{ text: "Texte en gras", bold: true }, { text: " et en italique", italic: true }] }],
+          },
+        ],
+      }),
+    );
+    const parsed = await extractText(buffer);
+    expect(parsed.text).toContain("Texte en gras");
+    expect(parsed.text).toContain("et en italique");
+  });
+
+  it("renders a run with an href as a real PDF link annotation (/URI)", async () => {
+    const renderer = new PdfmakeDocumentRenderer();
+    const buffer = await renderer.render(
+      baseDocument({
+        sections: [
+          {
+            id: "S1",
+            label: "S1",
+            blocks: [{ kind: "paragraph", text: "fallback", runs: [{ text: "voir la référence", href: "https://example.org/preuve" }] }],
+          },
+        ],
+      }),
+    );
+    const parsed = await extractText(buffer);
+    expect(parsed.text).toContain("voir la référence");
+    expect(buffer.toString("latin1")).toContain("https://example.org/preuve");
+  });
+
+  it("renders list items with runs alongside plain-text items", async () => {
+    const renderer = new PdfmakeDocumentRenderer();
+    const buffer = await renderer.render(
+      baseDocument({
+        sections: [
+          {
+            id: "S1",
+            label: "S1",
+            blocks: [
+              { kind: "list", ordered: true, items: ["Item avec mise en forme", "Item simple"], itemRuns: [[{ text: "Item avec mise en forme", bold: true }]] },
+            ],
+          },
+        ],
+      }),
+    );
+    const parsed = await extractText(buffer);
+    expect(parsed.text).toContain("Item avec mise en forme");
+    expect(parsed.text).toContain("Item simple");
+  });
+
   it("throws UnreliableRenderError rather than a silent success if fed unresolvable content — regression guard", async () => {
     // Le renderer ne devrait jamais produire un buffer sans en-tête %PDF valide ; ce test documente
     // le comportement attendu si un futur changement cassait la génération (mission §24 "marque-le

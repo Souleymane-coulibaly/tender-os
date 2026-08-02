@@ -3,7 +3,7 @@ import { Injectable } from "@nestjs/common";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfmake = require("pdfmake");
 import type { PdfRendererPort } from "../application/ports/pdf-renderer";
-import type { RenderableBlock, RenderableDocument } from "../application/services/renderable-document";
+import type { RenderableBlock, RenderableDocument, RichTextRun } from "../application/services/renderable-document";
 import { UnreliableRenderError } from "../domain/errors";
 
 /**
@@ -129,9 +129,14 @@ function renderBlock(block: RenderableBlock): PdfContent[] {
     case "heading":
       return [{ text: block.text, style: headingStyle(block.level) }];
     case "paragraph":
-      return [{ text: block.text, margin: [0, 0, 0, 6] }];
-    case "list":
-      return [block.ordered ? { ol: [...block.items] } : { ul: [...block.items] }];
+      return [block.runs && block.runs.length > 0 ? { text: buildRuns(block.runs), margin: [0, 0, 0, 6] } : { text: block.text, margin: [0, 0, 0, 6] }];
+    case "list": {
+      const items = block.items.map((item, index) => {
+        const runs = block.itemRuns?.[index];
+        return runs && runs.length > 0 ? { text: buildRuns(runs) } : item;
+      });
+      return [block.ordered ? { ol: items } : { ul: items }];
+    }
     case "table":
       return [
         {
@@ -150,4 +155,15 @@ function renderBlock(block: RenderableBlock): PdfContent[] {
     default:
       return [];
   }
+}
+
+/** Mission Sprint 8A.1 §9 — `href` déjà validé (`http(s)://` uniquement) par le domaine
+ *  Deliverables ; pdfmake rend un lien cliquable via la propriété `link` d'un run de texte. */
+function buildRuns(runs: readonly RichTextRun[]): Record<string, unknown>[] {
+  return runs.map((run) => ({
+    text: run.text,
+    ...(run.bold ? { bold: true } : {}),
+    ...(run.italic ? { italics: true } : {}),
+    ...(run.href ? { link: run.href, color: "#1a56db", decoration: "underline" } : {}),
+  }));
 }

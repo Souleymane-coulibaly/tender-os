@@ -94,3 +94,72 @@ describe("SectionContentResolverService — gel de version pricing", () => {
     expect(resolvedContent.get("COSTS")!.table!.rows).toEqual([["Temps de préparation", "500.00 EUR"]]);
   });
 });
+
+/**
+ * Correctif audit Codex P1-001 — "traçabilité export et manifest" : une section MANUAL/ANNEX qui
+ * transporte une provenance Deliverables (deliverableId/deliverableSectionId/deliverableRevisionId/
+ * revisionNumber/validationStatus/selectedBy/selectedAt) la conserve verbatim sur l'`ExportSectionSelection`
+ * produite, et le `validationStatus` de la sélection reflète le statut RÉEL de la révision (jamais
+ * une affirmation VALIDATED non prouvée par l'appelant).
+ */
+describe("SectionContentResolverService — provenance Deliverables (audit Codex P1-001)", () => {
+  const provenance = {
+    deliverableId: "deliverable-1",
+    deliverableSectionId: "section-1",
+    deliverableRevisionId: "revision-1",
+    revisionNumber: 1,
+    validationStatus: "VALIDATED",
+    selectedBy: "user-1",
+    selectedAt: new Date("2026-09-06T10:00:00Z"),
+  };
+
+  it("conserve la provenance Deliverables verbatim sur la sélection MANUAL produite", async () => {
+    const resolver = new SectionContentResolverService({} as GetGenerationUseCase, {} as GetPricingEstimateUseCase);
+
+    const { sections } = await resolver.resolve({
+      organizationId: "org-1",
+      actorId: "user-1",
+      actorRole: "OWNER",
+      clientAccountId: "client-1",
+      selections: [{ sectionId: "INTRO", sourceType: "MANUAL", manualContent: "Contenu validé.", deliverableProvenance: provenance }],
+      selectedBy: "user-1",
+      occurredAt: new Date("2026-09-06T11:00:00Z"),
+    });
+
+    expect(sections[0]!.deliverableProvenance).toEqual(provenance);
+    expect(sections[0]!.validationStatus).toBe("VALIDATED");
+  });
+
+  it("marque NOT_VALIDATED (jamais VALIDATED) quand la provenance porte un statut de révision non validé", async () => {
+    const resolver = new SectionContentResolverService({} as GetGenerationUseCase, {} as GetPricingEstimateUseCase);
+
+    const { sections } = await resolver.resolve({
+      organizationId: "org-1",
+      actorId: "user-1",
+      actorRole: "OWNER",
+      clientAccountId: "client-1",
+      selections: [{ sectionId: "INTRO", sourceType: "MANUAL", manualContent: "Brouillon.", deliverableProvenance: { ...provenance, validationStatus: "DRAFT" } }],
+      selectedBy: "user-1",
+      occurredAt: new Date("2026-09-06T11:00:00Z"),
+    });
+
+    expect(sections[0]!.validationStatus).toBe("NOT_VALIDATED");
+  });
+
+  it("laisse la provenance absente (undefined) pour une section MANUAL Sprint 8A qui n'origine pas de Deliverables", async () => {
+    const resolver = new SectionContentResolverService({} as GetGenerationUseCase, {} as GetPricingEstimateUseCase);
+
+    const { sections } = await resolver.resolve({
+      organizationId: "org-1",
+      actorId: "user-1",
+      actorRole: "OWNER",
+      clientAccountId: "client-1",
+      selections: [{ sectionId: "INTRO", sourceType: "MANUAL", manualContent: "Texte saisi directement dans Export." }],
+      selectedBy: "user-1",
+      occurredAt: new Date("2026-09-06T11:00:00Z"),
+    });
+
+    expect(sections[0]!.deliverableProvenance).toBeUndefined();
+    expect(sections[0]!.validationStatus).toBe("UNKNOWN");
+  });
+});
