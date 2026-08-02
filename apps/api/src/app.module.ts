@@ -4,6 +4,7 @@ import { AiBenchmarkModule, RoutingPolicyBridgeModule } from "./modules/ai-bench
 import { AnalysisModule } from "./modules/analysis/analysis.module";
 import { ClientPortfolioModule } from "./modules/client-portfolio/client-portfolio.module";
 import { DceModule } from "./modules/dce/dce.module";
+import { DeliverablesModule } from "./modules/deliverables/deliverables.module";
 import { DocumentsModule } from "./modules/documents/documents.module";
 import { ExportModule } from "./modules/export";
 import { ExtractionModule } from "./modules/extraction/extraction.module";
@@ -45,6 +46,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     ValidationModule,
     SignatureModule,
     SubmissionPackageModule,
+    DeliverablesModule,
   ],
 })
 export class AppModule {}

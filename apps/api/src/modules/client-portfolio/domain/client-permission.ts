@@ -45,6 +45,13 @@ export const ClientPermission = {
   ReadExport: "CLIENT_READ_EXPORT",
   ManageExport: "CLIENT_MANAGE_EXPORT",
   ApproveExport: "CLIENT_APPROVE_EXPORT",
+  /** Sprint 8A.1 (Espace Livrables) — même motif additif que `ReadGeneration`/`ManageGeneration`/
+   *  `ValidateGeneration` : consulter un livrable/une section/une révision vs. éditer/générer/
+   *  soumettre à revue/commenter vs. valider/approuver une revue/sélectionner pour l'export
+   *  ("règle stricte" implicite, mission §17 — même palier que `ApproveExport`). */
+  ReadDeliverable: "CLIENT_READ_DELIVERABLE",
+  ManageDeliverable: "CLIENT_MANAGE_DELIVERABLE",
+  ValidateDeliverable: "CLIENT_VALIDATE_DELIVERABLE",
 } as const;
 
 export type ClientPermission = (typeof ClientPermission)[keyof typeof ClientPermission];
@@ -84,6 +91,9 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ReadExport,
   ClientPermission.ManageExport,
   ClientPermission.ApproveExport,
+  ClientPermission.ReadDeliverable,
+  ClientPermission.ManageDeliverable,
+  ClientPermission.ValidateDeliverable,
 ];
 
 export const ROLE_CLIENT_PORTFOLIO_PERMISSIONS: Record<string, readonly ClientPermission[]> = {
@@ -123,6 +133,11 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadExport,
     ClientPermission.ManageExport,
     ClientPermission.ApproveExport,
+    ClientPermission.ReadDeliverable,
+    ClientPermission.ManageDeliverable,
+    /** Mission §17 "Valider : Selon politique" — accordé au CLIENT_MANAGER, même palier que
+     *  `ApproveExport` ("règle stricte"), jamais au CONTRIBUTOR. */
+    ClientPermission.ValidateDeliverable,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -146,6 +161,8 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
      *  accordé au CONTRIBUTOR ; en revanche `ApproveExport` ("règle stricte") reste réservé au
      *  CLIENT_MANAGER et au palier organisation, jamais au CONTRIBUTOR. */
     ClientPermission.ManageExport,
+    ClientPermission.ReadDeliverable,
+    ClientPermission.ManageDeliverable,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -156,6 +173,7 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadGeneration,
     ClientPermission.ReadPricing,
     ClientPermission.ReadExport,
+    ClientPermission.ReadDeliverable,
   ],
 };
 

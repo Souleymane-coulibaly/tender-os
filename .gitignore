@@ -34,6 +34,7 @@ coverage/
 playwright-report/
 test-results/
 blob-report/
+tests/.e2e-fixture.json
 
 # Editor / OS
 .DS_Store
