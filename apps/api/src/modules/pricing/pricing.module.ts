@@ -51,5 +51,9 @@ import { PricingController } from "./interfaces/http/pricing.controller";
     { provide: GENERATION_COST_READER, useClass: PrismaGenerationCostReader },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
   ],
+  // Réexporté pour permettre au module Export (Sprint 8A) d'inclure un rapport de coûts figé sur
+  // une version PRÉCISE d'estimation — jamais un recalcul à l'export (mission Sprint 8A §17).
+  // Reste RBAC-gated en interne (ClientPermission.ReadPricing).
+  exports: [GetPricingEstimateUseCase],
 })
 export class PricingModule {}

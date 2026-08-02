@@ -89,5 +89,11 @@ import { PromptTemplatesController } from "./interfaces/http/prompt-templates.co
     // ANALYSIS_CONFIG/AI_BENCHMARK_CONFIG.
     { provide: GENERATION_CONFIG, useFactory: () => loadGenerationConfig() },
   ],
+  // Réexportés pour permettre au module Export (Sprint 8A) de lire les générations RÉELLEMENT
+  // validées d'un Tender avant assemblage documentaire — jamais une seconde lecture directe de la
+  // table `generations` (même motif que le réexport de `GetTenderUseCase` par Tenders pour
+  // Documents/Pricing). Ces use cases restent RBAC-gated (`ClientPermission.ReadGeneration`) :
+  // Export ne contourne rien, il consomme le même chemin qu'un acteur humain.
+  exports: [GetGenerationUseCase, ListTenderGenerationsUseCase, ListGenerationVersionsUseCase],
 })
 export class GenerationModule {}

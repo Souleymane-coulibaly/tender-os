@@ -20,7 +20,11 @@ function assertRequiredEnv(): void {
 async function bootstrap(): Promise<void> {
   assertRequiredEnv();
 
-  const app = await NestFactory.create(AppModule);
+  // Mission Sprint 8A bis §44/§45 — le webhook Universign vérifie une JWS détachée calculée sur le
+  // corps HTTP brut EXACT reçu sur le fil ; `rawBody: true` fait conserver ce buffer par Nest
+  // (accessible via `RawBodyRequest<Request>.rawBody`) SANS désactiver le parsing JSON global dont
+  // dépendent toutes les autres routes déjà validées (Sprints 0-7).
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.use(requestIdMiddleware);
   // /health reste hors versionnement (contrat fixé par la fondation technique).

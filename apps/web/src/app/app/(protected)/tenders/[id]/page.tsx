@@ -111,6 +111,27 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         </div>
       </div>
 
+      <nav className="flex flex-wrap gap-2 border-b border-neutral-200 pb-3 text-sm">
+        <Link href={`/app/tenders/${tender.id}/generations`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
+          Générations
+        </Link>
+        <Link href={`/app/tenders/${tender.id}/pricing`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
+          Pricing
+        </Link>
+        <Link href={`/app/tenders/${tender.id}/export`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
+          Export
+        </Link>
+        <Link href={`/app/tenders/${tender.id}/validation`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
+          Validation
+        </Link>
+        <Link href={`/app/tenders/${tender.id}/signature`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
+          Signature
+        </Link>
+        <Link href={`/app/tenders/${tender.id}/submission-package`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
+          Dossier de soumission
+        </Link>
+      </nav>
+
       {tender.status !== "ARCHIVED" ? <StatusChangeForm tenderId={tender.id} status={tender.status} /> : null}
 
       {canEditTenderDetails(role) ? (

@@ -5,6 +5,7 @@ import { AnalysisModule } from "./modules/analysis/analysis.module";
 import { ClientPortfolioModule } from "./modules/client-portfolio/client-portfolio.module";
 import { DceModule } from "./modules/dce/dce.module";
 import { DocumentsModule } from "./modules/documents/documents.module";
+import { ExportModule } from "./modules/export";
 import { ExtractionModule } from "./modules/extraction/extraction.module";
 import { GenerationModule } from "./modules/generation";
 import { IdentityModule } from "./modules/identity/identity.module";
@@ -13,7 +14,10 @@ import { MembershipsModule } from "./modules/memberships/memberships.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { PlatformAdministrationModule } from "./modules/platform-administration/platform-administration.module";
 import { PricingModule } from "./modules/pricing/pricing.module";
+import { SignatureModule } from "./modules/signature";
+import { SubmissionPackageModule } from "./modules/submission-package";
 import { TendersModule } from "./modules/tenders/tenders.module";
+import { ValidationModule } from "./modules/validation";
 import { DatabaseModule } from "./shared-kernel/database.module";
 import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
 
@@ -37,6 +41,10 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     AiBenchmarkModule,
     GenerationModule,
     PricingModule,
+    ExportModule,
+    ValidationModule,
+    SignatureModule,
+    SubmissionPackageModule,
   ],
 })
 export class AppModule {}

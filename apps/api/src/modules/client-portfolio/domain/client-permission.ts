@@ -36,6 +36,15 @@ export const ClientPermission = {
    *  estimation, deux capacités distinctes plutôt qu'une seule permission ambiguë. */
   ReadPricing: "CLIENT_READ_PRICING",
   ManagePricing: "CLIENT_MANAGE_PRICING",
+  /** Sprint 8A/8A bis (Export, Validation, Signature, Package) — même motif additif que
+   *  `ReadPricing`/`ManagePricing` : consulter (aperçu/export/validation/signature/package) vs.
+   *  créer/agir (aperçu, export final, validation, résolution, signataires, exigences de
+   *  signature) vs. les actions à "règle stricte" de la mission (approbation finale, démarrage
+   *  d'une signature, import d'un document signé, création du package) — trois capacités
+   *  distinctes plutôt qu'une seule permission ambiguë (mission §42/§56 "Selon règle stricte"). */
+  ReadExport: "CLIENT_READ_EXPORT",
+  ManageExport: "CLIENT_MANAGE_EXPORT",
+  ApproveExport: "CLIENT_APPROVE_EXPORT",
 } as const;
 
 export type ClientPermission = (typeof ClientPermission)[keyof typeof ClientPermission];
@@ -72,6 +81,9 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ValidateGeneration,
   ClientPermission.ReadPricing,
   ClientPermission.ManagePricing,
+  ClientPermission.ReadExport,
+  ClientPermission.ManageExport,
+  ClientPermission.ApproveExport,
 ];
 
 export const ROLE_CLIENT_PORTFOLIO_PERMISSIONS: Record<string, readonly ClientPermission[]> = {
@@ -108,6 +120,9 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ValidateGeneration,
     ClientPermission.ReadPricing,
     ClientPermission.ManagePricing,
+    ClientPermission.ReadExport,
+    ClientPermission.ManageExport,
+    ClientPermission.ApproveExport,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -126,6 +141,11 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ValidateGeneration,
     ClientPermission.ReadPricing,
     ClientPermission.ManagePricing,
+    ClientPermission.ReadExport,
+    /** Mission §42/§56 "Créer un export final : Selon règle" / "Lancer la validation : Oui" —
+     *  accordé au CONTRIBUTOR ; en revanche `ApproveExport` ("règle stricte") reste réservé au
+     *  CLIENT_MANAGER et au palier organisation, jamais au CONTRIBUTOR. */
+    ClientPermission.ManageExport,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -135,6 +155,7 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadKnowledge,
     ClientPermission.ReadGeneration,
     ClientPermission.ReadPricing,
+    ClientPermission.ReadExport,
   ],
 };
 

@@ -346,6 +346,13 @@ model Tender {
   analysisSummaries        TenderAnalysisSummary[]
   generations              Generation[]
   pricingEstimates         PricingEstimate[]
+  exportJobs               ExportJob[]
+  validationRuns           ValidationRun[]
+  finalApprovals           FinalApproval[]
+  signatureRequirements    SignatureRequirement[]
+  signatories              Signatory[]
+  signatureTransactions    SignatureTransaction[]
+  submissionPackages       SubmissionPackage[]
 
   /// AUDIT-007 : contrainte composite support de la FK composée de TenderLot ci-dessous — garantit
   /// au niveau base de données qu'un TenderLot ne peut jamais référencer un couple
@@ -1609,11 +1616,18 @@ model ClientAccount {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  assignments      ClientAssignment[]
-  tenders          Tender[]
-  knowledgeEntries KnowledgeEntry[]
-  generations      Generation[]
-  pricingEstimates PricingEstimate[]
+  assignments           ClientAssignment[]
+  tenders               Tender[]
+  knowledgeEntries      KnowledgeEntry[]
+  generations           Generation[]
+  pricingEstimates      PricingEstimate[]
+  exportJobs            ExportJob[]
+  validationRuns        ValidationRun[]
+  finalApprovals        FinalApproval[]
+  signatureRequirements SignatureRequirement[]
+  signatories           Signatory[]
+  signatureTransactions SignatureTransaction[]
+  submissionPackages    SubmissionPackage[]
 
   @@unique([id, organizationId])
   @@unique([organizationId, nameNormalized])
@@ -2389,4 +2403,613 @@ model PricingBreakdownLine {
 
   @@index([estimateVersionId])
   @@map("pricing_breakdown_lines")
+}
+
+// ============================================================================
+// Sprint 8A / 8A bis — Export, Validation, Signature (pré-intégration Universign), Package.
+// Consomme Generation (Sprint 6) et PricingEstimateVersion (Sprint 7) en LECTURE SEULE via des
+// colonnes dénormalisées non-FK (mêmes motif que `PrismaGenerationCostReader` — la validation
+// d'appartenance/organisation passe par l'application, jamais par une contrainte DB inter-module),
+// jamais une seconde écriture sur ces tables. Aucune migration existante modifiée.
+// ============================================================================
+
+/// Mission §16/§18 — un template définit la structure d'un type de document (mémoire technique,
+/// synthèse, matrice, checklist, rapport de validation, rapport de coûts, dossier de signature).
+/// Organisation-scope uniquement (même motif que `PromptTemplate`, Sprint 6) — jamais client/tender.
+model ExportTemplate {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// TECHNICAL_MEMO | EXECUTIVE_SUMMARY | COMPLIANCE_MATRIX | CHECKLIST | VALIDATION_REPORT |
+  /// COST_REPORT | SIGNATURE_PACKAGE — CHECK (migration).
+  documentType String  @map("document_type") @db.VarChar(30)
+  name         String  @db.VarChar(200)
+  description  String?
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  versions ExportTemplateVersion[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, documentType, name])
+  @@map("export_templates")
+}
+
+/// Mission §7/§16 — une seule version ACTIVE par template (index partiel ajouté à la main en fin
+/// de migration, même motif que `prompt_versions_org_template_active_key`, Sprint 6). Une version
+/// active est immuable : `config` n'est jamais réécrit après activation, seul `status` change.
+model ExportTemplateVersion {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  exportTemplateId String         @map("export_template_id") @db.Uuid
+  exportTemplate   ExportTemplate @relation(fields: [exportTemplateId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  version Int
+
+  /// DRAFT | ACTIVE | ARCHIVED — CHECK (migration).
+  status String @db.VarChar(10)
+  /// DOCX | PDF — CHECK (migration).
+  format String @db.VarChar(4)
+
+  /// Ordre des sections, sections obligatoires, styles, marges, typographie, page de garde,
+  /// en-tête/pied de page, numérotation, variables autorisées — structure contrôlée par le
+  /// domaine à la création (`ExportTemplateVersion.create`), jamais une exécution de template
+  /// arbitraire (mission §16 "aucune macro, aucune injection de template").
+  config Json
+
+  createdBy   String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  activatedAt DateTime? @map("activated_at")
+  archivedAt  DateTime? @map("archived_at")
+
+  exportJobs ExportJob[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, exportTemplateId, version])
+  @@map("export_template_versions")
+}
+
+/// Mission §7/§19/§22 — un "job" EST l'export (aperçu ou final) : une ligne par tentative,
+/// jamais mutée après COMPLETED/FAILED (mission "un export historique reste immuable").
+/// `basedOnExportJobId` prouve qu'un export FINAL réutilise EXACTEMENT la sélection d'un aperçu
+/// déjà approuvé (mission §32 "aucune substitution silencieuse d'une version validée").
+model ExportJob {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  exportTemplateId        String                @map("export_template_id") @db.Uuid
+  exportTemplateVersionId String                @map("export_template_version_id") @db.Uuid
+  exportTemplateVersion   ExportTemplateVersion @relation(fields: [exportTemplateVersionId, organizationId], references: [id, organizationId])
+
+  /// Dénormalisé depuis le template au moment de la création — jamais recalculé si le template
+  /// change ensuite (mission "un export final référence une version précise du template").
+  documentType String @map("document_type") @db.VarChar(30)
+
+  /// PREVIEW | FINAL — CHECK (migration). Un PREVIEW n'approuve jamais, ne verrouille jamais, ne
+  /// démarre jamais de signature (mission §21).
+  mode   String @db.VarChar(7)
+  /// DOCX | PDF — CHECK (migration).
+  format String @db.VarChar(4)
+  /// PENDING | GENERATING | COMPLETED | FAILED — CHECK (migration).
+  status String @db.VarChar(10)
+
+  /// Numérotation stable PAR (tenderId, documentType, format) — mission §22/§60 "hash stable",
+  /// "export historique stable". Incrémentée pour PREVIEW et FINAL indifféremment (une seule
+  /// séquence, jamais deux compteurs qui pourraient diverger).
+  version Int
+
+  basedOnExportJobId String?     @map("based_on_export_job_id") @db.Uuid
+  basedOnExportJob   ExportJob?  @relation("ExportJobBasis", fields: [basedOnExportJobId], references: [id])
+  derivedExportJobs  ExportJob[] @relation("ExportJobBasis")
+
+  createdBy    String    @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  completedAt  DateTime? @map("completed_at")
+  errorCode    String?   @map("error_code") @db.VarChar(60)
+  /// Toujours assaini — même discipline que Generation.errorMessage (jamais un contenu client brut).
+  errorMessage String?   @map("error_message")
+
+  sections       ExportSectionSelection[]
+  artifact       ExportArtifact?
+  validationRuns ValidationRun[]
+  finalApprovals FinalApproval[]
+
+  @@unique([id, organizationId])
+  @@unique([tenderId, documentType, format, version])
+  @@index([organizationId, tenderId])
+  @@map("export_jobs")
+}
+
+/// Mission §17/§20 — une ligne par section incluse dans un export, conservant la provenance
+/// minimale (mission §20 "pour chaque section incluse, conserver..."). `generationId` et
+/// `pricingEstimateId` sont des références dénormalisées en LECTURE SEULE (jamais de FK
+/// inter-module — même motif que `PrismaGenerationCostReader`, Sprint 7) : la validité réelle est
+/// vérifiée par l'application via les use cases publics de Generation/Pricing, jamais par la DB.
+model ExportSectionSelection {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  exportJobId String    @map("export_job_id") @db.Uuid
+  exportJob   ExportJob @relation(fields: [exportJobId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  sectionId String  @map("section_id") @db.VarChar(100)
+  taskType  String? @map("task_type") @db.VarChar(40)
+
+  /// GENERATION | PRICING | MANUAL | ANNEX — CHECK (migration).
+  sourceType String @map("source_type") @db.VarChar(10)
+
+  generationId                 String? @map("generation_id") @db.Uuid
+  /// Mission (audit de correction) — l'identifiant réel de l'ESTIMATION, jamais d'une version
+  /// (renommé depuis `pricingEstimateVersionId`, qui était en réalité utilisé comme un
+  /// `estimateId` — bug réel : l'export ne gelait jamais une version précise). Dénormalisé en
+  /// LECTURE SEULE (jamais de FK inter-module), même motif que `PrismaGenerationCostReader`.
+  pricingEstimateId            String? @map("pricing_estimate_id") @db.Uuid
+  /// Le numéro de version PRÉCIS figé au moment de la sélection — absent seulement pour une
+  /// sélection antérieure à cette correction, jamais un défaut implicite pour une nouvelle.
+  pricingEstimateVersionNumber Int?    @map("pricing_estimate_version_number")
+  manualContent                String? @map("manual_content")
+
+  /// VALIDATED | NOT_VALIDATED | UNKNOWN — CHECK (migration). Cliché au moment de la sélection
+  /// (mission §20 "validationStatus") — jamais recalculé rétroactivement pour un export historique.
+  validationStatus String @map("validation_status") @db.VarChar(14)
+
+  selectedBy String   @map("selected_by") @db.Uuid
+  selectedAt DateTime @map("selected_at")
+  order      Int
+  notes      String?
+
+  @@unique([exportJobId, sectionId])
+  @@index([organizationId, exportJobId])
+  @@map("export_section_selections")
+}
+
+/// Mission §7/§25/§26 — l'artefact final, créé UNE SEULE FOIS à la complétion d'un `ExportJob`
+/// (mission "un artefact final ne peut pas être remplacé silencieusement" : aucun update prévu
+/// après création, seule la lecture existe côté application).
+model ExportArtifact {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  exportJobId String    @map("export_job_id") @db.Uuid
+  exportJob   ExportJob @relation(fields: [exportJobId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  fileName      String @map("file_name") @db.VarChar(255)
+  mimeType      String @map("mime_type") @db.VarChar(120)
+  fileSize      Int    @map("file_size")
+  fileHash      String @map("file_hash") @db.VarChar(64)
+  hashAlgorithm String @default("SHA-256") @map("hash_algorithm") @db.VarChar(20)
+  storageKey    String @map("storage_key") @db.VarChar(500)
+
+  /// Snapshot figé du manifest (mission §25) — reconstruit à la création, jamais recalculé après
+  /// (même si le template ou les générations sources changent ensuite).
+  manifestJson Json @map("manifest_json")
+  warnings     Json @default("[]")
+  errors       Json @default("[]")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  signatureTransactions SignatureTransaction[]
+
+  @@unique([id, organizationId])
+  @@unique([exportJobId, organizationId])
+  @@map("export_artifacts")
+}
+
+/// Mission §8/§26/§27 — une exécution de validation contre un `ExportJob` précis (typiquement un
+/// aperçu). Immuable après création (mission "une validation historique reste immuable") : seules
+/// les `ValidationIssue` associées peuvent être résolues/rouvertes, jamais le run lui-même.
+model ValidationRun {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  exportJobId String    @map("export_job_id") @db.Uuid
+  exportJob   ExportJob @relation(fields: [exportJobId, organizationId], references: [id, organizationId])
+
+  /// NOT_READY | READY_WITH_WARNINGS | READY_FOR_APPROVAL | BLOCKED — CHECK (migration). Sous-
+  /// ensemble de `ReadinessStatus` réellement calculable à ce stade (avant approbation/signature).
+  readinessStatus String @map("readiness_status") @db.VarChar(20)
+
+  runBy String   @map("run_by") @db.Uuid
+  runAt DateTime @default(now()) @map("run_at")
+
+  issues             ValidationIssue[]
+  finalApprovals     FinalApproval[]
+  submissionPackages SubmissionPackage[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId])
+  @@map("validation_runs")
+}
+
+/// Mission §26/§29 — un contrôle détecté par le moteur de validation. `resolutionStatus`
+/// transite OPEN → RESOLVED → REOPENED, jamais une suppression (mission "toute résolution
+/// conserve l'auteur, la date et la justification").
+model ValidationIssue {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  validationRunId String        @map("validation_run_id") @db.Uuid
+  validationRun   ValidationRun @relation(fields: [validationRunId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  ruleCode String @map("rule_code") @db.VarChar(60)
+  /// BLOCKING | WARNING — CHECK (migration). Un contrôle bloquant, tant qu'il n'est pas résolu,
+  /// empêche l'approbation (mission §29) — dérivé de CE champ uniquement, jamais un second
+  /// booléen redondant qui pourrait diverger.
+  severity String @db.VarChar(10)
+  message  String
+
+  resourceType   String? @map("resource_type") @db.VarChar(40)
+  resourceId     String? @map("resource_id") @db.Uuid
+  source         String? @db.VarChar(40)
+  recommendation String?
+
+  detectedAt DateTime @default(now()) @map("detected_at")
+
+  /// OPEN | RESOLVED | REOPENED — CHECK (migration).
+  resolutionStatus String    @default("OPEN") @map("resolution_status") @db.VarChar(10)
+  resolvedAt       DateTime? @map("resolved_at")
+  resolvedBy       String?   @map("resolved_by") @db.Uuid
+  resolutionNote   String?   @map("resolution_note")
+
+  @@index([organizationId, validationRunId])
+  @@map("validation_issues")
+}
+
+/// Mission §28/§31 — approbation d'un export précis. `manifestHash` fige la preuve que la version
+/// approuvée est EXACTEMENT celle qui sera exportée en FINAL (mission §32 "toute modification
+/// après approbation... invalide l'approbation"). Historique immuable : une invalidation ne
+/// supprime jamais la ligne, elle bascule `status`.
+model FinalApproval {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  exportJobId String    @map("export_job_id") @db.Uuid
+  exportJob   ExportJob @relation(fields: [exportJobId, organizationId], references: [id, organizationId])
+
+  validationRunId String        @map("validation_run_id") @db.Uuid
+  validationRun   ValidationRun @relation(fields: [validationRunId, organizationId], references: [id, organizationId])
+
+  manifestHash String @map("manifest_hash") @db.VarChar(64)
+
+  approvedBy   String   @map("approved_by") @db.Uuid
+  approverRole String   @map("approver_role") @db.VarChar(30)
+  approvedAt   DateTime @default(now()) @map("approved_at")
+  comment      String?
+
+  previousStatus String? @map("previous_status") @db.VarChar(20)
+  nextStatus     String? @map("next_status") @db.VarChar(20)
+
+  /// ACTIVE | INVALIDATED — CHECK (migration).
+  status            String    @default("ACTIVE") @db.VarChar(11)
+  invalidatedAt     DateTime? @map("invalidated_at")
+  invalidatedReason String?   @map("invalidated_reason")
+
+  submissionPackages SubmissionPackage[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId])
+  @@map("final_approvals")
+}
+
+/// Mission §36/§40 — exigence de signature détectée (IA ou saisie humaine) puis confirmée par un
+/// humain avant de devenir contraignante (mission "une détection automatique ne doit pas devenir
+/// obligatoire sans confirmation humaine").
+model SignatureRequirement {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  documentRef   String  @map("document_ref") @db.VarChar(200)
+  sourceDce     String? @map("source_dce") @db.VarChar(300)
+  pageOrSection String? @map("page_or_section") @db.VarChar(100)
+  mandatory     Boolean
+  momentText    String? @map("moment_text")
+  format        String? @db.VarChar(40)
+
+  /// LEVEL0 | LEVEL1 | LEVEL2 | LEVEL3 | LEVEL4 — CHECK (migration), nullable = non déterminé
+  /// (mission §41 "ne suppose pas que la signature simple suffit toujours").
+  levelExpected          String? @map("level_expected") @db.VarChar(6)
+  certificateRequirement String? @map("certificate_requirement")
+  signatoryExpected      String? @map("signatory_expected") @db.VarChar(200)
+
+  /// LOW | MEDIUM | HIGH — CHECK (migration).
+  confidence String @default("MEDIUM") @db.VarChar(6)
+  /// DETECTED | CONFIRMED | REJECTED | UNKNOWN — CHECK (migration).
+  status     String @default("DETECTED") @db.VarChar(9)
+
+  confirmedBy String?   @map("confirmed_by") @db.Uuid
+  confirmedAt DateTime? @map("confirmed_at")
+  comment     String?
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId])
+  @@map("signature_requirements")
+}
+
+/// Mission §37/§42 — un signataire et son pouvoir. `userId` est une référence molle uniquement
+/// (mission §42 "OWNER ou ADMIN TenderOS ≠ pouvoir juridique automatique de signature") :
+/// aucune FK, aucune permission dérivée de ce lien.
+model Signatory {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  userId String? @map("user_id") @db.Uuid
+
+  firstName         String  @map("first_name") @db.VarChar(120)
+  lastName          String  @map("last_name") @db.VarChar(120)
+  professionalEmail String  @map("professional_email") @db.VarChar(320)
+  jobTitle          String? @map("job_title") @db.VarChar(150)
+  organizationName  String? @map("organization_name") @db.VarChar(200)
+
+  authorityText       String? @map("authority_text")
+  authorityDocumentId String? @map("authority_document_id") @db.Uuid
+
+  validFrom  DateTime? @map("valid_from")
+  validUntil DateTime? @map("valid_until")
+
+  /// PENDING | VERIFIED | REJECTED — CHECK (migration).
+  status String @default("PENDING") @db.VarChar(9)
+
+  verifiedBy String?   @map("verified_by") @db.Uuid
+  verifiedAt DateTime? @map("verified_at")
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  participants SignatureParticipant[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId])
+  @@map("signatories")
+}
+
+/// Mission §33/§38/§43 — une transaction de signature locale, préparée puis (fake ou réelle)
+/// exécutée chez le prestataire. Porte TOUJOURS sur un `ExportArtifact` FINAL figé (vérifié par
+/// l'application avant création, mission §38/§39). `documentHash` gèle la preuve d'intégrité.
+model SignatureTransaction {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  exportArtifactId String         @map("export_artifact_id") @db.Uuid
+  exportArtifact   ExportArtifact @relation(fields: [exportArtifactId, organizationId], references: [id, organizationId])
+
+  /// FAKE | UNIVERSIGN — CHECK (migration). Jamais un bascule silencieuse (mission §34/§37).
+  provider              String  @db.VarChar(10)
+  providerTransactionId String? @map("provider_transaction_id") @db.VarChar(120)
+
+  /// PREPARING | READY_TO_SEND | SENT | IN_PROGRESS | SIGNED | VERIFIED | DECLINED | CANCELLED |
+  /// EXPIRED | FAILED | INVALID — CHECK (migration). Mission §46 — mapping interne, jamais les
+  /// statuts bruts du prestataire persistés ici (voir `SignatureProviderEvent.eventType`).
+  status String @default("PREPARING") @db.VarChar(13)
+
+  requestedLevel String? @map("requested_level") @db.VarChar(6)
+  confirmedLevel String? @map("confirmed_level") @db.VarChar(6)
+  levelSource    String? @map("level_source") @db.VarChar(40)
+
+  documentHash String @map("document_hash") @db.VarChar(64)
+
+  createdBy    String    @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  startedAt    DateTime? @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  errorCode    String?   @map("error_code") @db.VarChar(60)
+  errorMessage String?   @map("error_message")
+
+  participants SignatureParticipant[]
+  artifacts    SignatureArtifact[]
+
+  @@unique([id, organizationId])
+  @@unique([provider, providerTransactionId])
+  @@index([organizationId, tenderId])
+  @@map("signature_transactions")
+}
+
+/// Mission §37/§43 — un signataire affecté à une transaction précise, avec sa propre progression
+/// (un participant peut signer indépendamment des autres, mission "jusqu'à 50 participants").
+model SignatureParticipant {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  signatureTransactionId String               @map("signature_transaction_id") @db.Uuid
+  signatureTransaction   SignatureTransaction @relation(fields: [signatureTransactionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  signatoryId String    @map("signatory_id") @db.Uuid
+  signatory   Signatory @relation(fields: [signatoryId, organizationId], references: [id, organizationId])
+
+  providerParticipantId String? @map("provider_participant_id") @db.VarChar(120)
+  sequence              Int     @default(1)
+
+  /// PENDING | SENT | OPENED | SIGNED | DECLINED — CHECK (migration).
+  status                String  @default("PENDING") @db.VarChar(8)
+  invitationRedirectUrl String? @map("invitation_redirect_url") @db.VarChar(2048)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([signatureTransactionId, signatoryId])
+  @@index([organizationId, signatureTransactionId])
+  @@map("signature_participants")
+}
+
+/// Mission §41/§49/§50 — document signé récupéré (prestataire ou import manuel) ou preuve de
+/// signature. `isFakeTestEvidence` marque explicitement tout artefact produit par le fake
+/// provider (mission "FAKE_TEST_EVIDENCE... jamais confondue avec une preuve réelle").
+model SignatureArtifact {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  signatureTransactionId String               @map("signature_transaction_id") @db.Uuid
+  signatureTransaction   SignatureTransaction @relation(fields: [signatureTransactionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// SIGNED_DOCUMENT | PROOF — CHECK (migration).
+  kind String @db.VarChar(15)
+
+  fileName   String @map("file_name") @db.VarChar(255)
+  mimeType   String @map("mime_type") @db.VarChar(120)
+  fileSize   Int    @map("file_size")
+  fileHash   String @map("file_hash") @db.VarChar(64)
+  storageKey String @map("storage_key") @db.VarChar(500)
+
+  providerArtifactId String? @map("provider_artifact_id") @db.VarChar(120)
+  isFakeTestEvidence Boolean @default(false) @map("is_fake_test_evidence")
+
+  /// PROVIDER | MANUAL_IMPORT — CHECK (migration).
+  source     String  @default("PROVIDER") @db.VarChar(13)
+  importedBy String? @map("imported_by") @db.Uuid
+
+  /// IMPORTED | TO_VERIFY | VERIFIED | INVALID | REJECTED — CHECK (migration). Nullable : ne
+  /// s'applique qu'à `kind = SIGNED_DOCUMENT` (mission §48/§51 "ne devient pas automatiquement
+  /// VERIFIED").
+  verificationStatus String?   @map("verification_status") @db.VarChar(10)
+  verifiedBy         String?   @map("verified_by") @db.Uuid
+  verifiedAt         DateTime? @map("verified_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, signatureTransactionId])
+  @@map("signature_artifacts")
+}
+
+/// Mission §39/§45 — trace de CHAQUE événement webhook reçu, avant même réconciliation (mission
+/// "rejeter une transaction inconnue" — la ligne existe quand même, `organizationId` nullable, pour
+/// l'observabilité et la détection d'abus). Contrainte d'unicité sur l'identifiant prestataire pour
+/// l'idempotence (mission §45 "ajouter une contrainte unique... lorsque disponible").
+model SignatureProviderEvent {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String? @map("organization_id") @db.Uuid
+
+  provider              String  @db.VarChar(10)
+  providerEventId       String? @map("provider_event_id") @db.VarChar(120)
+  providerTransactionId String? @map("provider_transaction_id") @db.VarChar(120)
+
+  eventType   String    @map("event_type") @db.VarChar(60)
+  receivedAt  DateTime  @default(now()) @map("received_at")
+  processedAt DateTime? @map("processed_at")
+
+  /// RECEIVED | PROCESSED | REJECTED | IGNORED — CHECK (migration).
+  status String @default("RECEIVED") @db.VarChar(9)
+
+  payloadHash       String  @map("payload_hash") @db.VarChar(64)
+  signatureVerified Boolean @map("signature_verified")
+
+  errorCode  String? @map("error_code") @db.VarChar(60)
+  retryCount Int     @default(0) @map("retry_count")
+
+  @@unique([provider, providerEventId])
+  @@index([organizationId, providerTransactionId])
+  @@map("signature_provider_events")
+}
+
+/// Mission §10/§52/§53 — le package final. Immuable après création (mission "un package final est
+/// immuable") : un nouveau contenu produit une nouvelle ligne (`version` incrémentée), jamais une
+/// mise à jour en place.
+model SubmissionPackage {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  version Int
+
+  /// PENDING | GENERATING | COMPLETED | FAILED — CHECK (migration).
+  status String @default("PENDING") @db.VarChar(10)
+
+  validationRunId String        @map("validation_run_id") @db.Uuid
+  validationRun   ValidationRun @relation(fields: [validationRunId, organizationId], references: [id, organizationId])
+
+  approvalId String        @map("approval_id") @db.Uuid
+  approval   FinalApproval @relation(fields: [approvalId, organizationId], references: [id, organizationId])
+
+  readinessStatus String @map("readiness_status") @db.VarChar(20)
+
+  fileName     String? @map("file_name") @db.VarChar(255)
+  mimeType     String? @map("mime_type") @db.VarChar(60)
+  fileSize     Int?    @map("file_size")
+  fileHash     String? @map("file_hash") @db.VarChar(64)
+  storageKey   String? @map("storage_key") @db.VarChar(500)
+  manifestJson Json?   @map("manifest_json")
+
+  createdBy    String    @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  completedAt  DateTime? @map("completed_at")
+  errorCode    String?   @map("error_code") @db.VarChar(60)
+  errorMessage String?   @map("error_message")
+
+  files PackageFile[]
+
+  @@unique([id, organizationId])
+  @@unique([tenderId, version])
+  @@index([organizationId, tenderId])
+  @@map("submission_packages")
+}
+
+/// Mission §53/§54 — un fichier inclus dans le ZIP final, avec son propre hash (mission "tous les
+/// fichiers possèdent un hash", "aucun nom de fichier ne doit entrer en collision").
+model PackageFile {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  submissionPackageId String            @map("submission_package_id") @db.Uuid
+  submissionPackage   SubmissionPackage @relation(fields: [submissionPackageId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Chemin sûr à l'intérieur du ZIP — généré côté serveur uniquement (mission §54 "convention de
+  /// nommage sûre"), jamais dérivé directement d'une entrée utilisateur non assainie.
+  archivePath String @map("archive_path") @db.VarChar(300)
+
+  /// EXPORT_ARTIFACT | SIGNATURE_ARTIFACT | MANIFEST — CHECK (migration).
+  sourceType String  @map("source_type") @db.VarChar(20)
+  sourceId   String? @map("source_id") @db.Uuid
+
+  fileName String @map("file_name") @db.VarChar(255)
+  mimeType String @map("mime_type") @db.VarChar(120)
+  fileSize Int    @map("file_size")
+  fileHash String @map("file_hash") @db.VarChar(64)
+  order    Int
+
+  @@unique([submissionPackageId, archivePath])
+  @@index([organizationId, submissionPackageId])
+  @@map("package_files")
 }
