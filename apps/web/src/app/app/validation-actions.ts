@@ -35,6 +35,7 @@ export async function runFinalValidationAction(tenderId: string, exportJobId: st
   try {
     const run = await appApiFetch<ValidationRunSummary>(`/api/v1/tenders/${tenderId}/validation/run`, { method: "POST", body: JSON.stringify({ exportJobId }) });
     revalidatePath(`/app/tenders/${tenderId}/validation`);
+    revalidatePath(`/app/tenders/${tenderId}`);
     return { run };
   } catch (error) {
     return { error: describeValidationActionError(error) };
@@ -48,6 +49,7 @@ export async function resolveValidationIssueAction(tenderId: string, issueId: st
     return { error: describeValidationActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/validation`);
+  revalidatePath(`/app/tenders/${tenderId}`);
   return {};
 }
 
@@ -58,16 +60,22 @@ export async function reopenValidationIssueAction(tenderId: string, issueId: str
     return { error: describeValidationActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/validation`);
+  revalidatePath(`/app/tenders/${tenderId}`);
   return {};
 }
 
+/** Mission Sprint 8A.2 (audit Cockpit Bid Manager) — `POST .../final-approval` renvoie
+ *  `{ approval, finalExport }` (`ApproveFinalVersionUseCase`), jamais `FinalApprovalSummary`
+ *  directement ; corrige un typage jusque-là faux mais silencieux (rien ne lisait encore les
+ *  champs de `result.approval`). */
 export async function approveFinalVersionAction(tenderId: string, validationRunId: string, comment: string | undefined): Promise<{ error?: string; approval?: FinalApprovalSummary }> {
   try {
-    const approval = await appApiFetch<FinalApprovalSummary>(`/api/v1/tenders/${tenderId}/final-approval`, {
+    const { approval } = await appApiFetch<{ approval: FinalApprovalSummary; finalExport: unknown }>(`/api/v1/tenders/${tenderId}/final-approval`, {
       method: "POST",
       body: JSON.stringify({ validationRunId, ...(comment ? { comment } : {}) }),
     });
     revalidatePath(`/app/tenders/${tenderId}/validation`);
+    revalidatePath(`/app/tenders/${tenderId}`);
     return { approval };
   } catch (error) {
     return { error: describeValidationActionError(error) };
@@ -81,5 +89,6 @@ export async function reopenFinalVersionAction(tenderId: string, reason: string)
     return { error: describeValidationActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/validation`);
+  revalidatePath(`/app/tenders/${tenderId}`);
   return {};
 }

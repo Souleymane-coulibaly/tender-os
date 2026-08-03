@@ -18,6 +18,11 @@ export type ExportJobProps = {
   version: number;
   basedOnExportJobId?: string | undefined;
   sections: readonly ExportSectionSelection[];
+  /** Mission Sprint 8A.2 (correction bugs #7/#8) — thème RÉELLEMENT résolu au moment du rendu
+   *  (voir ThemeResolver/TemplateThemeResolverService), jamais recalculé après coup : un export
+   *  déjà généré garde la preuve exacte du thème qui l'a produit. */
+  themeVersionId?: string | undefined;
+  themeSourceLevel?: string | undefined;
   createdBy: string;
   createdAt: Date;
   completedAt?: Date | undefined;
@@ -48,6 +53,8 @@ export class ExportJob {
     version: number;
     basedOnExportJobId?: string | undefined;
     sections: readonly ExportSectionSelection[];
+    themeVersionId?: string | undefined;
+    themeSourceLevel?: string | undefined;
     createdBy: string;
     occurredAt: Date;
   }): ExportJob {
@@ -71,6 +78,8 @@ export class ExportJob {
       version: input.version,
       basedOnExportJobId: input.basedOnExportJobId,
       sections: input.sections,
+      themeVersionId: input.themeVersionId,
+      themeSourceLevel: input.themeSourceLevel,
       createdBy: input.createdBy,
       createdAt: input.occurredAt,
     });
@@ -152,6 +161,12 @@ export class ExportJob {
   }
   get sections(): readonly ExportSectionSelection[] {
     return this.props.sections;
+  }
+  get themeVersionId(): string | undefined {
+    return this.props.themeVersionId;
+  }
+  get themeSourceLevel(): string | undefined {
+    return this.props.themeSourceLevel;
   }
   get createdBy(): string {
     return this.props.createdBy;

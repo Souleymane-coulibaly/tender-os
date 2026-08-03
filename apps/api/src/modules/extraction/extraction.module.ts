@@ -18,6 +18,7 @@ import { PDF_RASTERIZER } from "./application/ports/pdf-rasterizer";
 import { SPREADSHEET_EXTRACTOR } from "./application/ports/spreadsheet-extractor";
 import { TEXT_SEGMENTER } from "./application/ports/text-segmenter";
 
+import { AutoTriggerDocumentExtractionUseCase } from "./application/use-cases/auto-trigger-document-extraction.use-case";
 import { ExtractDocumentContentUseCase } from "./application/use-cases/extract-document-content.use-case";
 import { GetDocumentAnalysisInputUseCase } from "./application/use-cases/get-document-analysis-input.use-case";
 import { GetDocumentExtractionUseCase } from "./application/use-cases/get-document-extraction.use-case";
@@ -49,6 +50,9 @@ import { ExtractionController } from "./interfaces/http/extraction.controller";
     GetDocumentExtractionUseCase,
     RetryDocumentExtractionUseCase,
     ProcessDocumentExtractionUseCase,
+    // Mission Sprint 8A.2 — déclenchement système (jamais RBAC-gated), lié aux ports propres de
+    // DCE/Documents par `ExtractionTriggerBridgeModule` (voir infrastructure/).
+    AutoTriggerDocumentExtractionUseCase,
     // Correction P1-04 — le seul point d'entrée applicatif que le futur module d'analyse IA
     // (Sprint 4) doit utiliser pour lire le corpus de chunks ; jamais un accès direct à
     // l'infrastructure de ce module.
@@ -79,6 +83,6 @@ import { ExtractionController } from "./interfaces/http/extraction.controller";
   // module consommateur ne peut injecter `GetDocumentAnalysisInputUseCase` via le mécanisme de DI
   // NestJS standard, même en important `ExtractionModule` : le réexport déjà présent dans
   // `index.ts` (correction P1-04) ne suffit qu'au typage, jamais à la résolution DI runtime.
-  exports: [GetDocumentAnalysisInputUseCase, ExtractDocumentContentUseCase],
+  exports: [GetDocumentAnalysisInputUseCase, ExtractDocumentContentUseCase, AutoTriggerDocumentExtractionUseCase],
 })
 export class ExtractionModule {}

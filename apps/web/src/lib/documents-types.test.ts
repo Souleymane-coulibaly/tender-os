@@ -7,6 +7,13 @@ describe("canUploadOrEditDocument", () => {
     expect(canUploadOrEditDocument("BID_MANAGER")).toBe(true);
   });
 
+  // Mission Sprint 8A.2 (audit Cockpit Bid Manager) — régression : OWNER manquait du miroir
+  // ADMIN_TIER (jamais mis à jour après le correctif backend OWNER de document-permission.ts),
+  // masquant l'import/édition de documents pour un propriétaire d'organisation.
+  it("allows OWNER (superset of ORGANIZATION_ADMIN, backend-mirrored)", () => {
+    expect(canUploadOrEditDocument("OWNER")).toBe(true);
+  });
+
   it("allows the contributor tier", () => {
     expect(canUploadOrEditDocument("CONTRIBUTOR")).toBe(true);
   });
@@ -20,6 +27,7 @@ describe("canUploadOrEditDocument", () => {
 
 describe("canManageDocumentLifecycle", () => {
   it("allows only the admin tier", () => {
+    expect(canManageDocumentLifecycle("OWNER")).toBe(true);
     expect(canManageDocumentLifecycle("ORGANIZATION_ADMIN")).toBe(true);
     expect(canManageDocumentLifecycle("BID_MANAGER")).toBe(true);
     expect(canManageDocumentLifecycle("CONTRIBUTOR")).toBe(false);

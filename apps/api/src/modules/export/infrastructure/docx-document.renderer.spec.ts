@@ -190,4 +190,55 @@ describe("DocxDocumentRenderer", () => {
     expect(documentXml).toContain("Item avec mise en forme");
     expect(documentXml).toContain("Item simple");
   });
+
+  // Mission Sprint 8A.2 (correction bugs #7/#8 "thème document pas toujours appliqué") — preuve
+  // RÉELLE (contenu XML effectivement parsé, jamais seulement "le rendu n'a pas levé d'exception")
+  // que le thème résolu se retrouve dans le document produit.
+  describe("mission Sprint 8A.2 — theme application (bugs #7/#8)", () => {
+    it("applies the theme's accent color to heading runs", async () => {
+      const renderer = new DocxDocumentRenderer();
+      const buffer = await renderer.render(baseDocument({ theme: { accentColor: "#1A73E8" } }));
+      const zip = await JSZip.loadAsync(buffer);
+      const documentXml = await zip.files["word/document.xml"]!.async("string");
+      expect(documentXml).toContain("1A73E8");
+    });
+
+    it("never emits a theme color when no theme is provided (Sprint 8A behavior unchanged)", async () => {
+      const renderer = new DocxDocumentRenderer();
+      const buffer = await renderer.render(baseDocument({ theme: undefined }));
+      const zip = await JSZip.loadAsync(buffer);
+      const documentXml = await zip.files["word/document.xml"]!.async("string");
+      expect(documentXml).not.toContain("1A73E8");
+    });
+
+    it("applies the theme's font family as the document's default run font", async () => {
+      const renderer = new DocxDocumentRenderer();
+      const buffer = await renderer.render(baseDocument({ theme: { fontFamily: "Georgia" } }));
+      const zip = await JSZip.loadAsync(buffer);
+      const stylesXml = await zip.files["word/styles.xml"]!.async("string");
+      expect(stylesXml).toContain("Georgia");
+    });
+
+    it("embeds the theme's logo as a real image part in the document", async () => {
+      const renderer = new DocxDocumentRenderer();
+      // Un PNG 1x1 minimal réel (jamais un buffer arbitraire) — la bibliothèque `docx` doit
+      // réellement pouvoir l'intégrer comme partie image OOXML.
+      const onePixelPng = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        "base64",
+      );
+      const buffer = await renderer.render(baseDocument({ theme: { logo: { buffer: onePixelPng, mimeType: "image/png" } } }));
+      const zip = await JSZip.loadAsync(buffer);
+      const mediaFiles = Object.keys(zip.files).filter((name) => name.startsWith("word/media/"));
+      expect(mediaFiles.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("never embeds a media part when no theme logo is provided", async () => {
+      const renderer = new DocxDocumentRenderer();
+      const buffer = await renderer.render(baseDocument({ theme: undefined }));
+      const zip = await JSZip.loadAsync(buffer);
+      const mediaFiles = Object.keys(zip.files).filter((name) => name.startsWith("word/media/"));
+      expect(mediaFiles.length).toBe(0);
+    });
+  });
 });

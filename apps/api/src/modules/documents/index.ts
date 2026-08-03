@@ -43,3 +43,8 @@ export type { IncomingFile } from "./application/incoming-file";
 
 export { DocumentOrigin } from "./domain/document-origin";
 export { DocumentDomain } from "./domain/document-domain";
+
+// Réexporté en LECTURE SEULE pour Sprint 8A.2 (module `cockpit`) — liste des documents associés à
+// un Tender pour la vue d'ensemble, jamais un second accès direct aux repositories.
+export { ListTenderDocumentsUseCase } from "./application/use-cases/list-tender-documents.use-case";
+export type { ListTenderDocumentsQuery } from "./application/use-cases/list-tender-documents.use-case";

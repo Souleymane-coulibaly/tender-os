@@ -48,6 +48,19 @@ export type RenderableCoverPage = Readonly<{
   version: number;
 }>;
 
+/**
+ * Mission Sprint 8A.2 (correction bugs #7/#8 "thème document pas toujours appliqué") — thème
+ * RÉELLEMENT résolu (voir ThemeResolver, TENDER > CLIENT > ORGANIZATION > TENDEROS) au format déjà
+ * prêt pour un renderer : `logo` porte les octets déjà chargés depuis le stockage, jamais une
+ * clé/URL que le renderer irait résoudre lui-même (même discipline "aucune E/S dans le renderer"
+ * que le reste de cette IR).
+ */
+export type RenderableTheme = Readonly<{
+  accentColor?: string | undefined;
+  fontFamily?: string | undefined;
+  logo?: Readonly<{ buffer: Buffer; mimeType: string }> | undefined;
+}>;
+
 export type RenderableDocument = Readonly<{
   documentTitle: string;
   coverPage?: RenderableCoverPage | undefined;
@@ -57,5 +70,6 @@ export type RenderableDocument = Readonly<{
   showTableOfContents: boolean;
   /** "APERÇU" sur un aperçu, absent sur un export final (mission §18/§21). */
   watermarkText?: string | undefined;
+  theme?: RenderableTheme | undefined;
   sections: readonly RenderableSection[];
 }>;

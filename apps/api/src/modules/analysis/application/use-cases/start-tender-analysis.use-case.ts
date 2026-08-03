@@ -45,6 +45,7 @@ export class StartTenderAnalysisUseCase {
     await this.getTenderUseCase.execute({
       organizationId: command.organizationId,
       tenderId: command.tenderId,
+      actorId: command.actorId,
       actorRole: command.actorRole,
     });
 

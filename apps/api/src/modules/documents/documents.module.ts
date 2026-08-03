@@ -77,6 +77,8 @@ import { TenderDocumentsController } from "./interfaces/http/tender-documents.co
     DOCUMENT_REPOSITORY,
     DOCUMENT_VERSION_REPOSITORY,
     STORAGE_PROVIDER,
+    // Réexporté pour Sprint 8A.2 (module `cockpit`, lecture seule).
+    ListTenderDocumentsUseCase,
   ],
 })
 export class DocumentsModule {}

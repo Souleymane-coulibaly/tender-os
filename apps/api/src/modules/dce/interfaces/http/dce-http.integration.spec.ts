@@ -98,6 +98,58 @@ describe("DCE — real HTTP + PostgreSQL (NestJS)", () => {
     return { status: res.status, ...body };
   }
 
+  type DceImportJobResponse = {
+    id: string;
+    status: string;
+    result?: { accepted: { documentId: string }[]; rejected: { originalFilename: string; reason: string }[] };
+    errorMessage?: string;
+  };
+
+  /** Mission Sprint 8A.2 (correction bug #3) — l'import ZIP est désormais asynchrone : la requête
+   *  HTTP ne renvoie plus qu'un `jobId` (202), jamais le résultat final directement. */
+  async function startZipImport(input: {
+    tenderId: string;
+    token: string;
+    organizationId: string;
+    zip: Buffer;
+    filename?: string;
+  }): Promise<{ status: number; job: DceImportJobResponse }> {
+    const form = new FormData();
+    form.append("archive", new Blob([input.zip], { type: "application/zip" }), input.filename ?? "archive.zip");
+    const res = await fetch(`${baseUrl}/api/v1/tenders/${input.tenderId}/dce/import-zip`, {
+      method: "POST",
+      headers: authHeaders(input.token, input.organizationId),
+      body: form,
+    });
+    const job = (await res.json()) as DceImportJobResponse;
+    return { status: res.status, job };
+  }
+
+  const TERMINAL_IMPORT_JOB_STATUSES = new Set(["READY", "PARTIALLY_READY", "FAILED", "CANCELLED"]);
+
+  async function waitForTerminalImportJob(input: {
+    tenderId: string;
+    jobId: string;
+    token: string;
+    organizationId: string;
+    timeoutMs?: number;
+  }): Promise<DceImportJobResponse> {
+    const deadline = Date.now() + (input.timeoutMs ?? 15000);
+    for (;;) {
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${input.tenderId}/dce/import-jobs/${input.jobId}`, {
+        headers: authHeaders(input.token, input.organizationId),
+      });
+      const job = (await res.json()) as DceImportJobResponse;
+      if (res.status === 200 && TERMINAL_IMPORT_JOB_STATUSES.has(job.status)) {
+        return job;
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`Import job ${input.jobId} never reached a terminal status (last: ${job.status})`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -313,35 +365,62 @@ describe("DCE — real HTTP + PostgreSQL (NestJS)", () => {
     expect(downloadRes.headers.get("content-type")).toBe("application/pdf");
   });
 
-  it("rejects a dangerous ZIP archive (path traversal) with 422", async () => {
+  /** Mission Sprint 8A.2 (correction bug #3 "import ZIP lourd échoue ou bloque") — l'import ZIP
+   *  est désormais asynchrone : la requête HTTP répond IMMÉDIATEMENT avec un job à l'état CREATED
+   *  (202), jamais un 422/201 synchrone qui obligerait à attendre l'extraction/l'import complets.
+   *  Une archive dangereuse échoue le JOB (FAILED), jamais la requête elle-même. */
+  it("a dangerous ZIP archive (path traversal) responds 202 immediately, then ends the job as FAILED", async () => {
     const dangerousZip = buildZipBuffer([{ name: "../../etc/passwd.pdf", content: Buffer.from("x") }]);
-    const form = new FormData();
-    form.append("archive", new Blob([dangerousZip], { type: "application/zip" }), "archive.zip");
 
-    const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/dce/import-zip`, {
-      method: "POST",
-      headers: authHeaders(tokenAdminA, orgAId),
-      body: form,
-    });
-    expect(res.status).toBe(422);
+    const { status, job: created } = await startZipImport({ tenderId: tenderAId, token: tokenAdminA, organizationId: orgAId, zip: dangerousZip });
+    expect(status).toBe(202);
+    expect(created.status).toBe("CREATED");
+
+    const job = await waitForTerminalImportJob({ tenderId: tenderAId, jobId: created.id, token: tokenAdminA, organizationId: orgAId });
+    expect(job.status).toBe("FAILED");
+    expect(job.errorMessage).toMatch(/ZIP archive rejected/);
   });
 
-  it("accepts a valid ZIP archive (201) with all entries imported", async () => {
+  it("responds 202 immediately for a valid ZIP archive, and the job reaches READY with all entries imported", async () => {
     const zip = buildZipBuffer([
       { name: "cctp.pdf", content: Buffer.from("%PDF-1.7 entry a") },
       { name: "reglement.pdf", content: Buffer.from("%PDF-1.7 entry b") },
     ]);
-    const form = new FormData();
-    form.append("archive", new Blob([zip], { type: "application/zip" }), "archive.zip");
 
-    const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/dce/import-zip`, {
-      method: "POST",
-      headers: authHeaders(tokenAdminA, orgAId),
-      body: form,
+    const { status, job: created } = await startZipImport({ tenderId: tenderAId, token: tokenAdminA, organizationId: orgAId, zip });
+    expect(status).toBe(202);
+    expect(created.status).toBe("CREATED");
+    expect(created.result).toBeUndefined();
+
+    const job = await waitForTerminalImportJob({ tenderId: tenderAId, jobId: created.id, token: tokenAdminA, organizationId: orgAId });
+    expect(job.status).toBe("READY");
+    expect(job.result?.accepted).toHaveLength(2);
+  });
+
+  it("READ_ONLY (no client assignment, same fixture as the rest of this file) cannot start an import (403) nor poll one belonging to a tender it has no client access to (404, never 500)", async () => {
+    const zip = buildZipBuffer([{ name: "readonly-guard.pdf", content: Buffer.from("%PDF-1.7 readonly guard") }]);
+    const forbidden = await startZipImport({ tenderId: tenderAId, token: tokenReadOnlyA, organizationId: orgAId, zip });
+    expect(forbidden.status).toBe(403);
+
+    const { job: created } = await startZipImport({ tenderId: tenderAId, token: tokenAdminA, organizationId: orgAId, zip });
+    // Correctif Sprint 8A.2 (DceErrorFilter était le seul filtre du projet à ne mapper ni
+    // CLIENT_ACCOUNT_NOT_FOUND ni CLIENT_PERMISSION_MISSING — voir dce-error.filter.ts) : ce
+    // chemin de lecture doit rester un 404 explicite (anti-énumération, même motif que partout
+    // ailleurs), jamais un 500 opaque qui masquerait la vraie cause.
+    const pollRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/dce/import-jobs/${created.id}`, {
+      headers: authHeaders(tokenReadOnlyA, orgAId),
     });
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { accepted: unknown[] };
-    expect(body.accepted).toHaveLength(2);
+    expect(pollRes.status).toBe(404);
+  });
+
+  it("never lets org B poll org A's import job (404)", async () => {
+    const zip = buildZipBuffer([{ name: "isolation-guard.pdf", content: Buffer.from("%PDF-1.7 isolation guard") }]);
+    const { job: created } = await startZipImport({ tenderId: tenderAId, token: tokenAdminA, organizationId: orgAId, zip });
+
+    const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/dce/import-jobs/${created.id}`, {
+      headers: authHeaders(tokenAdminB, orgBId),
+    });
+    expect(res.status).toBe(404);
   });
 
   it("mission P1-2 — two concurrent imports of the exact same file content into the same DCE create only one active document", async () => {
@@ -391,30 +470,34 @@ describe("DCE — real HTTP + PostgreSQL (NestJS)", () => {
 
   it("mission P1-2 — the same ZIP replayed does not create duplicate active documents", async () => {
     const zip = buildZipBuffer([{ name: `replayed-${randomUUID()}.pdf`, content: Buffer.from("%PDF-1.7 replayed entry") }]);
-    const form = () => {
-      const f = new FormData();
-      f.append("archive", new Blob([zip], { type: "application/zip" }), "archive.zip");
-      return f;
-    };
 
-    const firstImport = await fetch(`${baseUrl}/api/v1/tenders/${tenderA2Id}/dce/import-zip`, {
-      method: "POST",
-      headers: authHeaders(tokenAdminA, orgAId),
-      body: form(),
+    const { status: firstStatus, job: firstCreated } = await startZipImport({
+      tenderId: tenderA2Id,
+      token: tokenAdminA,
+      organizationId: orgAId,
+      zip,
     });
-    expect(firstImport.status).toBe(201);
-    const firstBody = (await firstImport.json()) as { accepted: unknown[] };
-    expect(firstBody.accepted).toHaveLength(1);
+    expect(firstStatus).toBe(202);
+    const firstJob = await waitForTerminalImportJob({ tenderId: tenderA2Id, jobId: firstCreated.id, token: tokenAdminA, organizationId: orgAId });
+    expect(firstJob.status).toBe("READY");
+    expect(firstJob.result?.accepted).toHaveLength(1);
 
-    const replayedImport = await fetch(`${baseUrl}/api/v1/tenders/${tenderA2Id}/dce/import-zip`, {
-      method: "POST",
-      headers: authHeaders(tokenAdminA, orgAId),
-      body: form(),
+    const { status: replayedStatus, job: replayedCreated } = await startZipImport({
+      tenderId: tenderA2Id,
+      token: tokenAdminA,
+      organizationId: orgAId,
+      zip,
     });
-    expect(replayedImport.status).toBe(201);
-    const replayedBody = (await replayedImport.json()) as { accepted: unknown[]; rejected: { reason: string }[] };
-    expect(replayedBody.accepted).toHaveLength(0);
-    expect(replayedBody.rejected[0]?.reason).toMatch(/duplicate/);
+    expect(replayedStatus).toBe(202);
+    const replayedJob = await waitForTerminalImportJob({
+      tenderId: tenderA2Id,
+      jobId: replayedCreated.id,
+      token: tokenAdminA,
+      organizationId: orgAId,
+    });
+    expect(replayedJob.status).toBe("PARTIALLY_READY");
+    expect(replayedJob.result?.accepted).toHaveLength(0);
+    expect(replayedJob.result?.rejected[0]?.reason).toMatch(/duplicate/);
   });
 
   it("mission P1-2 — two different organizations can import byte-identical content without collision", async () => {

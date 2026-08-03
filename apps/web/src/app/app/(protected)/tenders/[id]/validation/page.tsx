@@ -15,7 +15,7 @@ export default async function TenderValidationPage({ params }: { params: Promise
   let actorRole: string | undefined;
   try {
     [readiness, exportHistory, actorRole] = await Promise.all([
-      appApiFetch<ReadinessStatusResult>(`/api/v1/tenders/${tenderId}/readiness`),
+      appApiFetch<ReadinessStatusResult>(`/api/v1/tenders/${tenderId}/validation/readiness`),
       appApiFetch<{ items: ExportJobSummary[]; total: number }>(`/api/v1/tenders/${tenderId}/exports?mode=PREVIEW&limit=20&offset=0`),
       getCurrentMembershipRole(),
     ]);

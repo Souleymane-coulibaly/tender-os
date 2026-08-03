@@ -147,7 +147,15 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
   }, 60000);
 
   afterAll(async () => {
+    // Mission Sprint 8A.2 — une fois qu'une RoutingPolicy ACTIVE existe pour EXECUTIVE_SUMMARY
+    // (bloc "generation capabilities"), les générations lancées plus loin dans ce fichier
+    // produisent une vraie RoutingDecision durable (audit Codex P1-2), référencée par
+    // `Generation.routingDecisionId` : `generation` doit donc être supprimée AVANT
+    // `routingDecision` (sens inverse de la FK), qui doit elle-même précéder `routingPolicy`
+    // (contrainte FK réelle) — jamais nettoyées par les suppressions "métier" ci-dessous.
     await prisma.generation.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.routingDecision.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.routingPolicy.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.promptVersion.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.promptTemplate.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.tender.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -215,6 +223,95 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
 
     it("never lets org B see org A's prompt template (404)", async () => {
       const res = await fetch(`${baseUrl}/api/v1/prompt-templates/${templateId}`, { headers: authHeaders(tokenOwnerB, orgBId) });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  /** Mission Sprint 8A.2 (bugs #1/#4 — "aucune vérification en amont", "No active routing policy"
+   *  affiché sans que le frontend sache jamais lesquels des 17 types sont réellement utilisables).
+   *  Réutilise EXECUTIVE_SUMMARY (template + version ACTIVE déjà créés par le bloc précédent) pour
+   *  prouver la transition NO_ACTIVE_ROUTING_POLICY -> ready, sans jamais dupliquer la résolution
+   *  faite par ProcessGenerationUseCase/LaunchGenerationUseCase (mêmes repositories/résolveur). */
+  describe("generation capabilities (mission Sprint 8A.2)", () => {
+    async function activateRoutingPolicyFor(taskType: string): Promise<void> {
+      const aiModelRepository = new PrismaAiModelRepository(prisma);
+      const routingPolicyRepository = new PrismaRoutingPolicyRepository(prisma);
+      const model = await createUniqueProductionAiModel(aiModelRepository, {
+        displayNamePrefix: `Capabilities test model (${taskType})`,
+        occurredAt: new Date(),
+      });
+      const policy = RoutingPolicy.create({
+        id: randomUUID(),
+        organizationId: orgAId,
+        promptKey: taskType,
+        version: 1,
+        primaryAiModelId: model.id,
+        timeoutMs: 30000,
+        maxRetries: 1,
+        escalationConditions: [],
+        authorUserId: userIds[0]!,
+        occurredAt: new Date(),
+      });
+      await routingPolicyRepository.create(policy);
+      policy.activate(new Date());
+      await routingPolicyRepository.activateAtomically(policy);
+    }
+
+    it("a task type with no prompt template at all is not ready (PROMPT_TEMPLATE_NOT_FOUND)", async () => {
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/generation-capabilities`, {
+        headers: authHeaders(tokenOwnerA, orgAId),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { items: { taskType: string; ready: boolean; reasonCode?: string }[] };
+      expect(body.items).toHaveLength(17);
+
+      const quality = body.items.find((item) => item.taskType === "QUALITY");
+      expect(quality).toEqual({ taskType: "QUALITY", ready: false, reasonCode: "PROMPT_TEMPLATE_NOT_FOUND" });
+    });
+
+    it("a task type with an active prompt version but no active routing policy is not ready (NO_ACTIVE_ROUTING_POLICY)", async () => {
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/generation-capabilities`, {
+        headers: authHeaders(tokenOwnerA, orgAId),
+      });
+      const body = (await res.json()) as { items: { taskType: string; ready: boolean; reasonCode?: string }[] };
+      const executiveSummary = body.items.find((item) => item.taskType === "EXECUTIVE_SUMMARY");
+      expect(executiveSummary).toEqual({ taskType: "EXECUTIVE_SUMMARY", ready: false, reasonCode: "NO_ACTIVE_ROUTING_POLICY" });
+    });
+
+    it("becomes ready once an active routing policy also exists for that task type — the exact same resolution LaunchGenerationUseCase uses", async () => {
+      await activateRoutingPolicyFor("EXECUTIVE_SUMMARY");
+
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/generation-capabilities`, {
+        headers: authHeaders(tokenOwnerA, orgAId),
+      });
+      const body = (await res.json()) as { items: { taskType: string; ready: boolean; reasonCode?: string }[] };
+      const executiveSummary = body.items.find((item) => item.taskType === "EXECUTIVE_SUMMARY");
+      expect(executiveSummary).toEqual({ taskType: "EXECUTIVE_SUMMARY", ready: true });
+    });
+
+    it("never leaks org A's readiness into org B's capabilities (tenant isolation)", async () => {
+      const tenderBId = randomUUID();
+      const clientBId = randomUUID();
+      await prisma.clientAccount.create({
+        data: { id: clientBId, organizationId: orgBId, name: "Client B", nameNormalized: "client b", status: "ACTIVE", createdBy: userIds[2]! },
+      });
+      await prisma.tender.create({
+        data: { id: tenderBId, organizationId: orgBId, clientAccountId: clientBId, title: "Marché B HTTP", status: "DRAFT", tags: [], createdBy: userIds[2]! },
+      });
+
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderBId}/generation-capabilities`, {
+        headers: authHeaders(tokenOwnerB, orgBId),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { items: { taskType: string; ready: boolean; reasonCode?: string }[] };
+      const executiveSummary = body.items.find((item) => item.taskType === "EXECUTIVE_SUMMARY");
+      expect(executiveSummary).toEqual({ taskType: "EXECUTIVE_SUMMARY", ready: false, reasonCode: "PROMPT_TEMPLATE_NOT_FOUND" });
+    });
+
+    it("refuses a CONTRIBUTOR not assigned to the client (404, never a leak via 403)", async () => {
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/generation-capabilities`, {
+        headers: authHeaders(tokenContributorA, orgAId),
+      });
       expect(res.status).toBe(404);
     });
   });

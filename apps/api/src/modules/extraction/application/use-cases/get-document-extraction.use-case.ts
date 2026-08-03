@@ -11,6 +11,7 @@ export type GetDocumentExtractionQuery = Readonly<{
   organizationId: string;
   tenderId: string;
   documentId: string;
+  actorId: string;
   actorRole: string;
 }>;
 
@@ -32,6 +33,7 @@ export class GetDocumentExtractionUseCase {
     await this.getTenderUseCase.execute({
       organizationId: query.organizationId,
       tenderId: query.tenderId,
+      actorId: query.actorId,
       actorRole: query.actorRole,
     });
 

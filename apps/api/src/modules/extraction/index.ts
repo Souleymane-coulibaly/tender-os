@@ -1,5 +1,10 @@
 export { ExtractionModule } from "./extraction.module";
 
+// Pont `@Global()` Sprint 8A.2 (correction "aucun déclencheur d'extraction") — DOIT être importé
+// par `AppModule` aux côtés d'`ExtractionModule` (même obligation que `RoutingPolicyBridgeModule`
+// pour `ai-benchmark`), sinon DCE/Documents ne peuvent jamais déclencher d'extraction.
+export { ExtractionTriggerBridgeModule } from "./infrastructure/extraction-trigger-bridge.module";
+
 // Correction P1-04 — seul point d'entrée applicatif que le futur module d'analyse IA (Sprint 4)
 // doit utiliser pour lire le corpus de chunks d'un document déjà extrait : jamais Prisma, jamais
 // un repository infrastructure, jamais une table SQL, jamais un contrôleur HTTP interne de ce

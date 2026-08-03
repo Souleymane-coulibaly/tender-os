@@ -7,7 +7,7 @@ import type {
   NativeTextExtractor,
 } from "../application/ports/native-text-extractor";
 import type { StoredDocumentReference } from "../application/ports/stored-document-reference";
-import { readStreamToBuffer } from "./read-stream-to-buffer";
+import { readStreamToBuffer } from "../../../shared-kernel/read-stream-to-buffer";
 
 /**
  * Extraction de texte natif via `pdf-parse` (mission Sprint 3 §9) — jamais utilisé sur un PDF sans

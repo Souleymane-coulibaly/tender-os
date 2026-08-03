@@ -47,7 +47,7 @@ import { SPREADSHEET_EXTRACTOR, type SpreadsheetExtractor } from "../ports/sprea
 import type { StoredDocumentReference } from "../ports/stored-document-reference";
 import { TEXT_SEGMENTER, type TextSegmenter } from "../ports/text-segmenter";
 import { EXTRACTION_CONFIG, type ExtractionConfig } from "../../infrastructure/extraction-config";
-import { readStreamToBuffer } from "../../infrastructure/read-stream-to-buffer";
+import { readStreamToBuffer } from "../../../../shared-kernel/read-stream-to-buffer";
 
 export type ProcessDocumentExtractionCommand = Readonly<{
   organizationId: string;

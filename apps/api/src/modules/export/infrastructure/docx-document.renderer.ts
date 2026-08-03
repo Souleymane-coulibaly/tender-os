@@ -6,6 +6,7 @@ import {
   Footer,
   Header,
   HeadingLevel,
+  ImageRun,
   Packer,
   PageBreak,
   PageNumber,
@@ -18,9 +19,23 @@ import {
   WidthType,
 } from "docx";
 import type { DocumentRendererPort } from "../application/ports/document-renderer";
-import type { RenderableBlock, RenderableDocument, RichTextRun } from "../application/services/renderable-document";
+import type { RenderableBlock, RenderableDocument, RenderableTheme, RichTextRun } from "../application/services/renderable-document";
 
 const HEADING_LEVELS = [HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3] as const;
+
+/** `DocumentThemeVersion.accentColor` est validé en amont (domaine Deliverables) au format
+ *  `#RRGGBB` — `docx` attend le même hexadécimal SANS le `#`. */
+function stripHash(color: string): string {
+  return color.replace(/^#/, "").toUpperCase();
+}
+
+const IMAGE_TYPE_BY_MIME: Record<string, "png" | "jpg" | "gif" | "bmp"> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/gif": "gif",
+  "image/bmp": "bmp",
+};
 
 /**
  * Mission Sprint 8A §20/§23 — construit le document via l'API structurée de `docx` (jamais un
@@ -41,6 +56,18 @@ export class DocxDocumentRenderer implements DocumentRendererPort {
           children: [new TextRun({ text: document.watermarkText, bold: true, color: "C00000", size: 56 })],
         }),
       );
+    }
+
+    if (document.theme?.logo) {
+      const imageType = IMAGE_TYPE_BY_MIME[document.theme.logo.mimeType];
+      if (imageType) {
+        children.push(
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new ImageRun({ type: imageType, data: document.theme.logo.buffer, transformation: { width: 160, height: 80 } })],
+          }),
+        );
+      }
     }
 
     if (document.coverPage) {
@@ -68,11 +95,18 @@ export class DocxDocumentRenderer implements DocumentRendererPort {
 
     for (const section of document.sections) {
       for (const block of section.blocks) {
-        children.push(...renderBlock(block));
+        children.push(...renderBlock(block, document.theme));
       }
     }
 
+    const fontFamily = document.theme?.fontFamily;
+
     const doc = new Document({
+      // Mission Sprint 8A.2 (correction bugs #7/#8) — police par défaut du document entier quand
+      // le thème en fournit une (`fontFamily`, simple référence de nom résolue par Word/LibreOffice
+      // à l'ouverture, jamais un fichier de police embarqué côté serveur) ; sinon comportement
+      // Sprint 8A inchangé (police par défaut de `docx`).
+      ...(fontFamily ? { styles: { default: { document: { run: { font: fontFamily } } } } } : {}),
       numbering: {
         config: [
           {
@@ -108,10 +142,16 @@ export class DocxDocumentRenderer implements DocumentRendererPort {
   }
 }
 
-function renderBlock(block: RenderableBlock): (Paragraph | Table)[] {
+function renderBlock(block: RenderableBlock, theme?: RenderableTheme): (Paragraph | Table)[] {
   switch (block.kind) {
     case "heading": {
       const level = HEADING_LEVELS[Math.min(block.level, 3) - 1] ?? HeadingLevel.HEADING_1;
+      // Mission Sprint 8A.2 (correction bugs #7/#8) — la couleur d'accent du thème s'applique en
+      // formatage direct sur le run (l'emporte sur la couleur du style de titre Word), jamais un
+      // second système de styles parallèle.
+      if (theme?.accentColor) {
+        return [new Paragraph({ heading: level, children: [new TextRun({ text: block.text, color: stripHash(theme.accentColor) })] })];
+      }
       return [new Paragraph({ text: block.text, heading: level })];
     }
     case "paragraph":

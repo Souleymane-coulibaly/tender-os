@@ -16,6 +16,13 @@ describe("canChangeTenderStatus", () => {
     expect(canChangeTenderStatus("BID_MANAGER")).toBe(true);
   });
 
+  // Mission Sprint 8A.2 (audit Cockpit Bid Manager) — régression : OWNER manquait du miroir
+  // ROLES_ALLOWED_TO_CHANGE_STATUS (jamais mis à jour après le correctif backend OWNER de
+  // tender-permission.ts), masquant le changement de statut pour un propriétaire d'organisation.
+  it("allows OWNER (superset of ORGANIZATION_ADMIN, backend-mirrored)", () => {
+    expect(canChangeTenderStatus("OWNER")).toBe(true);
+  });
+
   it("denies read-only and other roles that lack tender:update on the backend", () => {
     expect(canChangeTenderStatus("READ_ONLY")).toBe(false);
     expect(canChangeTenderStatus("REVIEWER")).toBe(false);
@@ -26,6 +33,7 @@ describe("canChangeTenderStatus", () => {
 
 describe("canEditTenderDetails", () => {
   it("mirrors canManageTenderLots (same tender:update permission)", () => {
+    expect(canEditTenderDetails("OWNER")).toBe(true);
     expect(canEditTenderDetails("ORGANIZATION_ADMIN")).toBe(true);
     expect(canEditTenderDetails("BID_MANAGER")).toBe(true);
     expect(canEditTenderDetails("READ_ONLY")).toBe(false);

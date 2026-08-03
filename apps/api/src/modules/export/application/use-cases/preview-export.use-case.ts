@@ -1,12 +1,13 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { GetTenderUseCase } from "../../../tenders";
 import { ExportTemplateNotFoundError, NoActiveExportTemplateVersionError } from "../../domain/errors";
 import { ExportMode } from "../../domain/export-mode";
 import { toExportJobSummary, type ExportJobSummary } from "../dtos";
+import { THEME_RESOLVER, type ThemeResolver } from "../ports/theme-resolver";
 import { EXPORT_TEMPLATE_REPOSITORY, type ExportTemplateRepository } from "../ports/export-template.repository";
-import { ExportRenderPipelineService } from "../services/export-render-pipeline.service";
+import { ExportRenderPipelineService, type RunExportPipelineThemeInput } from "../services/export-render-pipeline.service";
 import { SectionContentResolverService, type SectionSelectionInput } from "../services/section-content-resolver.service";
 
 export type PreviewExportCommand = Readonly<{
@@ -26,6 +27,8 @@ export type PreviewExportCommand = Readonly<{
  */
 @Injectable()
 export class PreviewExportUseCase {
+  private readonly logger = new Logger(PreviewExportUseCase.name);
+
   constructor(
     @Inject(EXPORT_TEMPLATE_REPOSITORY) private readonly exportTemplateRepository: ExportTemplateRepository,
     private readonly getTenderUseCase: GetTenderUseCase,
@@ -33,7 +36,24 @@ export class PreviewExportUseCase {
     private readonly sectionContentResolver: SectionContentResolverService,
     private readonly exportRenderPipeline: ExportRenderPipelineService,
     @Inject(CLOCK) private readonly clock: Clock,
+    // Optionnel — même discipline que ProcessGenerationUseCase/routingPolicyResolver : absent
+    // (ExportThemeResolverBridgeModule non importé), l'export continue sans thème plutôt que
+    // d'échouer (mission Sprint 8A.2 "aucune régression possible par omission").
+    @Optional() @Inject(THEME_RESOLVER) private readonly themeResolver?: ThemeResolver,
   ) {}
+
+  private async resolveTheme(input: { organizationId: string; clientAccountId: string; tenderId: string }): Promise<RunExportPipelineThemeInput | undefined> {
+    if (!this.themeResolver) return undefined;
+    try {
+      const resolved = await this.themeResolver.resolveActive(input);
+      return resolved
+        ? { versionId: resolved.versionId, sourceLevel: resolved.sourceLevel, accentColor: resolved.accentColor, fontFamily: resolved.fontFamily, logoStorageKey: resolved.logoStorageKey }
+        : undefined;
+    } catch (error) {
+      this.logger.warn(`Theme resolution failed (rendering will continue without a theme): ${error instanceof Error ? error.message : String(error)}`);
+      return undefined;
+    }
+  }
 
   async execute(command: PreviewExportCommand): Promise<ExportJobSummary> {
     const tender = await this.getTenderUseCase.execute({
@@ -70,6 +90,8 @@ export class PreviewExportUseCase {
       occurredAt,
     });
 
+    const theme = await this.resolveTheme({ organizationId: command.organizationId, clientAccountId: tender.clientAccountId, tenderId: command.tenderId });
+
     const { job, artifact } = await this.exportRenderPipeline.run({
       organizationId: command.organizationId,
       clientAccountId: tender.clientAccountId,
@@ -84,6 +106,7 @@ export class PreviewExportUseCase {
       resolvedContent,
       documentTitle: tender.title,
       coverPage: { buyerName: tender.buyerName, reference: tender.reference, tenderTitle: tender.title },
+      theme,
       createdBy: command.actorId,
       occurredAt,
     });

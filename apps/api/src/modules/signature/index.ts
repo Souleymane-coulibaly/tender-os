@@ -22,6 +22,6 @@ export type { ListSignatureTransactionsQuery } from "./application/use-cases/lis
 export type { SignatureTransactionSummary, SignatorySummary, SignatureRequirementSummary, SignatureArtifactSummary } from "./application/dtos";
 
 export { SignatureRequirementStatus } from "./domain/signature-requirement";
-export { SignatureTransactionStatus } from "./domain/signature-transaction-status";
+export { SignatureTransactionStatus, isTerminalSignatureTransactionStatus } from "./domain/signature-transaction-status";
 export { SIGNATURE_PROVIDER } from "./domain/signature-level";
 export type { SignatureProviderName } from "./domain/signature-level";

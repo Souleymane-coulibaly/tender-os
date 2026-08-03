@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
-import type { GenerationSummary, PromptTemplateSummary, PromptVersionSummary } from "../../lib/generation-types";
+import type { GenerationCapability, GenerationSummary, PromptTemplateSummary, PromptVersionSummary } from "../../lib/generation-types";
 
 export type FormActionState = { error?: string };
 
@@ -104,6 +104,14 @@ export async function archivePromptTemplateAction(templateId: string): Promise<{
   revalidatePath("/app/ai-configuration/prompts");
   revalidatePath(`/app/ai-configuration/prompts/${templateId}`);
   return {};
+}
+
+/** Mission Sprint 8A.2 (bugs #1/#4) — vérifie côté backend, pour chaque type de contenu, si un
+ *  prompt actif et une politique de routage active existent RÉELLEMENT avant de proposer le
+ *  bouton "Générer" : jamais une tentative à l'aveugle suivie d'un échec asynchrone opaque. */
+export async function fetchGenerationCapabilities(tenderId: string): Promise<GenerationCapability[]> {
+  const result = await appApiFetch<{ items: GenerationCapability[] }>(`/api/v1/tenders/${tenderId}/generation-capabilities`);
+  return result.items;
 }
 
 export async function launchGenerationAction(tenderId: string, taskType: string): Promise<{ error?: string; generationId?: string }> {

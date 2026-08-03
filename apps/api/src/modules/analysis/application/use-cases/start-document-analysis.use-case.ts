@@ -61,6 +61,7 @@ export class StartDocumentAnalysisUseCase {
       organizationId: command.organizationId,
       tenderId: command.tenderId,
       documentId: command.documentId,
+      actorId: command.actorId,
       actorRole: command.actorRole,
     });
 

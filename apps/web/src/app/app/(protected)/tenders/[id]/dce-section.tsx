@@ -1,14 +1,157 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState, type FormEvent } from "react";
 import {
   deleteDceDocumentAction,
+  fetchDceSectionData,
+  getDceImportJobAction,
   importDceFilesAction,
-  importDceZipAction,
   initDceAction,
+  startDceZipImportAction,
   type ImportActionState,
 } from "../../../dce-actions";
-import { formatDceFileSize, type DceDocumentSummary, type DceSummary } from "../../../../../lib/dce-types";
+import { getAnalysisJobAction, retryDocumentAnalysisAction, startDocumentAnalysisAction } from "../../../analysis-actions";
+import { ANALYSIS_STATUS_LABELS, type AnalysisJobSummary } from "../../../../../lib/analysis-types";
+import {
+  DCE_DOCUMENT_PROCESSING_STATUS_LABELS,
+  DCE_IMPORT_JOB_STATUS_LABELS,
+  formatDceFileSize,
+  isReadyForAnalysis,
+  isTerminalDceImportJobStatus,
+  type DceDocumentSummary,
+  type DceImportJobSummary,
+  type DceSummary,
+} from "../../../../../lib/dce-types";
+
+const NON_TERMINAL_ANALYSIS_STATUSES = ["PENDING", "QUEUED", "PROCESSING"];
+
+function analysisStatusBadgeClass(status: AnalysisJobSummary["status"]): string {
+  switch (status) {
+    case "SUCCEEDED":
+    case "PARTIALLY_SUCCEEDED":
+      return "bg-green-100 text-green-800";
+    case "FAILED":
+      return "bg-red-100 text-red-800";
+    case "CANCELLED":
+      return "bg-neutral-200 text-neutral-700";
+    default:
+      return "bg-blue-100 text-blue-800";
+  }
+}
+
+/**
+ * Contrôle "Analyser" par document (mission Sprint 8A.2 — StartDocumentAnalysisUseCase existait
+ * déjà côté backend mais n'avait jamais de déclencheur côté écran Tender). Désactivé tant que
+ * `processingStatus` n'indique pas une extraction terminée — jamais une autorité réelle, seulement
+ * un confort évitant un aller-retour API pour un état déjà connu côté client. Le statut affiché
+ * n'est connu que pour la session en cours (aucune lecture "dernière analyse de ce document"
+ * persistée côté API à ce jour) — un rechargement de page réinitialise ce contrôle à son état
+ * initial "Analyser", sans perdre l'analyse déjà lancée côté backend.
+ */
+function DocumentAnalysisControl({ tenderId, documentId, processingStatus, canAnalyze }: {
+  tenderId: string;
+  documentId: string;
+  processingStatus: DceDocumentSummary["processingStatus"];
+  canAnalyze: boolean;
+}) {
+  const [job, setJob] = useState<AnalysisJobSummary | undefined>();
+  const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const ready = isReadyForAnalysis(processingStatus);
+  const isRunning = job !== undefined && NON_TERMINAL_ANALYSIS_STATUSES.includes(job.status);
+
+  async function handleStart(): Promise<void> {
+    setIsPending(true);
+    const result = await startDocumentAnalysisAction(tenderId, documentId);
+    setIsPending(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setError(undefined);
+    setJob(result.job);
+  }
+
+  async function handleRetry(): Promise<void> {
+    if (!job) return;
+    setIsPending(true);
+    const result = await retryDocumentAnalysisAction(job.id);
+    setIsPending(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setError(undefined);
+    setJob(result.job);
+  }
+
+  async function handleRefresh(): Promise<void> {
+    if (!job) return;
+    setIsPending(true);
+    const result = await getAnalysisJobAction(job.id);
+    setIsPending(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setError(undefined);
+    setJob(result.job);
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-2">
+        <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
+          {DCE_DOCUMENT_PROCESSING_STATUS_LABELS[processingStatus]}
+        </span>
+        {job ? (
+          <span className={`rounded px-2 py-0.5 text-xs font-medium ${analysisStatusBadgeClass(job.status)}`}>
+            {ANALYSIS_STATUS_LABELS[job.status]}
+          </span>
+        ) : null}
+      </div>
+      {canAnalyze ? (
+        <div className="flex items-center gap-2">
+          {job ? (
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={handleRefresh}
+              className="text-xs text-neutral-700 hover:underline disabled:opacity-50"
+            >
+              Actualiser
+            </button>
+          ) : null}
+          {!job || (!isRunning && job.status !== "FAILED") ? (
+            <button
+              type="button"
+              disabled={isPending || !ready || isRunning}
+              onClick={handleStart}
+              className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50"
+            >
+              Analyser
+            </button>
+          ) : null}
+          {job?.status === "FAILED" ? (
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={handleRetry}
+              className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50"
+            >
+              Relancer
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-xs text-red-600">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 const INITIAL_IMPORT_STATE: ImportActionState = {};
 
@@ -60,7 +203,7 @@ function DeleteDocumentButton({ tenderId, documentId }: { tenderId: string; docu
   );
 }
 
-function InitDceButton({ tenderId }: { tenderId: string }) {
+function InitDceButton({ tenderId, onSettled }: { tenderId: string; onSettled: () => void }) {
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -74,6 +217,12 @@ function InitDceButton({ tenderId }: { tenderId: string }) {
           const result = await initDceAction(tenderId);
           setIsPending(false);
           setError(result.error);
+          // Mission Sprint 8A.2 (audit Cockpit Bid Manager, découvert via le parcours Playwright)
+          // — `initDceAction` ne fait que `revalidatePath` (cache serveur pour la PROCHAINE
+          // navigation) : sans ce rafraîchissement explicite, `liveDce` restait `null` côté client
+          // après un succès, l'écran affichant encore "Aucun DCE initialisé" bien que le DCE
+          // existe déjà réellement en base — même motif que `ZipImportControl.onSettled`.
+          if (!result.error) onSettled();
         }}
         className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
       >
@@ -85,6 +234,90 @@ function InitDceButton({ tenderId }: { tenderId: string }) {
         </p>
       ) : null}
     </div>
+  );
+}
+
+const IMPORT_JOB_POLL_INTERVAL_MS = 700;
+
+/**
+ * Import ZIP asynchrone (mission Sprint 8A.2, correction bug #3 "import ZIP lourd échoue ou
+ * bloque") — la soumission répond immédiatement avec un job (CREATED), sondé ensuite côté client
+ * jusqu'à un statut terminal, jamais une attente bloquante d'une requête HTTP unique. `onSettled`
+ * rafraîchit la liste des documents une fois le job terminal (nouveaux documents importés).
+ */
+function ZipImportControl({ tenderId, onSettled }: { tenderId: string; onSettled: () => void }) {
+  const [job, setJob] = useState<DceImportJobSummary | undefined>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const formRef = useRef<HTMLFormElement>(null);
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  function schedulePoll(jobId: string): void {
+    pollTimer.current = setTimeout(async () => {
+      const result = await getDceImportJobAction(tenderId, jobId);
+      if (result.error || !result.job) {
+        setError(result.error ?? "Impossible de suivre l'import.");
+        return;
+      }
+      setJob(result.job);
+      if (isTerminalDceImportJobStatus(result.job.status)) {
+        onSettled();
+      } else {
+        schedulePoll(jobId);
+      }
+    }, IMPORT_JOB_POLL_INTERVAL_MS);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (pollTimer.current) clearTimeout(pollTimer.current);
+    setError(undefined);
+    setJob(undefined);
+    setIsSubmitting(true);
+    const formData = new FormData(event.currentTarget);
+    const result = await startDceZipImportAction(tenderId, formData);
+    setIsSubmitting(false);
+    if (result.error || !result.job) {
+      setError(result.error ?? "Impossible de démarrer l'import.");
+      return;
+    }
+    setJob(result.job);
+    formRef.current?.reset();
+    schedulePoll(result.job.id);
+  }
+
+  const isRunning = job !== undefined && !isTerminalDceImportJobStatus(job.status);
+
+  return (
+    <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col items-start gap-2">
+      <div className="flex items-end gap-2">
+        <input name="archive" type="file" accept=".zip" className="text-xs" />
+        <button
+          type="submit"
+          disabled={isSubmitting || isRunning}
+          className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
+        >
+          Importer une archive ZIP
+        </button>
+      </div>
+      {job ? (
+        <p className="text-xs text-neutral-600">
+          {DCE_IMPORT_JOB_STATUS_LABELS[job.status]}
+          {job.totalFiles !== undefined ? ` — ${job.totalFiles} fichier(s)` : ""}
+        </p>
+      ) : null}
+      {job?.status === "FAILED" && job.errorMessage ? (
+        <p role="alert" className="text-xs text-red-600">
+          {job.errorMessage}
+        </p>
+      ) : null}
+      {job?.result ? <ImportResultSummary result={job.result} /> : null}
+      {error ? (
+        <p role="alert" className="text-xs text-red-600">
+          {error}
+        </p>
+      ) : null}
+    </form>
   );
 }
 
@@ -101,12 +334,14 @@ export function DceSection({
   documents,
   canManage,
   canDelete,
+  canAnalyze,
 }: {
   tenderId: string;
   dce: DceSummary | null;
   documents: DceDocumentSummary[];
   canManage: boolean;
   canDelete: boolean;
+  canAnalyze: boolean;
 }) {
   const importFilesBoundAction = importDceFilesAction.bind(null, tenderId);
   const [importFilesState, importFilesFormAction, isImportingFiles] = useActionState(
@@ -114,28 +349,49 @@ export function DceSection({
     INITIAL_IMPORT_STATE,
   );
 
-  const importZipBoundAction = importDceZipAction.bind(null, tenderId);
-  const [importZipState, importZipFormAction, isImportingZip] = useActionState(
-    importZipBoundAction,
-    INITIAL_IMPORT_STATE,
-  );
+  const [liveDce, setLiveDce] = useState(dce);
+  const [liveDocuments, setLiveDocuments] = useState(documents);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  async function handleRefresh(): Promise<void> {
+    setIsRefreshing(true);
+    try {
+      const fresh = await fetchDceSectionData(tenderId);
+      setLiveDce(fresh.dce);
+      setLiveDocuments(fresh.documents);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold text-neutral-700">DCE</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-neutral-700">DCE</h2>
+        {liveDce ? (
+          <button
+            type="button"
+            disabled={isRefreshing}
+            onClick={handleRefresh}
+            className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50"
+          >
+            Actualiser
+          </button>
+        ) : null}
+      </div>
 
-      {!dce ? (
+      {!liveDce ? (
         <>
           <p className="text-sm text-neutral-500">Aucun DCE initialise pour cet appel d&apos;offres.</p>
-          {canManage ? <InitDceButton tenderId={tenderId} /> : null}
+          {canManage ? <InitDceButton tenderId={tenderId} onSettled={handleRefresh} /> : null}
         </>
       ) : (
         <>
-          {documents.length === 0 ? (
+          {liveDocuments.length === 0 ? (
             <p className="text-sm text-neutral-500">Aucun document du DCE.</p>
           ) : (
             <ul>
-              {documents.map((doc) => (
+              {liveDocuments.map((doc) => (
                 <li
                   key={doc.documentId}
                   className="flex items-center justify-between gap-2 border-b border-neutral-100 py-2 text-sm"
@@ -145,6 +401,12 @@ export function DceSection({
                     <span className="ml-2 text-xs text-neutral-500">{formatDceFileSize(doc.sizeBytes)}</span>
                   </div>
                   <div className="flex items-center gap-3">
+                    <DocumentAnalysisControl
+                      tenderId={tenderId}
+                      documentId={doc.documentId}
+                      processingStatus={doc.processingStatus}
+                      canAnalyze={canAnalyze}
+                    />
                     <a
                       href={`/app/tenders/${tenderId}/dce-documents/${doc.documentId}/download`}
                       className="text-xs text-neutral-700 hover:underline"
@@ -179,24 +441,7 @@ export function DceSection({
                 <ImportResultSummary result={importFilesState.result} />
               </form>
 
-              <form action={importZipFormAction} className="flex flex-col items-start gap-2">
-                <div className="flex items-end gap-2">
-                  <input name="archive" type="file" accept=".zip" className="text-xs" />
-                  <button
-                    type="submit"
-                    disabled={isImportingZip}
-                    className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
-                  >
-                    Importer une archive ZIP
-                  </button>
-                </div>
-                {importZipState.error ? (
-                  <p role="alert" className="text-xs text-red-600">
-                    {importZipState.error}
-                  </p>
-                ) : null}
-                <ImportResultSummary result={importZipState.result} />
-              </form>
+              <ZipImportControl tenderId={tenderId} onSettled={handleRefresh} />
             </>
           ) : null}
         </>

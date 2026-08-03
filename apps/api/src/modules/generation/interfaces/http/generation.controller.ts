@@ -6,6 +6,7 @@ import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe
 import { CancelGenerationUseCase } from "../../application/use-cases/cancel-generation.use-case";
 import { CompareGenerationVersionsUseCase } from "../../application/use-cases/compare-generation-versions.use-case";
 import { EditGenerationUseCase } from "../../application/use-cases/edit-generation.use-case";
+import { GetGenerationCapabilitiesUseCase } from "../../application/use-cases/get-generation-capabilities.use-case";
 import { GetGenerationUseCase } from "../../application/use-cases/get-generation.use-case";
 import { LaunchGenerationUseCase } from "../../application/use-cases/launch-generation.use-case";
 import { ListGenerationVersionsUseCase } from "../../application/use-cases/list-generation-versions.use-case";
@@ -15,7 +16,7 @@ import { RejectGenerationUseCase } from "../../application/use-cases/reject-gene
 import { RetryGenerationUseCase } from "../../application/use-cases/retry-generation.use-case";
 import { ValidateGenerationUseCase } from "../../application/use-cases/validate-generation.use-case";
 import { GenerationErrorFilter } from "./generation-error.filter";
-import { presentGeneration } from "./presenters";
+import { presentGeneration, presentGenerationCapability } from "./presenters";
 import {
   CompareGenerationsQuerySchema,
   EditGenerationBodySchema,
@@ -46,6 +47,7 @@ export class GenerationController {
     private readonly validateGenerationUseCase: ValidateGenerationUseCase,
     private readonly rejectGenerationUseCase: RejectGenerationUseCase,
     private readonly getGenerationUseCase: GetGenerationUseCase,
+    private readonly getGenerationCapabilitiesUseCase: GetGenerationCapabilitiesUseCase,
     private readonly listGenerationVersionsUseCase: ListGenerationVersionsUseCase,
     private readonly listTenderGenerationsUseCase: ListTenderGenerationsUseCase,
     private readonly compareGenerationVersionsUseCase: CompareGenerationVersionsUseCase,
@@ -89,6 +91,21 @@ export class GenerationController {
       offset: query.offset,
     });
     return { items: result.items.map(presentGeneration), total: result.total };
+  }
+
+  @Get("tenders/:tenderId/generation-capabilities")
+  async capabilities(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    const result = await this.getGenerationCapabilitiesUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      tenderId,
+    });
+    return { items: result.map(presentGenerationCapability) };
   }
 
   @Get("generations/compare")

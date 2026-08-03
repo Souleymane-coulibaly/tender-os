@@ -1,4 +1,4 @@
-import type { DceDocumentSummary, DceSummary } from "../../application/dtos";
+import type { DceDocumentSummary, DceImportJobSummary, DceSummary } from "../../application/dtos";
 import type { ImportDceFilesResult } from "../../application/use-cases/import-dce-files.use-case";
 
 // Passe-plat volontaire : DceSummary/DceDocumentSummary n'exposent déjà jamais storageKey ni
@@ -13,4 +13,11 @@ export function presentDceDocument(document: DceDocumentSummary): DceDocumentSum
 
 export function presentImportResult(result: ImportDceFilesResult) {
   return { accepted: result.accepted.map(presentDceDocument), rejected: result.rejected };
+}
+
+export function presentDceImportJob(job: DceImportJobSummary): DceImportJobSummary {
+  return {
+    ...job,
+    result: job.result ? { accepted: job.result.accepted.map(presentDceDocument), rejected: job.result.rejected } : undefined,
+  };
 }

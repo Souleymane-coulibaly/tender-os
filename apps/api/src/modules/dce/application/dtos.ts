@@ -1,4 +1,6 @@
+import type { DceImportJob } from "../domain/dce-import-job.aggregate";
 import type { Dce } from "../domain/dce.aggregate";
+import type { ImportDceFilesResult } from "./use-cases/import-dce-files.use-case";
 
 export type DceSummary = {
   id: string;
@@ -28,6 +30,44 @@ export function toDceSummary(dce: Dce): DceSummary {
  * documents + document_versions), jamais en rappelant les use cases de Documents un par un
  * (évite le N+1 — voir décision d'architecture "lecture hybride" du rapport final).
  */
+export type DceImportJobSummary = {
+  id: string;
+  organizationId: string;
+  tenderId: string;
+  status: string;
+  originalFilename: string;
+  sizeBytes: number;
+  totalFiles?: number | undefined;
+  acceptedCount?: number | undefined;
+  rejectedCount?: number | undefined;
+  result?: ImportDceFilesResult | undefined;
+  errorMessage?: string | undefined;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string | undefined;
+};
+
+export function toDceImportJobSummary(job: DceImportJob): DceImportJobSummary {
+  return {
+    id: job.id,
+    organizationId: job.organizationId,
+    tenderId: job.tenderId,
+    status: job.status,
+    originalFilename: job.originalFilename,
+    sizeBytes: job.sizeBytes,
+    totalFiles: job.totalFiles,
+    acceptedCount: job.acceptedCount,
+    rejectedCount: job.rejectedCount,
+    result: job.result,
+    errorMessage: job.errorMessage,
+    createdByUserId: job.createdByUserId,
+    createdAt: job.createdAt.toISOString(),
+    updatedAt: job.updatedAt.toISOString(),
+    completedAt: job.completedAt?.toISOString(),
+  };
+}
+
 export type DceDocumentSummary = {
   dceId: string;
   documentId: string;

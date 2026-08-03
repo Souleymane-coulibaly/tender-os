@@ -9,7 +9,7 @@ import type {
 } from "../application/ports/spreadsheet-extractor";
 import type { StoredDocumentReference } from "../application/ports/stored-document-reference";
 import { EXTRACTION_CONFIG, type ExtractionConfig } from "./extraction-config";
-import { readStreamToBuffer } from "./read-stream-to-buffer";
+import { readStreamToBuffer } from "../../../shared-kernel/read-stream-to-buffer";
 
 /**
  * Extraction XLSX/XLS via `xlsx` (SheetJS) — mission Sprint 3 §11. `sheet_to_json` avec

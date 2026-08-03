@@ -3,7 +3,7 @@ import { InvalidPDFException, PasswordException, PDFParse } from "pdf-parse";
 import { STORAGE_PROVIDER, type StorageProvider } from "../../documents";
 import type { PdfInspectionResult, PdfInspector } from "../application/ports/pdf-inspector";
 import type { StoredDocumentReference } from "../application/ports/stored-document-reference";
-import { readStreamToBuffer } from "./read-stream-to-buffer";
+import { readStreamToBuffer } from "../../../shared-kernel/read-stream-to-buffer";
 
 /**
  * Inspection réelle du PDF (mission Sprint 3 §8) via `pdf-parse` — jamais une décision sur la

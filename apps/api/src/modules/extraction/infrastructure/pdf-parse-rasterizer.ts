@@ -3,7 +3,7 @@ import { PDFParse } from "pdf-parse";
 import { STORAGE_PROVIDER, type StorageProvider } from "../../documents";
 import type { PdfRasterizer, RasterizedPage } from "../application/ports/pdf-rasterizer";
 import type { StoredDocumentReference } from "../application/ports/stored-document-reference";
-import { readStreamToBuffer } from "./read-stream-to-buffer";
+import { readStreamToBuffer } from "../../../shared-kernel/read-stream-to-buffer";
 
 /**
  * Rasterisation PDF → PNG via `pdf-parse` (mission Sprint 3 §9) — nécessaire uniquement pour

@@ -10,7 +10,7 @@ export type ZipExtractedEntry = Readonly<{
   /** Nom d'entrée déjà validé structurellement (ni chemin absolu, ni traversal, ni lien
    *  symbolique) — reste un nom brut d'archive, PAS encore passé par `sanitizeFilename` ni par
    *  le contrôle de format DCE : ces contrôles, propres au domaine DCE, restent la responsabilité
-   *  de l'appelant (ImportDceZipUseCase), pas de ce port purement structurel/sécurité. */
+   *  de l'appelant (ProcessDceZipImportUseCase), pas de ce port purement structurel/sécurité. */
   entryName: string;
   buffer: Buffer;
 }>;

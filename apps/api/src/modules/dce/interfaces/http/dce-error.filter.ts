@@ -13,6 +13,14 @@ const STATUS_BY_CODE: Record<string, number> = {
   DOCUMENT_NOT_FOUND: HttpStatus.NOT_FOUND,
   DOCUMENT_VERSION_NOT_FOUND: HttpStatus.NOT_FOUND,
   DOCUMENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
+  // Mission Sprint 8A.2 — GetDceImportJobUseCase est le premier chemin DCE à atteindre
+  // AssertClientAccessUseCase (via GetTenderUseCase) pour un acteur restreint : sans ces deux
+  // entrées (déjà présentes dans TOUS les autres filtres du projet), ces codes retombaient sur
+  // 500, jamais observé avant faute d'un chemin de lecture DCE les exerçant. CLIENT_ACCOUNT_NOT_FOUND
+  // reste un 404 (jamais 403) — même logique anti-énumération que partout ailleurs : un acteur sans
+  // accès à un client ne doit jamais pouvoir distinguer "n'existe pas" de "accès refusé".
+  CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,
+  CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
 
   DCE_NOT_FOUND: HttpStatus.NOT_FOUND,
   DCE_ALREADY_EXISTS: HttpStatus.CONFLICT,

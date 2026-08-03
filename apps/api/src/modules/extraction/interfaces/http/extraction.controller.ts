@@ -46,6 +46,7 @@ export class ExtractionController {
   @Get()
   @HttpCode(HttpStatus.OK)
   async get(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
@@ -54,6 +55,7 @@ export class ExtractionController {
       organizationId: membership.organizationId,
       tenderId,
       documentId,
+      actorId: actor.userId,
       actorRole: membership.role,
     });
     return presentDocumentExtraction(result);

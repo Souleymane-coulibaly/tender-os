@@ -34,8 +34,15 @@ const ADMIN_PERMISSIONS: readonly DcePermission[] = Object.values(DcePermission)
  * Mapping (parité avec ROLE_DOCUMENT_PERMISSIONS) :
  * Admin = ORGANIZATION_ADMIN, BID_MANAGER ; Contributor = CONTRIBUTOR ;
  * Viewer = REVIEWER, EXECUTIVE, EXTERNAL_CONSULTANT, READ_ONLY.
+ *
+ * OWNER (audit Cockpit Bid Manager, Sprint 8A.2) — superset strict de ORGANIZATION_ADMIN, même
+ * correctif déjà appliqué à Documents (Sprint 5) et Analysis (Sprint 4.1, audit Codex P1-01) mais
+ * jamais porté ici : sans cette entrée, un propriétaire d'organisation ne pouvait lire ni gérer
+ * AUCUN DCE (`DCE_PERMISSION_MISSING` sur `GetDceUseCase`/`ListDceDocumentsUseCase`/etc., découvert
+ * en écrivant le test d'intégration HTTP du module `cockpit`).
  */
 export const ROLE_DCE_PERMISSIONS: Record<string, readonly DcePermission[]> = {
+  OWNER: ADMIN_PERMISSIONS,
   ORGANIZATION_ADMIN: ADMIN_PERMISSIONS,
   BID_MANAGER: ADMIN_PERMISSIONS,
   CONTRIBUTOR: CONTRIBUTOR_PERMISSIONS,

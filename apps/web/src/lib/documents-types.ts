@@ -86,7 +86,10 @@ export const DOCUMENT_CATEGORY_SUGGESTIONS = [
 
 /** Miroir cote UI de ROLE_DOCUMENT_PERMISSIONS (document-permission.ts) — sert uniquement a
  *  griser/masquer une action ; la seule autorite reelle reste la revalidation backend. */
-const ADMIN_TIER = ["ORGANIZATION_ADMIN", "BID_MANAGER"];
+// Mission Sprint 8A.2 (audit Cockpit Bid Manager) — OWNER manquait ici (miroir jamais mis à jour
+// après le correctif backend OWNER de document-permission.ts), rendant l'import/édition de
+// documents invisibles pour un propriétaire d'organisation bien qu'autorisé côté API.
+const ADMIN_TIER = ["OWNER", "ORGANIZATION_ADMIN", "BID_MANAGER"];
 const CONTRIBUTOR_TIER = ["CONTRIBUTOR"];
 
 export function canUploadOrEditDocument(role: string | undefined): boolean {

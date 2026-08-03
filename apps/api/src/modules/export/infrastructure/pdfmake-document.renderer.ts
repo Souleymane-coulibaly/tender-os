@@ -6,6 +6,14 @@ import type { PdfRendererPort } from "../application/ports/pdf-renderer";
 import type { RenderableBlock, RenderableDocument, RichTextRun } from "../application/services/renderable-document";
 import { UnreliableRenderError } from "../domain/errors";
 
+/** Mission Sprint 8A.2 (correction bugs #7/#8) — `fontFamily` du thème n'est délibérément PAS
+ *  appliqué ici : `pdfmake` exige une police déjà EMBARQUÉE (fichier réel enregistré via
+ *  `setFonts`), jamais un simple nom résolu à l'ouverture comme Word le fait pour `docx`.
+ *  `DocumentThemeConfig` ne porte qu'un nom de police, jamais un fichier — charger dynamiquement
+ *  un fichier de police arbitraire irait à l'encontre de `setLocalAccessPolicy` (deny-all sauf les
+ *  4 variantes Helvetica standard, mission §71 "aucun chemin arbitraire") : limite assumée et
+ *  documentée, seuls `accentColor` et `logo` s'appliquent au PDF (voir rapport final). */
+
 /**
  * Mission Sprint 8A §13/§15/§24 — rendu PDF via `pdfmake` (construit sur `pdfkit`, pure JS, sans
  * navigateur headless). Sécurité : aucune ressource externe/locale n'est jamais chargée
@@ -62,6 +70,17 @@ export class PdfmakeDocumentRenderer implements PdfRendererPort {
       content.push({ text: document.watermarkText, style: "watermark", alignment: "center" });
     }
 
+    if (document.theme?.logo) {
+      // Donnée inline (base64), jamais un chemin/URL résolu par pdfmake lui-même — ne traverse
+      // donc jamais `setUrlAccessPolicy`/`setLocalAccessPolicy` (mission §71).
+      content.push({
+        image: `data:${document.theme.logo.mimeType};base64,${document.theme.logo.buffer.toString("base64")}`,
+        width: 120,
+        alignment: "center",
+        margin: [0, 0, 0, 12],
+      });
+    }
+
     if (document.coverPage) {
       const cover = document.coverPage;
       if (cover.showTitle) content.push({ text: document.documentTitle, style: "title" });
@@ -85,13 +104,17 @@ export class PdfmakeDocumentRenderer implements PdfRendererPort {
       }
     }
 
+    // Mission Sprint 8A.2 (correction bugs #7/#8) — couleur d'accent du thème appliquée aux titres
+    // (jamais au watermark/notice, qui restent des couleurs sémantiques fixes) ; absente = mêmes
+    // styles Sprint 8A inchangés.
+    const accentColor = document.theme?.accentColor;
     const docDefinition: PdfDocDefinition = {
       content,
       styles: {
-        title: { fontSize: 22, bold: true, margin: [0, 0, 0, 12] },
-        h1: { fontSize: 16, bold: true, margin: [0, 12, 0, 6] },
-        h2: { fontSize: 13, bold: true, margin: [0, 10, 0, 5] },
-        h3: { fontSize: 11, bold: true, margin: [0, 8, 0, 4] },
+        title: { fontSize: 22, bold: true, margin: [0, 0, 0, 12], ...(accentColor ? { color: accentColor } : {}) },
+        h1: { fontSize: 16, bold: true, margin: [0, 12, 0, 6], ...(accentColor ? { color: accentColor } : {}) },
+        h2: { fontSize: 13, bold: true, margin: [0, 10, 0, 5], ...(accentColor ? { color: accentColor } : {}) },
+        h3: { fontSize: 11, bold: true, margin: [0, 8, 0, 4], ...(accentColor ? { color: accentColor } : {}) },
         notice: { italics: true, color: "#666666" },
         watermark: { fontSize: 40, bold: true, color: "#C00000" },
       },

@@ -1,10 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { DCE_DOCUMENT_REPOSITORY, DCE_REPOSITORY, type DceDocumentRepository, type DceRepository } from "../../../dce";
 import { GetTenderUseCase } from "../../../tenders";
-import { DocumentExtraction } from "../../domain/document-extraction.aggregate";
 import { DocumentExtractionNotFoundError } from "../../domain/extraction-errors";
 import { ExtractionPermission } from "../../domain/extraction-permission";
 import { assertHasExtractionPermission } from "../policies/extraction-authorization.policy";
+import { resolveOrCreateDocumentExtraction } from "../services/resolve-or-create-document-extraction";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { DOCUMENT_EXTRACTION_REPOSITORY, type DocumentExtractionRepository } from "../ports/document-extraction.repository";
 import { EXTRACTION_DISPATCHER, type ExtractionDispatcher } from "../ports/extraction-dispatcher";
@@ -47,6 +47,7 @@ export class StartDocumentExtractionUseCase {
     await this.getTenderUseCase.execute({
       organizationId: command.organizationId,
       tenderId: command.tenderId,
+      actorId: command.actorId,
       actorRole: command.actorRole,
     });
 
@@ -67,25 +68,12 @@ export class StartDocumentExtractionUseCase {
       throw new DocumentExtractionNotFoundError();
     }
 
-    const extraction = await this.extractionRepository.runExclusiveShort({
+    const extraction = await resolveOrCreateDocumentExtraction({
+      extractionRepository: this.extractionRepository,
+      organizationId: command.organizationId,
+      dceId: dce.id.value,
       documentId: command.documentId,
-      fn: async (context) => {
-        const existing = await context.findByDocumentId({
-          organizationId: command.organizationId,
-          documentId: command.documentId,
-        });
-        if (existing) {
-          return existing;
-        }
-        const created = DocumentExtraction.create({
-          documentId: command.documentId,
-          dceId: dce.id.value,
-          organizationId: command.organizationId,
-          occurredAt: this.clock.now(),
-        });
-        await context.save(created);
-        return created;
-      },
+      occurredAt: this.clock.now(),
     });
 
     await this.auditLogWriter.record({

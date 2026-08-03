@@ -36,6 +36,8 @@ export type PersistedExportJob = {
   status: string;
   version: number;
   basedOnExportJobId: string | null;
+  themeVersionId: string | null;
+  themeSourceLevel: string | null;
   createdBy: string;
   createdAt: Date;
   completedAt: Date | null;
@@ -118,6 +120,8 @@ export function toDomainJob(record: PersistedExportJob): ExportJob {
     version: record.version,
     basedOnExportJobId: record.basedOnExportJobId ?? undefined,
     sections: record.sections.map(toDomainSection),
+    themeVersionId: record.themeVersionId ?? undefined,
+    themeSourceLevel: record.themeSourceLevel ?? undefined,
     createdBy: record.createdBy,
     createdAt: record.createdAt,
     completedAt: record.completedAt ?? undefined,

@@ -90,4 +90,37 @@ describe("ValidationSection", () => {
     const approveButton = screen.getByRole("button", { name: "Approuver la version finale" });
     expect(approveButton).toBeDisabled();
   });
+
+  describe("mission Sprint 8A.2 (bug #5) — never stuck offering re-approval once signature has progressed", () => {
+    it("shows Rouvrir (never Approuver again) once readiness has progressed past APPROVED to a signature stage", () => {
+      render(
+        <ValidationSection
+          tenderId="tender-1"
+          readiness={readiness({ status: "PARTIALLY_SIGNED", activeApprovalId: "approval-1" })}
+          run={run()}
+          completedPreviews={[]}
+          actorRole="OWNER"
+        />,
+      );
+
+      expect(screen.getByRole("button", { name: "Rouvrir" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Approuver la version finale" })).not.toBeInTheDocument();
+      expect(screen.getByText("Partiellement signé")).toBeInTheDocument();
+    });
+
+    it("shows Rouvrir once ready for submission (all mandatory signatures verified)", () => {
+      render(
+        <ValidationSection
+          tenderId="tender-1"
+          readiness={readiness({ status: "READY_FOR_SUBMISSION", activeApprovalId: "approval-1" })}
+          run={run()}
+          completedPreviews={[]}
+          actorRole="OWNER"
+        />,
+      );
+
+      expect(screen.getByRole("button", { name: "Rouvrir" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Approuver la version finale" })).not.toBeInTheDocument();
+    });
+  });
 });

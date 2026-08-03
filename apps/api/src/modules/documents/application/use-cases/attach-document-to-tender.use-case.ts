@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import { GetTenderUseCase } from "../../../tenders";
@@ -13,6 +13,10 @@ import {
   type DocumentTenderAssociationRepository,
 } from "../ports/document-tender-association.repository";
 import { DOCUMENT_REPOSITORY, type DocumentRepository } from "../ports/document.repository";
+import {
+  DOCUMENT_EXTRACTION_TRIGGER,
+  type DocumentExtractionTrigger,
+} from "../ports/document-extraction-trigger";
 
 export type AttachDocumentToTenderCommand = Readonly<{
   organizationId: string;
@@ -31,6 +35,8 @@ export type AttachDocumentToTenderCommand = Readonly<{
  */
 @Injectable()
 export class AttachDocumentToTenderUseCase {
+  private readonly logger = new Logger(AttachDocumentToTenderUseCase.name);
+
   constructor(
     @Inject(DOCUMENT_REPOSITORY) private readonly documentRepository: DocumentRepository,
     @Inject(DOCUMENT_TENDER_ASSOCIATION_REPOSITORY)
@@ -38,6 +44,9 @@ export class AttachDocumentToTenderUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly getTenderUseCase: GetTenderUseCase,
+    @Optional()
+    @Inject(DOCUMENT_EXTRACTION_TRIGGER)
+    private readonly extractionTrigger?: DocumentExtractionTrigger,
   ) {}
 
   async execute(command: AttachDocumentToTenderCommand): Promise<DocumentTenderAssociationSummary> {
@@ -86,6 +95,24 @@ export class AttachDocumentToTenderUseCase {
       requestId: command.requestId,
       metadata: { tenderId: command.tenderId },
     });
+
+    // Mission Sprint 8A.2 — un document attaché au Tender doit devenir analysable exactement
+    // comme un document importé via DCE (best-effort : un échec du déclenchement système ne
+    // remet jamais en cause l'attachement déjà acquis).
+    try {
+      await this.extractionTrigger?.ensureExtractionTriggered({
+        organizationId: command.organizationId,
+        tenderId: command.tenderId,
+        documentId: command.documentId,
+        actorId: command.actorId,
+        requestId: command.requestId,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Auto-extraction trigger failed for document ${command.documentId} after a successful tender attachment: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
 
     return toDocumentTenderAssociationSummary(association);
   }

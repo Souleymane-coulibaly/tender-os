@@ -5,6 +5,7 @@ import { fetchAnalysisSectionData } from "../../../analysis-actions";
 import { canTriggerAnalysis, type AnalysisSectionData } from "../../../../../lib/analysis-types";
 import { fetchDceSectionData } from "../../../dce-actions";
 import { canDeleteDceDocument, canImportOrReplaceDceDocument, type DceDocumentSummary, type DceSummary } from "../../../../../lib/dce-types";
+import type { TenderCockpit } from "../../../../../lib/cockpit-types";
 import { canUploadOrEditDocument, type DocumentSummary } from "../../../../../lib/documents-types";
 import {
   TENDER_STATUS_LABELS,
@@ -27,6 +28,7 @@ import { AlertsSection } from "./alerts-section";
 import { AnalysisSection } from "./analysis-section";
 import { ArchiveButton } from "./archive-button";
 import { ChecklistSection } from "./checklist-section";
+import { CockpitSection } from "./cockpit-section";
 import { CriteriaSection } from "./criteria-section";
 import { DceSection } from "./dce-section";
 import { DocumentsSection } from "./documents-section";
@@ -69,9 +71,10 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   let dceSection: { dce: DceSummary | null; documents: DceDocumentSummary[] };
   let analysisData: AnalysisSectionData;
   let role: string | undefined;
+  let cockpit: TenderCockpit;
 
   try {
-    [tender, lots, checklistItems, criteria, requestedDocuments, milestones, risks, alerts, readiness, history, documents, dceSection, analysisData, role] =
+    [tender, lots, checklistItems, criteria, requestedDocuments, milestones, risks, alerts, readiness, history, documents, dceSection, analysisData, role, cockpit] =
       await Promise.all([
         appApiFetch<Tender>(`/api/v1/tenders/${id}`),
         appApiFetch<TenderLot[]>(`/api/v1/tenders/${id}/lots`),
@@ -87,6 +90,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         fetchDceSectionData(id),
         fetchAnalysisSectionData(id),
         getCurrentMembershipRole(),
+        appApiFetch<TenderCockpit>(`/api/v1/tenders/${id}/cockpit`),
       ]);
   } catch (error) {
     return <ApiErrorState error={error} />;
@@ -135,6 +139,8 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         </Link>
       </nav>
 
+      <CockpitSection tenderId={tender.id} cockpit={cockpit} />
+
       {tender.status !== "ARCHIVED" ? <StatusChangeForm tenderId={tender.id} status={tender.status} /> : null}
 
       {canEditTenderDetails(role) ? (
@@ -178,6 +184,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
           documents={dceSection.documents}
           canManage={canImportOrReplaceDceDocument(role)}
           canDelete={canDeleteDceDocument(role)}
+          canAnalyze={canTriggerAnalysis(role)}
         />
         <MilestonesSection tenderId={tender.id} milestones={milestones} />
         <RisksSection tenderId={tender.id} risks={risks} />

@@ -41,6 +41,9 @@ describe("Extraction — real HTTP + PostgreSQL (NestJS)", () => {
   let tokenAdminA: string;
   let tokenReadOnlyA: string;
   let tokenAdminB: string;
+  let adminAUserId: string;
+  let readOnlyAUserId: string;
+  let clientAccountAId: string;
 
   let tenderAId: string;
   let tenderBId: string;
@@ -167,6 +170,8 @@ describe("Extraction — real HTTP + PostgreSQL (NestJS)", () => {
     tokenAdminA = adminA.token;
     tokenReadOnlyA = readOnlyA.token;
     tokenAdminB = adminB.token;
+    adminAUserId = adminA.userId;
+    readOnlyAUserId = readOnlyA.userId;
 
     await addMembership({ organizationId: orgAId, userId: adminA.userId, role: OrganizationRole.OrganizationAdmin });
     await addMembership({ organizationId: orgAId, userId: readOnlyA.userId, role: OrganizationRole.ReadOnly });
@@ -182,6 +187,7 @@ describe("Extraction — real HTTP + PostgreSQL (NestJS)", () => {
         createdBy: adminA.userId,
       },
     });
+    clientAccountAId = clientAccountA.id;
     const clientAccountB = await prisma.clientAccount.create({
       data: {
         id: randomUUID(),
@@ -216,6 +222,7 @@ describe("Extraction — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.document.updateMany({ where: { organizationId: { in: [orgAId, orgBId] } }, data: { currentVersionId: null } });
     await prisma.document.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.tender.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.clientAssignment.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: [orgAId, orgBId] } } } });
@@ -250,7 +257,7 @@ describe("Extraction — real HTTP + PostgreSQL (NestJS)", () => {
     expect(chunks.length).toBe(final.chunkCount);
   }, 25000);
 
-  it("READ_ONLY cannot trigger an extraction (403) but can read its status (200)", async () => {
+  it("READ_ONLY cannot trigger an extraction (403)", async () => {
     const documentId = await importPdf({
       tenderId: tenderAId,
       token: tokenAdminA,
@@ -264,9 +271,42 @@ describe("Extraction — real HTTP + PostgreSQL (NestJS)", () => {
       headers: authHeaders(tokenReadOnlyA, orgAId),
     });
     expect(forbidden.status).toBe(403);
+  }, 25000);
 
+  // Mission Sprint 8A.2 (audit isolation inter-client) — régression : avant ce correctif, un
+  // READ_ONLY SANS affectation client pouvait tout de même lire l'extraction de N'IMPORTE QUEL
+  // Tender de l'organisation (aucun `GetTenderUseCase` n'était jamais appelé avec `actorId`, donc
+  // `AssertClientAccessUseCase` n'était jamais déclenché). `readOnlyA` n'a encore ici aucune
+  // `ClientAssignment` — cette lecture doit être refusée, jamais un contournement silencieux.
+  it("READ_ONLY without any client assignment cannot read an extraction status either (404, never a silent bypass)", async () => {
+    const documentId = await importPdf({
+      tenderId: tenderAId,
+      token: tokenAdminA,
+      organizationId: orgAId,
+      buffer: buildMinimalPdf([`Unassigned readonly guard test ${randomUUID()}.`]),
+      filename: "unassigned-guard.pdf",
+    });
     await fetch(extractionUrl(tenderAId, documentId), { method: "POST", headers: authHeaders(tokenAdminA, orgAId) });
     await waitForTerminalStatus(tenderAId, documentId, tokenAdminA, orgAId);
+
+    const { status } = await getExtraction(tenderAId, documentId, tokenReadOnlyA, orgAId);
+    expect(status).toBe(404);
+  }, 25000);
+
+  it("READ_ONLY can read the extraction status once genuinely assigned to the client (200, access not over-restricted)", async () => {
+    const documentId = await importPdf({
+      tenderId: tenderAId,
+      token: tokenAdminA,
+      organizationId: orgAId,
+      buffer: buildMinimalPdf([`Assigned readonly guard test ${randomUUID()}.`]),
+      filename: "assigned-guard.pdf",
+    });
+    await fetch(extractionUrl(tenderAId, documentId), { method: "POST", headers: authHeaders(tokenAdminA, orgAId) });
+    await waitForTerminalStatus(tenderAId, documentId, tokenAdminA, orgAId);
+
+    await prisma.clientAssignment.create({
+      data: { id: randomUUID(), organizationId: orgAId, clientAccountId: clientAccountAId, userId: readOnlyAUserId, role: "VIEWER", createdBy: adminAUserId },
+    });
 
     const { status } = await getExtraction(tenderAId, documentId, tokenReadOnlyA, orgAId);
     expect(status).toBe(200);

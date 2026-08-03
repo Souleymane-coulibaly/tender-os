@@ -11,7 +11,14 @@ import {
   retryGenerationAction,
   validateGenerationAction,
 } from "../../../../generation-actions";
-import { GENERATION_STATUS_LABELS, generationStatusBadgeClass, type GenerationSummary } from "../../../../../../lib/generation-types";
+import {
+  describeGenerationFailureCode,
+  GENERATION_CAPABILITY_REASON_LABELS,
+  GENERATION_STATUS_LABELS,
+  generationStatusBadgeClass,
+  type GenerationCapability,
+  type GenerationSummary,
+} from "../../../../../../lib/generation-types";
 
 function canLaunchGeneration(actorRole: string | undefined): boolean {
   // Vérification UI uniquement, jamais l'autorité — le backend revalide systématiquement via
@@ -29,16 +36,22 @@ export function GenerationSection({
   initialGenerations,
   actorRole,
   taskTypeLabels,
+  capabilities,
 }: {
   tenderId: string;
   initialGenerations: GenerationSummary[];
   actorRole: string | undefined;
   taskTypeLabels: Record<string, string>;
+  capabilities: GenerationCapability[];
 }) {
   const router = useRouter();
   const [taskType, setTaskType] = useState(Object.keys(taskTypeLabels)[0] ?? "EXECUTIVE_SUMMARY");
   const [isLaunching, setIsLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | undefined>();
+
+  const capabilityByTaskType = new Map(capabilities.map((capability) => [capability.taskType, capability]));
+  const selectedCapability = capabilityByTaskType.get(taskType);
+  const isSelectedTaskTypeReady = selectedCapability?.ready ?? true;
 
   async function handleLaunch() {
     setIsLaunching(true);
@@ -68,22 +81,30 @@ export function GenerationSection({
                 onChange={(event) => setTaskType(event.target.value)}
                 className="rounded border border-neutral-300 px-3 py-2 text-sm"
               >
-                {Object.entries(taskTypeLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
+                {Object.entries(taskTypeLabels).map(([value, label]) => {
+                  const ready = capabilityByTaskType.get(value)?.ready ?? true;
+                  return (
+                    <option key={value} value={value}>
+                      {ready ? label : `${label} (non configuré)`}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             <button
               type="button"
               onClick={handleLaunch}
-              disabled={isLaunching}
+              disabled={isLaunching || !isSelectedTaskTypeReady}
               className="rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             >
               {isLaunching ? "Lancement..." : "Générer"}
             </button>
           </div>
+          {!isSelectedTaskTypeReady && selectedCapability?.reasonCode ? (
+            <p role="alert" className="text-sm text-amber-700">
+              {GENERATION_CAPABILITY_REASON_LABELS[selectedCapability.reasonCode]}
+            </p>
+          ) : null}
           {launchError ? (
             <p role="alert" className="text-sm text-red-600">
               {launchError}
@@ -148,8 +169,8 @@ function GenerationCard({
         </span>
       </div>
 
-      {generation.status === "FAILED" && generation.errorMessage ? (
-        <p className="text-sm text-red-600">Échec : {generation.errorMessage}</p>
+      {generation.status === "FAILED" ? (
+        <p className="text-sm text-red-600">Échec : {describeGenerationFailureCode(generation.errorCode)}</p>
       ) : null}
 
       {content ? (

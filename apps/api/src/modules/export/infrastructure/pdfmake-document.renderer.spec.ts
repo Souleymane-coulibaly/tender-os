@@ -165,6 +165,37 @@ describe("PdfmakeDocumentRenderer", () => {
     expect(parsed.text).toContain("Item simple");
   });
 
+  // Mission Sprint 8A.2 (correction bugs #7/#8 "thème document pas toujours appliqué") — preuve
+  // RÉELLE sur les octets PDF produits, jamais seulement l'absence d'exception.
+  describe("mission Sprint 8A.2 — theme application (bugs #7/#8)", () => {
+    it("produces a different PDF when an accent color theme is applied (color genuinely reaches the output)", async () => {
+      const renderer = new PdfmakeDocumentRenderer();
+      const withoutTheme = await renderer.render(baseDocument());
+      const withTheme = await renderer.render(baseDocument({ theme: { accentColor: "#1A73E8" } }));
+      expect(withTheme.equals(withoutTheme)).toBe(false);
+      // Le texte lui-même reste inchangé — seule la mise en forme diffère (mission "jamais
+      // recalculer le contenu pour appliquer un thème").
+      const parsed = await extractText(withTheme);
+      expect(parsed.text).toContain("Résumé exécutif");
+    });
+
+    it("embeds the theme's logo as a real image XObject in the PDF", async () => {
+      const renderer = new PdfmakeDocumentRenderer();
+      const onePixelPng = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        "base64",
+      );
+      const buffer = await renderer.render(baseDocument({ theme: { logo: { buffer: onePixelPng, mimeType: "image/png" } } }));
+      expect(buffer.toString("latin1")).toMatch(/\/Subtype\s*\/Image/);
+    });
+
+    it("never embeds an image XObject when no theme logo is provided", async () => {
+      const renderer = new PdfmakeDocumentRenderer();
+      const buffer = await renderer.render(baseDocument({ theme: undefined }));
+      expect(buffer.toString("latin1")).not.toMatch(/\/Subtype\s*\/Image/);
+    });
+  });
+
   it("throws UnreliableRenderError rather than a silent success if fed unresolvable content — regression guard", async () => {
     // Le renderer ne devrait jamais produire un buffer sans en-tête %PDF valide ; ce test documente
     // le comportement attendu si un futur changement cassait la génération (mission §24 "marque-le

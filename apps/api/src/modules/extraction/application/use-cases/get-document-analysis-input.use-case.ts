@@ -13,6 +13,13 @@ export type GetDocumentAnalysisInputQuery = Readonly<{
   tenderId: string;
   documentId: string;
   actorRole: string;
+  /** Optionnel — même discipline que `GetTenderQuery.actorId` (mission Sprint 8A.2, audit
+   *  isolation inter-client) : présent pour l'appel synchrone déclenché par un acteur
+   *  (`StartDocumentAnalysisUseCase`, permission client vérifiée), absent pour la relecture
+   *  ASYNCHRONE du pipeline de consolidation (`BusinessAnalysisContentResolver`), qui ne traite
+   *  jamais qu'un job DÉJÀ créé après vérification d'accès au moment du déclenchement — jamais une
+   *  seconde vérification inventée sans acteur réel à vérifier. */
+  actorId?: string | undefined;
 }>;
 
 export type DocumentAnalysisChunk = Readonly<{
@@ -86,6 +93,7 @@ export class GetDocumentAnalysisInputUseCase {
     await this.getTenderUseCase.execute({
       organizationId: query.organizationId,
       tenderId: query.tenderId,
+      actorId: query.actorId,
       actorRole: query.actorRole,
     });
 

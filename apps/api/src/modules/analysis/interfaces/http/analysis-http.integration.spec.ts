@@ -229,6 +229,14 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
     await waitForTerminalExtraction(tenderAId, extractedDocumentId, tokenAdminA, orgAId);
 
     unextractedDocumentId = await importPdf({ tenderId: tenderAId, token: tokenAdminA, organizationId: orgAId, filename: "ccap.pdf" });
+    // Mission Sprint 8A.2 (correction bug #2 élargie — "aucun déclencheur d'extraction") —
+    // l'import DCE déclenche désormais lui-même une extraction en meilleur effort
+    // (`AutoTriggerDocumentExtractionUseCase`), qui réussit ici (PDF fixture valide) avant même
+    // que ce test ne s'exécute. Supprime cette extraction auto-déclenchée pour restaurer
+    // délibérément l'état "jamais extrait" que CE test précis veut exercer — jamais une
+    // régression du comportement réel, seulement la fixture qui doit refléter le nouveau
+    // comportement par défaut.
+    await prisma.documentExtraction.delete({ where: { documentId: unextractedDocumentId } });
 
     // Document dédié, extrait avec succès, réservé aux tests OWNER document-scope — jamais
     // `extractedDocumentId` (déjà porteur de plusieurs AnalysisJob créés par d'autres tests de ce

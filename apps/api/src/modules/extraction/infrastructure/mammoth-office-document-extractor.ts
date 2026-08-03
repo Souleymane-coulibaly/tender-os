@@ -7,7 +7,7 @@ import type {
   OfficeExtractionResult,
 } from "../application/ports/office-document-extractor";
 import type { StoredDocumentReference } from "../application/ports/stored-document-reference";
-import { readStreamToBuffer } from "./read-stream-to-buffer";
+import { readStreamToBuffer } from "../../../shared-kernel/read-stream-to-buffer";
 
 const TOP_LEVEL_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6", "p", "table", "ul", "ol"] as const;
 

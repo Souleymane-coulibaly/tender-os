@@ -3,10 +3,12 @@ import type { IdGenerator } from "../../../shared-kernel/id-generator";
 import { DceDocument } from "../domain/dce-document.entity";
 import type { DceDocumentProcessingStatus } from "../domain/dce-document-processing-status";
 import { Dce } from "../domain/dce.aggregate";
+import type { DceImportJob } from "../domain/dce-import-job.aggregate";
 import { DceAlreadyExistsError } from "../domain/errors";
 import type { AsyncJobSubmission, AsyncJobSubmitter } from "../application/ports/async-job-submitter";
 import type { AuditLogWriter, DceAuditLogEntry } from "../application/ports/audit-log-writer";
 import type { DceDocumentRepository } from "../application/ports/dce-document.repository";
+import type { DceImportJobRepository } from "../application/ports/dce-import-job.repository";
 import type { DceRepository } from "../application/ports/dce.repository";
 import type { DetectedFileSignature, FileSignatureDetector } from "../application/ports/file-signature-detector";
 import type { ZipArchiveInspector, ZipExtractedEntry, ZipImportLimits } from "../application/ports/zip-archive-inspector";
@@ -174,6 +176,26 @@ export class InMemoryDceDocumentRepository implements DceDocumentRepository {
    *  condition (voir l'intégration PostgreSQL dédiée). */
   async runExclusiveForDce<T>(input: { dceId: string; fn: () => Promise<T> }): Promise<T> {
     return input.fn();
+  }
+}
+
+export class InMemoryDceImportJobRepository implements DceImportJobRepository {
+  private readonly byId = new Map<string, DceImportJob>();
+
+  async findById(input: { organizationId: string; jobId: string }): Promise<DceImportJob | null> {
+    const job = this.byId.get(input.jobId);
+    if (!job || job.organizationId !== input.organizationId) {
+      return null;
+    }
+    return job;
+  }
+
+  async create(job: DceImportJob): Promise<void> {
+    this.byId.set(job.id, job);
+  }
+
+  async save(job: DceImportJob): Promise<void> {
+    this.byId.set(job.id, job);
   }
 }
 

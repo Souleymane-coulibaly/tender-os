@@ -91,3 +91,17 @@ export class InvalidFilenameError extends DomainError {
     super(`Invalid or dangerous filename: ${input.filename}.`);
   }
 }
+
+export class DceImportJobNotFoundError extends DomainError {
+  readonly code = "DCE_IMPORT_JOB_NOT_FOUND";
+  constructor() {
+    super("Import job not found.");
+  }
+}
+
+export class InvalidDceImportJobStatusTransitionError extends DomainError {
+  readonly code = "INVALID_DCE_IMPORT_JOB_STATUS_TRANSITION";
+  constructor(input: { from: string; to: string }) {
+    super(`Cannot transition import job from ${input.from} to ${input.to}.`);
+  }
+}

@@ -28,14 +28,15 @@ import { DCE_CONFIG, type DceConfig } from "../../infrastructure/dce-config";
 import { CreateDceUseCase } from "../../application/use-cases/create-dce.use-case";
 import { DeleteDceDocumentUseCase } from "../../application/use-cases/delete-dce-document.use-case";
 import { DownloadDceDocumentUseCase } from "../../application/use-cases/download-dce-document.use-case";
+import { GetDceImportJobUseCase } from "../../application/use-cases/get-dce-import-job.use-case";
 import { GetDceUseCase } from "../../application/use-cases/get-dce.use-case";
 import { GetDceDocumentUseCase } from "../../application/use-cases/get-dce-document.use-case";
 import { ImportDceFilesUseCase } from "../../application/use-cases/import-dce-files.use-case";
-import { ImportDceZipUseCase } from "../../application/use-cases/import-dce-zip.use-case";
 import { ListDceDocumentsUseCase } from "../../application/use-cases/list-dce-documents.use-case";
 import { ReplaceDceDocumentUseCase } from "../../application/use-cases/replace-dce-document.use-case";
+import { StartDceZipImportUseCase } from "../../application/use-cases/start-dce-zip-import.use-case";
 import { DceErrorFilter } from "./dce-error.filter";
-import { presentDce, presentDceDocument, presentImportResult } from "./presenters";
+import { presentDce, presentDceDocument, presentDceImportJob, presentImportResult } from "./presenters";
 import { IdParamSchema } from "./schemas";
 
 /** Plafond brut Multer — filet de sécurité en amont des limites métier configurables (voir
@@ -57,7 +58,8 @@ export class DceController {
     private readonly createDceUseCase: CreateDceUseCase,
     private readonly getDceUseCase: GetDceUseCase,
     private readonly importDceFilesUseCase: ImportDceFilesUseCase,
-    private readonly importDceZipUseCase: ImportDceZipUseCase,
+    private readonly startDceZipImportUseCase: StartDceZipImportUseCase,
+    private readonly getDceImportJobUseCase: GetDceImportJobUseCase,
     private readonly listDceDocumentsUseCase: ListDceDocumentsUseCase,
     private readonly getDceDocumentUseCase: GetDceDocumentUseCase,
     private readonly downloadDceDocumentUseCase: DownloadDceDocumentUseCase,
@@ -87,12 +89,14 @@ export class DceController {
   @Get()
   @HttpCode(HttpStatus.OK)
   async get(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
   ) {
     const result = await this.getDceUseCase.execute({
       organizationId: membership.organizationId,
       tenderId,
+      actorId: actor.userId,
       actorRole: membership.role,
     });
     return presentDce(result);
@@ -130,8 +134,15 @@ export class DceController {
     return presentImportResult(result);
   }
 
+  /**
+   * Mission Sprint 8A.2 (correction bug #3 "import ZIP lourd échoue ou bloque") — ne fait plus
+   * qu'un déclenchement ASYNCHRONE : valide l'upload puis répond immédiatement avec un `jobId` à
+   * sonder via `GET .../dce/import-jobs/:jobId`, jamais une attente bloquante le temps de
+   * l'extraction et de l'import fichier-par-fichier (qui peuvent être longs pour une archive
+   * volumineuse).
+   */
   @Post("import-zip")
-  @HttpCode(HttpStatus.CREATED)
+  @HttpCode(HttpStatus.ACCEPTED)
   @UseInterceptors(FileInterceptor("archive", { storage: memoryStorage(), limits: { fileSize: MULTER_HARD_CEILING_BYTES } }))
   async importZip(
     @CurrentActor() actor: AuthenticatedActor,
@@ -140,29 +151,50 @@ export class DceController {
     @UploadedFile() archive: Express.Multer.File,
     @Req() request: RequestWithId,
   ) {
-    const result = await this.importDceZipUseCase.execute({
+    const job = await this.startDceZipImportUseCase.execute(
+      {
+        organizationId: membership.organizationId,
+        tenderId,
+        actorId: actor.userId,
+        actorRole: membership.role,
+        originalFilename: archive.originalname,
+        sizeBytes: archive.size,
+        requestId: request.id,
+      },
+      archive.buffer,
+    );
+    return presentDceImportJob(job);
+  }
+
+  @Get("import-jobs/:jobId")
+  @HttpCode(HttpStatus.OK)
+  async getImportJob(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Param("jobId", new ZodValidationPipe(IdParamSchema)) jobId: string,
+  ) {
+    const job = await this.getDceImportJobUseCase.execute({
       organizationId: membership.organizationId,
       tenderId,
       actorId: actor.userId,
       actorRole: membership.role,
-      zipBuffer: archive.buffer,
-      maxFileSizeBytes: this.dceConfig.maxFileSizeBytes,
-      maxFilesPerImport: this.dceConfig.maxFilesPerImport,
-      zipLimits: this.dceConfig.zipLimits,
-      requestId: request.id,
+      jobId,
     });
-    return presentImportResult(result);
+    return presentDceImportJob(job);
   }
 
   @Get("documents")
   @HttpCode(HttpStatus.OK)
   async listDocuments(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
   ) {
     const documents = await this.listDceDocumentsUseCase.execute({
       organizationId: membership.organizationId,
       tenderId,
+      actorId: actor.userId,
       actorRole: membership.role,
     });
     return documents.map(presentDceDocument);
@@ -171,6 +203,7 @@ export class DceController {
   @Get("documents/:documentId")
   @HttpCode(HttpStatus.OK)
   async getDocument(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
@@ -179,6 +212,7 @@ export class DceController {
       organizationId: membership.organizationId,
       tenderId,
       documentId,
+      actorId: actor.userId,
       actorRole: membership.role,
     });
     return presentDceDocument(result);
@@ -187,6 +221,7 @@ export class DceController {
   @Get("documents/:documentId/download")
   @HttpCode(HttpStatus.OK)
   async downloadDocument(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
     @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
@@ -196,6 +231,7 @@ export class DceController {
       organizationId: membership.organizationId,
       tenderId,
       documentId,
+      actorId: actor.userId,
       actorRole: membership.role,
     });
 

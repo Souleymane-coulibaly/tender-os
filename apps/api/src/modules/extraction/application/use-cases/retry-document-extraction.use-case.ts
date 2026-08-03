@@ -51,6 +51,7 @@ export class RetryDocumentExtractionUseCase {
     await this.getTenderUseCase.execute({
       organizationId: command.organizationId,
       tenderId: command.tenderId,
+      actorId: command.actorId,
       actorRole: command.actorRole,
     });
 

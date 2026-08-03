@@ -96,7 +96,13 @@ export function ValidationSection({
   const [approveError, setApproveError] = useState<string | undefined>();
 
   const blockingOpen = run?.issues.some((i) => i.severity === "BLOCKING" && (i.resolutionStatus === "OPEN" || i.resolutionStatus === "REOPENED")) ?? false;
-  const canApproveNow = run !== undefined && !blockingOpen && readiness.status !== "APPROVED";
+  // Mission Sprint 8A.2 (correction bug #5/#9) — une fois approuvé, `readiness.status` progresse
+  // au-delà de "APPROVED" (READY_FOR_SIGNATURE/SIGNATURE_IN_PROGRESS/PARTIALLY_SIGNED/
+  // READY_FOR_SUBMISSION/BLOCKED) à mesure que la signature avance : `activeApprovalId` reste le
+  // seul signal fiable "une approbation active existe déjà", jamais une comparaison de statut
+  // littérale qui redeviendrait vraie par erreur dès que le statut progresse après approbation.
+  const isAlreadyApproved = readiness.activeApprovalId !== undefined;
+  const canApproveNow = run !== undefined && !blockingOpen && !isAlreadyApproved;
 
   async function handleRun() {
     if (!selectedExportJobId) return;
@@ -182,7 +188,7 @@ export function ValidationSection({
           )}
 
           {canApprove ? (
-            readiness.status === "APPROVED" ? (
+            isAlreadyApproved ? (
               <div className="flex flex-col gap-2 rounded border border-neutral-200 bg-neutral-50 p-3">
                 <label htmlFor="reopen-reason" className="text-sm font-medium text-neutral-700">
                   Rouvrir l&apos;approbation (raison requise)

@@ -18,6 +18,7 @@ import { CompareGenerationVersionsUseCase } from "./application/use-cases/compar
 import { CreatePromptTemplateUseCase } from "./application/use-cases/create-prompt-template.use-case";
 import { CreatePromptVersionUseCase } from "./application/use-cases/create-prompt-version.use-case";
 import { EditGenerationUseCase } from "./application/use-cases/edit-generation.use-case";
+import { GetGenerationCapabilitiesUseCase } from "./application/use-cases/get-generation-capabilities.use-case";
 import { GetGenerationUseCase } from "./application/use-cases/get-generation.use-case";
 import { GetPromptTemplateUseCase } from "./application/use-cases/get-prompt-template.use-case";
 import { LaunchGenerationUseCase } from "./application/use-cases/launch-generation.use-case";
@@ -73,6 +74,7 @@ import { PromptTemplatesController } from "./interfaces/http/prompt-templates.co
     ValidateGenerationUseCase,
     RejectGenerationUseCase,
     GetGenerationUseCase,
+    GetGenerationCapabilitiesUseCase,
     ListGenerationVersionsUseCase,
     ListTenderGenerationsUseCase,
     CompareGenerationVersionsUseCase,

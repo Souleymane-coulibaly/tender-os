@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DownloadDocumentVersionUseCase } from "../../../documents";
+import type { GetTenderUseCase } from "../../../tenders";
 import { DceDocumentNotFoundError, DceNotFoundError } from "../../domain/errors";
 import { DceDocumentCategory } from "../../domain/dce-document-category";
 import { Dce } from "../../domain/dce.aggregate";
@@ -20,17 +21,23 @@ function fakeDownloadDocumentVersionUseCase(): DownloadDocumentVersionUseCase {
   } as unknown as DownloadDocumentVersionUseCase;
 }
 
+function fakeGetTenderUseCase(): GetTenderUseCase {
+  return { execute: vi.fn(async () => ({ id: "tender-1", organizationId: "org-1", clientAccountId: "client-1" })) } as unknown as GetTenderUseCase;
+}
+
 describe("DownloadDceDocumentUseCase", () => {
   let dceRepository: InMemoryDceRepository;
   let dceDocumentRepository: InMemoryDceDocumentRepository;
+  let getTenderUseCase: GetTenderUseCase;
   let downloadDocumentVersionUseCase: DownloadDocumentVersionUseCase;
   let useCase: DownloadDceDocumentUseCase;
 
   beforeEach(async () => {
     dceRepository = new InMemoryDceRepository();
     dceDocumentRepository = new InMemoryDceDocumentRepository();
+    getTenderUseCase = fakeGetTenderUseCase();
     downloadDocumentVersionUseCase = fakeDownloadDocumentVersionUseCase();
-    useCase = new DownloadDceDocumentUseCase(dceRepository, dceDocumentRepository, downloadDocumentVersionUseCase);
+    useCase = new DownloadDceDocumentUseCase(dceRepository, dceDocumentRepository, getTenderUseCase, downloadDocumentVersionUseCase);
 
     await dceRepository.seed(
       Dce.create({
@@ -58,6 +65,7 @@ describe("DownloadDceDocumentUseCase", () => {
       organizationId: "org-1",
       tenderId: "tender-1",
       documentId: "document-1",
+      actorId: "user-1",
       actorRole: "READ_ONLY",
     });
 
@@ -76,6 +84,7 @@ describe("DownloadDceDocumentUseCase", () => {
         organizationId: "org-1",
         tenderId: "tender-1",
         documentId: "document-from-another-tender",
+        actorId: "user-1",
         actorRole: "READ_ONLY",
       }),
     ).rejects.toThrow(DceDocumentNotFoundError);
@@ -88,8 +97,17 @@ describe("DownloadDceDocumentUseCase", () => {
         organizationId: "org-1",
         tenderId: "tender-without-dce",
         documentId: "document-1",
+        actorId: "user-1",
         actorRole: "READ_ONLY",
       }),
     ).rejects.toThrow(DceNotFoundError);
+  });
+
+  // Mission Sprint 8A.2 (audit isolation inter-client) — régression : `GetTenderUseCase` doit
+  // recevoir `actorId`, sinon l'affectation client de l'acteur n'est jamais vérifiée.
+  it("regression guard — always calls GetTenderUseCase with actorId, never omitted (isolation inter-client)", async () => {
+    await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", documentId: "document-1", actorId: "user-42", actorRole: "READ_ONLY" });
+
+    expect(getTenderUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ actorId: "user-42" }));
   });
 });

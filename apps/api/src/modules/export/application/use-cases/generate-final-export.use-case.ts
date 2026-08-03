@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { GetTenderUseCase } from "../../../tenders";
 import { ExportBlockedError, ExportJobNotFoundError } from "../../domain/errors";
@@ -6,7 +6,8 @@ import { ExportMode } from "../../domain/export-mode";
 import { toExportJobSummary, type ExportJobSummary } from "../dtos";
 import { EXPORT_JOB_REPOSITORY, type ExportJobRepository } from "../ports/export-job.repository";
 import { EXPORT_TEMPLATE_REPOSITORY, type ExportTemplateRepository } from "../ports/export-template.repository";
-import { ExportRenderPipelineService } from "../services/export-render-pipeline.service";
+import { THEME_RESOLVER, type ThemeResolver } from "../ports/theme-resolver";
+import { ExportRenderPipelineService, type RunExportPipelineThemeInput } from "../services/export-render-pipeline.service";
 import { SectionContentResolverService } from "../services/section-content-resolver.service";
 
 export type GenerateFinalExportCommand = Readonly<{
@@ -31,6 +32,8 @@ export type GenerateFinalExportCommand = Readonly<{
  */
 @Injectable()
 export class GenerateFinalExportUseCase {
+  private readonly logger = new Logger(GenerateFinalExportUseCase.name);
+
   constructor(
     @Inject(EXPORT_JOB_REPOSITORY) private readonly exportJobRepository: ExportJobRepository,
     @Inject(EXPORT_TEMPLATE_REPOSITORY) private readonly exportTemplateRepository: ExportTemplateRepository,
@@ -38,7 +41,31 @@ export class GenerateFinalExportUseCase {
     private readonly exportRenderPipeline: ExportRenderPipelineService,
     private readonly sectionContentResolver: SectionContentResolverService,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Optional() @Inject(THEME_RESOLVER) private readonly themeResolver?: ThemeResolver,
   ) {}
+
+  /** Mission Sprint 8A.2 (correction bugs #7/#8 "l'aperçu doit correspondre exactement à l'export
+   *  final") — réutilise TOUJOURS le thème déjà figé sur l'aperçu approuvé (`themeVersionId`/
+   *  `themeSourceLevel`), jamais une nouvelle résolution par hiérarchie (même discipline que
+   *  `exportTemplateVersionId` juste au-dessus) : un logo/une couleur changés côté organisation
+   *  entre l'approbation et le figeage ne doivent jamais faire dériver silencieusement le FINAL. */
+  private async resolveFrozenTheme(input: { organizationId: string; themeVersionId?: string | undefined; themeSourceLevel?: string | undefined }): Promise<RunExportPipelineThemeInput | undefined> {
+    if (!this.themeResolver || !input.themeVersionId) return undefined;
+    try {
+      const resolved = await this.themeResolver.findByVersionId({ organizationId: input.organizationId, versionId: input.themeVersionId });
+      if (!resolved) return undefined;
+      return {
+        versionId: resolved.versionId,
+        sourceLevel: input.themeSourceLevel ?? resolved.sourceLevel,
+        accentColor: resolved.accentColor,
+        fontFamily: resolved.fontFamily,
+        logoStorageKey: resolved.logoStorageKey,
+      };
+    } catch (error) {
+      this.logger.warn(`Failed to reload the theme frozen on the approved preview (rendering will continue without it): ${error instanceof Error ? error.message : String(error)}`);
+      return undefined;
+    }
+  }
 
   async execute(command: GenerateFinalExportCommand): Promise<ExportJobSummary> {
     const found = await this.exportJobRepository.findById({ organizationId: command.organizationId, exportJobId: command.basedOnExportJobId });
@@ -81,6 +108,12 @@ export class GenerateFinalExportUseCase {
       sections: previewJob.sections,
     });
 
+    const theme = await this.resolveFrozenTheme({
+      organizationId: command.organizationId,
+      themeVersionId: previewJob.themeVersionId,
+      themeSourceLevel: previewJob.themeSourceLevel,
+    });
+
     const { job, artifact } = await this.exportRenderPipeline.run({
       organizationId: command.organizationId,
       clientAccountId: previewJob.clientAccountId,
@@ -96,6 +129,7 @@ export class GenerateFinalExportUseCase {
       basedOnExportJobId: previewJob.id,
       documentTitle: tender.title,
       coverPage: { buyerName: tender.buyerName, reference: tender.reference, tenderTitle: tender.title },
+      theme,
       createdBy: command.actorId,
       occurredAt,
     });

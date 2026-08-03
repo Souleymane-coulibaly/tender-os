@@ -1,8 +1,9 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Readable } from "node:stream";
 import { STORAGE_PROVIDER, type StorageProvider } from "../../../documents";
 import { computeSha256, FILE_HASH_ALGORITHM } from "../../../../shared-kernel/file-hash";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { readStreamToBuffer } from "../../../../shared-kernel/read-stream-to-buffer";
 import { ExportArtifact, type ExportManifest } from "../../domain/export-artifact";
 import { ExportJob } from "../../domain/export-job.aggregate";
 import type { ExportSectionSelection } from "../../domain/export-section-selection";
@@ -12,6 +13,15 @@ import { DOCUMENT_RENDERER, type DocumentRendererPort } from "../ports/document-
 import { PDF_RENDERER, type PdfRendererPort } from "../ports/pdf-renderer";
 import { EXPORT_JOB_REPOSITORY, type ExportJobRepository } from "../ports/export-job.repository";
 import { assembleExportDocument, type ResolvedSectionContent } from "./export-assembly.service";
+import type { RenderableTheme } from "./renderable-document";
+
+export type RunExportPipelineThemeInput = Readonly<{
+  versionId: string;
+  sourceLevel: string;
+  accentColor?: string | undefined;
+  fontFamily?: string | undefined;
+  logoStorageKey?: string | undefined;
+}>;
 
 export type RunExportPipelineInput = Readonly<{
   organizationId: string;
@@ -28,6 +38,11 @@ export type RunExportPipelineInput = Readonly<{
   basedOnExportJobId?: string | undefined;
   documentTitle: string;
   coverPage?: Readonly<{ buyerName?: string | undefined; clientName?: string | undefined; reference?: string | undefined; tenderTitle?: string | undefined }> | undefined;
+  /** Mission Sprint 8A.2 (correction bugs #7/#8 "thème document pas toujours appliqué") — déjà
+   *  résolu par l'use case appelant (voir ThemeResolver) : ce pipeline ne fait que charger les
+   *  octets du logo depuis le stockage (seule E/S propre au thème) et conserver la preuve du
+   *  thème utilisé sur le job (`themeVersionId`/`themeSourceLevel`). */
+  theme?: RunExportPipelineThemeInput | undefined;
   createdBy: string;
   occurredAt: Date;
 }>;
@@ -41,6 +56,8 @@ export type RunExportPipelineInput = Readonly<{
  */
 @Injectable()
 export class ExportRenderPipelineService {
+  private readonly logger = new Logger(ExportRenderPipelineService.name);
+
   constructor(
     @Inject(EXPORT_JOB_REPOSITORY) private readonly exportJobRepository: ExportJobRepository,
     @Inject(DOCUMENT_RENDERER) private readonly documentRenderer: DocumentRendererPort,
@@ -71,6 +88,8 @@ export class ExportRenderPipelineService {
       version,
       basedOnExportJobId: input.basedOnExportJobId,
       sections: input.sections,
+      themeVersionId: input.theme?.versionId,
+      themeSourceLevel: input.theme?.sourceLevel,
       createdBy: input.createdBy,
       occurredAt: input.occurredAt,
     });
@@ -81,6 +100,14 @@ export class ExportRenderPipelineService {
     await this.exportJobRepository.markGenerating({ organizationId: input.organizationId, exportJobId: jobId });
 
     try {
+      const theme: RenderableTheme | undefined = input.theme
+        ? {
+            accentColor: input.theme.accentColor,
+            fontFamily: input.theme.fontFamily,
+            logo: await this.loadThemeLogo(input.theme.logoStorageKey),
+          }
+        : undefined;
+
       const renderable = assembleExportDocument({
         documentTitle: input.documentTitle,
         config: input.templateConfig,
@@ -90,6 +117,7 @@ export class ExportRenderPipelineService {
         version,
         date: input.occurredAt,
         isPreview: input.mode === "PREVIEW",
+        theme,
       });
 
       // Rendu HORS transaction (mission §69 "ne garde jamais une transaction ouverte pendant le
@@ -178,6 +206,24 @@ export class ExportRenderPipelineService {
         occurredAt: input.occurredAt,
       });
       throw error;
+    }
+  }
+
+  /** Best-effort (mission Sprint 8A.2 bugs #7/#8) — un logo manquant ou illisible ne doit jamais
+   *  faire échouer un export par ailleurs valide, seulement produire un document sans logo (le
+   *  reste du thème — accentColor/fontFamily — s'applique quand même). */
+  private async loadThemeLogo(logoStorageKey: string | undefined): Promise<{ buffer: Buffer; mimeType: string } | undefined> {
+    if (!logoStorageKey) return undefined;
+    try {
+      const [metadata, stream] = await Promise.all([
+        this.storageProvider.getMetadata(logoStorageKey),
+        this.storageProvider.openReadStream(logoStorageKey),
+      ]);
+      const buffer = await readStreamToBuffer(stream);
+      return { buffer, mimeType: metadata?.contentType ?? "image/png" };
+    } catch (error) {
+      this.logger.warn(`Failed to load theme logo "${logoStorageKey}" (rendering will continue without it): ${error instanceof Error ? error.message : String(error)}`);
+      return undefined;
     }
   }
 }

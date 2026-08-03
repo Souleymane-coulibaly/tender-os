@@ -70,7 +70,7 @@ describe("GenerationSection", () => {
 
   it("shows the launch form for a role allowed to manage generations and launches with the selected taskType", async () => {
     const user = userEvent.setup();
-    render(<GenerationSection tenderId="tender-1" initialGenerations={[]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} />);
+    render(<GenerationSection tenderId="tender-1" initialGenerations={[]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} capabilities={[]} />);
 
     await user.selectOptions(screen.getByLabelText("Type de contenu"), "METHODOLOGY");
     await user.click(screen.getByRole("button", { name: "Générer" }));
@@ -82,7 +82,7 @@ describe("GenerationSection", () => {
   it("correctif Sprint 6 (audit Codex P1-1) — shows the backend's error message when launch fails (e.g. no active routing policy), never a raw code", async () => {
     launchGenerationAction.mockResolvedValue({ error: "Cette action entre en conflit avec l'état actuel de la ressource." });
     const user = userEvent.setup();
-    render(<GenerationSection tenderId="tender-1" initialGenerations={[]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} />);
+    render(<GenerationSection tenderId="tender-1" initialGenerations={[]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} capabilities={[]} />);
 
     await user.click(screen.getByRole("button", { name: "Générer" }));
 
@@ -91,18 +91,18 @@ describe("GenerationSection", () => {
   });
 
   it("hides the launch form for a READ_ONLY actor (UI-only gate, backend remains the source of truth)", () => {
-    render(<GenerationSection tenderId="tender-1" initialGenerations={[]} actorRole="READ_ONLY" taskTypeLabels={TASK_TYPE_LABELS} />);
+    render(<GenerationSection tenderId="tender-1" initialGenerations={[]} actorRole="READ_ONLY" taskTypeLabels={TASK_TYPE_LABELS} capabilities={[]} />);
     expect(screen.queryByRole("button", { name: "Générer" })).not.toBeInTheDocument();
   });
 
   it("shows a placeholder when there are no generations yet", () => {
-    render(<GenerationSection tenderId="tender-1" initialGenerations={[]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} />);
+    render(<GenerationSection tenderId="tender-1" initialGenerations={[]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} capabilities={[]} />);
     expect(screen.getByText("Aucune génération pour l'instant.")).toBeInTheDocument();
   });
 
   it("a GENERATED generation shows Régénérer/Éditer/Valider but never Réessayer or Annuler", () => {
     render(
-      <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} />,
+      <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} capabilities={[]} />,
     );
     expect(screen.getByText("Contenu généré.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Régénérer" })).toBeInTheDocument();
@@ -112,7 +112,7 @@ describe("GenerationSection", () => {
     expect(screen.queryByRole("button", { name: "Annuler" })).not.toBeInTheDocument();
   });
 
-  it("a FAILED generation shows the error message and a Réessayer button that calls retryGenerationAction", async () => {
+  it("mission Sprint 8A.2 (bugs #4/#10) — a FAILED generation shows the mapped French message, never the raw English errorMessage", async () => {
     const user = userEvent.setup();
     render(
       <GenerationSection
@@ -126,12 +126,58 @@ describe("GenerationSection", () => {
         ]}
         actorRole="OWNER"
         taskTypeLabels={TASK_TYPE_LABELS}
+        capabilities={[]}
       />,
     );
 
-    expect(screen.getByText(/No active routing policy for this task type/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Échec : La génération IA n'est pas configurée pour ce type de contenu. Un administrateur doit activer une politique de routage dans Configuration IA.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/No active routing policy for this task type/)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Réessayer" }));
     expect(retryGenerationAction).toHaveBeenCalledWith("tender-1", "gen-1");
+  });
+
+  describe("capabilities gating (mission Sprint 8A.2 bugs #1/#4)", () => {
+    it("disables Générer and shows the reason when the selected task type isn't configured", () => {
+      render(
+        <GenerationSection
+          tenderId="tender-1"
+          initialGenerations={[]}
+          actorRole="OWNER"
+          taskTypeLabels={TASK_TYPE_LABELS}
+          capabilities={[{ taskType: "EXECUTIVE_SUMMARY", ready: false, reasonCode: "NO_ACTIVE_ROUTING_POLICY" }]}
+        />,
+      );
+
+      expect(screen.getByRole("button", { name: "Générer" })).toBeDisabled();
+      expect(
+        screen.getByText(
+          "La génération IA n'est pas configurée pour ce type de contenu. Un administrateur doit activer une politique de routage dans Configuration IA.",
+        ),
+      ).toBeInTheDocument();
+      expect(launchGenerationAction).not.toHaveBeenCalled();
+    });
+
+    it("enables Générer once the selected task type is ready", async () => {
+      const user = userEvent.setup();
+      render(
+        <GenerationSection
+          tenderId="tender-1"
+          initialGenerations={[]}
+          actorRole="OWNER"
+          taskTypeLabels={TASK_TYPE_LABELS}
+          capabilities={[{ taskType: "EXECUTIVE_SUMMARY", ready: true }]}
+        />,
+      );
+
+      const button = screen.getByRole("button", { name: "Générer" });
+      expect(button).toBeEnabled();
+      await user.click(button);
+      expect(launchGenerationAction).toHaveBeenCalledWith("tender-1", "EXECUTIVE_SUMMARY");
+    });
   });
 
   it("a PENDING generation shows Annuler but never Réessayer/Régénérer/Valider", () => {
@@ -141,6 +187,7 @@ describe("GenerationSection", () => {
         initialGenerations={[generationWithoutContent({ status: "PENDING" })]}
         actorRole="OWNER"
         taskTypeLabels={TASK_TYPE_LABELS}
+        capabilities={[]}
       />,
     );
     expect(screen.getByRole("button", { name: "Annuler" })).toBeInTheDocument();
@@ -150,7 +197,7 @@ describe("GenerationSection", () => {
 
   it("hides all action buttons for a READ_ONLY actor even on a GENERATED generation", () => {
     render(
-      <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="READ_ONLY" taskTypeLabels={TASK_TYPE_LABELS} />,
+      <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="READ_ONLY" taskTypeLabels={TASK_TYPE_LABELS} capabilities={[]} />,
     );
     expect(screen.queryByRole("button", { name: "Régénérer" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Éditer" })).not.toBeInTheDocument();
@@ -159,7 +206,7 @@ describe("GenerationSection", () => {
 
   it("cost/tokens are shown only when the backend actually included them (server-computed authorization, never a frontend guess)", () => {
     const { rerender } = render(
-      <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} />,
+      <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} capabilities={[]} />,
     );
     expect(screen.queryByText(/tokens/)).not.toBeInTheDocument();
 
@@ -169,6 +216,7 @@ describe("GenerationSection", () => {
         initialGenerations={[generation({ totalTokenCount: 42, estimatedCostAmount: "0.0012", currency: "USD" })]}
         actorRole="OWNER"
         taskTypeLabels={TASK_TYPE_LABELS}
+        capabilities={[]}
       />,
     );
     expect(screen.getByText(/42 tokens/)).toBeInTheDocument();
@@ -179,7 +227,7 @@ describe("GenerationSection", () => {
     validateGenerationAction.mockResolvedValue({});
     const user = userEvent.setup();
     render(
-      <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} />,
+      <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} capabilities={[]} />,
     );
 
     await user.click(screen.getByRole("button", { name: "Valider" }));
@@ -194,7 +242,7 @@ describe("GenerationSection", () => {
       rejectGenerationAction.mockResolvedValue({});
       const user = userEvent.setup();
       render(
-        <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} />,
+        <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} capabilities={[]} />,
       );
 
       await user.click(screen.getByRole("button", { name: "Rejeter" }));
@@ -209,7 +257,7 @@ describe("GenerationSection", () => {
       rejectGenerationAction.mockResolvedValue({});
       const user = userEvent.setup();
       render(
-        <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} />,
+        <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} capabilities={[]} />,
       );
 
       await user.click(screen.getByRole("button", { name: "Rejeter" }));
@@ -221,7 +269,7 @@ describe("GenerationSection", () => {
     it("cancelling the reject flow never calls the action", async () => {
       const user = userEvent.setup();
       render(
-        <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} />,
+        <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} capabilities={[]} />,
       );
 
       await user.click(screen.getByRole("button", { name: "Rejeter" }));
@@ -235,7 +283,7 @@ describe("GenerationSection", () => {
       rejectGenerationAction.mockResolvedValue({ error: "Cette génération a déjà été validée et ne peut plus être rejetée." });
       const user = userEvent.setup();
       render(
-        <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} />,
+        <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="OWNER" taskTypeLabels={TASK_TYPE_LABELS} capabilities={[]} />,
       );
 
       await user.click(screen.getByRole("button", { name: "Rejeter" }));
@@ -252,6 +300,7 @@ describe("GenerationSection", () => {
           initialGenerations={[generation({ rejectedBy: "user-owner", rejectedAt: "2026-08-01T11:00:00.000Z", rejectionReason: "Hors sujet" })]}
           actorRole="OWNER"
           taskTypeLabels={TASK_TYPE_LABELS}
+        capabilities={[]}
         />,
       );
 
@@ -268,6 +317,7 @@ describe("GenerationSection", () => {
           initialGenerations={[generation({ validatedBy: "user-owner", validatedAt: "2026-08-01T11:00:00.000Z" })]}
           actorRole="OWNER"
           taskTypeLabels={TASK_TYPE_LABELS}
+        capabilities={[]}
         />,
       );
 
@@ -276,7 +326,7 @@ describe("GenerationSection", () => {
 
     it("a READ_ONLY actor never sees the Rejeter button", () => {
       render(
-        <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="READ_ONLY" taskTypeLabels={TASK_TYPE_LABELS} />,
+        <GenerationSection tenderId="tender-1" initialGenerations={[generation()]} actorRole="READ_ONLY" taskTypeLabels={TASK_TYPE_LABELS} capabilities={[]} />,
       );
       expect(screen.queryByRole("button", { name: "Rejeter" })).not.toBeInTheDocument();
     });

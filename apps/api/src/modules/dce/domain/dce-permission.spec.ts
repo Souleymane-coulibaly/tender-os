@@ -2,10 +2,21 @@ import { describe, expect, it } from "vitest";
 import { DcePermission, roleHasDcePermission } from "./dce-permission";
 
 describe("roleHasDcePermission", () => {
-  it("grants Admin-tier roles (ORGANIZATION_ADMIN, BID_MANAGER) every permission", () => {
+  it("grants Admin-tier roles (OWNER, ORGANIZATION_ADMIN, BID_MANAGER) every permission", () => {
     for (const permission of Object.values(DcePermission)) {
+      expect(roleHasDcePermission("OWNER", permission)).toBe(true);
       expect(roleHasDcePermission("ORGANIZATION_ADMIN", permission)).toBe(true);
       expect(roleHasDcePermission("BID_MANAGER", permission)).toBe(true);
+    }
+  });
+
+  // Mission Sprint 8A.2 (audit Cockpit Bid Manager) — régression : OWNER manquait de
+  // `ROLE_DCE_PERMISSIONS`, un propriétaire d'organisation ne pouvait alors lire ni gérer aucun
+  // DCE, contrairement à Documents/Analysis qui avaient déjà reçu ce correctif (Sprint 5 / Sprint
+  // 4.1 audit Codex P1-01).
+  it("regression guard — OWNER is a superset of ORGANIZATION_ADMIN, never missing an admin permission", () => {
+    for (const permission of Object.values(DcePermission)) {
+      expect(roleHasDcePermission("OWNER", permission)).toBe(roleHasDcePermission("ORGANIZATION_ADMIN", permission));
     }
   });
 

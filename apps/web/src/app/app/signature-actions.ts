@@ -39,6 +39,7 @@ export async function detectSignatureRequirementAction(
   try {
     const requirement = await appApiFetch<SignatureRequirementSummary>(`/api/v1/tenders/${tenderId}/signature-requirements`, { method: "POST", body: JSON.stringify(input) });
     revalidatePath(`/app/tenders/${tenderId}/signature`);
+    revalidatePath(`/app/tenders/${tenderId}`);
     return { requirement };
   } catch (error) {
     return { error: describeSignatureActionError(error) };
@@ -52,6 +53,7 @@ export async function confirmSignatureRequirementAction(tenderId: string, requir
     return { error: describeSignatureActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/signature`);
+  revalidatePath(`/app/tenders/${tenderId}`);
   return {};
 }
 
@@ -62,6 +64,7 @@ export async function rejectSignatureRequirementAction(tenderId: string, require
     return { error: describeSignatureActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/signature`);
+  revalidatePath(`/app/tenders/${tenderId}`);
   return {};
 }
 
@@ -72,6 +75,7 @@ export async function registerSignatoryAction(
   try {
     const signatory = await appApiFetch<SignatorySummary>(`/api/v1/tenders/${tenderId}/signatories`, { method: "POST", body: JSON.stringify(input) });
     revalidatePath(`/app/tenders/${tenderId}/signature`);
+    revalidatePath(`/app/tenders/${tenderId}`);
     return { signatory };
   } catch (error) {
     return { error: describeSignatureActionError(error) };
@@ -85,6 +89,7 @@ export async function verifySignatoryAction(tenderId: string, signatoryId: strin
     return { error: describeSignatureActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/signature`);
+  revalidatePath(`/app/tenders/${tenderId}`);
   return {};
 }
 
@@ -100,6 +105,7 @@ export async function prepareSignatureTransactionAction(
       body: JSON.stringify({ signatoryIds, ...(requestedLevel ? { requestedLevel } : {}) }),
     });
     revalidatePath(`/app/tenders/${tenderId}/signature`);
+    revalidatePath(`/app/tenders/${tenderId}`);
     return { transaction };
   } catch (error) {
     return { error: describeSignatureActionError(error) };
@@ -113,6 +119,7 @@ export async function startSignatureTransactionAction(tenderId: string, transact
     return { error: describeSignatureActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/signature`);
+  revalidatePath(`/app/tenders/${tenderId}`);
   return {};
 }
 
@@ -125,6 +132,7 @@ export async function syncSignatureTransactionAction(tenderId: string, transacti
     return { error: describeSignatureActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/signature`);
+  revalidatePath(`/app/tenders/${tenderId}`);
   return {};
 }
 
@@ -135,6 +143,7 @@ export async function retrieveSignedArtifactsAction(tenderId: string, transactio
     return { error: describeSignatureActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/signature`);
+  revalidatePath(`/app/tenders/${tenderId}`);
   return {};
 }
 
@@ -147,6 +156,7 @@ export async function verifySignedDocumentIntegrityAction(tenderId: string, tran
     return { error: describeSignatureActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/signature`);
+  revalidatePath(`/app/tenders/${tenderId}`);
   return {};
 }
 
@@ -163,5 +173,6 @@ export async function importSignedDocumentAction(tenderId: string, transactionId
     return { error: describeSignatureActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/signature`);
+  revalidatePath(`/app/tenders/${tenderId}`);
   return {};
 }

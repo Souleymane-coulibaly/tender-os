@@ -18,8 +18,42 @@ import type {
 
 export type FormActionState = { error?: string };
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Une erreur est survenue.";
+/** Mission Sprint 8A.2 (correction bug #10 "erreurs techniques affichées brutes") — même motif
+ *  que `describeExportActionError` (export-actions.ts) : ne laisse jamais `error.message` (texte
+ *  backend brut, souvent en anglais) atteindre un composant. */
+function describeAnalysisActionError(error: unknown): string {
+  if (error instanceof AppApiError) {
+    console.error(`[TenderOS] Analysis action failed (${error.status} ${error.code}): ${error.message}`);
+    switch (error.status) {
+      case 400:
+        return "Certains champs sont invalides.";
+      case 401:
+        return "Votre session a expiré. Veuillez vous reconnecter.";
+      case 403:
+        return "Vous n'avez pas les droits nécessaires pour cette action.";
+      case 404:
+        if (error.code === "DOCUMENT_EXTRACTION_NOT_FOUND") return "Aucune extraction n'a encore été effectuée pour ce document.";
+        return "Ressource introuvable.";
+      case 409:
+        if (error.code === "EXTRACTION_NOT_READY_FOR_ANALYSIS") return "L'extraction de ce document n'est pas encore terminée : l'analyse n'est pas encore possible.";
+        if (error.code === "ANALYSIS_ALREADY_RUNNING") return "Une analyse est déjà en cours pour cet appel d'offres.";
+        if (error.code === "ANALYSIS_NOT_RETRYABLE") return "Cette analyse ne peut pas être relancée dans son état actuel.";
+        if (error.code === "ANALYSIS_RETRY_LIMIT_EXCEEDED") return "Le nombre maximal de tentatives a été atteint pour cette analyse.";
+        return "Cette action entre en conflit avec l'état actuel de la ressource.";
+      case 422:
+        return "Certains champs sont invalides.";
+      case 429:
+        return "Trop de requêtes envoyées au fournisseur IA. Veuillez réessayer dans quelques instants.";
+      case 503:
+        return "Le service d'intelligence artificielle est momentanément indisponible. Veuillez réessayer plus tard.";
+      case 504:
+        return "Le fournisseur IA n'a pas répondu à temps. Veuillez réessayer.";
+      default:
+        return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";
+    }
+  }
+  console.error("[TenderOS] Unexpected error during an analysis action:", error);
+  return "Une erreur réseau est survenue. Vérifiez votre connexion et réessayez.";
 }
 
 /** GET .../analysis renvoie 404 TENDER_BUSINESS_ANALYSIS_NOT_FOUND tant qu'aucune consolidation
@@ -58,7 +92,7 @@ export async function startTenderAnalysisAction(tenderId: string): Promise<FormA
   try {
     await appApiFetch(`/api/v1/tenders/${tenderId}/analyses`, { method: "POST" });
   } catch (error) {
-    return { error: errorMessage(error) };
+    return { error: describeAnalysisActionError(error) };
   }
 
   revalidatePath(`/app/tenders/${tenderId}`);
@@ -69,9 +103,45 @@ export async function retryAnalysisAction(tenderId: string, analysisId: string):
   try {
     await appApiFetch(`/api/v1/analyses/${analysisId}/retry`, { method: "POST" });
   } catch (error) {
-    return { error: errorMessage(error) };
+    return { error: describeAnalysisActionError(error) };
   }
 
   revalidatePath(`/app/tenders/${tenderId}`);
   return {};
+}
+
+export type DocumentAnalysisActionState = { error?: string; job?: AnalysisJobSummary };
+
+/** Mission Sprint 8A.2 — déclenchement d'une analyse pour UN document (bouton "Analyser" de la
+ *  section DCE), distinct de `startTenderAnalysisAction` (consolidation). Le bouton appelant reste
+ *  désactivé tant que `processingStatus` n'indique pas une extraction terminée (voir
+ *  `isReadyForAnalysis`, dce-types.ts) — revalidé de toute façon côté API
+ *  (ExtractionNotReadyForAnalysisError), jamais une autorité réelle côté frontend. */
+export async function startDocumentAnalysisAction(tenderId: string, documentId: string): Promise<DocumentAnalysisActionState> {
+  try {
+    const job = await appApiFetch<AnalysisJobSummary>(`/api/v1/tenders/${tenderId}/documents/${documentId}/analyses`, {
+      method: "POST",
+    });
+    return { job };
+  } catch (error) {
+    return { error: describeAnalysisActionError(error) };
+  }
+}
+
+export async function retryDocumentAnalysisAction(analysisId: string): Promise<DocumentAnalysisActionState> {
+  try {
+    const job = await appApiFetch<AnalysisJobSummary>(`/api/v1/analyses/${analysisId}/retry`, { method: "POST" });
+    return { job };
+  } catch (error) {
+    return { error: describeAnalysisActionError(error) };
+  }
+}
+
+export async function getAnalysisJobAction(analysisId: string): Promise<DocumentAnalysisActionState> {
+  try {
+    const job = await appApiFetch<AnalysisJobSummary>(`/api/v1/analyses/${analysisId}`);
+    return { job };
+  } catch (error) {
+    return { error: describeAnalysisActionError(error) };
+  }
 }

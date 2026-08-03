@@ -49,6 +49,7 @@ export class ReplaceDceDocumentUseCase {
     const tender = await this.getTenderUseCase.execute({
       organizationId: command.organizationId,
       tenderId: command.tenderId,
+      actorId: command.actorId,
       actorRole: command.actorRole,
     });
     assertTenderNotArchivedForDceMutation(tender);

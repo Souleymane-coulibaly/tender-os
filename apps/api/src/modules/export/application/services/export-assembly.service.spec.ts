@@ -176,4 +176,34 @@ describe("assembleExportDocument", () => {
     });
     expect(doc.watermarkText).toBeUndefined();
   });
+
+  // Mission Sprint 8A.2 (correction bugs #7/#8) — le thème déjà résolu par l'appelant traverse ce
+  // moteur PUR sans jamais être recalculé ni perdu.
+  it("passes the theme through unchanged to the assembled document", () => {
+    const theme = { accentColor: "#1A73E8", fontFamily: "Georgia", logo: { buffer: Buffer.from("x"), mimeType: "image/png" } };
+    const doc = assembleExportDocument({
+      documentTitle: "Mémoire",
+      config: config(),
+      sections: [section("SUMMARY", 0)],
+      resolvedContent: new Map([["SUMMARY", { text: "x" }]]),
+      version: 1,
+      date: NOW,
+      isPreview: false,
+      theme,
+    });
+    expect(doc.theme).toEqual(theme);
+  });
+
+  it("leaves theme undefined when the caller resolved none", () => {
+    const doc = assembleExportDocument({
+      documentTitle: "Mémoire",
+      config: config(),
+      sections: [section("SUMMARY", 0)],
+      resolvedContent: new Map([["SUMMARY", { text: "x" }]]),
+      version: 1,
+      date: NOW,
+      isPreview: false,
+    });
+    expect(doc.theme).toBeUndefined();
+  });
 });

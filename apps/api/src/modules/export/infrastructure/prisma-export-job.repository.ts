@@ -32,6 +32,8 @@ export class PrismaExportJobRepository implements ExportJobRepository {
           status: job.status,
           version: job.version,
           basedOnExportJobId: job.basedOnExportJobId ?? null,
+          themeVersionId: job.themeVersionId ?? null,
+          themeSourceLevel: job.themeSourceLevel ?? null,
           createdBy: job.createdBy,
           createdAt: job.createdAt,
         },

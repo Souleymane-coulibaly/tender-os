@@ -334,7 +334,10 @@ export type TenderStatistics = {
 /** Miroir cote UI de ROLE_TENDER_PERMISSIONS (tender-permission.ts) pour ce seul role
  *  "tender:update" — sert uniquement a griser le glisser-depose / masquer l'action ;
  *  la seule autorite reelle reste la revalidation backend a chaque requete. */
-const ROLES_ALLOWED_TO_CHANGE_STATUS = ["ORGANIZATION_ADMIN", "BID_MANAGER"];
+// Mission Sprint 8A.2 (audit Cockpit Bid Manager) — OWNER manquait ici (miroir jamais mis à jour
+// après le correctif backend OWNER de tender-permission.ts), masquant le changement de statut/le
+// glisser-déposer pour un propriétaire d'organisation bien qu'autorisé côté API.
+const ROLES_ALLOWED_TO_CHANGE_STATUS = ["OWNER", "ORGANIZATION_ADMIN", "BID_MANAGER"];
 
 export function canChangeTenderStatus(role: string | undefined): boolean {
   return role !== undefined && ROLES_ALLOWED_TO_CHANGE_STATUS.includes(role);

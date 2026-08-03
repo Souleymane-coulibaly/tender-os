@@ -1,6 +1,6 @@
 import type { ExportTemplateConfig } from "../../domain/export-template-config";
 import type { ExportSectionSelection } from "../../domain/export-section-selection";
-import type { RenderableBlock, RenderableDocument, RenderableSection } from "./renderable-document";
+import type { RenderableBlock, RenderableDocument, RenderableSection, RenderableTheme } from "./renderable-document";
 
 export type ResolvedSectionContent = Readonly<{
   /** Texte brut (mission §20 "gérer les paragraphes") — scindé sur les doubles sauts de ligne en
@@ -33,6 +33,9 @@ export type AssembleExportDocumentInput = Readonly<{
   version: number;
   date: Date;
   isPreview: boolean;
+  /** Mission Sprint 8A.2 (correction bugs #7/#8) — déjà résolu par l'use case appelant (voir
+   *  ThemeResolver), jamais recalculé ici : ce moteur reste PUR, aucune E/S. */
+  theme?: RenderableTheme | undefined;
 }>;
 
 function toParagraphBlocks(text: string): RenderableBlock[] {
@@ -121,6 +124,7 @@ export function assembleExportDocument(input: AssembleExportDocumentInput): Rend
     showPageNumbers: input.config.showPageNumbers,
     showTableOfContents: input.config.showTableOfContents,
     watermarkText: input.isPreview ? "APERÇU" : undefined,
+    theme: input.theme,
     sections,
   };
 }

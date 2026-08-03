@@ -91,6 +91,43 @@ export type GenerationSummary = {
   rejectionReason?: string;
 };
 
+/** Mission Sprint 8A.2 (bugs #1/#4/#10) — mêmes codes que ceux réellement posés par
+ *  GetGenerationCapabilitiesUseCase/ProcessGenerationUseCase côté backend (PROMPT_TEMPLATE_NOT_FOUND
+ *  / NO_ACTIVE_PROMPT_VERSION / NO_ACTIVE_ROUTING_POLICY) — jamais un second vocabulaire d'erreur. */
+export type GenerationCapabilityReasonCode = "PROMPT_TEMPLATE_NOT_FOUND" | "NO_ACTIVE_PROMPT_VERSION" | "NO_ACTIVE_ROUTING_POLICY";
+
+export type GenerationCapability = {
+  taskType: string;
+  ready: boolean;
+  reasonCode?: GenerationCapabilityReasonCode;
+};
+
+/** Un seul mapping FR, utilisé à la fois pour la vérification en amont (capacités) et pour
+ *  l'affichage d'un échec déjà survenu (Generation.errorCode) — jamais un message anglais brut,
+ *  jamais une pile d'appel ou un détail fournisseur affiché à l'utilisateur (mission §"messages
+ *  d'erreur sanitizés"). */
+export const GENERATION_CAPABILITY_REASON_LABELS: Record<GenerationCapabilityReasonCode, string> = {
+  PROMPT_TEMPLATE_NOT_FOUND:
+    "Aucun prompt n'a encore été créé pour ce type de contenu. Un administrateur doit en créer un dans Configuration IA.",
+  NO_ACTIVE_PROMPT_VERSION:
+    "Aucune version de prompt active pour ce type de contenu. Un administrateur doit en activer une dans Configuration IA.",
+  NO_ACTIVE_ROUTING_POLICY:
+    "La génération IA n'est pas configurée pour ce type de contenu. Un administrateur doit activer une politique de routage dans Configuration IA.",
+};
+
+function isGenerationCapabilityReasonCode(value: string): value is GenerationCapabilityReasonCode {
+  return value in GENERATION_CAPABILITY_REASON_LABELS;
+}
+
+/** Retourne le message FR mappé si le code est connu, sinon un repli générique — jamais
+ *  `generation.errorMessage` (anglais, technique) affiché tel quel. */
+export function describeGenerationFailureCode(errorCode: string | undefined): string {
+  if (errorCode && isGenerationCapabilityReasonCode(errorCode)) {
+    return GENERATION_CAPABILITY_REASON_LABELS[errorCode];
+  }
+  return "La génération a échoué. Réessayez, ou contactez un administrateur si le problème persiste.";
+}
+
 export function generationStatusBadgeClass(status: string): string {
   switch (status) {
     case "GENERATED":

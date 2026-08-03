@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
@@ -16,6 +16,10 @@ import { assertTenderNotArchivedForDceMutation } from "../policies/dce-tender-mu
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { DCE_DOCUMENT_REPOSITORY, type DceDocumentRepository } from "../ports/dce-document.repository";
 import { DCE_REPOSITORY, type DceRepository } from "../ports/dce.repository";
+import {
+  DCE_DOCUMENT_EXTRACTION_TRIGGER,
+  type DceDocumentExtractionTrigger,
+} from "../ports/document-extraction-trigger";
 import { FILE_SIGNATURE_DETECTOR, type FileSignatureDetector } from "../ports/file-signature-detector";
 import { validateIncomingDceFile } from "../incoming-file";
 import type { DceDocumentSummary } from "../dtos";
@@ -43,9 +47,10 @@ export type ImportDceFilesResult = Readonly<{
 /**
  * Import d'un fichier unique OU de plusieurs fichiers (mission Sprint 1) — un seul cas d'usage
  * pour les deux, la seconde n'étant qu'un tableau de longueur 1. N'accepte jamais un fichier
- * `.zip` ici : une archive doit passer par ImportDceZipUseCase, qui applique la sécurité
- * obligatoire (mission §"sécurité ZIP") avant de réutiliser exactement le même traitement
- * par-fichier que ce cas d'usage.
+ * `.zip` ici : une archive doit passer par StartDceZipImportUseCase/ProcessDceZipImportUseCase
+ * (import asynchrone, mission Sprint 8A.2), qui applique la sécurité obligatoire (mission
+ * §"sécurité ZIP") avant de réutiliser exactement le même traitement par-fichier que ce cas
+ * d'usage.
  *
  * Stratégie d'atomicité (mission §"atomicité ou stratégie de compensation") : chaque fichier est
  * traité indépendamment et séquentiellement. La création du Document sous-jacent est déjà
@@ -73,6 +78,9 @@ export class ImportDceFilesUseCase {
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly createDocumentWithFirstVersionUseCase: CreateDocumentWithFirstVersionUseCase,
     private readonly internalDocumentCleanupService: InternalDocumentCleanupService,
+    @Optional()
+    @Inject(DCE_DOCUMENT_EXTRACTION_TRIGGER)
+    private readonly extractionTrigger?: DceDocumentExtractionTrigger,
   ) {}
 
   async execute(command: ImportDceFilesCommand): Promise<ImportDceFilesResult> {
@@ -85,6 +93,7 @@ export class ImportDceFilesUseCase {
     const tender = await this.getTenderUseCase.execute({
       organizationId: command.organizationId,
       tenderId: command.tenderId,
+      actorId: command.actorId,
       actorRole: command.actorRole,
     });
     assertTenderNotArchivedForDceMutation(tender);
@@ -245,6 +254,26 @@ export class ImportDceFilesUseCase {
     if (accepted.length > 0) {
       dce.markImported(this.clock.now());
       await this.dceRepository.save(dce);
+    }
+
+    // Mission Sprint 8A.2 — déclenche l'extraction pour chaque fichier accepté (jamais bloqué par
+    // un déclenchement individuel en échec : chaque appel est indépendant, un import déjà accepté
+    // ne doit jamais être remis en cause parce que le déclenchement système, best-effort, échoue).
+    for (const summary of accepted) {
+      try {
+        await this.extractionTrigger?.ensureExtractionTriggered({
+          organizationId: command.organizationId,
+          tenderId: command.tenderId,
+          documentId: summary.documentId,
+          actorId: command.actorId,
+          requestId: command.requestId,
+        });
+      } catch (error) {
+        this.logger.error(
+          `Auto-extraction trigger failed for document ${summary.documentId} after a successful DCE import: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
 
     return { accepted, rejected };

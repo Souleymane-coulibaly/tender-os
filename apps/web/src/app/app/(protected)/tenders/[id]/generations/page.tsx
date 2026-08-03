@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
-import { GENERATION_TASK_TYPE_LABELS, type GenerationSummary } from "../../../../../../lib/generation-types";
+import { fetchGenerationCapabilities } from "../../../../generation-actions";
+import { GENERATION_TASK_TYPE_LABELS, type GenerationCapability, type GenerationSummary } from "../../../../../../lib/generation-types";
 import { ApiErrorState } from "../../../api-error-state";
 import { GenerationSection } from "./generation-section";
 
@@ -10,10 +11,12 @@ export default async function TenderGenerationsPage({ params }: { params: Promis
   const { id: tenderId } = await params;
 
   let generations: { items: GenerationSummary[]; total: number };
+  let capabilities: GenerationCapability[];
   let actorRole: string | undefined;
   try {
-    [generations, actorRole] = await Promise.all([
+    [generations, capabilities, actorRole] = await Promise.all([
       appApiFetch<{ items: GenerationSummary[]; total: number }>(`/api/v1/tenders/${tenderId}/generations?limit=50&offset=0`),
+      fetchGenerationCapabilities(tenderId),
       getCurrentMembershipRole(),
     ]);
   } catch (error) {
@@ -29,7 +32,13 @@ export default async function TenderGenerationsPage({ params }: { params: Promis
           versionnés. Toute génération doit être relue et validée par un humain avant utilisation.
         </p>
       </div>
-      <GenerationSection tenderId={tenderId} initialGenerations={generations.items} actorRole={actorRole} taskTypeLabels={GENERATION_TASK_TYPE_LABELS} />
+      <GenerationSection
+        tenderId={tenderId}
+        initialGenerations={generations.items}
+        actorRole={actorRole}
+        taskTypeLabels={GENERATION_TASK_TYPE_LABELS}
+        capabilities={capabilities}
+      />
     </div>
   );
 }

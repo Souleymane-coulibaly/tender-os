@@ -8,6 +8,13 @@ const STATUS_BY_CODE: Record<string, number> = {
   // erreur remonter telle quelle — même motif que DceErrorFilter pour TENDER_NOT_FOUND.
   TENDER_NOT_FOUND: HttpStatus.NOT_FOUND,
   TENDER_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
+  // Mission Sprint 8A.2 (audit isolation inter-client) — GetTenderUseCase délègue aussi à Client
+  // Portfolio (AssertClientAccessUseCase) dès que `actorId` lui est fourni ; ces deux entrées
+  // manquaient (même gap déjà corrigé pour DceErrorFilter, bug #3) et retombaient sur 500 dès que
+  // ce chemin était réellement exercé. CLIENT_ACCOUNT_NOT_FOUND reste un 404 (jamais 403) — même
+  // logique anti-énumération que partout ailleurs.
+  CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,
+  CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
 
   DOCUMENT_EXTRACTION_NOT_FOUND: HttpStatus.NOT_FOUND,
   INVALID_DOCUMENT_EXTRACTION_STATUS: HttpStatus.UNPROCESSABLE_ENTITY,

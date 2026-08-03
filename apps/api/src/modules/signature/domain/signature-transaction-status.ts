@@ -50,3 +50,11 @@ const ALLOWED_TRANSITIONS: Record<SignatureTransactionStatus, readonly Signature
 export function canTransitionSignatureTransaction(from: SignatureTransactionStatus, to: SignatureTransactionStatus): boolean {
   return ALLOWED_TRANSITIONS[from].includes(to);
 }
+
+/** Un statut sans transition sortante dans `ALLOWED_TRANSITIONS` — même définition que celle
+ *  utilisée par `CreateSubmissionPackageUseCase` (submission-package) et
+ *  `GetReadinessStatusUseCase` (validation, mission Sprint 8A.2 bug #5) : une seule source de
+ *  vérité pour "cette transaction n'évoluera plus", jamais deux ensembles divergents. */
+export function isTerminalSignatureTransactionStatus(status: SignatureTransactionStatus): boolean {
+  return ALLOWED_TRANSITIONS[status].length === 0;
+}
