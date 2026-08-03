@@ -34,11 +34,7 @@ export type KnownChunk = Readonly<{
 
 export type ChunksBySequence = ReadonlyMap<number, KnownChunk>;
 
-/** Réduit une chaîne à sa forme comparée (accents/casse/espaces indifférents) — utilisée
- *  UNIQUEMENT pour diagnostiquer un rejet a posteriori (mission — "vérifier si la citation est
- *  absente, modifiée, ou simplement normalisée différemment"), jamais pour décider si une
- *  citation est acceptée : la vérification verbatim de `validateChunkProvenance` reste la seule
- *  source de vérité pour la garantie anti-fabrication. */
+/** Réduit une chaîne à sa forme comparée (accents/casse/espaces indifférents). */
 const COMBINING_DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
 
 function foldForComparison(text: string): string {
@@ -50,26 +46,27 @@ function foldForComparison(text: string): string {
     .toLowerCase();
 }
 
-/** `true` si `needle` apparaît dans `haystack` une fois espaces/accents/casse neutralisés —
- *  distingue une reformulation bénigne (retour à la ligne interne d'un chunk PDF restitué comme
- *  une phrase continue, accent normalisé différemment) d'une citation réellement absente/fabriquée.
- *  Ne renvoie jamais le texte source lui-même (mission §"jamais un extrait du corpus dans les
- *  champs d'erreur", voir `AnalysisJob.resultSummary`/`Generation.errorMessage` dans le schéma) —
- *  uniquement ce verdict booléen, consommé par l'appelant pour enrichir `reason` sans fuite de
- *  contenu client. */
+/** `true` si `needle` apparaît dans `haystack` une fois espaces/accents/casse neutralisés. */
 function matchesAfterNormalization(needle: string, haystack: string): boolean {
   return haystack.length > 0 && foldForComparison(haystack).includes(foldForComparison(needle));
 }
 
-/** Explique un rejet de citation SANS jamais reproduire la citation ni le contenu du chunk —
- *  seulement leurs longueurs et un verdict de normalisation (mission §"vérifier si la citation
- *  est absente, modifiée, ou simplement normalisée différemment", sans réintroduire de contenu
- *  client dans les champs d'erreur persistés). */
+/** Une citation est acceptée si elle apparaît verbatim OU si elle correspond seulement après
+ *  normalisation espaces/accents/casse (mission — correctif rejets "aléatoires" confirmés en prod :
+ *  un chunk PDF conserve les retours à la ligne internes des lignes justifiées de la source, mais
+ *  le modèle restitue le même passage comme une phrase continue — le texte cité reste réel, seule
+ *  sa mise en forme diffère d'une génération à l'autre). La garantie anti-fabrication n'est jamais
+ *  affaiblie : une citation qui ne correspond MÊME PAS après cette normalisation reste rejetée. */
+function citationMatches(citation: string, haystack: string): boolean {
+  return haystack.includes(citation) || matchesAfterNormalization(citation, haystack);
+}
+
+/** Explique un rejet de citation (désormais confirmé fabriquée/mal attribuée, la reformulation
+ *  bénigne étant déjà tolérée par `citationMatches`) SANS jamais reproduire la citation ni le
+ *  contenu du chunk — seulement leurs longueurs (mission §"jamais un extrait du corpus dans les
+ *  champs d'erreur", voir `AnalysisJob.resultSummary`/`Generation.errorMessage` dans le schéma). */
 function describeCitationMismatch(citation: string, haystack: string): string {
-  const verdict = matchesAfterNormalization(citation, haystack)
-    ? "matches after whitespace/accent normalization — likely a benign reformatting by the model, not a fabricated citation"
-    : "does not match even after whitespace/accent normalization — likely a fabricated or misattributed citation";
-  return `citation (${citation.length} chars) ${verdict} (chunk content: ${haystack.length} chars)`;
+  return `citation (${citation.length} chars) does not match even after whitespace/accent normalization — likely a fabricated or misattributed citation (chunk content: ${haystack.length} chars)`;
 }
 
 /**
@@ -80,7 +77,9 @@ function describeCitationMismatch(citation: string, haystack: string): string {
  * `AiProvenanceValidationFailedError` (jamais silencieusement ignorée, jamais partiellement
  * persistée) dès qu'une affirmation de provenance ne peut pas être confirmée par le corpus réel :
  * - `chunkSequence` inexistant parmi les chunks connus du document,
- * - `citation` absente (recherche verbatim) du contenu du chunk cité,
+ * - `citation` absente du contenu du chunk cité, même en tolérant une différence de mise en forme
+ *   bénigne (espaces/sauts de ligne internes/accents/casse — voir `citationMatches`) : une citation
+ *   qui ne correspond MÊME PAS après cette normalisation reste rejetée,
  * - `pageStart`/`pageEnd`/`sheetName`/`sectionTitle` qui CONTREDIT une valeur réellement connue du
  *   chunk cité (un champ non renseigné côté chunk n'est jamais une contradiction, seulement une
  *   information absente).
@@ -95,11 +94,11 @@ function describeCitationMismatch(citation: string, haystack: string): string {
 export function validateChunkProvenance(item: DeclaredProvenance, chunksBySequence: ChunksBySequence): void {
   if (item.chunkSequence == null) {
     if (item.citation != null) {
-      const foundAnywhere = [...chunksBySequence.values()].some((chunk) => chunk.content.includes(item.citation!));
+      const foundAnywhere = [...chunksBySequence.values()].some((chunk) => citationMatches(item.citation!, chunk.content));
       if (!foundAnywhere) {
         const haystack = [...chunksBySequence.values()].map((chunk) => chunk.content).join("\n");
         throw new AiProvenanceValidationFailedError({
-          reason: `citation was not found verbatim in any known chunk of this document (${describeCitationMismatch(item.citation!, haystack)})`,
+          reason: `citation was not found in any known chunk of this document — ${describeCitationMismatch(item.citation!, haystack)}`,
         });
       }
     }
@@ -113,9 +112,9 @@ export function validateChunkProvenance(item: DeclaredProvenance, chunksBySequen
     });
   }
 
-  if (item.citation != null && !chunk.content.includes(item.citation)) {
+  if (item.citation != null && !citationMatches(item.citation, chunk.content)) {
     throw new AiProvenanceValidationFailedError({
-      reason: `citation was not found verbatim in the content of chunk ${item.chunkSequence} (${describeCitationMismatch(item.citation, chunk.content)})`,
+      reason: `citation was not found in the content of chunk ${item.chunkSequence} — ${describeCitationMismatch(item.citation, chunk.content)}`,
     });
   }
   if (item.pageStart != null && chunk.pageStart !== undefined && item.pageStart !== chunk.pageStart) {

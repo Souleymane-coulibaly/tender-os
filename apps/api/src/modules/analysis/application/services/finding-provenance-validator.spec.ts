@@ -55,23 +55,16 @@ describe("validateChunkProvenance", () => {
     expect(() => validateChunkProvenance({ citation: "clause totalement inventée" }, CHUNKS)).toThrow(AiProvenanceValidationFailedError);
   });
 
-  it("flags a rejected citation as likely benign reformatting when it matches after whitespace/accent normalization — mission diagnostic Codex, jamais le texte source dans errorMessage", () => {
+  it("accepts a citation that only matches after whitespace/accent normalization — mission correctif rejets aléatoires confirmés en prod (retour à la ligne interne d'un chunk PDF restitué comme une phrase continue par le modèle)", () => {
     const chunksWithLineBreak: ChunksBySequence = new Map([
       [0, { content: "Le present marche a pour objet\nla fourniture de materiel informatique." }],
     ]);
-    try {
-      validateChunkProvenance({ chunkSequence: 0, citation: "Le présent marché a pour objet la fourniture de matériel informatique." }, chunksWithLineBreak);
-      throw new Error("expected validateChunkProvenance to throw");
-    } catch (error) {
-      expect(error).toBeInstanceOf(AiProvenanceValidationFailedError);
-      const message = (error as Error).message;
-      expect(message).toContain("matches after whitespace/accent normalization");
-      expect(message).not.toContain("présent marché");
-      expect(message).not.toContain("materiel informatique");
-    }
+    expect(() =>
+      validateChunkProvenance({ chunkSequence: 0, citation: "Le présent marché a pour objet la fourniture de matériel informatique." }, chunksWithLineBreak),
+    ).not.toThrow();
   });
 
-  it("flags a rejected citation as likely fabricated when it does NOT match even after normalization", () => {
+  it("rejects a citation as fabricated (and never leaks the source text in the error message) when it does NOT match even after normalization", () => {
     try {
       validateChunkProvenance({ chunkSequence: 0, citation: "clause de résiliation anticipée totalement absente" }, CHUNKS);
       throw new Error("expected validateChunkProvenance to throw");
