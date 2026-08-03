@@ -25,7 +25,7 @@ export const TenderRiskItemSchema = z
     title: z.string().min(1).max(300),
     category: z.string().min(1).max(60),
     severity: z.enum(RISK_SEVERITIES),
-    probability: z.number().min(0).max(1).optional(),
+    probability: z.number().min(0).max(1).optional().nullable(),
     explanation: z.string().min(1).max(2000),
     recommendation: z.string().min(1).max(1000),
   })

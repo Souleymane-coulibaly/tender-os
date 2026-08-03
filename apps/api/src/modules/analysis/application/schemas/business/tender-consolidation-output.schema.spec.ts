@@ -106,6 +106,27 @@ describe("parseTenderConsolidationOutput", () => {
     expect(() => parseTenderConsolidationOutput(JSON.stringify(output))).toThrow(AiSchemaValidationFailedError);
   });
 
+  it("accepts explicit null on optional fields (probability, documentId) — mission correctif crash prod, Structured Outputs strict envoie null jamais une clé absente", () => {
+    const output = validOutput({
+      risks: [
+        {
+          title: "Délai de réponse très court",
+          category: "PLANNING",
+          severity: "HIGH",
+          probability: null,
+          explanation: "Le délai entre la publication et la remise est inférieur à 3 semaines.",
+          recommendation: "Prioriser la rédaction du mémoire technique dès maintenant.",
+          documentId: null,
+          confidence: 0.75,
+        },
+      ],
+    });
+
+    const result = parseTenderConsolidationOutput(JSON.stringify(output));
+    expect(result.risks[0]!.probability).toBeNull();
+    expect(result.risks[0]!.documentId).toBeNull();
+  });
+
   it("rejects a risk item with the 'confidence' field entirely missing, never a silent default", () => {
     const output = validOutput({
       risks: [

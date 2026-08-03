@@ -69,6 +69,46 @@ describe("parseDocumentAnalysisOutput", () => {
     expect(() => parseDocumentAnalysisOutput(JSON.stringify(output))).toThrow(AiSchemaValidationFailedError);
   });
 
+  it("accepts explicit null on optional fields — mission correctif crash prod, Structured Outputs strict envoie null jamais une clé absente", () => {
+    const output = validOutput({
+      metadata: {
+        title: null,
+        reference: null,
+        buyer: "Ville de Test",
+        contractingAuthority: null,
+        purpose: null,
+        procedureType: null,
+        marketType: null,
+        marketForm: null,
+        allotment: null,
+        lotCount: null,
+        duration: null,
+        renewal: null,
+        executionPlace: null,
+        cpvCode: null,
+        variantsAllowed: null,
+        additionalServices: null,
+        mandatoryVisit: null,
+        negotiationPossible: null,
+      },
+      deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "2026-09-01T12:00:00.000Z", rawText: null, chunkSequence: null, pageStart: null, pageEnd: null, sheetName: null, sectionTitle: null, citation: null, confidence: 0.9 }],
+      criteria: [{ name: "Prix", weight: null, subCriteria: null, scoringMethod: null, priceFormula: null, threshold: null, isEliminatory: false, citation: null, confidence: 0.8 }],
+      clauses: [{ category: "PENALTY", summary: "Pénalités", sheetName: null, sectionTitle: null, citation: null, confidence: 0.9 }],
+    });
+
+    const result = parseDocumentAnalysisOutput(JSON.stringify(output));
+    expect(result.metadata.title).toBeNull();
+    expect(result.deadlines[0]!.rawText).toBeNull();
+    expect(result.clauses[0]!.summary).toBe("Pénalités");
+  });
+
+  it("still rejects a deadline where BOTH date and rawText are explicitly null, not just both absent", () => {
+    const output = validOutput({
+      deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: null, rawText: null, confidence: 0.5 }],
+    });
+    expect(() => parseDocumentAnalysisOutput(JSON.stringify(output))).toThrow(AiSchemaValidationFailedError);
+  });
+
   it("rejects an extra top-level field the model was never asked to produce", () => {
     // Zod's default (non-strict) object parsing simply strips unknown keys — this documents that
     // behaviour explicitly rather than assuming strictness by accident.

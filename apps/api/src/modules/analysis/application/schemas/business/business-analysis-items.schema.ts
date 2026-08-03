@@ -14,24 +14,24 @@ import { ProvenanceSchema, TenderProvenanceSchema } from "./provenance.schema";
 // Mission §1 "Informations générales" — objet volontairement plat, tous champs optionnels : un
 // DCE ne contient pas toujours l'information, jamais une raison de faire échouer l'analyse.
 export const BusinessMetadataSchema = z.object({
-  title: z.string().max(500).optional(),
-  reference: z.string().max(255).optional(),
-  buyer: z.string().max(300).optional(),
-  contractingAuthority: z.string().max(300).optional(),
-  purpose: z.string().max(2000).optional(),
-  procedureType: z.string().max(200).optional(),
-  marketType: z.string().max(100).optional(),
-  marketForm: z.string().max(100).optional(),
-  allotment: z.boolean().optional(),
-  lotCount: z.number().int().min(0).optional(),
-  duration: z.string().max(200).optional(),
-  renewal: z.string().max(200).optional(),
-  executionPlace: z.string().max(300).optional(),
-  cpvCode: z.string().max(50).optional(),
-  variantsAllowed: z.boolean().optional(),
-  additionalServices: z.string().max(1000).optional(),
-  mandatoryVisit: z.boolean().optional(),
-  negotiationPossible: z.boolean().optional(),
+  title: z.string().max(500).optional().nullable(),
+  reference: z.string().max(255).optional().nullable(),
+  buyer: z.string().max(300).optional().nullable(),
+  contractingAuthority: z.string().max(300).optional().nullable(),
+  purpose: z.string().max(2000).optional().nullable(),
+  procedureType: z.string().max(200).optional().nullable(),
+  marketType: z.string().max(100).optional().nullable(),
+  marketForm: z.string().max(100).optional().nullable(),
+  allotment: z.boolean().optional().nullable(),
+  lotCount: z.number().int().min(0).optional().nullable(),
+  duration: z.string().max(200).optional().nullable(),
+  renewal: z.string().max(200).optional().nullable(),
+  executionPlace: z.string().max(300).optional().nullable(),
+  cpvCode: z.string().max(50).optional().nullable(),
+  variantsAllowed: z.boolean().optional().nullable(),
+  additionalServices: z.string().max(1000).optional().nullable(),
+  mandatoryVisit: z.boolean().optional().nullable(),
+  negotiationPossible: z.boolean().optional().nullable(),
 });
 export type BusinessMetadataOutput = z.infer<typeof BusinessMetadataSchema>;
 
@@ -45,11 +45,15 @@ function makeDeadlineSchema<P extends z.AnyZodObject>(provenance: P) {
       kind: z.enum(DEADLINE_KINDS),
       label: z.string().min(1).max(300),
       // Mission §"Chaque date doit être normalisée dans un format stable" — ISO 8601 complet.
-      date: z.string().datetime().optional(),
-      rawText: z.string().max(300).optional(),
+      date: z.string().datetime().optional().nullable(),
+      rawText: z.string().max(300).optional().nullable(),
     })
     .merge(provenance)
-    .refine((value) => value.date !== undefined || value.rawText !== undefined, {
+    // `!= null` (comparaison lâche) couvre `undefined` ET `null` en une seule fois — le mode
+    // Structured Outputs strict d'OpenAI envoie `null`, jamais une clé absente (voir
+    // `strict-output-schemas.ts`) ; une comparaison stricte `!== undefined` laisserait passer à
+    // tort un objet où date/rawText valent `null` tous les deux.
+    .refine((value) => value.date != null || value.rawText != null, {
       message: "a deadline must carry either a normalized date or the source raw text",
     });
 }
@@ -61,11 +65,14 @@ function makeCriterionSchema<P extends z.AnyZodObject>(provenance: P) {
   return z
     .object({
       name: z.string().min(1).max(300),
-      weight: z.number().min(0).max(100).optional(),
-      subCriteria: z.array(z.object({ name: z.string().min(1).max(300), weight: z.number().min(0).max(100).optional() })).optional(),
-      scoringMethod: z.string().max(500).optional(),
-      priceFormula: z.string().max(500).optional(),
-      threshold: z.string().max(300).optional(),
+      weight: z.number().min(0).max(100).optional().nullable(),
+      subCriteria: z
+        .array(z.object({ name: z.string().min(1).max(300), weight: z.number().min(0).max(100).optional().nullable() }))
+        .optional()
+        .nullable(),
+      scoringMethod: z.string().max(500).optional().nullable(),
+      priceFormula: z.string().max(500).optional().nullable(),
+      threshold: z.string().max(300).optional().nullable(),
       isEliminatory: z.boolean().default(false),
     })
     .merge(provenance);
@@ -79,7 +86,7 @@ function makeRequirementSchema<P extends z.AnyZodObject>(provenance: P) {
     .object({
       category: z.enum(REQUIREMENT_CATEGORIES),
       label: z.string().min(1).max(300),
-      expectedFormat: z.string().max(300).optional(),
+      expectedFormat: z.string().max(300).optional().nullable(),
       isMandatory: z.boolean().default(true),
     })
     .merge(provenance);

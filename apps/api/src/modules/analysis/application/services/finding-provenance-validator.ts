@@ -4,17 +4,23 @@ import type { TenderConsolidationOutput } from "../schemas/business/tender-conso
 
 /** Provenance déclarée par le modèle sur UN item (deadline/critère/exigence/clause/risque/
  *  question) — même sous-ensemble de champs pour les sorties document et tender. */
+/** Chaque champ accepte aussi `null` (mission — correctif crash prod `AI_SCHEMA_VALIDATION_FAILED`) :
+ *  le mode Structured Outputs strict d'OpenAI (`strict-output-schemas.ts`) envoie `null` pour tout
+ *  champ non renseigné, jamais une clé absente — voir `business-analysis-items.schema.ts`, où ces
+ *  mêmes champs sont désormais `.optional().nullable()`. Toutes les comparaisons ci-dessous
+ *  traitent `null` et `undefined` de façon identique (opérateurs `==`/`!=` lâches), jamais une
+ *  vérification stricte `=== undefined` qui laisserait passer `null` à tort. */
 export type DeclaredProvenance = Readonly<{
-  chunkSequence?: number | undefined;
-  pageStart?: number | undefined;
-  pageEnd?: number | undefined;
-  sheetName?: string | undefined;
-  sectionTitle?: string | undefined;
-  citation?: string | undefined;
+  chunkSequence?: number | null | undefined;
+  pageStart?: number | null | undefined;
+  pageEnd?: number | null | undefined;
+  sheetName?: string | null | undefined;
+  sectionTitle?: string | null | undefined;
+  citation?: string | null | undefined;
 }>;
 
 /** Provenance déclarée au niveau tender — désigne en plus le document source. */
-export type DeclaredTenderProvenance = DeclaredProvenance & { documentId?: string | undefined };
+export type DeclaredTenderProvenance = DeclaredProvenance & { documentId?: string | null | undefined };
 
 /** Fait réellement connu d'UN chunk d'UN document (mission §"vérifier autant que possible") — issu
  *  du contrat public Extraction (`DocumentAnalysisChunk`, jamais reconstruit ni approximé). */
@@ -49,8 +55,8 @@ export type ChunksBySequence = ReadonlyMap<number, KnownChunk>;
  * une citation directe" déjà garanti par le schéma Zod (`isInferred`).
  */
 export function validateChunkProvenance(item: DeclaredProvenance, chunksBySequence: ChunksBySequence): void {
-  if (item.chunkSequence === undefined) {
-    if (item.citation !== undefined) {
+  if (item.chunkSequence == null) {
+    if (item.citation != null) {
       const foundAnywhere = [...chunksBySequence.values()].some((chunk) => chunk.content.includes(item.citation!));
       if (!foundAnywhere) {
         throw new AiProvenanceValidationFailedError({
@@ -68,27 +74,27 @@ export function validateChunkProvenance(item: DeclaredProvenance, chunksBySequen
     });
   }
 
-  if (item.citation !== undefined && !chunk.content.includes(item.citation)) {
+  if (item.citation != null && !chunk.content.includes(item.citation)) {
     throw new AiProvenanceValidationFailedError({
       reason: `citation was not found verbatim in the content of chunk ${item.chunkSequence}`,
     });
   }
-  if (item.pageStart !== undefined && chunk.pageStart !== undefined && item.pageStart !== chunk.pageStart) {
+  if (item.pageStart != null && chunk.pageStart !== undefined && item.pageStart !== chunk.pageStart) {
     throw new AiProvenanceValidationFailedError({
       reason: `pageStart ${item.pageStart} contradicts the known page (${chunk.pageStart}) of chunk ${item.chunkSequence}`,
     });
   }
-  if (item.pageEnd !== undefined && chunk.pageEnd !== undefined && item.pageEnd !== chunk.pageEnd) {
+  if (item.pageEnd != null && chunk.pageEnd !== undefined && item.pageEnd !== chunk.pageEnd) {
     throw new AiProvenanceValidationFailedError({
       reason: `pageEnd ${item.pageEnd} contradicts the known page (${chunk.pageEnd}) of chunk ${item.chunkSequence}`,
     });
   }
-  if (item.sheetName !== undefined && chunk.sheetName !== undefined && item.sheetName !== chunk.sheetName) {
+  if (item.sheetName != null && chunk.sheetName !== undefined && item.sheetName !== chunk.sheetName) {
     throw new AiProvenanceValidationFailedError({
       reason: `sheetName "${item.sheetName}" contradicts the known sheet ("${chunk.sheetName}") of chunk ${item.chunkSequence}`,
     });
   }
-  if (item.sectionTitle !== undefined && chunk.sectionTitle !== undefined && item.sectionTitle !== chunk.sectionTitle) {
+  if (item.sectionTitle != null && chunk.sectionTitle !== undefined && item.sectionTitle !== chunk.sectionTitle) {
     throw new AiProvenanceValidationFailedError({
       reason: `sectionTitle "${item.sectionTitle}" contradicts the known section ("${chunk.sectionTitle}") of chunk ${item.chunkSequence}`,
     });
@@ -137,11 +143,11 @@ export async function validateTenderConsolidationProvenance(
   }
 
   async function check(item: DeclaredTenderProvenance): Promise<void> {
-    if (item.documentId === undefined) {
+    if (item.documentId == null) {
       // Mission §"tender-wide et un-sourceable" (COMMON_RULES) — un fait sans document source est
       // légitime, mais alors JAMAIS accompagné d'un `chunkSequence` qu'aucun document ne peut
       // résoudre : une référence de chunk orpheline est une provenance fabriquée.
-      if (item.chunkSequence !== undefined) {
+      if (item.chunkSequence != null) {
         throw new AiProvenanceValidationFailedError({
           reason: "chunkSequence was provided without a documentId to resolve it against",
         });
