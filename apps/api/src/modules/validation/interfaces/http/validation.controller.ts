@@ -62,7 +62,16 @@ export class ValidationController {
     return this.getValidationRunUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId });
   }
 
-  @Get("tenders/:tenderId/readiness")
+  // Mission Sprint 8A.2 (audit Cockpit Bid Manager) — correctif d'une collision de route réelle :
+  // `TendersController` enregistre déjà `GET tenders/:tenderId/readiness` (score de complétude
+  // générique, Sprint 0/2) ; Nest/Express ne résolvant que la PREMIÈRE route enregistrée pour un
+  // chemin identique (ordre d'import de `app.module.ts`, `TendersModule` avant `ValidationModule`),
+  // cette route-ci n'était JAMAIS atteinte — l'écran Validation recevait silencieusement la forme
+  // de réponse de Tenders (`score`/`breakdown`) au lieu de `{status, latestValidationRunId,
+  // activeApprovalId}`, très probablement la cause racine réelle du bug #5 ("reste bloqué sur 'en
+  // attente d'approbation' après signature"). Chemin renommé sous le préfixe `/validation` déjà
+  // utilisé par la route sœur ci-dessus, jamais un chemin partagé avec un autre module.
+  @Get("tenders/:tenderId/validation/readiness")
   async readiness(
     @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,

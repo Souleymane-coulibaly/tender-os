@@ -56,6 +56,7 @@ import { PricingController } from "./interfaces/http/pricing.controller";
   // Reste RBAC-gated en interne (ClientPermission.ReadPricing).
   // `ListPricingEstimatesUseCase` réexporté en plus pour Sprint 8A.1 (Deliverables) — retrouver
   // l'estimation la plus récente d'un Tender pour la vue LECTURE SEULE "Rapport financier".
-  exports: [GetPricingEstimateUseCase, ListPricingEstimatesUseCase],
+  // `GetTenderCostSummaryUseCase` réexporté en plus pour Sprint 8A.2 (module `cockpit`, lecture seule).
+  exports: [GetPricingEstimateUseCase, ListPricingEstimatesUseCase, GetTenderCostSummaryUseCase],
 })
 export class PricingModule {}

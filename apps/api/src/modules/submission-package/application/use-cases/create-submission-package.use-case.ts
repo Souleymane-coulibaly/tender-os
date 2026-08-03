@@ -1,7 +1,14 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { EXPORT_JOB_REPOSITORY, ExportArtifactNotFoundError, type ExportJobRepository } from "../../../export";
-import { SIGNATURE_REQUIREMENT_REPOSITORY, SIGNATURE_TRANSACTION_REPOSITORY, type SignatureRequirementRepository, type SignatureTransactionRepository } from "../../../signature";
+import {
+  isTerminalSignatureTransactionStatus,
+  SIGNATURE_REQUIREMENT_REPOSITORY,
+  SIGNATURE_TRANSACTION_REPOSITORY,
+  SignatureTransactionStatus,
+  type SignatureRequirementRepository,
+  type SignatureTransactionRepository,
+} from "../../../signature";
 import { FINAL_APPROVAL_REPOSITORY, type FinalApprovalRepository } from "../../../validation";
 import { GetTenderUseCase } from "../../../tenders";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
@@ -10,8 +17,6 @@ import { PackageAssemblyService, type PackageSourceFile } from "../services/pack
 import { toSubmissionPackageSummary, type SubmissionPackageSummary } from "../dtos";
 
 export type CreateSubmissionPackageCommand = Readonly<{ organizationId: string; actorId: string; actorRole: string; tenderId: string }>;
-
-const TERMINAL_TRANSACTION_STATUSES = new Set(["VERIFIED", "DECLINED", "CANCELLED", "EXPIRED", "FAILED", "INVALID"]);
 
 /**
  * Mission Sprint 8A bis §10/§52/§53 — "Créer un package : règle stricte" ⇒ `ApproveExport`.
@@ -80,8 +85,10 @@ export class CreateSubmissionPackageUseCase {
 
     if (mandatoryConfirmed.length > 0) {
       const transactions = await this.signatureTransactionRepository.listForTender({ organizationId: command.organizationId, tenderId: command.tenderId });
-      const verified = transactions.filter((t) => t.transaction.status === "VERIFIED");
-      const nonTerminal = transactions.filter((t) => !TERMINAL_TRANSACTION_STATUSES.has(t.transaction.status));
+      const verified = transactions.filter((t) => t.transaction.status === SignatureTransactionStatus.Verified);
+      const nonTerminal = transactions.filter(
+        (t) => !isTerminalSignatureTransactionStatus(t.transaction.status as SignatureTransactionStatus),
+      );
       if (verified.length === 0 || nonTerminal.length > 0) {
         throw new PackageNotReadyError("mandatory signatures are not fully verified yet — the tender is not ready for packaging");
       }

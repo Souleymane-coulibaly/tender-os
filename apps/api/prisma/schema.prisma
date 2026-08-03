@@ -335,6 +335,7 @@ model Tender {
   statusHistory            TenderStatusHistoryEntry[]
   documentAssociations     DocumentTenderAssociation[]
   dces                     Dce[]
+  dceImportJobs            DceImportJob[]
   analysisJobs             AnalysisJob[]
   documentBusinessAnalyses DocumentBusinessAnalysis[]
   deadlineFindings         TenderDeadlineFinding[]
@@ -739,6 +740,49 @@ model Dce {
   @@unique([id, organizationId])
   @@index([organizationId])
   @@map("dces")
+}
+
+/// Job d'import ZIP asynchrone (mission Sprint 8A.2, correction bug #3 "import ZIP lourd échoue ou
+/// bloque") — la requête HTTP ne fait plus que valider l'upload et créer cette ligne ; l'extraction
+/// de l'archive et l'import fichier-par-fichier (déjà sûrs, voir YauzlArchiveInspector/
+/// ImportDceFilesUseCase, réutilisés tels quels) se déroulent en tâche de fond, même pattern
+/// InProcessDispatcher déjà pratiqué par Extraction/Analysis/Generation. Ne duplique jamais le
+/// résultat d'import lui-même : `result` sérialise le même contrat `ImportDceFilesResult` que la
+/// réponse HTTP synchrone historique.
+model DceImportJob {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// CREATED | EXTRACTING | IMPORTING | READY | PARTIALLY_READY | FAILED | CANCELLED — voir
+  /// dce/domain/dce-import-job-status.ts. Protégée par une contrainte CHECK (migration).
+  status String @default("CREATED") @db.VarChar(20)
+
+  originalFilename String @map("original_filename") @db.VarChar(255)
+  sizeBytes        Int    @map("size_bytes")
+
+  totalFiles    Int? @map("total_files")
+  acceptedCount Int? @map("accepted_count")
+  rejectedCount Int? @map("rejected_count")
+
+  /// Sérialisation JSON de `ImportDceFilesResult` (accepted/rejected) — même contrat que la
+  /// réponse synchrone historique, jamais un second format de résultat.
+  result Json?
+
+  /// Message sanitizé (jamais une pile d'appel ni un détail interne) — mission §"erreurs
+  /// techniques affichées brutes".
+  errorMessage String? @map("error_message") @db.VarChar(2000)
+
+  createdByUserId String    @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  completedAt     DateTime? @map("completed_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId])
+  @@map("dce_import_jobs")
 }
 
 /// Lien pur entre un Dce et un Document (même motif que DocumentTenderAssociation) — ne duplique
@@ -2515,6 +2559,14 @@ model ExportJob {
   basedOnExportJobId String?     @map("based_on_export_job_id") @db.Uuid
   basedOnExportJob   ExportJob?  @relation("ExportJobBasis", fields: [basedOnExportJobId], references: [id])
   derivedExportJobs  ExportJob[] @relation("ExportJobBasis")
+
+  /// Mission Sprint 8A.2 (correction bugs #7/#8 "thème non appliqué à l'export") — même motif
+  /// dénormalisé, sans FK inter-module, que `Deliverable.themeVersionId`/`themeSourceLevel`
+  /// (Sprint 8A.1) : le thème RÉELLEMENT résolu (TENDER > CLIENT > ORGANIZATION > TENDEROS, voir
+  /// TemplateThemeResolverService, réutilisé tel quel) au moment du rendu, jamais recalculé côté
+  /// frontend, jamais une seconde hiérarchie de résolution divergente.
+  themeVersionId   String? @map("theme_version_id") @db.Uuid
+  themeSourceLevel String? @map("theme_source_level") @db.VarChar(12)
 
   createdBy    String    @map("created_by") @db.Uuid
   createdAt    DateTime  @default(now()) @map("created_at")

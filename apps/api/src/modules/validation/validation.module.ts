@@ -3,6 +3,7 @@ import { ClientPortfolioModule } from "../client-portfolio";
 import { ExportModule } from "../export";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
+import { SignatureModule } from "../signature";
 import { TendersModule } from "../tenders";
 import { FINAL_APPROVAL_REPOSITORY } from "./application/ports/final-approval.repository";
 import { VALIDATION_RUN_REPOSITORY } from "./application/ports/validation-run.repository";
@@ -21,10 +22,14 @@ import { ValidationController } from "./interfaces/http/validation.controller";
  * Module Validation (Sprint 8A bis) — importe `ExportModule` dans UN SEUL sens (lit les
  * `ExportJob`/templates, déclenche `GenerateFinalExportUseCase` après approbation) : Export
  * n'importe jamais Validation en retour, évitant tout cycle Nest (même motif que
- * Generation → Analysis).
+ * Generation → Analysis). `SignatureModule` importé de même (mission Sprint 8A.2, correction
+ * bug #5 — `GetReadinessStatusUseCase` lit `SIGNATURE_REQUIREMENT_REPOSITORY`/
+ * `SIGNATURE_TRANSACTION_REPOSITORY` en lecture seule pour réconcilier l'état réel de signature ;
+ * Signature n'importe jamais Validation en retour, aucun cycle) — même lecture EXACTE déjà
+ * pratiquée par `submission-package` (Sprint 8A bis), jamais un second calcul divergent.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, ExportModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, ExportModule, SignatureModule],
   controllers: [ValidationController],
   providers: [
     RunFinalValidationUseCase,

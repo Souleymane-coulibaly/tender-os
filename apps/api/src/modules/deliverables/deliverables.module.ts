@@ -181,5 +181,12 @@ import { DocumentThemesController } from "./interfaces/http/document-themes.cont
     { provide: CHECKLIST_PIECE_ENTRY_REPOSITORY, useClass: PrismaChecklistPieceEntryRepository },
     { provide: DELIVERABLE_ANNEX_REPOSITORY, useClass: PrismaDeliverableAnnexRepository },
   ],
+  // Réexportés pour Sprint 8A.2 (correction bugs #7/#8) — `ExportThemeResolverBridgeModule`
+  // (infrastructure/) importe CE module pour lier `TemplateThemeResolverService.resolveTheme` (et
+  // `DOCUMENT_THEME_REPOSITORY.findVersionById`, pour un export FINAL qui réutilise le thème déjà
+  // figé sur l'aperçu approuvé) au port `THEME_RESOLVER` propre à Export — jamais un second calcul
+  // de la hiérarchie de résolution.
+  // `ListDeliverablesUseCase` réexporté en plus pour Sprint 8A.2 (module `cockpit`, lecture seule).
+  exports: [TemplateThemeResolverService, DOCUMENT_THEME_REPOSITORY, ListDeliverablesUseCase],
 })
 export class DeliverablesModule {}
