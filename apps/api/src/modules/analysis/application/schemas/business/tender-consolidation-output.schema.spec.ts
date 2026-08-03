@@ -105,4 +105,20 @@ describe("parseTenderConsolidationOutput", () => {
     delete (output as Record<string, unknown>).summary;
     expect(() => parseTenderConsolidationOutput(JSON.stringify(output))).toThrow(AiSchemaValidationFailedError);
   });
+
+  it("rejects a risk item with the 'confidence' field entirely missing, never a silent default", () => {
+    const output = validOutput({
+      risks: [
+        {
+          title: "Délai de réponse très court",
+          category: "PLANNING",
+          severity: "HIGH",
+          explanation: "Le délai entre la publication et la remise est inférieur à 3 semaines.",
+          recommendation: "Prioriser la rédaction du mémoire technique dès maintenant.",
+          documentId: DOC_ID,
+        },
+      ],
+    });
+    expect(() => parseTenderConsolidationOutput(JSON.stringify(output))).toThrow(AiSchemaValidationFailedError);
+  });
 });

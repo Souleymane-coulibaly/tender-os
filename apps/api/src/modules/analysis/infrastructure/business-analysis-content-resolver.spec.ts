@@ -181,6 +181,24 @@ describe("BusinessAnalysisContentResolver", () => {
       expect(analyses).toHaveLength(0);
     });
 
+    it("throws AiSchemaValidationFailedError when a provider response omits 'confidence' on a deadline item — never persists it, never a fabricated default", async () => {
+      const job = buildDocumentJob("OWNER");
+      const raw = JSON.stringify({
+        documentType: "CCTP",
+        language: "fr",
+        metadata: {},
+        deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "2026-09-01T12:00:00.000Z" }],
+        criteria: [],
+        requirements: [],
+        clauses: [],
+        warnings: [],
+      });
+
+      await expect(resolver.handleSuccess(job, raw)).rejects.toBeInstanceOf(AiSchemaValidationFailedError);
+      const analyses = await businessAnalysisRepository.findLatestDocumentAnalyses({ organizationId: ORG, tenderId: TENDER });
+      expect(analyses).toHaveLength(0);
+    });
+
     it("throws AiProvenanceValidationFailedError when the citation is not found in the cited chunk — never persists it", async () => {
       const job = buildDocumentJob("OWNER");
       const raw = JSON.stringify({

@@ -21,6 +21,23 @@ const COMMON_RULES =
   "invent a chunkSequence, page number, or citation that does not really appear in the provided input.";
 
 /**
+ * Renfort LOCAL de l'exigence `confidence` (mission — correctif crash prod `AI_SCHEMA_VALIDATION_FAILED`,
+ * confidence manquante malgré `COMMON_RULES`) — une seule mention générale en tête de prompt ne
+ * suffit pas à obtenir une conformité fiable du modèle sur CHAQUE élément d'un tableau ; cette
+ * fonction factorise la phrase de renfort (jamais copiée-collée à la main par tableau) pour que les
+ * deux prompts restent alignés sans dupliquer le texte. Générique — aucune mention de fournisseur ni
+ * de modèle, reste valable si le provider ou le modèle change.
+ */
+function requireConfidenceOn(arrayNames: readonly string[]): string {
+  const list = arrayNames.map((name) => `'${name}'`).join(", ");
+  return (
+    `Every single item you add to ${list} MUST carry its own 'confidence' number (0-1) — this is not ` +
+    "optional and applies to EVERY item, never just the array as a whole; if you are certain, use a " +
+    "high value (e.g. 0.95), never omit the field."
+  );
+}
+
+/**
  * Prompt technique (Sprint 4.1, inchangé) + les deux prompts métier du Sprint 4.2. Stockage
  * statique/applicatif (mission §"Prompts" — aucun écran d'administration, aucune édition
  * dynamique) : ce fichier est la SEULE source de contenu de prompt, jamais dispersé dans les use
@@ -61,6 +78,8 @@ export class StaticPromptTemplateProvider implements PromptTemplatePort {
         "TenderOS. You analyze ONE tender document at a time. You extract reliable, traceable business " +
         "facts — you never invent information, and you never write a free-form summary. " +
         COMMON_RULES +
+        " " +
+        requireConfidenceOn(["deadlines", "criteria", "requirements", "clauses"]) +
         " Classify 'documentType' as one of: " +
         Object.values(DocumentClassification).join(", ") +
         ". Use 'UNKNOWN' if genuinely unclear. Report 'language' as a 2-letter ISO code (e.g. 'fr', 'en'). " +
@@ -103,6 +122,8 @@ export class StaticPromptTemplateProvider implements PromptTemplatePort {
         "prices/quantities — but always defer to what the documents actually say over this generic " +
         "rule), detect real business risks, and generate clarification questions for the buyer. " +
         COMMON_RULES +
+        " " +
+        requireConfidenceOn(["deadlines", "criteria", "requirements", "clauses", "risks", "questions"]) +
         " Every finding must set 'documentId' to the exact id of the source document you used (from the " +
         "input), never a fabricated id. Every risk needs a 'title' (short label), a free-text 'category' " +
         "(e.g. juridique, technique, financier, delai), 'severity' (one of LOW, MEDIUM, HIGH, CRITICAL), " +

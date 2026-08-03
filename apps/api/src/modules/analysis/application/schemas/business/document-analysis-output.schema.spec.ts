@@ -55,6 +55,13 @@ describe("parseDocumentAnalysisOutput", () => {
     expect(() => parseDocumentAnalysisOutput(JSON.stringify(output))).toThrow(AiSchemaValidationFailedError);
   });
 
+  it("rejects a deadline item with the 'confidence' field entirely missing, never a silent default", () => {
+    const output = validOutput({
+      deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "2026-09-01T12:00:00.000Z" }],
+    });
+    expect(() => parseDocumentAnalysisOutput(JSON.stringify(output))).toThrow(AiSchemaValidationFailedError);
+  });
+
   it("rejects an unknown requirement category", () => {
     const output = validOutput({
       requirements: [{ category: "NOT_A_REAL_CATEGORY", label: "x", isMandatory: true, confidence: 0.5 }],
