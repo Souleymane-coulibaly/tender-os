@@ -62,6 +62,36 @@ describe("parseDocumentAnalysisOutput", () => {
     expect(() => parseDocumentAnalysisOutput(JSON.stringify(output))).toThrow(AiSchemaValidationFailedError);
   });
 
+  it("normalizes a date-only value (no time component) to midnight UTC — mission correctif rejets aleatoires selon le fichier, un document qui ne precise pas d'heure ne doit jamais faire echouer l'analyse", () => {
+    const output = validOutput({
+      deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "2026-09-01", confidence: 0.9 }],
+    });
+    const result = parseDocumentAnalysisOutput(JSON.stringify(output));
+    expect(result.deadlines[0]!.date).toBe("2026-09-01T00:00:00.000Z");
+  });
+
+  it("normalizes a datetime with a numeric timezone offset to UTC", () => {
+    const output = validOutput({
+      deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "2026-09-01T12:00:00+01:00", confidence: 0.9 }],
+    });
+    const result = parseDocumentAnalysisOutput(JSON.stringify(output));
+    expect(result.deadlines[0]!.date).toBe("2026-09-01T11:00:00.000Z");
+  });
+
+  it("still rejects a calendar-impossible date (e.g. February 30th) rather than silently rolling it over to March", () => {
+    const output = validOutput({
+      deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "2026-02-30T00:00:00Z", confidence: 0.9 }],
+    });
+    expect(() => parseDocumentAnalysisOutput(JSON.stringify(output))).toThrow(AiSchemaValidationFailedError);
+  });
+
+  it("still rejects an ambiguous non-ISO date format (e.g. DD/MM/YYYY) rather than guessing the field order", () => {
+    const output = validOutput({
+      deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "01/09/2026", confidence: 0.9 }],
+    });
+    expect(() => parseDocumentAnalysisOutput(JSON.stringify(output))).toThrow(AiSchemaValidationFailedError);
+  });
+
   it("rejects an unknown requirement category", () => {
     const output = validOutput({
       requirements: [{ category: "NOT_A_REAL_CATEGORY", label: "x", isMandatory: true, confidence: 0.5 }],
