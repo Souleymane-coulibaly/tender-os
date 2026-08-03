@@ -118,6 +118,24 @@ export function exportTemplateVersionStatusBadgeClass(status: string): string {
   }
 }
 
+export type ExportCapabilityBlocker = { code: string };
+
+export type ExportCapabilities = {
+  canExport: boolean;
+  canExportDocx: boolean;
+  canExportPdf: boolean;
+  canUseTemplate: boolean;
+  blockers: ExportCapabilityBlocker[];
+};
+
+/** Mission — "si une donnée obligatoire manque : bouton désactivé, raison visible, message en
+ *  français". Codes alignés sur `GetExportCapabilitiesUseCase` (backend), jamais un second
+ *  vocabulaire divergent. */
+export const EXPORT_CAPABILITY_BLOCKER_LABELS: Record<string, string> = {
+  EXPORT_TEMPLATE_MISSING: "Aucun modèle d'export n'a encore été créé pour cette organisation. Un administrateur doit en créer un dans Configuration IA.",
+  TEMPLATE_VERSION_MISSING: "Aucune version de modèle d'export n'est active. Un administrateur doit en activer une dans Configuration IA.",
+};
+
 const ORG_TIER = ["OWNER", "ORGANIZATION_ADMIN"];
 
 /** Vérification UI uniquement — le backend revalide toujours via `ExportPermission.ManageExportTemplates`

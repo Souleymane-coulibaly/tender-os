@@ -4,6 +4,7 @@ import { AuthenticatedGuard, CurrentActor, type AuthenticatedActor } from "../..
 import { CurrentMembershipContext, OrganizationMembershipGuard, type MembershipContext } from "../../../memberships";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
 import { DownloadExportArtifactUseCase } from "../../application/use-cases/download-export-artifact.use-case";
+import { GetExportCapabilitiesUseCase } from "../../application/use-cases/get-export-capabilities.use-case";
 import { GetExportJobUseCase } from "../../application/use-cases/get-export-job.use-case";
 import { ListExportHistoryUseCase } from "../../application/use-cases/list-export-history.use-case";
 import { PreviewExportUseCase } from "../../application/use-cases/preview-export.use-case";
@@ -23,7 +24,22 @@ export class ExportController {
     private readonly getExportJobUseCase: GetExportJobUseCase,
     private readonly listExportHistoryUseCase: ListExportHistoryUseCase,
     private readonly downloadExportArtifactUseCase: DownloadExportArtifactUseCase,
+    private readonly getExportCapabilitiesUseCase: GetExportCapabilitiesUseCase,
   ) {}
+
+  @Get("tenders/:tenderId/export-capabilities")
+  async capabilities(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    return this.getExportCapabilitiesUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      tenderId,
+    });
+  }
 
   @Post("tenders/:tenderId/exports/preview")
   @HttpCode(HttpStatus.CREATED)

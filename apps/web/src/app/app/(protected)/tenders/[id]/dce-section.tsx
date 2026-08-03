@@ -11,7 +11,7 @@ import {
   type ImportActionState,
 } from "../../../dce-actions";
 import { getAnalysisJobAction, retryDocumentAnalysisAction, startDocumentAnalysisAction } from "../../../analysis-actions";
-import { ANALYSIS_STATUS_LABELS, type AnalysisJobSummary } from "../../../../../lib/analysis-types";
+import { ANALYSIS_CAPABILITY_REASON_LABELS, ANALYSIS_STATUS_LABELS, type AnalysisCapability, type AnalysisJobSummary } from "../../../../../lib/analysis-types";
 import {
   DCE_DOCUMENT_PROCESSING_STATUS_LABELS,
   DCE_IMPORT_JOB_STATUS_LABELS,
@@ -48,16 +48,20 @@ function analysisStatusBadgeClass(status: AnalysisJobSummary["status"]): string 
  * persistée côté API à ce jour) — un rechargement de page réinitialise ce contrôle à son état
  * initial "Analyser", sans perdre l'analyse déjà lancée côté backend.
  */
-function DocumentAnalysisControl({ tenderId, documentId, processingStatus, canAnalyze }: {
+function DocumentAnalysisControl({ tenderId, documentId, processingStatus, canAnalyze, analysisCapability }: {
   tenderId: string;
   documentId: string;
   processingStatus: DceDocumentSummary["processingStatus"];
   canAnalyze: boolean;
+  analysisCapability: AnalysisCapability | undefined;
 }) {
   const [job, setJob] = useState<AnalysisJobSummary | undefined>();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const ready = isReadyForAnalysis(processingStatus);
+  // Mission — "ne pas afficher Analyser disponible si la config IA manque". `analysisCapability`
+  // absent (route non encore appelée) est traité comme prêt, jamais un blocage inventé.
+  const capabilityReasonCode = analysisCapability && !analysisCapability.ready ? analysisCapability.reasonCode : undefined;
   const isRunning = job !== undefined && NON_TERMINAL_ANALYSIS_STATUSES.includes(job.status);
 
   async function handleStart(): Promise<void> {
@@ -125,7 +129,7 @@ function DocumentAnalysisControl({ tenderId, documentId, processingStatus, canAn
           {!job || (!isRunning && job.status !== "FAILED") ? (
             <button
               type="button"
-              disabled={isPending || !ready || isRunning}
+              disabled={isPending || !ready || isRunning || capabilityReasonCode !== undefined}
               onClick={handleStart}
               className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50"
             >
@@ -143,6 +147,11 @@ function DocumentAnalysisControl({ tenderId, documentId, processingStatus, canAn
             </button>
           ) : null}
         </div>
+      ) : null}
+      {capabilityReasonCode ? (
+        <p role="alert" className="text-xs text-amber-700">
+          {ANALYSIS_CAPABILITY_REASON_LABELS[capabilityReasonCode] ?? "L'analyse IA n'est pas disponible pour le moment."}
+        </p>
       ) : null}
       {error ? (
         <p role="alert" className="text-xs text-red-600">
@@ -335,6 +344,7 @@ export function DceSection({
   canManage,
   canDelete,
   canAnalyze,
+  analysisCapability,
 }: {
   tenderId: string;
   dce: DceSummary | null;
@@ -342,6 +352,7 @@ export function DceSection({
   canManage: boolean;
   canDelete: boolean;
   canAnalyze: boolean;
+  analysisCapability?: AnalysisCapability | undefined;
 }) {
   const importFilesBoundAction = importDceFilesAction.bind(null, tenderId);
   const [importFilesState, importFilesFormAction, isImportingFiles] = useActionState(
@@ -406,6 +417,7 @@ export function DceSection({
                       documentId={doc.documentId}
                       processingStatus={doc.processingStatus}
                       canAnalyze={canAnalyze}
+                      analysisCapability={analysisCapability}
                     />
                     <a
                       href={`/app/tenders/${tenderId}/dce-documents/${doc.documentId}/download`}

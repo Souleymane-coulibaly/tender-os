@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type {
+  AnalysisCapability,
   AnalysisJobSummary,
   AnalysisSectionData,
   ClauseFinding,
@@ -86,6 +87,13 @@ export async function fetchAnalysisSectionData(tenderId: string): Promise<Analys
   const latestJob: AnalysisJobSummary | null = history.items[0] ?? null;
 
   return { latestJob, jobHistoryCount: history.total, summary, deadlines, criteria, requirements, clauses, risks, questions };
+}
+
+/** Mission — vérifie côté backend, avant d'afficher le bouton "Analyser", si l'analyse IA est
+ *  réellement configurée (jamais une tentative à l'aveugle suivie d'un échec asynchrone opaque). */
+export async function fetchAnalysisCapabilities(tenderId: string): Promise<AnalysisCapability[]> {
+  const result = await appApiFetch<{ items: AnalysisCapability[] }>(`/api/v1/tenders/${tenderId}/analysis-capabilities`);
+  return result.items;
 }
 
 export async function startTenderAnalysisAction(tenderId: string): Promise<FormActionState> {

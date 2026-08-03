@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
-import { fetchAnalysisSectionData } from "../../../analysis-actions";
-import { canTriggerAnalysis, type AnalysisSectionData } from "../../../../../lib/analysis-types";
+import { fetchAnalysisCapabilities, fetchAnalysisSectionData } from "../../../analysis-actions";
+import { canTriggerAnalysis, type AnalysisCapability, type AnalysisSectionData } from "../../../../../lib/analysis-types";
 import { fetchDceSectionData } from "../../../dce-actions";
 import { canDeleteDceDocument, canImportOrReplaceDceDocument, type DceDocumentSummary, type DceSummary } from "../../../../../lib/dce-types";
 import type { TenderCockpit } from "../../../../../lib/cockpit-types";
@@ -70,11 +70,12 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   let documents: DocumentSummary[];
   let dceSection: { dce: DceSummary | null; documents: DceDocumentSummary[] };
   let analysisData: AnalysisSectionData;
+  let analysisCapabilities: AnalysisCapability[];
   let role: string | undefined;
   let cockpit: TenderCockpit;
 
   try {
-    [tender, lots, checklistItems, criteria, requestedDocuments, milestones, risks, alerts, readiness, history, documents, dceSection, analysisData, role, cockpit] =
+    [tender, lots, checklistItems, criteria, requestedDocuments, milestones, risks, alerts, readiness, history, documents, dceSection, analysisData, analysisCapabilities, role, cockpit] =
       await Promise.all([
         appApiFetch<Tender>(`/api/v1/tenders/${id}`),
         appApiFetch<TenderLot[]>(`/api/v1/tenders/${id}/lots`),
@@ -89,6 +90,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         appApiFetch<DocumentSummary[]>(`/api/v1/tenders/${id}/documents`),
         fetchDceSectionData(id),
         fetchAnalysisSectionData(id),
+        fetchAnalysisCapabilities(id),
         getCurrentMembershipRole(),
         appApiFetch<TenderCockpit>(`/api/v1/tenders/${id}/cockpit`),
       ]);
@@ -185,6 +187,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
           canManage={canImportOrReplaceDceDocument(role)}
           canDelete={canDeleteDceDocument(role)}
           canAnalyze={canTriggerAnalysis(role)}
+          analysisCapability={analysisCapabilities.find((c) => c.taskType === "ANALYZE_DOCUMENT")}
         />
         <MilestonesSection tenderId={tender.id} milestones={milestones} />
         <RisksSection tenderId={tender.id} risks={risks} />

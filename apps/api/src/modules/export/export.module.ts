@@ -15,6 +15,7 @@ import { CreateExportTemplateUseCase } from "./application/use-cases/create-expo
 import { CreateExportTemplateVersionUseCase } from "./application/use-cases/create-export-template-version.use-case";
 import { DownloadExportArtifactUseCase } from "./application/use-cases/download-export-artifact.use-case";
 import { GenerateFinalExportUseCase } from "./application/use-cases/generate-final-export.use-case";
+import { GetExportCapabilitiesUseCase } from "./application/use-cases/get-export-capabilities.use-case";
 import { GetExportJobUseCase } from "./application/use-cases/get-export-job.use-case";
 import { ListExportHistoryUseCase } from "./application/use-cases/list-export-history.use-case";
 import { ListExportTemplatesUseCase } from "./application/use-cases/list-export-templates.use-case";
@@ -47,6 +48,7 @@ import { ExportTemplatesController } from "./interfaces/http/export-templates.co
     PreviewExportUseCase,
     GenerateFinalExportUseCase,
     GetExportJobUseCase,
+    GetExportCapabilitiesUseCase,
     ListExportHistoryUseCase,
     DownloadExportArtifactUseCase,
 

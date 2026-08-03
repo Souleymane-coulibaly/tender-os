@@ -14,6 +14,7 @@ import { BUSINESS_ANALYSIS_REPOSITORY } from "./application/ports/business-analy
 import { PROMPT_TEMPLATE } from "./application/ports/prompt-template.port";
 
 import { CancelAnalysisUseCase } from "./application/use-cases/cancel-analysis.use-case";
+import { GetAnalysisCapabilitiesUseCase } from "./application/use-cases/get-analysis-capabilities.use-case";
 import { GetAnalysisUseCase } from "./application/use-cases/get-analysis.use-case";
 import { GetTenderBusinessAnalysisUseCase } from "./application/use-cases/get-tender-business-analysis.use-case";
 import { ListTenderAnalysesUseCase } from "./application/use-cases/list-tender-analyses.use-case";
@@ -47,6 +48,7 @@ import { AnalysisController } from "./interfaces/http/analysis.controller";
     StartTenderAnalysisUseCase,
     StartDocumentAnalysisUseCase,
     GetAnalysisUseCase,
+    GetAnalysisCapabilitiesUseCase,
     RetryAnalysisUseCase,
     CancelAnalysisUseCase,
     ProcessAnalysisJobUseCase,

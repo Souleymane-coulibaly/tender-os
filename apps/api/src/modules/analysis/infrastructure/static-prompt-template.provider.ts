@@ -66,13 +66,20 @@ export class StaticPromptTemplateProvider implements PromptTemplatePort {
         ". Use 'UNKNOWN' if genuinely unclear. Report 'language' as a 2-letter ISO code (e.g. 'fr', 'en'). " +
         "'deadlines[].kind' must be one of: " +
         Object.values(DeadlineKind).join(", ") +
-        ". A deadline needs a normalized 'date' (full ISO 8601 datetime) OR, if you cannot normalize it " +
+        ". Every deadline needs a 'label' (short human-readable description, e.g. 'Date limite de remise " +
+        "des offres') and a normalized 'date' (full ISO 8601 datetime) OR, if you cannot normalize it " +
         "reliably, a 'rawText' field with the source text instead — never both empty, never a guessed date. " +
         "'requirements[].category' must be one of: " +
         Object.values(RequirementCategory).join(", ") +
-        ". 'clauses[].category' must be one of: " +
+        ", and every requirement needs a 'label' (short human-readable description of what is required). " +
+        "'clauses[].category' must be one of: " +
         Object.values(ClauseCategory).join(", ") +
-        ". The JSON object has exactly these top-level fields: documentType, language, metadata (object), " +
+        ", and every clause needs a 'summary' (concise plain-language summary of the clause's content, at " +
+        "most a few sentences). Every 'criteria[]' entry needs a 'name' (short human-readable label of the " +
+        "selection criterion); include 'weight' (0-100) only if explicitly stated, 'isEliminatory' (true " +
+        "only for a pass/fail eliminatory criterion, false otherwise), and 'subCriteria'/'scoringMethod'/" +
+        "'priceFormula'/'threshold' only when the document actually specifies them. " +
+        "The JSON object has exactly these top-level fields: documentType, language, metadata (object), " +
         "deadlines (array), criteria (array), requirements (array), clauses (array), warnings (array of " +
         "short strings describing anything ambiguous, contradictory, or unreadable in this document). Do " +
         "not extract risks or questions here — that only happens at tender-consolidation time.",
@@ -97,11 +104,18 @@ export class StaticPromptTemplateProvider implements PromptTemplatePort {
         "rule), detect real business risks, and generate clarification questions for the buyer. " +
         COMMON_RULES +
         " Every finding must set 'documentId' to the exact id of the source document you used (from the " +
-        "input), never a fabricated id. 'risks[].severity' must be one of LOW, MEDIUM, HIGH, CRITICAL. " +
-        "'questions[].priority' must be one of LOW, MEDIUM, HIGH. 'summary.complexityLevel' must be one " +
-        "of LOW, MEDIUM, HIGH. 'summary.goNoGoRecommendation' must be one of GO, GO_WITH_RESERVATIONS, " +
-        "NO_GO, INSUFFICIENT_DATA — this is a DECISION-SUPPORT SUGGESTION ONLY, never a final automatic " +
-        "decision; always justify it in 'summary.goNoGoRationale'. The JSON object has exactly these " +
+        "input), never a fabricated id. Every risk needs a 'title' (short label), a free-text 'category' " +
+        "(e.g. juridique, technique, financier, delai), 'severity' (one of LOW, MEDIUM, HIGH, CRITICAL), " +
+        "an 'explanation' (why this is a risk), and a 'recommendation' (what the bidder should do about " +
+        "it) — 'probability' (0-1) only if you can reasonably estimate it. Every question needs the " +
+        "actual 'question' text to ask the buyer, a 'justification' (why it matters), a 'priority' (one " +
+        "of LOW, MEDIUM, HIGH), and a 'theme' (short topic label, e.g. delais, criteres, pieces " +
+        "administratives). 'summary' must always include: 'opportunitySummary' (a few sentences), " +
+        "'complexityLevel' (one of LOW, MEDIUM, HIGH), 'mainCriteria', 'mainRisks', 'mainObligations', " +
+        "'missingElements' and 'pointsToClarify' (each an array of short strings — an empty array if " +
+        "genuinely none apply), 'goNoGoRecommendation' (one of GO, GO_WITH_RESERVATIONS, NO_GO, " +
+        "INSUFFICIENT_DATA — this is a DECISION-SUPPORT SUGGESTION ONLY, never a final automatic " +
+        "decision), and 'goNoGoRationale' (always justify it). The JSON object has exactly these " +
         "top-level fields: metadata, deadlines, criteria, requirements, clauses, risks, questions, summary.",
       userPrompt:
         "Here are the per-document structured analyses for this tender (JSON array, each entry includes " +

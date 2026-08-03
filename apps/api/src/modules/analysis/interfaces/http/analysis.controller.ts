@@ -4,6 +4,7 @@ import { CurrentMembershipContext, OrganizationMembershipGuard, type MembershipC
 import type { RequestWithId } from "../../../../shared-kernel/request-id.middleware";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
 import { CancelAnalysisUseCase } from "../../application/use-cases/cancel-analysis.use-case";
+import { GetAnalysisCapabilitiesUseCase } from "../../application/use-cases/get-analysis-capabilities.use-case";
 import { GetAnalysisUseCase } from "../../application/use-cases/get-analysis.use-case";
 import { GetTenderBusinessAnalysisUseCase } from "../../application/use-cases/get-tender-business-analysis.use-case";
 import { ListTenderAnalysesUseCase } from "../../application/use-cases/list-tender-analyses.use-case";
@@ -33,6 +34,7 @@ export class AnalysisController {
     private readonly startTenderAnalysisUseCase: StartTenderAnalysisUseCase,
     private readonly startDocumentAnalysisUseCase: StartDocumentAnalysisUseCase,
     private readonly getAnalysisUseCase: GetAnalysisUseCase,
+    private readonly getAnalysisCapabilitiesUseCase: GetAnalysisCapabilitiesUseCase,
     private readonly retryAnalysisUseCase: RetryAnalysisUseCase,
     private readonly cancelAnalysisUseCase: CancelAnalysisUseCase,
     private readonly listTenderAnalysesUseCase: ListTenderAnalysesUseCase,
@@ -81,6 +83,22 @@ export class AnalysisController {
       requestId: request.id,
     });
     return presentAnalysisJob(result);
+  }
+
+  @Get("tenders/:tenderId/analysis-capabilities")
+  @HttpCode(HttpStatus.OK)
+  async capabilities(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    const result = await this.getAnalysisCapabilitiesUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+    });
+    return { items: result };
   }
 
   @Get("analyses/:analysisId")

@@ -179,6 +179,24 @@ describe("DceSection", () => {
 
       expect(screen.queryByRole("button", { name: "Analyser" })).not.toBeInTheDocument();
     });
+
+    it("disables Analyser and shows the precise French reason when analysis capabilities report AI is not configured, even though extraction is ready", () => {
+      render(
+        <DceSection
+          tenderId="tender-1"
+          dce={dce}
+          documents={documents}
+          canManage={true}
+          canDelete={true}
+          canAnalyze={true}
+          analysisCapability={{ taskType: "ANALYZE_DOCUMENT", ready: false, reasonCode: "AI_PROVIDER_NOT_CONFIGURED" }}
+        />,
+      );
+
+      expect(screen.getByRole("button", { name: "Analyser" })).toBeDisabled();
+      expect(screen.getByRole("alert")).toHaveTextContent("La génération IA n'est pas configurée pour ce type de contenu.");
+      expect(startDocumentAnalysisAction).not.toHaveBeenCalled();
+    });
   });
 
   describe("read-only role", () => {

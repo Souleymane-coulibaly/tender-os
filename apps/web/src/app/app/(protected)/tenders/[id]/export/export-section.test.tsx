@@ -2,7 +2,9 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ExportSection } from "./export-section";
-import type { ExportJobSummary, ExportTemplateSummary } from "../../../../../../lib/export-types";
+import type { ExportCapabilities, ExportJobSummary, ExportTemplateSummary } from "../../../../../../lib/export-types";
+
+const READY_CAPABILITIES: ExportCapabilities = { canExport: true, canExportDocx: true, canExportPdf: true, canUseTemplate: true, blockers: [] };
 
 const previewExportAction = vi.fn(async (_tenderId: string, _templateId: string, _sections: unknown) => ({ job: undefined as ExportJobSummary | undefined, error: undefined as string | undefined }));
 
@@ -37,7 +39,7 @@ describe("ExportSection", () => {
     previewExportAction.mockResolvedValueOnce({ job: { id: "job-1", status: "COMPLETED", version: 1 } as ExportJobSummary, error: undefined });
     const user = userEvent.setup();
 
-    render(<ExportSection tenderId="tender-1" templates={[template()]} history={[]} actorRole="OWNER" />);
+    render(<ExportSection tenderId="tender-1" templates={[template()]} history={[]} actorRole="OWNER" capabilities={READY_CAPABILITIES} />);
 
     await user.type(screen.getByPlaceholderText("Contenu de la section"), "Notre approche méthodologique.");
     await user.click(screen.getByRole("button", { name: "Générer l'aperçu" }));
@@ -54,7 +56,7 @@ describe("ExportSection", () => {
     previewExportAction.mockResolvedValueOnce({ job: undefined, error: "La sélection de sections est invalide." });
     const user = userEvent.setup();
 
-    render(<ExportSection tenderId="tender-1" templates={[template()]} history={[]} actorRole="OWNER" />);
+    render(<ExportSection tenderId="tender-1" templates={[template()]} history={[]} actorRole="OWNER" capabilities={READY_CAPABILITIES} />);
     await user.click(screen.getByRole("button", { name: "Générer l'aperçu" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("La sélection de sections est invalide.");
@@ -64,7 +66,7 @@ describe("ExportSection", () => {
     previewExportAction.mockResolvedValueOnce({ job: { id: "job-1", status: "COMPLETED", version: 1 } as ExportJobSummary, error: undefined });
     const user = userEvent.setup();
 
-    render(<ExportSection tenderId="tender-1" templates={[template()]} history={[]} actorRole="OWNER" />);
+    render(<ExportSection tenderId="tender-1" templates={[template()]} history={[]} actorRole="OWNER" capabilities={READY_CAPABILITIES} />);
     await user.selectOptions(screen.getByDisplayValue("Contenu manuel"), "PRICING");
     await user.type(screen.getByPlaceholderText("ID de l'estimation"), "estimate-42");
     await user.type(screen.getByPlaceholderText("N° de version (vide = courante)"), "3");
@@ -78,7 +80,15 @@ describe("ExportSection", () => {
   });
 
   it("hides the preview form for a role that cannot manage exports", () => {
-    render(<ExportSection tenderId="tender-1" templates={[template()]} history={[]} actorRole="READ_ONLY" />);
+    render(<ExportSection tenderId="tender-1" templates={[template()]} history={[]} actorRole="READ_ONLY" capabilities={READY_CAPABILITIES} />);
+    expect(screen.queryByRole("button", { name: "Générer l'aperçu" })).not.toBeInTheDocument();
+  });
+
+  it("shows the precise French blocker reason and never the form when capabilities report the export is not possible yet", () => {
+    const blockedCapabilities: ExportCapabilities = { canExport: false, canExportDocx: false, canExportPdf: false, canUseTemplate: false, blockers: [{ code: "TEMPLATE_VERSION_MISSING" }] };
+    render(<ExportSection tenderId="tender-1" templates={[template()]} history={[]} actorRole="OWNER" capabilities={blockedCapabilities} />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Aucune version de modèle d'export n'est active.");
     expect(screen.queryByRole("button", { name: "Générer l'aperçu" })).not.toBeInTheDocument();
   });
 });

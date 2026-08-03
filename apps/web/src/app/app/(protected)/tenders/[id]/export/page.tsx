@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
-import type { ExportJobSummary, ExportTemplateSummary } from "../../../../../../lib/export-types";
+import type { ExportCapabilities, ExportJobSummary, ExportTemplateSummary } from "../../../../../../lib/export-types";
 import { ApiErrorState } from "../../../api-error-state";
+import { fetchExportCapabilities } from "../../../../export-actions";
 import { ExportSection } from "./export-section";
 
 export const metadata: Metadata = { title: "Export — TenderOS" };
@@ -12,11 +13,13 @@ export default async function TenderExportPage({ params }: { params: Promise<{ i
   let templates: ExportTemplateSummary[];
   let history: { items: ExportJobSummary[]; total: number };
   let actorRole: string | undefined;
+  let capabilities: ExportCapabilities;
   try {
-    [templates, history, actorRole] = await Promise.all([
+    [templates, history, actorRole, capabilities] = await Promise.all([
       appApiFetch<ExportTemplateSummary[]>("/api/v1/exports/templates"),
       appApiFetch<{ items: ExportJobSummary[]; total: number }>(`/api/v1/tenders/${tenderId}/exports?limit=50&offset=0`),
       getCurrentMembershipRole(),
+      fetchExportCapabilities(tenderId),
     ]);
   } catch (error) {
     return <ApiErrorState error={error} />;
@@ -31,7 +34,7 @@ export default async function TenderExportPage({ params }: { params: Promise<{ i
           qu&apos;après approbation dans l&apos;onglet Validation.
         </p>
       </div>
-      <ExportSection tenderId={tenderId} templates={templates} history={history.items} actorRole={actorRole} />
+      <ExportSection tenderId={tenderId} templates={templates} history={history.items} actorRole={actorRole} capabilities={capabilities} />
     </div>
   );
 }

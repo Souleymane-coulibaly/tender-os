@@ -160,6 +160,14 @@ export const GO_NO_GO_LABELS: Record<GoNoGoRecommendation, string> = {
 
 export const COMPLEXITY_LABELS: Record<ComplexityLevel, string> = { LOW: "Faible", MEDIUM: "Moyenne", HIGH: "Elevee" };
 
+export type AnalysisCapability = { taskType: "ANALYZE_DOCUMENT" | "CONSOLIDATE_TENDER_ANALYSIS"; ready: boolean; reasonCode?: string };
+
+/** Mission — "le frontend doit savoir avant le clic si l'analyse est possible". Codes alignés sur
+ *  `GetAnalysisCapabilitiesUseCase` (backend), jamais un second vocabulaire divergent. */
+export const ANALYSIS_CAPABILITY_REASON_LABELS: Record<string, string> = {
+  AI_PROVIDER_NOT_CONFIGURED: "La génération IA n'est pas configurée pour ce type de contenu. Un administrateur doit activer une politique de routage dans Configuration IA.",
+};
+
 /** Meme permission backend que analysis:trigger (ROLE_ANALYSIS_PERMISSIONS — OWNER,
  *  ORGANIZATION_ADMIN, BID_MANAGER, CONTRIBUTOR) — gate d'affichage uniquement, jamais l'autorite
  *  reelle (revalidee par l'API a chaque requete quoi que montre l'UI). */

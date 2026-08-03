@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { previewExportAction, type PreviewExportSectionInput } from "../../../../export-actions";
 import {
+  EXPORT_CAPABILITY_BLOCKER_LABELS,
   EXPORT_DOCUMENT_TYPE_LABELS,
   EXPORT_JOB_STATUS_LABELS,
   EXPORT_SECTION_SOURCES,
   EXPORT_SECTION_SOURCE_LABELS,
   canManageExport,
   exportJobStatusBadgeClass,
+  type ExportCapabilities,
   type ExportJobSummary,
   type ExportTemplateSummary,
 } from "../../../../../../lib/export-types";
@@ -36,11 +38,13 @@ export function ExportSection({
   templates,
   history,
   actorRole,
+  capabilities,
 }: {
   tenderId: string;
   templates: ExportTemplateSummary[];
   history: ExportJobSummary[];
   actorRole: string | undefined;
+  capabilities: ExportCapabilities;
 }) {
   const activatableTemplates = templates.filter((t) => t.activeVersion);
   const canManage = canManageExport(actorRole);
@@ -87,7 +91,15 @@ export function ExportSection({
       {canManage ? (
         <section className="flex flex-col gap-3 rounded border border-neutral-200 p-4">
           <h2 className="text-sm font-semibold text-neutral-900">Nouvel aperçu</h2>
-          {activatableTemplates.length === 0 ? (
+          {!capabilities.canExport ? (
+            <div className="flex flex-col gap-1">
+              {capabilities.blockers.map((blocker) => (
+                <p key={blocker.code} role="alert" className="text-sm text-amber-700">
+                  {EXPORT_CAPABILITY_BLOCKER_LABELS[blocker.code] ?? "L'export n'est pas encore disponible pour cette organisation."}
+                </p>
+              ))}
+            </div>
+          ) : activatableTemplates.length === 0 ? (
             <p className="text-sm text-amber-700">Aucun template avec une version active. Un administrateur doit d&apos;abord en activer un.</p>
           ) : (
             <>
