@@ -8,12 +8,17 @@ import {
   AiTimeoutError,
 } from "../domain/errors";
 import type { AIProvider, AIProviderRequest, AIProviderResult } from "../application/ports/ai-provider";
+import { STRICT_OUTPUT_SCHEMAS } from "./strict-output-schemas";
 
 const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
 
+/** `content` devient nullable et `refusal` apparaît UNIQUEMENT en mode Structured Outputs strict
+ *  (mission — nouveau cas à gérer explicitement, jamais possible avec l'ancien mode `json_object`) :
+ *  OpenAI peut refuser de produire le contenu demandé (cas limites de sécurité/contenu) plutôt que
+ *  de violer le schéma — jamais traité comme une réponse silencieusement vide. */
 const OpenAiChatCompletionSchema = z.object({
   id: z.string().optional(),
-  choices: z.array(z.object({ message: z.object({ content: z.string() }) })),
+  choices: z.array(z.object({ message: z.object({ content: z.string().nullable(), refusal: z.string().nullable().optional() }) })),
   usage: z
     .object({
       prompt_tokens: z.number().optional(),
@@ -22,6 +27,19 @@ const OpenAiChatCompletionSchema = z.object({
     })
     .optional(),
 });
+
+/** Mode strict UNIQUEMENT pour les deux contrats connus de la liste blanche
+ *  (`STRICT_OUTPUT_SCHEMAS`, `strict-output-schemas.ts`) — tout `responseSchemaName` absent de
+ *  cette liste (dont `"free_text"`, la quasi-totalité des types de génération de contenu, module
+ *  `generation`) retombe EXACTEMENT sur l'ancien comportement `json_object`, jamais une déduction
+ *  automatique. Mission — "ne jamais activer le mode strict par défaut". */
+function buildResponseFormat(responseSchemaName: string): Record<string, unknown> {
+  const strictSchema = STRICT_OUTPUT_SCHEMAS[responseSchemaName];
+  if (!strictSchema) {
+    return { type: "json_object" };
+  }
+  return { type: "json_schema", json_schema: { name: responseSchemaName, strict: true, schema: strictSchema } };
+}
 
 /**
  * Seul adapter réel de cette tranche (mission §"Un seul adapter réel suffit") — choisi car c'est le
@@ -51,7 +69,7 @@ export class OpenAiProvider implements AIProvider {
           ],
           ...(request.maxOutputTokens ? { max_tokens: request.maxOutputTokens } : {}),
           ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
-          response_format: { type: "json_object" },
+          response_format: buildResponseFormat(request.responseSchemaName),
         }),
         signal: AbortSignal.timeout(request.timeoutMs),
       });
@@ -90,6 +108,15 @@ export class OpenAiProvider implements AIProvider {
     const choice = parsed.success ? parsed.data.choices[0] : undefined;
     if (!parsed.success || !choice) {
       throw new AiInvalidResponseError({ reason: "unexpected AI provider response shape" });
+    }
+
+    // Mode strict UNIQUEMENT (mission) — jamais atteignable en mode `json_object`, jamais un
+    // contenu `null` silencieusement transformé en chaîne vide.
+    if (choice.message.refusal) {
+      throw new AiInvalidResponseError({ reason: "the model refused to produce a response matching the required schema" });
+    }
+    if (choice.message.content === null) {
+      throw new AiInvalidResponseError({ reason: "response body has no content and no refusal" });
     }
 
     return {
