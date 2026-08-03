@@ -34,6 +34,44 @@ export type KnownChunk = Readonly<{
 
 export type ChunksBySequence = ReadonlyMap<number, KnownChunk>;
 
+/** Réduit une chaîne à sa forme comparée (accents/casse/espaces indifférents) — utilisée
+ *  UNIQUEMENT pour diagnostiquer un rejet a posteriori (mission — "vérifier si la citation est
+ *  absente, modifiée, ou simplement normalisée différemment"), jamais pour décider si une
+ *  citation est acceptée : la vérification verbatim de `validateChunkProvenance` reste la seule
+ *  source de vérité pour la garantie anti-fabrication. */
+const COMBINING_DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
+
+function foldForComparison(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(COMBINING_DIACRITICS, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/** `true` si `needle` apparaît dans `haystack` une fois espaces/accents/casse neutralisés —
+ *  distingue une reformulation bénigne (retour à la ligne interne d'un chunk PDF restitué comme
+ *  une phrase continue, accent normalisé différemment) d'une citation réellement absente/fabriquée.
+ *  Ne renvoie jamais le texte source lui-même (mission §"jamais un extrait du corpus dans les
+ *  champs d'erreur", voir `AnalysisJob.resultSummary`/`Generation.errorMessage` dans le schéma) —
+ *  uniquement ce verdict booléen, consommé par l'appelant pour enrichir `reason` sans fuite de
+ *  contenu client. */
+function matchesAfterNormalization(needle: string, haystack: string): boolean {
+  return haystack.length > 0 && foldForComparison(haystack).includes(foldForComparison(needle));
+}
+
+/** Explique un rejet de citation SANS jamais reproduire la citation ni le contenu du chunk —
+ *  seulement leurs longueurs et un verdict de normalisation (mission §"vérifier si la citation
+ *  est absente, modifiée, ou simplement normalisée différemment", sans réintroduire de contenu
+ *  client dans les champs d'erreur persistés). */
+function describeCitationMismatch(citation: string, haystack: string): string {
+  const verdict = matchesAfterNormalization(citation, haystack)
+    ? "matches after whitespace/accent normalization — likely a benign reformatting by the model, not a fabricated citation"
+    : "does not match even after whitespace/accent normalization — likely a fabricated or misattributed citation";
+  return `citation (${citation.length} chars) ${verdict} (chunk content: ${haystack.length} chars)`;
+}
+
 /**
  * Validation déterministe de la provenance d'UN item, contre les chunks RÉELS d'UN document
  * (mission Sprint 4.2, correction "Validation déterministe de provenance") — un score de
@@ -59,8 +97,9 @@ export function validateChunkProvenance(item: DeclaredProvenance, chunksBySequen
     if (item.citation != null) {
       const foundAnywhere = [...chunksBySequence.values()].some((chunk) => chunk.content.includes(item.citation!));
       if (!foundAnywhere) {
+        const haystack = [...chunksBySequence.values()].map((chunk) => chunk.content).join("\n");
         throw new AiProvenanceValidationFailedError({
-          reason: `citation was not found verbatim in any known chunk of this document`,
+          reason: `citation was not found verbatim in any known chunk of this document (${describeCitationMismatch(item.citation!, haystack)})`,
         });
       }
     }
@@ -76,7 +115,7 @@ export function validateChunkProvenance(item: DeclaredProvenance, chunksBySequen
 
   if (item.citation != null && !chunk.content.includes(item.citation)) {
     throw new AiProvenanceValidationFailedError({
-      reason: `citation was not found verbatim in the content of chunk ${item.chunkSequence}`,
+      reason: `citation was not found verbatim in the content of chunk ${item.chunkSequence} (${describeCitationMismatch(item.citation, chunk.content)})`,
     });
   }
   if (item.pageStart != null && chunk.pageStart !== undefined && item.pageStart !== chunk.pageStart) {

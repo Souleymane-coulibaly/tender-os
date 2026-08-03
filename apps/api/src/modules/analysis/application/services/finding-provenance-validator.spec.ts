@@ -54,6 +54,34 @@ describe("validateChunkProvenance", () => {
   it("rejects a citation provided without chunkSequence when it is found in NO known chunk", () => {
     expect(() => validateChunkProvenance({ citation: "clause totalement inventée" }, CHUNKS)).toThrow(AiProvenanceValidationFailedError);
   });
+
+  it("flags a rejected citation as likely benign reformatting when it matches after whitespace/accent normalization — mission diagnostic Codex, jamais le texte source dans errorMessage", () => {
+    const chunksWithLineBreak: ChunksBySequence = new Map([
+      [0, { content: "Le present marche a pour objet\nla fourniture de materiel informatique." }],
+    ]);
+    try {
+      validateChunkProvenance({ chunkSequence: 0, citation: "Le présent marché a pour objet la fourniture de matériel informatique." }, chunksWithLineBreak);
+      throw new Error("expected validateChunkProvenance to throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AiProvenanceValidationFailedError);
+      const message = (error as Error).message;
+      expect(message).toContain("matches after whitespace/accent normalization");
+      expect(message).not.toContain("présent marché");
+      expect(message).not.toContain("materiel informatique");
+    }
+  });
+
+  it("flags a rejected citation as likely fabricated when it does NOT match even after normalization", () => {
+    try {
+      validateChunkProvenance({ chunkSequence: 0, citation: "clause de résiliation anticipée totalement absente" }, CHUNKS);
+      throw new Error("expected validateChunkProvenance to throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AiProvenanceValidationFailedError);
+      const message = (error as Error).message;
+      expect(message).toContain("does not match even after whitespace/accent normalization");
+      expect(message).not.toContain("résiliation anticipée");
+    }
+  });
 });
 
 describe("validateDocumentAnalysisProvenance", () => {
