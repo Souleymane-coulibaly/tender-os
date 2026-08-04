@@ -6,7 +6,7 @@ import { AddDeliverableCommentUseCase } from "../../application/use-cases/add-de
 import { ApproveDeliverableUseCase } from "../../application/use-cases/approve-deliverable.use-case";
 import { CreateChecklistPieceEntryUseCase, ListChecklistPieceEntriesUseCase, UpdateChecklistPieceEntryUseCase } from "../../application/use-cases/checklist-piece.use-cases";
 import { CreateComplianceMatrixEntryUseCase, ListComplianceMatrixEntriesUseCase, UpdateComplianceMatrixEntryUseCase, ValidateComplianceMatrixEntryUseCase } from "../../application/use-cases/compliance-matrix.use-cases";
-import { CreateDeliverableAnnexUseCase, ListDeliverableAnnexesUseCase } from "../../application/use-cases/deliverable-annex.use-cases";
+import { CreateDeliverableAnnexUseCase, ListDeliverableAnnexesUseCase, UpdateDeliverableAnnexUseCase } from "../../application/use-cases/deliverable-annex.use-cases";
 import { EnsureTenderDeliverablesUseCase } from "../../application/use-cases/ensure-tender-deliverables.use-case";
 import { GetDeliverableUseCase } from "../../application/use-cases/get-deliverable.use-case";
 import { ListDeliverablesUseCase } from "../../application/use-cases/list-deliverables.use-case";
@@ -29,6 +29,7 @@ import {
   SelectCostReportEstimateBodySchema,
   UpdateChecklistPieceEntryBodySchema,
   UpdateComplianceMatrixEntryBodySchema,
+  UpdateDeliverableAnnexBodySchema,
   type AddDeliverableCommentBody,
   type CreateChecklistPieceEntryBody,
   type CreateComplianceMatrixEntryBody,
@@ -36,6 +37,7 @@ import {
   type SelectCostReportEstimateBody,
   type UpdateChecklistPieceEntryBody,
   type UpdateComplianceMatrixEntryBody,
+  type UpdateDeliverableAnnexBody,
 } from "./schemas";
 
 /**
@@ -70,6 +72,7 @@ export class DeliverablesController {
     private readonly listChecklistPieceEntriesUseCase: ListChecklistPieceEntriesUseCase,
     private readonly createDeliverableAnnexUseCase: CreateDeliverableAnnexUseCase,
     private readonly listDeliverableAnnexesUseCase: ListDeliverableAnnexesUseCase,
+    private readonly updateDeliverableAnnexUseCase: UpdateDeliverableAnnexUseCase,
   ) {}
 
   @Get("tenders/:tenderId/deliverables")
@@ -234,5 +237,16 @@ export class DeliverablesController {
     @Body(new ZodValidationPipe(CreateDeliverableAnnexBodySchema)) body: CreateDeliverableAnnexBody,
   ) {
     return this.createDeliverableAnnexUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, deliverableId, ...body });
+  }
+
+  @Patch("deliverables/:id/annexes/:annexId")
+  async updateAnnex(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("id", new ZodValidationPipe(IdParamSchema)) deliverableId: string,
+    @Param("annexId", new ZodValidationPipe(IdParamSchema)) annexId: string,
+    @Body(new ZodValidationPipe(UpdateDeliverableAnnexBodySchema)) body: UpdateDeliverableAnnexBody,
+  ) {
+    return this.updateDeliverableAnnexUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, deliverableId, annexId, ...body });
   }
 }

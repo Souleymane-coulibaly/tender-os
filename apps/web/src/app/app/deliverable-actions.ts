@@ -298,6 +298,24 @@ export async function createDeliverableAnnexAction(tenderId: string, deliverable
   return {};
 }
 
+/** Mission — correctif "aucun moyen de faire avancer le statut d'une annexe déjà créée" : seul
+ *  moyen réel de sortir une annexe de PENDING pour une annexe existante (`documentId` obligatoire
+ *  côté schéma HTTP — jamais une bascule de statut sans document réel attaché). */
+export async function updateDeliverableAnnexAction(
+  tenderId: string,
+  deliverableId: string,
+  annexId: string,
+  input: { documentId: string; version?: string },
+): Promise<{ error?: string }> {
+  try {
+    await appApiFetch(`/api/v1/deliverables/${deliverableId}/annexes/${annexId}`, { method: "PATCH", body: JSON.stringify(input) });
+  } catch (error) {
+    return { error: describeDeliverableActionError(error) };
+  }
+  revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  return {};
+}
+
 // --- Templates de mémoire (mission §5) — gestion réservée OWNER/ORGANIZATION_ADMIN ---
 
 export type DeliverableTemplateSummary = {

@@ -76,6 +76,29 @@ export class DeliverableAnnex {
     this.props.status = status;
   }
 
+  /** Correctif — seul chemin réel pour faire progresser une annexe hors de PENDING (même motif
+   *  que `ChecklistPieceEntry.attachDocument`, audit Codex P1-003) : `documentVersionId`/
+   *  `documentChecksum`/`documentFileName`/`documentMimeType` sont TOUJOURS dérivés d'un document
+   *  déjà vérifié par l'appelant (jamais des valeurs fournies directement par le client) — voir
+   *  `UpdateDeliverableAnnexUseCase`. Passe systématiquement à PROVIDED : une annexe avec un
+   *  document réellement attaché n'est plus "en attente" par définition. */
+  attachDocument(input: {
+    documentId: string;
+    version?: string | undefined;
+    documentVersionId: string;
+    documentChecksum: string;
+    documentFileName: string;
+    documentMimeType: string;
+  }): void {
+    this.props.documentId = input.documentId;
+    this.props.version = input.version;
+    this.props.documentVersionId = input.documentVersionId;
+    this.props.documentChecksum = input.documentChecksum;
+    this.props.documentFileName = input.documentFileName;
+    this.props.documentMimeType = input.documentMimeType;
+    this.props.status = AnnexStatus.Provided;
+  }
+
   get id(): string {
     return this.props.id;
   }

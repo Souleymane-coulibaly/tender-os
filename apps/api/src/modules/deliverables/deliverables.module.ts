@@ -30,7 +30,7 @@ import { ApproveDeliverableUseCase } from "./application/use-cases/approve-deliv
 import { CreateChecklistPieceEntryUseCase, ListChecklistPieceEntriesUseCase, UpdateChecklistPieceEntryUseCase } from "./application/use-cases/checklist-piece.use-cases";
 import { CompareRevisionsUseCase } from "./application/use-cases/compare-revisions.use-case";
 import { CreateComplianceMatrixEntryUseCase, ListComplianceMatrixEntriesUseCase, UpdateComplianceMatrixEntryUseCase, ValidateComplianceMatrixEntryUseCase } from "./application/use-cases/compliance-matrix.use-cases";
-import { CreateDeliverableAnnexUseCase, ListDeliverableAnnexesUseCase } from "./application/use-cases/deliverable-annex.use-cases";
+import { CreateDeliverableAnnexUseCase, ListDeliverableAnnexesUseCase, UpdateDeliverableAnnexUseCase } from "./application/use-cases/deliverable-annex.use-cases";
 import { CreateDeliverableTemplateUseCase } from "./application/use-cases/create-deliverable-template.use-case";
 import { CreateDeliverableTemplateVersionUseCase } from "./application/use-cases/create-deliverable-template-version.use-case";
 import { CreateDocumentThemeUseCase } from "./application/use-cases/create-document-theme.use-case";
@@ -155,6 +155,7 @@ import { DocumentThemesController } from "./interfaces/http/document-themes.cont
     ListChecklistPieceEntriesUseCase,
     CreateDeliverableAnnexUseCase,
     ListDeliverableAnnexesUseCase,
+    UpdateDeliverableAnnexUseCase,
 
     // Autres livrables — lecture seule
     GetDeliverableValidationReportUseCase,

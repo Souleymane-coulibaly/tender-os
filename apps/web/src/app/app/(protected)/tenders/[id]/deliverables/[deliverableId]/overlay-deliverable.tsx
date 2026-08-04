@@ -7,12 +7,14 @@ import {
   createComplianceMatrixEntryAction,
   createDeliverableAnnexAction,
   updateComplianceMatrixEntryAction,
+  updateDeliverableAnnexAction,
 } from "../../../../../deliverable-actions";
 import { canManageDeliverable, type DeliverableSummary } from "../../../../../../../lib/deliverable-types";
 
 type ComplianceEntry = { id: string; source: string; mandatory: boolean; criticality: string; coverageStatus: string; response?: string };
 type ChecklistEntry = { id: string; name: string; mandatory: boolean; status: string };
 type AnnexEntry = { id: string; label: string; status: string };
+type DocumentEntry = { id: string; title: string };
 
 /** Mission Sprint 8A.1 §14 — Matrice de conformité/Checklist/Annexes : overlay léger, chaque
  *  entrée éditée directement, aucune révision/relecture séparée (décision de portée). Les données
@@ -26,6 +28,7 @@ export function OverlayDeliverable({
   complianceEntries,
   checklistEntries,
   annexEntries,
+  availableDocuments,
 }: {
   tenderId: string;
   deliverable: DeliverableSummary;
@@ -33,12 +36,13 @@ export function OverlayDeliverable({
   complianceEntries?: ComplianceEntry[] | undefined;
   checklistEntries?: ChecklistEntry[] | undefined;
   annexEntries?: AnnexEntry[] | undefined;
+  availableDocuments?: DocumentEntry[] | undefined;
 }) {
   const canEdit = canManageDeliverable(actorRole);
 
   if (deliverable.type === "COMPLIANCE_MATRIX") return <ComplianceMatrixView tenderId={tenderId} deliverableId={deliverable.id} canEdit={canEdit} entries={complianceEntries ?? []} />;
   if (deliverable.type === "CHECKLIST") return <ChecklistView tenderId={tenderId} deliverableId={deliverable.id} canEdit={canEdit} entries={checklistEntries ?? []} />;
-  return <AnnexesView tenderId={tenderId} deliverableId={deliverable.id} canEdit={canEdit} entries={annexEntries ?? []} />;
+  return <AnnexesView tenderId={tenderId} deliverableId={deliverable.id} canEdit={canEdit} entries={annexEntries ?? []} documents={availableDocuments ?? []} />;
 }
 
 function ComplianceMatrixView({ tenderId, deliverableId, canEdit, entries }: { tenderId: string; deliverableId: string; canEdit: boolean; entries: ComplianceEntry[] }) {
@@ -143,7 +147,19 @@ function ChecklistView({ tenderId, deliverableId, canEdit, entries }: { tenderId
   );
 }
 
-function AnnexesView({ tenderId, deliverableId, canEdit, entries }: { tenderId: string; deliverableId: string; canEdit: boolean; entries: AnnexEntry[] }) {
+function AnnexesView({
+  tenderId,
+  deliverableId,
+  canEdit,
+  entries,
+  documents,
+}: {
+  tenderId: string;
+  deliverableId: string;
+  canEdit: boolean;
+  entries: AnnexEntry[];
+  documents: DocumentEntry[];
+}) {
   const router = useRouter();
   const [label, setLabel] = useState("");
   const [error, setError] = useState<string | undefined>();
@@ -171,12 +187,75 @@ function AnnexesView({ tenderId, deliverableId, canEdit, entries }: { tenderId: 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <ul className="flex flex-col gap-2">
         {entries.map((entry) => (
-          <li key={entry.id} className="flex items-center justify-between rounded border border-neutral-200 px-3 py-2 text-sm">
-            <span>{entry.label}</span>
-            <span className="text-xs text-neutral-500">{entry.status}</span>
-          </li>
+          <AnnexRow key={entry.id} tenderId={tenderId} deliverableId={deliverableId} canEdit={canEdit} entry={entry} documents={documents} />
         ))}
       </ul>
     </div>
+  );
+}
+
+/** Mission — correctif "aucun moyen de faire avancer le statut d'une annexe" : le seul chemin réel
+ *  (`UpdateDeliverableAnnexUseCase`, backend) exige un document vérifié — jamais une bascule de
+ *  statut sans preuve réelle. Proposé uniquement tant que l'annexe est PENDING : une fois un
+ *  document attaché, le statut passe à PROVIDED côté serveur et ce sélecteur disparaît. */
+function AnnexRow({
+  tenderId,
+  deliverableId,
+  canEdit,
+  entry,
+  documents,
+}: {
+  tenderId: string;
+  deliverableId: string;
+  canEdit: boolean;
+  entry: AnnexEntry;
+  documents: DocumentEntry[];
+}) {
+  const router = useRouter();
+  const [documentId, setDocumentId] = useState("");
+  const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+
+  async function attach() {
+    if (!documentId) return;
+    setIsPending(true);
+    const result = await updateDeliverableAnnexAction(tenderId, deliverableId, entry.id, { documentId });
+    setIsPending(false);
+    if (result.error) setError(result.error);
+    else router.refresh();
+  }
+
+  return (
+    <li className="flex flex-col gap-2 rounded border border-neutral-200 px-3 py-2 text-sm">
+      <div className="flex items-center justify-between">
+        <span>{entry.label}</span>
+        <span className="text-xs text-neutral-500">{entry.status}</span>
+      </div>
+      {canEdit && entry.status === "PENDING" ? (
+        documents.length > 0 ? (
+          <div className="flex gap-2">
+            <select value={documentId} onChange={(e) => setDocumentId(e.target.value)} className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs">
+              <option value="">Choisir un document déjà déposé…</option>
+              {documents.map((doc) => (
+                <option key={doc.id} value={doc.id}>
+                  {doc.title}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={attach}
+              disabled={!documentId || isPending}
+              className="rounded border border-neutral-300 px-2 py-1 text-xs font-medium hover:bg-neutral-100 disabled:opacity-50"
+            >
+              {isPending ? "Attachement..." : "Attacher"}
+            </button>
+          </div>
+        ) : (
+          <p className="text-xs text-neutral-500">Aucun document disponible — déposez-en un dans Documents.</p>
+        )
+      ) : null}
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+    </li>
   );
 }

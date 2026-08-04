@@ -209,3 +209,14 @@ export const CreateDeliverableAnnexBodySchema = z
   })
   .strict();
 export type CreateDeliverableAnnexBody = z.infer<typeof CreateDeliverableAnnexBodySchema>;
+
+/** Correctif — `documentId` obligatoire : attacher un document vérifié est la seule raison
+ *  d'appeler cette route (jamais une bascule de statut sans preuve réelle, voir
+ *  `UpdateDeliverableAnnexUseCase`). */
+export const UpdateDeliverableAnnexBodySchema = z
+  .object({
+    documentId: z.string().uuid(),
+    version: z.string().max(40).optional(),
+  })
+  .strict();
+export type UpdateDeliverableAnnexBody = z.infer<typeof UpdateDeliverableAnnexBodySchema>;
