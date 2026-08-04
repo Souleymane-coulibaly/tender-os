@@ -7,7 +7,7 @@ import {
   type PricingSnapshotSummary,
 } from "../../../../../../lib/ai-configuration-types";
 import { ApiErrorState } from "../../../api-error-state";
-import { AddPricingSnapshotForm, AiModelStatusToggle } from "./ai-model-actions";
+import { AddPricingSnapshotForm, AiModelProductionToggle, AiModelStatusToggle } from "./ai-model-actions";
 
 export const metadata: Metadata = { title: "Détail du modèle — TenderOS" };
 
@@ -58,7 +58,10 @@ export default async function AiModelDetailPage({ params }: { params: Promise<{ 
         </div>
         <div>
           <dt className="text-neutral-500">Production autorisée</dt>
-          <dd className="font-medium">{model.enabledForProduction ? "Oui" : "Non"}</dd>
+          <dd className="flex items-center gap-3 font-medium">
+            {model.enabledForProduction ? "Oui" : "Non"}
+            {canManage ? <AiModelProductionToggle model={model} /> : null}
+          </dd>
         </div>
         <div>
           <dt className="text-neutral-500">Sortie structurée</dt>

@@ -6,6 +6,7 @@ import {
   addPricingSnapshotAction,
   disableAiModelAction,
   enableAiModelAction,
+  updateAiModelProductionAction,
   type FormActionState,
 } from "../../../../ai-configuration-actions";
 import type { AiModelSummary } from "../../../../../../lib/ai-configuration-types";
@@ -34,6 +35,38 @@ export function AiModelStatusToggle({ model }: { model: AiModelSummary }) {
         className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
       >
         {model.status === "ENABLED" ? "Désactiver" : "Activer"}
+      </button>
+      {error ? (
+        <p role="alert" className="text-xs text-red-600">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export function AiModelProductionToggle({ model }: { model: AiModelSummary }) {
+  const router = useRouter();
+  const [error, setError] = useState<string | undefined>();
+  const [isPending, setIsPending] = useState(false);
+
+  async function handleToggle() {
+    setIsPending(true);
+    const result = await updateAiModelProductionAction(model.id, !model.enabledForProduction);
+    setIsPending(false);
+    setError(result.error);
+    if (!result.error) router.refresh();
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <button
+        type="button"
+        onClick={handleToggle}
+        disabled={isPending}
+        className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
+      >
+        {model.enabledForProduction ? "Retirer de la production" : "Autoriser en production"}
       </button>
       {error ? (
         <p role="alert" className="text-xs text-red-600">

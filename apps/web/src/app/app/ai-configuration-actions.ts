@@ -84,6 +84,23 @@ export async function createAiModelAction(_prevState: FormActionState, formData:
   redirect(`/app/ai-configuration/models/${model.id}`);
 }
 
+/** Mission — correctif "Production autorisée" jamais modifiable après la création d'un modèle
+ *  (seule une case à cocher au moment de `createAiModelAction`, aucun contrôle ensuite dans
+ *  l'interface, alors que le backend le permettait déjà via `PATCH /ai-models/:modelId`). */
+export async function updateAiModelProductionAction(modelId: string, enabledForProduction: boolean): Promise<{ error?: string }> {
+  try {
+    await appApiFetch(`/api/v1/ai-models/${modelId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabledForProduction }),
+    });
+  } catch (error) {
+    return { error: describeAiConfigurationActionError(error) };
+  }
+  revalidatePath("/app/ai-configuration/models");
+  revalidatePath(`/app/ai-configuration/models/${modelId}`);
+  return {};
+}
+
 export async function enableAiModelAction(modelId: string): Promise<{ error?: string }> {
   try {
     await appApiFetch(`/api/v1/ai-models/${modelId}/enable`, { method: "POST" });
