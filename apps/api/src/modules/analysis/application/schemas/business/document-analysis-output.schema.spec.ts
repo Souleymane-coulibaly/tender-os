@@ -78,6 +78,14 @@ describe("parseDocumentAnalysisOutput", () => {
     expect(result.deadlines[0]!.date).toBe("2026-09-01T11:00:00.000Z");
   });
 
+  it("normalizes a datetime with no seconds component to UTC — mission correctif '12h00' restitue sans secondes par le modele", () => {
+    const output = validOutput({
+      deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "2026-09-30T12:00Z", confidence: 0.9 }],
+    });
+    const result = parseDocumentAnalysisOutput(JSON.stringify(output));
+    expect(result.deadlines[0]!.date).toBe("2026-09-30T12:00:00.000Z");
+  });
+
   it("still rejects a calendar-impossible date (e.g. February 30th) rather than silently rolling it over to March", () => {
     const output = validOutput({
       deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "2026-02-30T00:00:00Z", confidence: 0.9 }],
@@ -90,6 +98,26 @@ describe("parseDocumentAnalysisOutput", () => {
       deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "01/09/2026", confidence: 0.9 }],
     });
     expect(() => parseDocumentAnalysisOutput(JSON.stringify(output))).toThrow(AiSchemaValidationFailedError);
+  });
+
+  it("diagnoses a rejected date without ever leaking the source value: ISO-shaped but invalid calendar vs. not ISO-shaped at all", () => {
+    const isoShaped = validOutput({
+      deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "2026-02-30T00:00:00Z", confidence: 0.9 }],
+    });
+    expect(() => parseDocumentAnalysisOutput(JSON.stringify(isoShaped))).toThrow(
+      /has an ISO 8601 shape but an invalid calendar date or out-of-range time component/,
+    );
+
+    const notIsoShaped = validOutput({
+      deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "01/09/2026", confidence: 0.9 }],
+    });
+    try {
+      parseDocumentAnalysisOutput(JSON.stringify(notIsoShaped));
+      throw new Error("expected parseDocumentAnalysisOutput to throw");
+    } catch (error) {
+      expect((error as Error).message).toContain("does not resemble an ISO 8601 date/datetime at all");
+      expect((error as Error).message).not.toContain("01/09/2026");
+    }
   });
 
   it("rejects an unknown requirement category", () => {
