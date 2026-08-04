@@ -95,6 +95,7 @@ export async function createRevisionFromGenerationAction(
       body: JSON.stringify({ generationId }),
     });
     revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+    revalidatePath(`/app/tenders/${tenderId}/deliverables`);
     return { revision };
   } catch (error) {
     return { error: describeDeliverableActionError(error) };
@@ -113,6 +114,7 @@ export async function createManualRevisionAction(
       body: JSON.stringify({ content }),
     });
     revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+    revalidatePath(`/app/tenders/${tenderId}/deliverables`);
     return { revision };
   } catch (error) {
     return { error: describeDeliverableActionError(error) };
@@ -133,6 +135,7 @@ export async function saveRevisionDraftAction(
       body: JSON.stringify({ content, expectedEditVersion }),
     });
     revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+    revalidatePath(`/app/tenders/${tenderId}/deliverables`);
     return { revision };
   } catch (error) {
     return { error: describeDeliverableActionError(error) };
@@ -146,6 +149,7 @@ export async function submitRevisionForReviewAction(tenderId: string, deliverabl
     return { error: describeDeliverableActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  revalidatePath(`/app/tenders/${tenderId}/deliverables`);
   return {};
 }
 
@@ -166,6 +170,7 @@ export async function decideRevisionReviewAction(
     return { error: describeDeliverableActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  revalidatePath(`/app/tenders/${tenderId}/deliverables`);
   return {};
 }
 
@@ -179,6 +184,7 @@ export async function selectRevisionForExportAction(tenderId: string, deliverabl
     return { error: describeDeliverableActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  revalidatePath(`/app/tenders/${tenderId}/deliverables`);
   return {};
 }
 
@@ -192,6 +198,7 @@ export async function restoreRevisionAction(tenderId: string, deliverableId: str
     return { error: describeDeliverableActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  revalidatePath(`/app/tenders/${tenderId}/deliverables`);
   return {};
 }
 
@@ -213,6 +220,7 @@ export async function approveDeliverableAction(tenderId: string, deliverableId: 
     return { error: describeDeliverableActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  revalidatePath(`/app/tenders/${tenderId}/deliverables`);
   return {};
 }
 
@@ -229,6 +237,7 @@ export async function addDeliverableCommentAction(
       body: JSON.stringify({ content, ...(sectionId ? { deliverableSectionId: sectionId } : {}), ...(revisionId ? { deliverableRevisionId: revisionId } : {}) }),
     });
     revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+    revalidatePath(`/app/tenders/${tenderId}/deliverables`);
     return { comment };
   } catch (error) {
     return { error: describeDeliverableActionError(error) };
@@ -242,6 +251,7 @@ export async function resolveDeliverableCommentAction(tenderId: string, delivera
     return { error: describeDeliverableActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  revalidatePath(`/app/tenders/${tenderId}/deliverables`);
   return {};
 }
 
@@ -256,6 +266,7 @@ export async function createComplianceMatrixEntryAction(
     return { error: describeDeliverableActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  revalidatePath(`/app/tenders/${tenderId}/deliverables`);
   return {};
 }
 
@@ -271,6 +282,7 @@ export async function updateComplianceMatrixEntryAction(
     return { error: describeDeliverableActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  revalidatePath(`/app/tenders/${tenderId}/deliverables`);
   return {};
 }
 
@@ -285,6 +297,7 @@ export async function createChecklistPieceEntryAction(
     return { error: describeDeliverableActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  revalidatePath(`/app/tenders/${tenderId}/deliverables`);
   return {};
 }
 
@@ -304,6 +317,7 @@ export async function updateChecklistPieceEntryAction(
     return { error: describeDeliverableActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  revalidatePath(`/app/tenders/${tenderId}/deliverables`);
   return {};
 }
 
@@ -314,6 +328,7 @@ export async function createDeliverableAnnexAction(tenderId: string, deliverable
     return { error: describeDeliverableActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  revalidatePath(`/app/tenders/${tenderId}/deliverables`);
   return {};
 }
 
@@ -332,6 +347,7 @@ export async function updateDeliverableAnnexAction(
     return { error: describeDeliverableActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  revalidatePath(`/app/tenders/${tenderId}/deliverables`);
   return {};
 }
 
@@ -462,5 +478,6 @@ export async function updateDeliverableSectionAction(
     return { error: describeDeliverableActionError(error) };
   }
   revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  revalidatePath(`/app/tenders/${tenderId}/deliverables`);
   return {};
 }
