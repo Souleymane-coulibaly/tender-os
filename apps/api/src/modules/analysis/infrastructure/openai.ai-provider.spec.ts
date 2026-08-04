@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AiInvalidResponseError } from "../domain/errors";
+import { AiInvalidResponseError, AiProviderUnavailableError } from "../domain/errors";
 import type { AIProviderRequest } from "../application/ports/ai-provider";
 import { OpenAiProvider } from "./openai.ai-provider";
 import { STRICT_OUTPUT_SCHEMAS, documentAnalysisJsonSchema, tenderConsolidationJsonSchema } from "./strict-output-schemas";
@@ -118,5 +118,64 @@ describe("OpenAiProvider — liste blanche Structured Outputs strict", () => {
   it("still returns the real content untouched when the message shape is unchanged (regression guard for free_text/generation)", async () => {
     const result = await new OpenAiProvider("key").complete(baseRequest({ responseSchemaName: "free_text" }));
     expect(result.content).toBe('{"ok":true}');
+  });
+});
+
+/** Mission — correctif "AI_INVALID_RESPONSE: AI provider returned HTTP 400" sans aucun détail
+ *  exploitable : le corps d'erreur d'OpenAI (jamais du contenu client, toujours une description du
+ *  problème de FORME de la requête envoyée) est désormais inclus dans `reason`, jamais ignoré. */
+describe("OpenAiProvider — détail des erreurs HTTP du provider", () => {
+  let fetchSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("includes OpenAI's own error message in the reason for a 400 response", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { message: "Invalid schema for response_format 'X': field 'foo' is required" } }), { status: 400 }),
+    );
+
+    await expect(new OpenAiProvider("key").complete(baseRequest())).rejects.toMatchObject({
+      message: expect.stringContaining("Invalid schema for response_format 'X': field 'foo' is required"),
+    });
+  });
+
+  it("includes OpenAI's own error message in the reason for a 5xx response", async () => {
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "The server had an error processing your request" } }), { status: 503 }));
+
+    let caught: unknown;
+    try {
+      await new OpenAiProvider("key").complete(baseRequest());
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(AiProviderUnavailableError);
+    expect((caught as Error).message).toContain("The server had an error processing your request");
+  });
+
+  it("falls back to just the HTTP status when the error body is not valid JSON — never throws while describing the failure", async () => {
+    fetchSpy.mockResolvedValueOnce(new Response("not json", { status: 400 }));
+
+    await expect(new OpenAiProvider("key").complete(baseRequest())).rejects.toBeInstanceOf(AiInvalidResponseError);
+  });
+
+  it("truncates an overly long error message rather than persisting it unbounded", async () => {
+    const longMessage = "x".repeat(1000);
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: longMessage } }), { status: 400 }));
+
+    let caught: unknown;
+    try {
+      await new OpenAiProvider("key").complete(baseRequest());
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(AiInvalidResponseError);
+    expect((caught as Error).message.length).toBeLessThan(longMessage.length);
   });
 });

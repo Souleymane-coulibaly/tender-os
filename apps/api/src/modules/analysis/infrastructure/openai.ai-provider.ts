@@ -41,6 +41,28 @@ function buildResponseFormat(responseSchemaName: string): Record<string, unknown
   return { type: "json_schema", json_schema: { name: responseSchemaName, strict: true, schema: strictSchema } };
 }
 
+const PROVIDER_ERROR_DETAIL_MAX_CHARS = 300;
+
+/** Mission — correctif "AI_INVALID_RESPONSE: AI provider returned HTTP 400" sans aucun détail
+ *  exploitable : le corps de la réponse d'erreur d'OpenAI (`{"error":{"message":...}}`, décrivant
+ *  TOUJOURS un problème de forme de LA REQUÊTE envoyée par TenderOS — jamais un contenu client,
+ *  jamais un extrait du corpus analysé) était jusqu'ici entièrement ignoré. Lu une seule fois ici,
+ *  jamais après un `response.json()` réussi déjà consommé ailleurs (branches mutuellement
+ *  exclusives). Ne lève jamais elle-même — un corps d'erreur illisible ne doit jamais masquer
+ *  l'erreur HTTP déjà identifiée. */
+async function describeProviderErrorBody(response: Response): Promise<string | undefined> {
+  try {
+    const text = await response.text();
+    if (!text) return undefined;
+    const parsed: unknown = JSON.parse(text);
+    const message = (parsed as { error?: { message?: unknown } } | null)?.error?.message;
+    const detail = typeof message === "string" && message ? message : text;
+    return detail.length > PROVIDER_ERROR_DETAIL_MAX_CHARS ? `${detail.slice(0, PROVIDER_ERROR_DETAIL_MAX_CHARS)}…` : detail;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Seul adapter réel de cette tranche (mission §"Un seul adapter réel suffit") — choisi car c'est le
  * fournisseur le plus simple à intégrer sans dépendance supplémentaire : appel HTTP direct via
@@ -91,10 +113,12 @@ export class OpenAiProvider implements AIProvider {
       throw new AiRateLimitedError();
     }
     if (response.status >= 500) {
-      throw new AiProviderUnavailableError({ reason: `AI provider returned HTTP ${response.status}` });
+      const detail = await describeProviderErrorBody(response);
+      throw new AiProviderUnavailableError({ reason: `AI provider returned HTTP ${response.status}${detail ? `: ${detail}` : ""}` });
     }
     if (!response.ok) {
-      throw new AiInvalidResponseError({ reason: `AI provider returned HTTP ${response.status}` });
+      const detail = await describeProviderErrorBody(response);
+      throw new AiInvalidResponseError({ reason: `AI provider returned HTTP ${response.status}${detail ? `: ${detail}` : ""}` });
     }
 
     let body: unknown;
