@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import {
-  PROMPT_KEY_LABELS,
+  ROUTABLE_TASK_KEY_LABELS,
   ROUTING_POLICY_STATUS_LABELS,
   type AiModelSummary,
   type RoutingPolicySummary,
@@ -81,7 +81,7 @@ export default async function RoutingPoliciesListPage() {
                 <tr key={policy.id} className="border-b border-neutral-100">
                   <td className="py-2 pr-4">
                     <Link href={`/app/ai-configuration/routing-policies/${policy.id}`} className="font-medium text-neutral-900 hover:underline">
-                      {PROMPT_KEY_LABELS[policy.promptKey]}
+                      {ROUTABLE_TASK_KEY_LABELS[policy.promptKey]}
                     </Link>
                   </td>
                   <td className="py-2 pr-4 text-neutral-600">v{policy.version}</td>

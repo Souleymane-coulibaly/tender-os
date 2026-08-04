@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
 import {
   ESCALATION_CONDITION_LABELS,
-  PROMPT_KEY_LABELS,
+  ROUTABLE_TASK_KEY_LABELS,
   ROUTING_POLICY_STATUS_LABELS,
   type AiModelSummary,
   type RoutingPolicySummary,
@@ -51,7 +51,7 @@ export default async function RoutingPolicyDetailPage({ params }: { params: Prom
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-semibold">
-            {PROMPT_KEY_LABELS[policy.promptKey]} <span className="text-neutral-500">· v{policy.version}</span>
+            {ROUTABLE_TASK_KEY_LABELS[policy.promptKey]} <span className="text-neutral-500">· v{policy.version}</span>
           </h1>
           <p className="text-sm text-neutral-600">Créée par l&apos;utilisateur {policy.authorUserId}</p>
         </div>

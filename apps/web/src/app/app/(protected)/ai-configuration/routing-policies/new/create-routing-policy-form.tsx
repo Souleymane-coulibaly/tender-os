@@ -5,14 +5,12 @@ import { createRoutingPolicyAction, type FormActionState } from "../../../../ai-
 import {
   ESCALATION_CONDITIONS,
   ESCALATION_CONDITION_LABELS,
-  PROMPT_KEY_LABELS,
+  ROUTABLE_TASK_KEY_LABELS,
+  ROUTABLE_TASK_KEY_OPTIONS,
   type AiModelSummary,
-  type PromptKey,
 } from "../../../../../../lib/ai-configuration-types";
 
 const INITIAL_STATE: FormActionState = {};
-
-const PROMPT_KEYS: readonly PromptKey[] = ["ANALYZE_DOCUMENT", "CONSOLIDATE_TENDER_ANALYSIS"];
 
 export function CreateRoutingPolicyForm({ models }: { models: AiModelSummary[] }) {
   const [state, formAction, isPending] = useActionState(createRoutingPolicyAction, INITIAL_STATE);
@@ -29,9 +27,9 @@ export function CreateRoutingPolicyForm({ models }: { models: AiModelSummary[] }
           Tâche IA *
         </label>
         <select id="promptKey" name="promptKey" required className="rounded border border-neutral-300 px-3 py-2 text-sm">
-          {PROMPT_KEYS.map((key) => (
+          {ROUTABLE_TASK_KEY_OPTIONS.map((key) => (
             <option key={key} value={key}>
-              {PROMPT_KEY_LABELS[key]}
+              {ROUTABLE_TASK_KEY_LABELS[key]}
             </option>
           ))}
         </select>

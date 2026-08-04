@@ -1,3 +1,5 @@
+import { GENERATION_TASK_TYPE_LABELS } from "./generation-types";
+
 export type AiModelStatus = "ENABLED" | "DISABLED";
 
 export const AI_MODEL_STATUS_LABELS: Record<AiModelStatus, string> = {
@@ -48,6 +50,49 @@ export const PROMPT_KEY_LABELS: Record<PromptKey, string> = {
   ANALYZE_DOCUMENT: "Analyse de document",
   CONSOLIDATE_TENDER_ANALYSIS: "Consolidation de l'appel d'offres",
 };
+
+// Les 19 valeurs routables (mission — correctif "Synthèse exécutive (non configuré)" : la
+// politique de routage était impossible à créer pour un type de tâche Generation, alors que le
+// backend le permet déjà). Recopiées littéralement depuis `ROUTABLE_TASK_KEYS`
+// (apps/api/.../ai-benchmark/interfaces/http/schemas.ts) — jamais un import cross-app, ce fichier
+// web n'a aucune dépendance vers l'API. Réservé aux politiques de routage : `BenchmarkSuiteSummary`
+// et `ModelRecommendationSummary` restent volontairement scopés à `PromptKey` (2 valeurs) — un
+// benchmark ne doit jamais cibler un type de tâche Generation.
+const ROUTABLE_TASK_KEYS = [
+  "ANALYZE_DOCUMENT",
+  "CONSOLIDATE_TENDER_ANALYSIS",
+  "EXECUTIVE_SUMMARY",
+  "NEED_UNDERSTANDING",
+  "CRITERION_RESPONSE",
+  "METHODOLOGY",
+  "ORGANIZATION",
+  "GOVERNANCE",
+  "HUMAN_RESOURCES",
+  "TECHNICAL_RESOURCES",
+  "PLANNING",
+  "RISK_MANAGEMENT",
+  "QUALITY",
+  "SECURITY",
+  "CSR",
+  "REFERENCES",
+  "SECTION_SUMMARY",
+  "REPHRASING",
+  "CONTENT_IMPROVEMENT",
+] as const;
+
+export type RoutableTaskKey = (typeof ROUTABLE_TASK_KEYS)[number];
+
+export const ROUTABLE_TASK_KEY_OPTIONS: readonly RoutableTaskKey[] = ROUTABLE_TASK_KEYS;
+
+// Fusion de PROMPT_KEY_LABELS (2 clés Analysis) et GENERATION_TASK_TYPE_LABELS (17 clés
+// Generation, déjà utilisées par l'écran "Lancer une génération") — jamais une seconde copie des
+// libellés français. Le cast final est sûr : les deux sources couvrent ensemble exactement
+// `ROUTABLE_TASK_KEYS`, à maintenir en synchronisation avec le backend si une nouvelle tâche
+// routable est ajoutée.
+export const ROUTABLE_TASK_KEY_LABELS: Record<RoutableTaskKey, string> = {
+  ...PROMPT_KEY_LABELS,
+  ...GENERATION_TASK_TYPE_LABELS,
+} as Record<RoutableTaskKey, string>;
 
 export type BenchmarkSuiteStatus = "DRAFT" | "PUBLISHED";
 
@@ -224,7 +269,7 @@ export const ESCALATION_CONDITION_LABELS: Record<(typeof ESCALATION_CONDITIONS)[
 export type RoutingPolicySummary = {
   id: string;
   organizationId: string;
-  promptKey: PromptKey;
+  promptKey: RoutableTaskKey;
   version: number;
   status: RoutingPolicyStatus;
   primaryAiModelId: string;
