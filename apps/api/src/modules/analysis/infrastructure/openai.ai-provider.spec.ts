@@ -24,10 +24,12 @@ function baseRequest(overrides: Partial<AIProviderRequest> = {}): AIProviderRequ
 
 /**
  * Mission — "ne jamais activer le mode strict par défaut" : ces tests prouvent que SEULS les deux
- * noms de la liste blanche déclenchent le mode Structured Outputs strict ; tout le reste
- * (`"free_text"`, absent, inconnu) envoie EXACTEMENT le même payload qu'avant ce correctif — jamais
- * un changement implicite pour `generation`/`ai-benchmark`, qui réutilisent ce même adaptateur sans
+ * noms de la liste blanche déclenchent le mode Structured Outputs strict ; tout le reste (absent,
+ * inconnu) envoie EXACTEMENT le même payload `json_object` qu'avant ce correctif — jamais un
+ * changement implicite pour `generation`/`ai-benchmark`, qui réutilisent ce même adaptateur sans
  * jamais passer par ce test (ils utilisent `FakeAIProvider`, jamais `OpenAiProvider` réel).
+ * `"free_text"` fait exception depuis un correctif ultérieur (voir `buildResponseFormat`) : aucun
+ * `response_format` du tout, jamais `json_object` — voir le test dédié plus bas.
  */
 describe("OpenAiProvider — liste blanche Structured Outputs strict", () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
@@ -64,10 +66,10 @@ describe("OpenAiProvider — liste blanche Structured Outputs strict", () => {
     });
   });
 
-  it("keeps the unchanged json_object behavior for 'free_text' (generation module default)", async () => {
+  it("sends no response_format at all for 'free_text' — mission correctif prod \"messages must contain the word 'json'\" (OpenAI 400 réel sur une génération de texte libre forcée en json_object)", async () => {
     await new OpenAiProvider("key").complete(baseRequest({ responseSchemaName: "free_text" }));
 
-    expect(sentBody().response_format).toEqual({ type: "json_object" });
+    expect(sentBody()).not.toHaveProperty("response_format");
   });
 
   it("keeps the unchanged json_object behavior for an unrecognized responseSchemaName — never an implicit deduction", async () => {

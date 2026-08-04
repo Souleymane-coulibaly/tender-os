@@ -30,15 +30,30 @@ const OpenAiChatCompletionSchema = z.object({
 
 /** Mode strict UNIQUEMENT pour les deux contrats connus de la liste blanche
  *  (`STRICT_OUTPUT_SCHEMAS`, `strict-output-schemas.ts`) — tout `responseSchemaName` absent de
- *  cette liste (dont `"free_text"`, la quasi-totalité des types de génération de contenu, module
- *  `generation`) retombe EXACTEMENT sur l'ancien comportement `json_object`, jamais une déduction
- *  automatique. Mission — "ne jamais activer le mode strict par défaut". */
-function buildResponseFormat(responseSchemaName: string): Record<string, unknown> {
+ *  cette liste retombe sur l'ancien comportement `json_object`, jamais une déduction automatique.
+ *  Mission — "ne jamais activer le mode strict par défaut".
+ *
+ *  Exception à ce fallback (correctif "messages must contain the word 'json' in some form, to use
+ *  'response_format' of type 'json_object'" — échec HTTP 400 réel en prod sur "Synthèse
+ *  exécutive") : `"free_text"` est le sentinel exclusif de `ProcessGenerationUseCase` pour un
+ *  `PromptTemplate` en mode `outputMode: FREE_TEXT` (jamais utilisé pour une clé de schéma
+ *  structuré réelle — voir `responseSchemaName: input.template.structuredSchemaKey ?? "free_text"`,
+ *  process-generation.use-case.ts). OpenAI EXIGE que le mot "json" apparaisse dans les messages dès
+ *  que `response_format` vaut `json_object` — une contrainte qu'un prompt de génération de texte
+ *  libre (méthodologie, synthèse exécutive, reformulation...) n'a structurellement aucune raison de
+ *  respecter, et ne doit pas avoir à respecter : ce n'est pas une sortie JSON qui est demandée.
+ *  Aucun `response_format` n'est donc envoyé pour ce cas précis — jamais pour un autre nom
+ *  non-blanchi (`structuredSchemaKey` réel côté generation, ou schéma futur d'ai-benchmark), dont le
+ *  comportement `json_object` reste inchangé. */
+function buildResponseFormat(responseSchemaName: string): Record<string, unknown> | undefined {
   const strictSchema = STRICT_OUTPUT_SCHEMAS[responseSchemaName];
-  if (!strictSchema) {
-    return { type: "json_object" };
+  if (strictSchema) {
+    return { type: "json_schema", json_schema: { name: responseSchemaName, strict: true, schema: strictSchema } };
   }
-  return { type: "json_schema", json_schema: { name: responseSchemaName, strict: true, schema: strictSchema } };
+  if (responseSchemaName === "free_text") {
+    return undefined;
+  }
+  return { type: "json_object" };
 }
 
 const PROVIDER_ERROR_DETAIL_MAX_CHARS = 300;
@@ -78,6 +93,7 @@ export class OpenAiProvider implements AIProvider {
 
   async complete(request: AIProviderRequest): Promise<AIProviderResult> {
     const startedAt = Date.now();
+    const responseFormat = buildResponseFormat(request.responseSchemaName);
     let response: Response;
     try {
       response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
@@ -91,7 +107,7 @@ export class OpenAiProvider implements AIProvider {
           ],
           ...(request.maxOutputTokens ? { max_tokens: request.maxOutputTokens } : {}),
           ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
-          response_format: buildResponseFormat(request.responseSchemaName),
+          ...(responseFormat ? { response_format: responseFormat } : {}),
         }),
         signal: AbortSignal.timeout(request.timeoutMs),
       });
