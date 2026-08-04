@@ -40,10 +40,11 @@ const REQUIREMENT_CATEGORIES = Object.values(RequirementCategory) as [string, ..
 const CLAUSE_CATEGORIES = Object.values(ClauseCategory) as [string, ...string[]];
 
 const ISO_DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
-// Secondes optionnelles (mission — correctif "12h00" restitué sans secondes par le modèle,
-// ex. `...T12:00Z` : un ISO 8601 valide, que la version précédente de ce normaliseur rejetait à
-// tort faute d'un groupe `:(\d{2})` obligatoire).
-const ISO_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/;
+// Secondes ET fuseau optionnels (mission — correctif "12h00" restitué sans secondes, et/ou sans
+// aucun indicateur de fuseau, par le modèle ; ex. `...T12:00Z` ou `...T12:00:00` sans `Z` : deux
+// variantes ISO 8601 valides que la version précédente de ce normaliseur rejetait à tort faute
+// d'un groupe `:(\d{2})`/`(Z|...)` obligatoire).
+const ISO_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d{1,3})?(Z|[+-]\d{2}:\d{2})?$/;
 // Motif large qui capture "a la forme d'un ISO 8601" SANS valider calendrier/plages — sert
 // uniquement à distinguer, dans le diagnostic (jamais la valeur elle-même), une tentative de
 // format ISO 8601 mal formée d'un format qui n'y ressemble même pas.
@@ -59,12 +60,20 @@ function isValidCalendarDate(year: number, month: number, day: number): boolean 
 
 /** Normalise une date IA en ISO 8601 UTC complet, en tolérant les variantes ISO 8601 valides que le
  *  modèle produit couramment quand la source ne précise pas d'heure, ou restitue une heure sans
- *  secondes (mission — correctif rejets "aléatoires selon le fichier" : le schéma JSON envoyé à
- *  OpenAI en mode strict déclare `date` comme un simple `string` sans contrainte de format, donc
- *  rien ne garantit le "ISO 8601 complet" demandé au modèle en langage naturel dans le prompt) :
+ *  secondes / sans fuseau (mission — correctif rejets "aléatoires selon le fichier" : le schéma
+ *  JSON envoyé à OpenAI en mode strict déclare `date` comme un simple `string` sans contrainte de
+ *  format, donc rien ne garantit le "ISO 8601 complet" demandé au modèle en langage naturel dans
+ *  le prompt) :
  *  - date seule (`2026-09-01`) → minuit UTC,
  *  - datetime sans secondes (`...T12:00Z`) → secondes à zéro,
  *  - datetime avec décalage horaire numérique au lieu de `Z` (`...+01:00`) → converti en UTC,
+ *  - datetime SANS aucun indicateur de fuseau (`...T12:00:00`) → traité comme UTC, jamais comme
+ *    l'heure locale du serveur : `new Date(...)` seul interprète une chaîne sans fuseau selon le
+ *    fuseau local du process (mission — vérifié empiriquement : Europe/Paris en été convertit
+ *    `12:00:00` en `10:00:00Z`, un décalage silencieux et dépendant de l'environnement) ; `Z` est
+ *    donc explicitement ajouté avant conversion, jamais laissé à l'interprétation implicite du
+ *    moteur JS. Même convention que la date seule (déjà traitée comme minuit UTC) : en l'absence
+ *    d'information de fuseau, on ne devine jamais celui de la source, on adopte UTC par défaut.
  *  - datetime déjà complet avec `Z` → simplement re-normalisé.
  *  Ne reformate JAMAIS un format ambigu (ex. `01/09/2026`, ordre jour/mois indéterminable sans
  *  contexte) — mission §"jamais une date devinée" : seules des variantes ISO 8601 non ambiguës
@@ -87,7 +96,8 @@ function normalizeIsoDateTime(value: string): string | null {
     const minute = Number(dateTimeMatch[5]);
     const second = dateTimeMatch[6] === undefined ? 0 : Number(dateTimeMatch[6]);
     if (hour > 23 || minute > 59 || second > 59) return null;
-    return new Date(value).toISOString();
+    const hasZoneDesignator = dateTimeMatch[7] !== undefined;
+    return new Date(hasZoneDesignator ? value : `${value}Z`).toISOString();
   }
 
   return new Date(`${value}T00:00:00.000Z`).toISOString();

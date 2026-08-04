@@ -86,6 +86,14 @@ describe("parseDocumentAnalysisOutput", () => {
     expect(result.deadlines[0]!.date).toBe("2026-09-30T12:00:00.000Z");
   });
 
+  it("normalizes a datetime with NO timezone designator at all as UTC, never as the server's local time — mission correctif cas reel prod (DCE avec heure explicite '12h00', modele restituant '2026-09-30T12:00:00' sans Z ni decalage)", () => {
+    const output = validOutput({
+      deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "2026-09-30T12:00:00", confidence: 0.9 }],
+    });
+    const result = parseDocumentAnalysisOutput(JSON.stringify(output));
+    expect(result.deadlines[0]!.date).toBe("2026-09-30T12:00:00.000Z");
+  });
+
   it("still rejects a calendar-impossible date (e.g. February 30th) rather than silently rolling it over to March", () => {
     const output = validOutput({
       deadlines: [{ kind: "SUBMISSION", label: "Date limite", date: "2026-02-30T00:00:00Z", confidence: 0.9 }],
