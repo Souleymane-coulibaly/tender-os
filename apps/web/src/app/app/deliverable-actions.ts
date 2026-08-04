@@ -288,6 +288,25 @@ export async function createChecklistPieceEntryAction(
   return {};
 }
 
+/** Mission — même correctif que pour les annexes ("aucun moyen de faire avancer le statut d'une
+ *  pièce déjà créée") : le backend (`UpdateChecklistPieceEntryUseCase`,
+ *  `PATCH /deliverables/:id/checklist/:entryId`) supportait déjà l'attachement d'un document
+ *  vérifié, jamais relié au frontend. */
+export async function updateChecklistPieceEntryAction(
+  tenderId: string,
+  deliverableId: string,
+  entryId: string,
+  input: { documentId: string; version?: string },
+): Promise<{ error?: string }> {
+  try {
+    await appApiFetch(`/api/v1/deliverables/${deliverableId}/checklist/${entryId}`, { method: "PATCH", body: JSON.stringify(input) });
+  } catch (error) {
+    return { error: describeDeliverableActionError(error) };
+  }
+  revalidatePath(`/app/tenders/${tenderId}/deliverables/${deliverableId}`);
+  return {};
+}
+
 export async function createDeliverableAnnexAction(tenderId: string, deliverableId: string, input: { label: string; source?: string }): Promise<{ error?: string }> {
   try {
     await appApiFetch(`/api/v1/deliverables/${deliverableId}/annexes`, { method: "POST", body: JSON.stringify(input) });

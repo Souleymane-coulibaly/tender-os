@@ -11,9 +11,14 @@ const updateDeliverableAnnexAction = vi.fn(
 const updateComplianceMatrixEntryAction = vi.fn(
   async (_tenderId: string, _deliverableId: string, _entryId: string, _input: { response?: string; coverageStatus?: string }) => ({}),
 );
+const updateChecklistPieceEntryAction = vi.fn(
+  async (_tenderId: string, _deliverableId: string, _entryId: string, _input: { documentId: string; version?: string }) => ({}),
+);
 
 vi.mock("../../../../../deliverable-actions", () => ({
   createChecklistPieceEntryAction: vi.fn(async () => ({})),
+  updateChecklistPieceEntryAction: (tenderId: string, deliverableId: string, entryId: string, input: { documentId: string; version?: string }) =>
+    updateChecklistPieceEntryAction(tenderId, deliverableId, entryId, input),
   createComplianceMatrixEntryAction: vi.fn(async () => ({})),
   updateComplianceMatrixEntryAction: (tenderId: string, deliverableId: string, entryId: string, input: { response?: string; coverageStatus?: string }) =>
     updateComplianceMatrixEntryAction(tenderId, deliverableId, entryId, input),
@@ -190,6 +195,104 @@ describe("OverlayDeliverable — Matrice de conformité (mission correctif 'cove
     );
 
     expect(screen.getByText("Partiellement couvert")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+});
+
+function checklistDeliverable(): DeliverableSummary {
+  return {
+    id: "deliverable-3",
+    organizationId: "org-1",
+    clientAccountId: "client-1",
+    tenderId: "tender-1",
+    type: "CHECKLIST",
+    status: "NOT_STARTED",
+    createdBy: "user-1",
+    createdAt: "2026-08-01T10:00:00.000Z",
+    updatedAt: "2026-08-01T10:00:00.000Z",
+  } as DeliverableSummary;
+}
+
+describe("OverlayDeliverable — Checklist (mission correctif 'aucun moyen de faire avancer le statut d'une pièce')", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows a document picker and an Attacher button for a MISSING piece when documents are available", () => {
+    render(
+      <OverlayDeliverable
+        tenderId="tender-1"
+        deliverable={checklistDeliverable()}
+        actorRole="OWNER"
+        checklistEntries={[{ id: "piece-1", name: "attestation fiscale", mandatory: true, status: "MISSING" }]}
+        availableDocuments={[{ id: "doc-1", title: "Attestation fiscale 2026.pdf" }]}
+      />,
+    );
+
+    expect(screen.getByText("attestation fiscale")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Attestation fiscale 2026.pdf" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Attacher" })).toBeDisabled();
+  });
+
+  it("attaches the selected document and calls updateChecklistPieceEntryAction with the entry id and documentId", async () => {
+    const user = userEvent.setup();
+    render(
+      <OverlayDeliverable
+        tenderId="tender-1"
+        deliverable={checklistDeliverable()}
+        actorRole="OWNER"
+        checklistEntries={[{ id: "piece-1", name: "attestation fiscale", mandatory: true, status: "MISSING" }]}
+        availableDocuments={[{ id: "doc-1", title: "Attestation fiscale 2026.pdf" }]}
+      />,
+    );
+
+    await user.selectOptions(screen.getByRole("combobox"), "doc-1");
+    await user.click(screen.getByRole("button", { name: "Attacher" }));
+
+    expect(updateChecklistPieceEntryAction).toHaveBeenCalledWith("tender-1", "deliverable-3", "piece-1", { documentId: "doc-1" });
+  });
+
+  it("never shows the picker for a piece that is already PROVIDED", () => {
+    render(
+      <OverlayDeliverable
+        tenderId="tender-1"
+        deliverable={checklistDeliverable()}
+        actorRole="OWNER"
+        checklistEntries={[{ id: "piece-1", name: "attestation fiscale", mandatory: true, status: "PROVIDED" }]}
+        availableDocuments={[{ id: "doc-1", title: "Attestation fiscale 2026.pdf" }]}
+      />,
+    );
+
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Attacher" })).not.toBeInTheDocument();
+  });
+
+  it("explains there is nothing to attach yet when no organization document exists", () => {
+    render(
+      <OverlayDeliverable
+        tenderId="tender-1"
+        deliverable={checklistDeliverable()}
+        actorRole="OWNER"
+        checklistEntries={[{ id: "piece-1", name: "attestation fiscale", mandatory: true, status: "MISSING" }]}
+        availableDocuments={[]}
+      />,
+    );
+
+    expect(screen.getByText(/Aucun document disponible/)).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+
+  it("never shows the picker for a read-only actor (canManageDeliverable = false)", () => {
+    render(
+      <OverlayDeliverable
+        tenderId="tender-1"
+        deliverable={checklistDeliverable()}
+        actorRole="READ_ONLY"
+        checklistEntries={[{ id: "piece-1", name: "attestation fiscale", mandatory: true, status: "MISSING" }]}
+        availableDocuments={[{ id: "doc-1", title: "Attestation fiscale 2026.pdf" }]}
+      />,
+    );
+
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 });
