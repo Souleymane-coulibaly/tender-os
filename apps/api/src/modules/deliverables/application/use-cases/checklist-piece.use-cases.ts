@@ -9,6 +9,7 @@ import { ChecklistPieceEntryNotFoundError } from "../../domain/errors";
 import { toChecklistPieceEntrySummary, type ChecklistPieceEntrySummary } from "../dtos-overlay";
 import { CHECKLIST_PIECE_ENTRY_REPOSITORY, type ChecklistPieceEntryRepository } from "../ports/checklist-piece-entry.repository";
 import { DeliverableAccessService } from "../services/deliverable-access.service";
+import { DeliverableStatusRecalculationService } from "../services/deliverable-status-recalculation.service";
 import { verifyAttachableDocument } from "../services/verify-attachable-document";
 
 export type CreateChecklistPieceEntryCommand = Readonly<{
@@ -29,6 +30,7 @@ export class CreateChecklistPieceEntryUseCase {
   constructor(
     private readonly accessService: DeliverableAccessService,
     @Inject(CHECKLIST_PIECE_ENTRY_REPOSITORY) private readonly repository: ChecklistPieceEntryRepository,
+    private readonly statusRecalculation: DeliverableStatusRecalculationService,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
   ) {}
@@ -56,6 +58,7 @@ export class CreateChecklistPieceEntryUseCase {
       occurredAt: this.clock.now(),
     });
     await this.repository.create(entry);
+    await this.statusRecalculation.recomputeOverlayDeliverable({ organizationId: command.organizationId, deliverableId: deliverable.id });
     return toChecklistPieceEntrySummary(entry);
   }
 }
@@ -79,6 +82,7 @@ export class UpdateChecklistPieceEntryUseCase {
     private readonly accessService: DeliverableAccessService,
     @Inject(CHECKLIST_PIECE_ENTRY_REPOSITORY) private readonly repository: ChecklistPieceEntryRepository,
     private readonly getDocumentUseCase: GetDocumentUseCase,
+    private readonly statusRecalculation: DeliverableStatusRecalculationService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -123,6 +127,7 @@ export class UpdateChecklistPieceEntryUseCase {
       entry.assignResponsible({ responsibleUserId: command.responsibleUserId, occurredAt });
     }
     await this.repository.save(entry);
+    await this.statusRecalculation.recomputeOverlayDeliverable({ organizationId: command.organizationId, deliverableId: deliverable.id });
     return toChecklistPieceEntrySummary(entry);
   }
 }

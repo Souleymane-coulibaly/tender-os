@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CreateDeliverableAnnexUseCase, ListDeliverableAnnexesUseCase, UpdateDeliverableAnnexUseCase } from "./deliverable-annex.use-cases";
 import type { DeliverableAnnexRepository } from "../ports/deliverable-annex.repository";
 import type { DeliverableAccessService } from "../services/deliverable-access.service";
+import type { DeliverableStatusRecalculationService } from "../services/deliverable-status-recalculation.service";
 import type { GetDocumentUseCase } from "../../../documents";
 import { DeliverableAnnexNotFoundError } from "../../domain/errors";
 import { DeliverableAnnex } from "../../domain/deliverable-annex.aggregate";
@@ -24,6 +25,9 @@ function fakeIdGenerator() {
 }
 function fakeAccessService(): DeliverableAccessService {
   return { loadDeliverable: vi.fn(async () => ({ deliverable: fakeDeliverable(), clientAccountId: "client-1" })) } as unknown as DeliverableAccessService;
+}
+function fakeStatusRecalculation(): DeliverableStatusRecalculationService {
+  return { recomputeOverlayDeliverable: vi.fn(async () => {}) } as unknown as DeliverableStatusRecalculationService;
 }
 function fakeGetDocumentUseCase(): GetDocumentUseCase {
   return {
@@ -50,16 +54,18 @@ function inMemoryRepository(seed: DeliverableAnnex[] = []): DeliverableAnnexRepo
 describe("CreateDeliverableAnnexUseCase", () => {
   it("creates an annex PENDING when no document is attached yet", async () => {
     const getDocumentUseCase = fakeGetDocumentUseCase();
-    const useCase = new CreateDeliverableAnnexUseCase(fakeAccessService(), inMemoryRepository(), getDocumentUseCase, fakeClock(), fakeIdGenerator());
+    const statusRecalculation = fakeStatusRecalculation();
+    const useCase = new CreateDeliverableAnnexUseCase(fakeAccessService(), inMemoryRepository(), getDocumentUseCase, statusRecalculation, fakeClock(), fakeIdGenerator());
     const summary = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", deliverableId: DELIVERABLE_ID, label: "CV chef de projet" });
     expect(summary.status).toBe("PENDING");
     expect(summary.label).toBe("CV chef de projet");
     expect(getDocumentUseCase.execute).not.toHaveBeenCalled();
+    expect(statusRecalculation.recomputeOverlayDeliverable).toHaveBeenCalledWith({ organizationId: ORGANIZATION_ID, deliverableId: DELIVERABLE_ID });
   });
 
   it("creates an annex already PROVIDED when a documentId is given upfront, deriving the version reference from the VERIFIED document (mission P1-003)", async () => {
     const getDocumentUseCase = fakeGetDocumentUseCase();
-    const useCase = new CreateDeliverableAnnexUseCase(fakeAccessService(), inMemoryRepository(), getDocumentUseCase, fakeClock(), fakeIdGenerator());
+    const useCase = new CreateDeliverableAnnexUseCase(fakeAccessService(), inMemoryRepository(), getDocumentUseCase, fakeStatusRecalculation(), fakeClock(), fakeIdGenerator());
     const summary = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", deliverableId: DELIVERABLE_ID, label: "Certificat", documentId: "doc-1" });
     expect(getDocumentUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ documentId: "doc-1", actorId: "user-1", actorRole: "OWNER" }));
     expect(summary.status).toBe("PROVIDED");
@@ -72,7 +78,7 @@ describe("CreateDeliverableAnnexUseCase", () => {
   it("refuses a documentId that does not resolve to a real, accessible document (audit Codex P1-003)", async () => {
     const getDocumentUseCase = { execute: vi.fn(async () => { throw new Error("DOCUMENT_NOT_FOUND"); }) } as unknown as GetDocumentUseCase;
     const repository = inMemoryRepository();
-    const useCase = new CreateDeliverableAnnexUseCase(fakeAccessService(), repository, getDocumentUseCase, fakeClock(), fakeIdGenerator());
+    const useCase = new CreateDeliverableAnnexUseCase(fakeAccessService(), repository, getDocumentUseCase, fakeStatusRecalculation(), fakeClock(), fakeIdGenerator());
 
     await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", deliverableId: DELIVERABLE_ID, label: "Certificat", documentId: "doc-nonexistent" })).rejects.toThrow(
       "DOCUMENT_NOT_FOUND",
@@ -86,7 +92,8 @@ describe("UpdateDeliverableAnnexUseCase", () => {
     const pending = DeliverableAnnex.create({ id: "annex-1", organizationId: ORGANIZATION_ID, deliverableId: DELIVERABLE_ID, label: "CV chef de projet", order: 0, createdBy: "user-1", occurredAt: NOW });
     const getDocumentUseCase = fakeGetDocumentUseCase();
     const repository = inMemoryRepository([pending]);
-    const useCase = new UpdateDeliverableAnnexUseCase(fakeAccessService(), repository, getDocumentUseCase);
+    const statusRecalculation = fakeStatusRecalculation();
+    const useCase = new UpdateDeliverableAnnexUseCase(fakeAccessService(), repository, getDocumentUseCase, statusRecalculation);
 
     const summary = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", deliverableId: DELIVERABLE_ID, annexId: "annex-1", documentId: "doc-1" });
 
@@ -97,13 +104,14 @@ describe("UpdateDeliverableAnnexUseCase", () => {
     expect(summary.documentChecksum).toBe("abc123");
     expect(summary.documentFileName).toBe("certificat.pdf");
     expect(summary.documentMimeType).toBe("application/pdf");
+    expect(statusRecalculation.recomputeOverlayDeliverable).toHaveBeenCalledWith({ organizationId: ORGANIZATION_ID, deliverableId: DELIVERABLE_ID });
   });
 
   it("refuses a documentId that does not resolve to a real, accessible document — never attached without verification (audit Codex P1-003)", async () => {
     const pending = DeliverableAnnex.create({ id: "annex-1", organizationId: ORGANIZATION_ID, deliverableId: DELIVERABLE_ID, label: "CV", order: 0, createdBy: "user-1", occurredAt: NOW });
     const getDocumentUseCase = { execute: vi.fn(async () => { throw new Error("DOCUMENT_NOT_FOUND"); }) } as unknown as GetDocumentUseCase;
     const repository = inMemoryRepository([pending]);
-    const useCase = new UpdateDeliverableAnnexUseCase(fakeAccessService(), repository, getDocumentUseCase);
+    const useCase = new UpdateDeliverableAnnexUseCase(fakeAccessService(), repository, getDocumentUseCase, fakeStatusRecalculation());
 
     await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", deliverableId: DELIVERABLE_ID, annexId: "annex-1", documentId: "doc-nonexistent" })).rejects.toThrow(
       "DOCUMENT_NOT_FOUND",
@@ -113,7 +121,7 @@ describe("UpdateDeliverableAnnexUseCase", () => {
   });
 
   it("rejects an annexId that does not exist (or belongs to a different deliverable) with DeliverableAnnexNotFoundError", async () => {
-    const useCase = new UpdateDeliverableAnnexUseCase(fakeAccessService(), inMemoryRepository(), fakeGetDocumentUseCase());
+    const useCase = new UpdateDeliverableAnnexUseCase(fakeAccessService(), inMemoryRepository(), fakeGetDocumentUseCase(), fakeStatusRecalculation());
 
     await expect(
       useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", deliverableId: DELIVERABLE_ID, annexId: "annex-missing", documentId: "doc-1" }),

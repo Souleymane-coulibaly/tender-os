@@ -7,6 +7,7 @@ import {
 } from "./compliance-matrix.use-cases";
 import type { ComplianceMatrixEntryRepository } from "../ports/compliance-matrix-entry.repository";
 import type { DeliverableAccessService } from "../services/deliverable-access.service";
+import type { DeliverableStatusRecalculationService } from "../services/deliverable-status-recalculation.service";
 import { ComplianceMatrixEntry } from "../../domain/compliance-matrix-entry.aggregate";
 import { Criticality } from "../../domain/compliance-coverage-status";
 import { Deliverable } from "../../domain/deliverable.aggregate";
@@ -33,6 +34,10 @@ function fakeAccessService(): DeliverableAccessService {
   return { loadDeliverable: vi.fn(async () => ({ deliverable: fakeDeliverable(), clientAccountId: "client-1" })) } as unknown as DeliverableAccessService;
 }
 
+function fakeStatusRecalculation(): DeliverableStatusRecalculationService {
+  return { recomputeOverlayDeliverable: vi.fn(async () => {}) } as unknown as DeliverableStatusRecalculationService;
+}
+
 function inMemoryRepository(seed: ComplianceMatrixEntry[] = []): ComplianceMatrixEntryRepository {
   const rows = new Map(seed.map((e) => [e.id, e]));
   return {
@@ -52,7 +57,8 @@ const baseCommand = { organizationId: ORGANIZATION_ID, actorId: "user-1", actorR
 describe("CreateComplianceMatrixEntryUseCase", () => {
   it("creates an entry at the next order position, defaulting coverageStatus to TO_CONFIRM", async () => {
     const repository = inMemoryRepository();
-    const useCase = new CreateComplianceMatrixEntryUseCase(fakeAccessService(), repository, fakeClock(), fakeIdGenerator());
+    const statusRecalculation = fakeStatusRecalculation();
+    const useCase = new CreateComplianceMatrixEntryUseCase(fakeAccessService(), repository, statusRecalculation, fakeClock(), fakeIdGenerator());
 
     const summary = await useCase.execute({ ...baseCommand, source: "CCTP art. 3.2", mandatory: true, criticality: Criticality.High });
 
@@ -60,6 +66,7 @@ describe("CreateComplianceMatrixEntryUseCase", () => {
     expect(summary.coverageStatus).toBe("TO_CONFIRM");
     expect(summary.order).toBe(0);
     expect(summary.validated).toBe(false);
+    expect(statusRecalculation.recomputeOverlayDeliverable).toHaveBeenCalledWith({ organizationId: ORGANIZATION_ID, deliverableId: DELIVERABLE_ID });
   });
 });
 
@@ -68,18 +75,20 @@ describe("UpdateComplianceMatrixEntryUseCase", () => {
     const entry = ComplianceMatrixEntry.create({ id: "entry-1", organizationId: ORGANIZATION_ID, deliverableId: DELIVERABLE_ID, source: "CCTP art. 3.2", mandatory: true, criticality: Criticality.Medium, order: 0, createdBy: "user-1", occurredAt: NOW });
     entry.markValidated({ validatedBy: "user-2", occurredAt: NOW });
     const repository = inMemoryRepository([entry]);
-    const useCase = new UpdateComplianceMatrixEntryUseCase(fakeAccessService(), repository, fakeClock());
+    const statusRecalculation = fakeStatusRecalculation();
+    const useCase = new UpdateComplianceMatrixEntryUseCase(fakeAccessService(), repository, statusRecalculation, fakeClock());
 
     const summary = await useCase.execute({ ...baseCommand, entryId: "entry-1", response: "Réponse mise à jour", coverageStatus: "COVERED" });
 
     expect(summary.response).toBe("Réponse mise à jour");
     expect(summary.coverageStatus).toBe("COVERED");
     expect(summary.validated).toBe(false);
+    expect(statusRecalculation.recomputeOverlayDeliverable).toHaveBeenCalledWith({ organizationId: ORGANIZATION_ID, deliverableId: DELIVERABLE_ID });
   });
 
   it("throws ComplianceMatrixEntryNotFoundError for an entry belonging to a different deliverable", async () => {
     const entry = ComplianceMatrixEntry.create({ id: "entry-1", organizationId: ORGANIZATION_ID, deliverableId: "other-deliverable", source: "x", mandatory: true, criticality: Criticality.Low, order: 0, createdBy: "user-1", occurredAt: NOW });
-    const useCase = new UpdateComplianceMatrixEntryUseCase(fakeAccessService(), inMemoryRepository([entry]), fakeClock());
+    const useCase = new UpdateComplianceMatrixEntryUseCase(fakeAccessService(), inMemoryRepository([entry]), fakeStatusRecalculation(), fakeClock());
     await expect(useCase.execute({ ...baseCommand, entryId: "entry-1", response: "x" })).rejects.toThrow(ComplianceMatrixEntryNotFoundError);
   });
 });

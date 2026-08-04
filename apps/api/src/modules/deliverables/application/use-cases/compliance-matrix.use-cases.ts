@@ -8,6 +8,7 @@ import { ComplianceMatrixEntryNotFoundError } from "../../domain/errors";
 import { toComplianceMatrixEntrySummary, type ComplianceMatrixEntrySummary } from "../dtos-overlay";
 import { COMPLIANCE_MATRIX_ENTRY_REPOSITORY, type ComplianceMatrixEntryRepository } from "../ports/compliance-matrix-entry.repository";
 import { DeliverableAccessService } from "../services/deliverable-access.service";
+import { DeliverableStatusRecalculationService } from "../services/deliverable-status-recalculation.service";
 
 export type CreateComplianceMatrixEntryCommand = Readonly<{
   organizationId: string;
@@ -27,6 +28,7 @@ export class CreateComplianceMatrixEntryUseCase {
   constructor(
     private readonly accessService: DeliverableAccessService,
     @Inject(COMPLIANCE_MATRIX_ENTRY_REPOSITORY) private readonly repository: ComplianceMatrixEntryRepository,
+    private readonly statusRecalculation: DeliverableStatusRecalculationService,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
   ) {}
@@ -53,6 +55,7 @@ export class CreateComplianceMatrixEntryUseCase {
       occurredAt: this.clock.now(),
     });
     await this.repository.create(entry);
+    await this.statusRecalculation.recomputeOverlayDeliverable({ organizationId: command.organizationId, deliverableId: deliverable.id });
     return toComplianceMatrixEntrySummary(entry);
   }
 }
@@ -74,6 +77,7 @@ export class UpdateComplianceMatrixEntryUseCase {
   constructor(
     private readonly accessService: DeliverableAccessService,
     @Inject(COMPLIANCE_MATRIX_ENTRY_REPOSITORY) private readonly repository: ComplianceMatrixEntryRepository,
+    private readonly statusRecalculation: DeliverableStatusRecalculationService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -97,6 +101,7 @@ export class UpdateComplianceMatrixEntryUseCase {
       occurredAt: this.clock.now(),
     });
     await this.repository.save(entry);
+    await this.statusRecalculation.recomputeOverlayDeliverable({ organizationId: command.organizationId, deliverableId: deliverable.id });
     return toComplianceMatrixEntrySummary(entry);
   }
 }

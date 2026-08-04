@@ -2,11 +2,19 @@ import { Inject, Injectable } from "@nestjs/common";
 import { EXPORT_JOB_REPOSITORY, ExportMode, ExportStatus, type ExportJobRepository } from "../../../export";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { deriveDeliverableSectionStatus } from "../../domain/deliverable-section-status";
-import { deriveDeliverableStatus } from "../../domain/deliverable-status";
-import { isStructuredDeliverableType } from "../../domain/deliverable-type";
+import {
+  deriveAnnexesDeliverableStatus,
+  deriveChecklistDeliverableStatus,
+  deriveComplianceMatrixDeliverableStatus,
+  deriveDeliverableStatus,
+} from "../../domain/deliverable-status";
+import { DeliverableType, isStructuredDeliverableType } from "../../domain/deliverable-type";
+import { DELIVERABLE_ANNEX_REPOSITORY, type DeliverableAnnexRepository } from "../ports/deliverable-annex.repository";
 import { DELIVERABLE_REPOSITORY, type DeliverableRepository } from "../ports/deliverable.repository";
 import { DELIVERABLE_REVISION_REPOSITORY, type DeliverableRevisionRepository } from "../ports/deliverable-revision.repository";
 import { DELIVERABLE_SECTION_REPOSITORY, type DeliverableSectionRepository } from "../ports/deliverable-section.repository";
+import { CHECKLIST_PIECE_ENTRY_REPOSITORY, type ChecklistPieceEntryRepository } from "../ports/checklist-piece-entry.repository";
+import { COMPLIANCE_MATRIX_ENTRY_REPOSITORY, type ComplianceMatrixEntryRepository } from "../ports/compliance-matrix-entry.repository";
 
 /** Nombre d'exports FINAUX examinés pour retrouver le dernier COMPLETED de ce type de document —
  *  largement au-dessus de tout historique réaliste pour un même (tender, documentType). */
@@ -24,6 +32,9 @@ export class DeliverableStatusRecalculationService {
     @Inject(DELIVERABLE_SECTION_REPOSITORY) private readonly sectionRepository: DeliverableSectionRepository,
     @Inject(DELIVERABLE_REVISION_REPOSITORY) private readonly revisionRepository: DeliverableRevisionRepository,
     @Inject(EXPORT_JOB_REPOSITORY) private readonly exportJobRepository: ExportJobRepository,
+    @Inject(DELIVERABLE_ANNEX_REPOSITORY) private readonly annexRepository: DeliverableAnnexRepository,
+    @Inject(CHECKLIST_PIECE_ENTRY_REPOSITORY) private readonly checklistRepository: ChecklistPieceEntryRepository,
+    @Inject(COMPLIANCE_MATRIX_ENTRY_REPOSITORY) private readonly complianceRepository: ComplianceMatrixEntryRepository,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -69,6 +80,35 @@ export class DeliverableStatusRecalculationService {
     const visible = sections.filter((s) => !s.hidden);
     const exportedAt = await this.findLatestExportedAt({ organizationId: input.organizationId, tenderId: deliverable.tenderId, documentType: deliverable.type });
     const status = deriveDeliverableStatus({ sectionStatuses: visible.map((s) => s.status), approvedAt: deliverable.approvedAt, exportedAt });
+    deliverable.applyComputedStatus(status, this.clock.now());
+    await this.deliverableRepository.save(deliverable);
+  }
+
+  /** Correctif — même point d'entrée unique que `recomputeDeliverable` (mission §15), mais pour les
+   *  3 livrables en overlay léger (Annexes/Checklist/Matrice de conformité) : leur statut ne
+   *  bougeait jamais de NOT_STARTED, ce recalcul n'ayant jamais été implémenté (voir
+   *  `deriveAnnexesDeliverableStatus`/`deriveChecklistDeliverableStatus`/
+   *  `deriveComplianceMatrixDeliverableStatus`, deliverable-status.ts). Ne touche jamais un livrable
+   *  d'un autre type (structuré ou lecture seule) — appelé UNIQUEMENT par les use cases
+   *  Create/Update des 3 types overlay. */
+  async recomputeOverlayDeliverable(input: { organizationId: string; deliverableId: string }): Promise<void> {
+    const deliverable = await this.deliverableRepository.findById({ organizationId: input.organizationId, deliverableId: input.deliverableId });
+    if (!deliverable) return;
+
+    let status;
+    if (deliverable.type === DeliverableType.Annexes) {
+      const entries = await this.annexRepository.listByDeliverable({ organizationId: input.organizationId, deliverableId: input.deliverableId });
+      status = deriveAnnexesDeliverableStatus(entries.map((entry) => entry.status));
+    } else if (deliverable.type === DeliverableType.Checklist) {
+      const entries = await this.checklistRepository.listByDeliverable({ organizationId: input.organizationId, deliverableId: input.deliverableId });
+      status = deriveChecklistDeliverableStatus(entries.map((entry) => entry.status));
+    } else if (deliverable.type === DeliverableType.ComplianceMatrix) {
+      const entries = await this.complianceRepository.listByDeliverable({ organizationId: input.organizationId, deliverableId: input.deliverableId });
+      status = deriveComplianceMatrixDeliverableStatus(entries.map((entry) => entry.coverageStatus));
+    } else {
+      return;
+    }
+
     deliverable.applyComputedStatus(status, this.clock.now());
     await this.deliverableRepository.save(deliverable);
   }

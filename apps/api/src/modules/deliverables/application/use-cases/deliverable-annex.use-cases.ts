@@ -8,6 +8,7 @@ import { DeliverableAnnexNotFoundError } from "../../domain/errors";
 import { toDeliverableAnnexSummary, type DeliverableAnnexSummary } from "../dtos-overlay";
 import { DELIVERABLE_ANNEX_REPOSITORY, type DeliverableAnnexRepository } from "../ports/deliverable-annex.repository";
 import { DeliverableAccessService } from "../services/deliverable-access.service";
+import { DeliverableStatusRecalculationService } from "../services/deliverable-status-recalculation.service";
 import { verifyAttachableDocument, type AttachableDocumentReference } from "../services/verify-attachable-document";
 
 export type CreateDeliverableAnnexCommand = Readonly<{
@@ -29,6 +30,7 @@ export class CreateDeliverableAnnexUseCase {
     private readonly accessService: DeliverableAccessService,
     @Inject(DELIVERABLE_ANNEX_REPOSITORY) private readonly repository: DeliverableAnnexRepository,
     private readonly getDocumentUseCase: GetDocumentUseCase,
+    private readonly statusRecalculation: DeliverableStatusRecalculationService,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
   ) {}
@@ -71,6 +73,7 @@ export class CreateDeliverableAnnexUseCase {
       occurredAt: this.clock.now(),
     });
     await this.repository.create(annex);
+    await this.statusRecalculation.recomputeOverlayDeliverable({ organizationId: command.organizationId, deliverableId: deliverable.id });
     return toDeliverableAnnexSummary(annex);
   }
 }
@@ -97,6 +100,7 @@ export class UpdateDeliverableAnnexUseCase {
     private readonly accessService: DeliverableAccessService,
     @Inject(DELIVERABLE_ANNEX_REPOSITORY) private readonly repository: DeliverableAnnexRepository,
     private readonly getDocumentUseCase: GetDocumentUseCase,
+    private readonly statusRecalculation: DeliverableStatusRecalculationService,
   ) {}
 
   async execute(command: UpdateDeliverableAnnexCommand): Promise<DeliverableAnnexSummary> {
@@ -129,6 +133,7 @@ export class UpdateDeliverableAnnexUseCase {
       documentMimeType: verified.documentMimeType,
     });
     await this.repository.save(annex);
+    await this.statusRecalculation.recomputeOverlayDeliverable({ organizationId: command.organizationId, deliverableId: deliverable.id });
     return toDeliverableAnnexSummary(annex);
   }
 }

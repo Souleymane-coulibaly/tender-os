@@ -1,3 +1,6 @@
+import { AnnexStatus } from "./annex-status";
+import { ChecklistPieceStatus } from "./checklist-piece-status";
+import { ComplianceCoverageStatus } from "./compliance-coverage-status";
 import { DeliverableSectionStatus } from "./deliverable-section-status";
 
 /** Mission §15 — statut global d'un livrable, également DÉRIVÉ ("calculé et contrôlé côté
@@ -66,5 +69,52 @@ export function deriveDeliverableStatus(input: {
   if (worst === SECTION_RANK[DeliverableSectionStatus.Draft]) {
     return DeliverableStatus.Draft;
   }
+  return DeliverableStatus.InProgress;
+}
+
+/**
+ * Correctif — le statut d'un livrable en overlay léger (Annexes/Checklist/Matrice de conformité)
+ * restait NOT_STARTED indéfiniment, quelle que soit la progression réelle de ses entrées : contrairement
+ * aux livrables structurés (`deriveDeliverableStatus`, sections), ce recalcul n'avait jamais été
+ * implémenté — un angle mort du Sprint 8A.1 ("overlay léger : entrées éditées directement, aucun
+ * statut global calculé"), jamais un choix explicitement voulu pour le badge de la page liste.
+ *
+ * Règle volontairement simple et cohérente entre les 3 dérivations ci-dessous : NOT_STARTED tant
+ * qu'aucune entrée n'a progressé, IN_PROGRESS dès qu'au moins une a progressé sans que toutes le
+ * soient, READY_FOR_REVIEW quand TOUTES les entrées sont dans un état final positif,
+ * CHANGES_REQUESTED si au moins une entrée signale un problème réel (jamais une simple entrée
+ * encore en attente). Un livrable sans aucune entrée reste NOT_STARTED — jamais "prêt" par défaut.
+ */
+export function deriveAnnexesDeliverableStatus(statuses: readonly AnnexStatus[]): DeliverableStatus {
+  if (statuses.length === 0) return DeliverableStatus.NotStarted;
+  const progressed = statuses.filter((status) => status !== AnnexStatus.Pending).length;
+  if (progressed === 0) return DeliverableStatus.NotStarted;
+  if (progressed === statuses.length) return DeliverableStatus.ReadyForReview;
+  return DeliverableStatus.InProgress;
+}
+
+/** EXPIRED/REJECTED signalent un vrai problème (une pièce fournie mais refusée/périmée) — jamais
+ *  traité comme une simple pièce encore manquante. */
+export function deriveChecklistDeliverableStatus(statuses: readonly ChecklistPieceStatus[]): DeliverableStatus {
+  if (statuses.length === 0) return DeliverableStatus.NotStarted;
+  if (statuses.some((status) => status === ChecklistPieceStatus.Rejected || status === ChecklistPieceStatus.Expired)) {
+    return DeliverableStatus.ChangesRequested;
+  }
+  const done = statuses.filter((status) => status === ChecklistPieceStatus.Provided || status === ChecklistPieceStatus.Valid).length;
+  if (done === 0) return DeliverableStatus.NotStarted;
+  if (done === statuses.length) return DeliverableStatus.ReadyForReview;
+  return DeliverableStatus.InProgress;
+}
+
+/** NOT_COVERED signale un vrai écart de conformité — jamais traité comme une simple exigence
+ *  encore à confirmer (TO_CONFIRM, l'état par défaut à la création). */
+export function deriveComplianceMatrixDeliverableStatus(statuses: readonly ComplianceCoverageStatus[]): DeliverableStatus {
+  if (statuses.length === 0) return DeliverableStatus.NotStarted;
+  if (statuses.some((status) => status === ComplianceCoverageStatus.NotCovered)) {
+    return DeliverableStatus.ChangesRequested;
+  }
+  const done = statuses.filter((status) => status !== ComplianceCoverageStatus.ToConfirm).length;
+  if (done === 0) return DeliverableStatus.NotStarted;
+  if (done === statuses.length) return DeliverableStatus.ReadyForReview;
   return DeliverableStatus.InProgress;
 }

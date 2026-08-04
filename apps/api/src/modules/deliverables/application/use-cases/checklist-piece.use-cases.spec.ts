@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CreateChecklistPieceEntryUseCase, ListChecklistPieceEntriesUseCase, UpdateChecklistPieceEntryUseCase } from "./checklist-piece.use-cases";
 import type { ChecklistPieceEntryRepository } from "../ports/checklist-piece-entry.repository";
 import type { DeliverableAccessService } from "../services/deliverable-access.service";
+import type { DeliverableStatusRecalculationService } from "../services/deliverable-status-recalculation.service";
 import type { GetDocumentUseCase } from "../../../documents";
 import { ChecklistPieceEntry } from "../../domain/checklist-piece-entry.aggregate";
 import { Deliverable } from "../../domain/deliverable.aggregate";
@@ -24,6 +25,9 @@ function fakeIdGenerator() {
 }
 function fakeAccessService(): DeliverableAccessService {
   return { loadDeliverable: vi.fn(async () => ({ deliverable: fakeDeliverable(), clientAccountId: "client-1" })) } as unknown as DeliverableAccessService;
+}
+function fakeStatusRecalculation(): DeliverableStatusRecalculationService {
+  return { recomputeOverlayDeliverable: vi.fn(async () => {}) } as unknown as DeliverableStatusRecalculationService;
 }
 function fakeGetDocumentUseCase(): GetDocumentUseCase {
   return {
@@ -51,10 +55,12 @@ const baseCommand = { organizationId: ORGANIZATION_ID, actorId: "user-1", actorR
 
 describe("CreateChecklistPieceEntryUseCase", () => {
   it("creates a piece defaulting to MISSING status", async () => {
-    const useCase = new CreateChecklistPieceEntryUseCase(fakeAccessService(), inMemoryRepository(), fakeClock(), fakeIdGenerator());
+    const statusRecalculation = fakeStatusRecalculation();
+    const useCase = new CreateChecklistPieceEntryUseCase(fakeAccessService(), inMemoryRepository(), statusRecalculation, fakeClock(), fakeIdGenerator());
     const summary = await useCase.execute({ ...baseCommand, name: "Attestation fiscale", mandatory: true });
     expect(summary.status).toBe("MISSING");
     expect(summary.name).toBe("Attestation fiscale");
+    expect(statusRecalculation.recomputeOverlayDeliverable).toHaveBeenCalledWith({ organizationId: ORGANIZATION_ID, deliverableId: DELIVERABLE_ID });
   });
 });
 
@@ -63,7 +69,8 @@ describe("UpdateChecklistPieceEntryUseCase", () => {
     const entry = ChecklistPieceEntry.create({ id: "entry-1", organizationId: ORGANIZATION_ID, deliverableId: DELIVERABLE_ID, name: "Attestation fiscale", mandatory: true, order: 0, createdBy: "user-1", occurredAt: NOW });
     const repository = inMemoryRepository([entry]);
     const getDocumentUseCase = fakeGetDocumentUseCase();
-    const useCase = new UpdateChecklistPieceEntryUseCase(fakeAccessService(), repository, getDocumentUseCase, fakeClock());
+    const statusRecalculation = fakeStatusRecalculation();
+    const useCase = new UpdateChecklistPieceEntryUseCase(fakeAccessService(), repository, getDocumentUseCase, statusRecalculation, fakeClock());
 
     const summary = await useCase.execute({ ...baseCommand, entryId: "entry-1", documentId: "doc-1", version: "v1" });
 
@@ -74,13 +81,14 @@ describe("UpdateChecklistPieceEntryUseCase", () => {
     expect(summary.documentChecksum).toBe("abc123");
     expect(summary.documentFileName).toBe("attestation.pdf");
     expect(summary.documentMimeType).toBe("application/pdf");
+    expect(statusRecalculation.recomputeOverlayDeliverable).toHaveBeenCalledWith({ organizationId: ORGANIZATION_ID, deliverableId: DELIVERABLE_ID });
   });
 
   it("refuses a documentId that does not resolve to a real, accessible document (audit Codex P1-003)", async () => {
     const entry = ChecklistPieceEntry.create({ id: "entry-1", organizationId: ORGANIZATION_ID, deliverableId: DELIVERABLE_ID, name: "x", mandatory: true, order: 0, createdBy: "user-1", occurredAt: NOW });
     const repository = inMemoryRepository([entry]);
     const getDocumentUseCase = { execute: vi.fn(async () => { throw new Error("DOCUMENT_NOT_FOUND"); }) } as unknown as GetDocumentUseCase;
-    const useCase = new UpdateChecklistPieceEntryUseCase(fakeAccessService(), repository, getDocumentUseCase, fakeClock());
+    const useCase = new UpdateChecklistPieceEntryUseCase(fakeAccessService(), repository, getDocumentUseCase, fakeStatusRecalculation(), fakeClock());
 
     await expect(useCase.execute({ ...baseCommand, entryId: "entry-1", documentId: "doc-nonexistent" })).rejects.toThrow("DOCUMENT_NOT_FOUND");
     const stillMissing = await repository.findById({ organizationId: ORGANIZATION_ID, entryId: "entry-1" });
@@ -91,7 +99,7 @@ describe("UpdateChecklistPieceEntryUseCase", () => {
     const entry = ChecklistPieceEntry.create({ id: "entry-1", organizationId: ORGANIZATION_ID, deliverableId: DELIVERABLE_ID, name: "x", mandatory: true, order: 0, createdBy: "user-1", occurredAt: NOW });
     const repository = inMemoryRepository([entry]);
     const getDocumentUseCase = { execute: vi.fn(async () => ({ id: "doc-1", currentVersion: undefined })) } as unknown as GetDocumentUseCase;
-    const useCase = new UpdateChecklistPieceEntryUseCase(fakeAccessService(), repository, getDocumentUseCase, fakeClock());
+    const useCase = new UpdateChecklistPieceEntryUseCase(fakeAccessService(), repository, getDocumentUseCase, fakeStatusRecalculation(), fakeClock());
 
     await expect(useCase.execute({ ...baseCommand, entryId: "entry-1", documentId: "doc-1" })).rejects.toBeInstanceOf(DocumentNotUsableForDeliverableError);
   });
@@ -99,7 +107,7 @@ describe("UpdateChecklistPieceEntryUseCase", () => {
   it("assigns a responsible user without touching the document/status fields", async () => {
     const entry = ChecklistPieceEntry.create({ id: "entry-1", organizationId: ORGANIZATION_ID, deliverableId: DELIVERABLE_ID, name: "x", mandatory: true, order: 0, createdBy: "user-1", occurredAt: NOW });
     const repository = inMemoryRepository([entry]);
-    const useCase = new UpdateChecklistPieceEntryUseCase(fakeAccessService(), repository, fakeGetDocumentUseCase(), fakeClock());
+    const useCase = new UpdateChecklistPieceEntryUseCase(fakeAccessService(), repository, fakeGetDocumentUseCase(), fakeStatusRecalculation(), fakeClock());
 
     const summary = await useCase.execute({ ...baseCommand, entryId: "entry-1", responsibleUserId: "user-9" });
 
@@ -109,7 +117,7 @@ describe("UpdateChecklistPieceEntryUseCase", () => {
 
   it("throws ChecklistPieceEntryNotFoundError for an entry belonging to a different deliverable", async () => {
     const entry = ChecklistPieceEntry.create({ id: "entry-1", organizationId: ORGANIZATION_ID, deliverableId: "other-deliverable", name: "x", mandatory: true, order: 0, createdBy: "user-1", occurredAt: NOW });
-    const useCase = new UpdateChecklistPieceEntryUseCase(fakeAccessService(), inMemoryRepository([entry]), fakeGetDocumentUseCase(), fakeClock());
+    const useCase = new UpdateChecklistPieceEntryUseCase(fakeAccessService(), inMemoryRepository([entry]), fakeGetDocumentUseCase(), fakeStatusRecalculation(), fakeClock());
     await expect(useCase.execute({ ...baseCommand, entryId: "entry-1", responsibleUserId: "user-9" })).rejects.toThrow(ChecklistPieceEntryNotFoundError);
   });
 });
