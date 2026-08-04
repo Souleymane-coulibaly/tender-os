@@ -45,6 +45,8 @@ function describeAiConfigurationActionError(error: unknown): string {
         if (error.code === "PRICING_SNAPSHOT_NOT_FOUND") return "Aucun tarif actif pour l'un des modèles sélectionnés.";
         if (error.code === "BENCHMARK_RUN_NOT_COMPLETED") return "Ce benchmark doit être terminé avant de générer une recommandation.";
         if (error.code === "NO_ADMISSIBLE_MODEL") return "Tous les modèles de ce benchmark ont été éliminés : aucune recommandation possible.";
+        if (error.code === "ROUTING_POLICY_MODEL_NOT_ELIGIBLE")
+          return "Le modèle principal ou le modèle d'escalade de cette politique n'est pas activé et autorisé en production. Vérifiez-le dans Configuration IA → Modèles.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";
