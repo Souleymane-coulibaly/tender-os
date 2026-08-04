@@ -89,6 +89,20 @@ export const DELIVERABLE_TYPES = [
   "SUBMISSION_PACKAGE",
 ] as const;
 
+/** Mission — correctif "coverageStatus toujours forcé à COVERED côté écran, quelle que soit la
+ *  réponse tapée" : les 5 statuts réels supportés par le backend
+ *  (`ComplianceCoverageStatus`, deliverables/domain/compliance-coverage-status.ts), jamais un
+ *  sous-ensemble recopié à la main. */
+export const COMPLIANCE_COVERAGE_STATUSES = ["COVERED", "PARTIALLY_COVERED", "NOT_COVERED", "NOT_APPLICABLE", "TO_CONFIRM"] as const;
+
+export const COMPLIANCE_COVERAGE_STATUS_LABELS: Record<string, string> = {
+  COVERED: "Couvert",
+  PARTIALLY_COVERED: "Partiellement couvert",
+  NOT_COVERED: "Non couvert",
+  NOT_APPLICABLE: "Non applicable",
+  TO_CONFIRM: "À confirmer",
+};
+
 export const DELIVERABLE_TYPE_LABELS: Record<string, string> = {
   TECHNICAL_MEMO: "Mémoire technique",
   EXECUTIVE_SUMMARY: "Synthèse exécutive",

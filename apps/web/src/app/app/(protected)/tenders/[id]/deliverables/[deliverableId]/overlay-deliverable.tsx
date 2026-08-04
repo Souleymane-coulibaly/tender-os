@@ -9,7 +9,12 @@ import {
   updateComplianceMatrixEntryAction,
   updateDeliverableAnnexAction,
 } from "../../../../../deliverable-actions";
-import { canManageDeliverable, type DeliverableSummary } from "../../../../../../../lib/deliverable-types";
+import {
+  canManageDeliverable,
+  COMPLIANCE_COVERAGE_STATUSES,
+  COMPLIANCE_COVERAGE_STATUS_LABELS,
+  type DeliverableSummary,
+} from "../../../../../../../lib/deliverable-types";
 
 type ComplianceEntry = { id: string; source: string; mandatory: boolean; criticality: string; coverageStatus: string; response?: string };
 type ChecklistEntry = { id: string; name: string; mandatory: boolean; status: string };
@@ -61,7 +66,13 @@ function ComplianceMatrixView({ tenderId, deliverableId, canEdit, entries }: { t
   }
 
   async function updateResponse(entryId: string, response: string) {
-    const result = await updateComplianceMatrixEntryAction(tenderId, deliverableId, entryId, { response, coverageStatus: "COVERED" });
+    const result = await updateComplianceMatrixEntryAction(tenderId, deliverableId, entryId, { response });
+    if (result.error) setError(result.error);
+    else router.refresh();
+  }
+
+  async function updateCoverage(entryId: string, coverageStatus: string) {
+    const result = await updateComplianceMatrixEntryAction(tenderId, deliverableId, entryId, { coverageStatus });
     if (result.error) setError(result.error);
     else router.refresh();
   }
@@ -100,7 +111,23 @@ function ComplianceMatrixView({ tenderId, deliverableId, canEdit, entries }: { t
                   entry.response
                 )}
               </td>
-              <td className="py-2 pr-4 text-neutral-600">{entry.coverageStatus}</td>
+              <td className="py-2 pr-4 text-neutral-600">
+                {canEdit ? (
+                  <select
+                    value={entry.coverageStatus}
+                    onChange={(e) => updateCoverage(entry.id, e.target.value)}
+                    className="rounded border border-neutral-300 px-2 py-1"
+                  >
+                    {COMPLIANCE_COVERAGE_STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {COMPLIANCE_COVERAGE_STATUS_LABELS[status]}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  (COMPLIANCE_COVERAGE_STATUS_LABELS[entry.coverageStatus] ?? entry.coverageStatus)
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

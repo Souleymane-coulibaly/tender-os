@@ -8,11 +8,15 @@ const createDeliverableAnnexAction = vi.fn(async (_tenderId: string, _deliverabl
 const updateDeliverableAnnexAction = vi.fn(
   async (_tenderId: string, _deliverableId: string, _annexId: string, _input: { documentId: string; version?: string }) => ({}),
 );
+const updateComplianceMatrixEntryAction = vi.fn(
+  async (_tenderId: string, _deliverableId: string, _entryId: string, _input: { response?: string; coverageStatus?: string }) => ({}),
+);
 
 vi.mock("../../../../../deliverable-actions", () => ({
   createChecklistPieceEntryAction: vi.fn(async () => ({})),
   createComplianceMatrixEntryAction: vi.fn(async () => ({})),
-  updateComplianceMatrixEntryAction: vi.fn(async () => ({})),
+  updateComplianceMatrixEntryAction: (tenderId: string, deliverableId: string, entryId: string, input: { response?: string; coverageStatus?: string }) =>
+    updateComplianceMatrixEntryAction(tenderId, deliverableId, entryId, input),
   createDeliverableAnnexAction: (tenderId: string, deliverableId: string, input: { label: string; source?: string }) =>
     createDeliverableAnnexAction(tenderId, deliverableId, input),
   updateDeliverableAnnexAction: (tenderId: string, deliverableId: string, annexId: string, input: { documentId: string; version?: string }) =>
@@ -117,6 +121,75 @@ describe("OverlayDeliverable — Annexes (mission correctif 'aucun moyen de fair
       />,
     );
 
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+});
+
+function complianceDeliverable(): DeliverableSummary {
+  return {
+    id: "deliverable-2",
+    organizationId: "org-1",
+    clientAccountId: "client-1",
+    tenderId: "tender-1",
+    type: "COMPLIANCE_MATRIX",
+    status: "NOT_STARTED",
+    createdBy: "user-1",
+    createdAt: "2026-08-01T10:00:00.000Z",
+    updatedAt: "2026-08-01T10:00:00.000Z",
+  } as DeliverableSummary;
+}
+
+describe("OverlayDeliverable — Matrice de conformité (mission correctif 'coverageStatus toujours forcé à COVERED')", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("lets the user pick the real coverage status instead of it being forced to COVERED", async () => {
+    const user = userEvent.setup();
+    render(
+      <OverlayDeliverable
+        tenderId="tender-1"
+        deliverable={complianceDeliverable()}
+        actorRole="OWNER"
+        complianceEntries={[{ id: "entry-1", source: "CCTP art. 3.2", mandatory: true, criticality: "MEDIUM", coverageStatus: "TO_CONFIRM", response: "oui" }]}
+      />,
+    );
+
+    await user.selectOptions(screen.getByRole("combobox"), "NOT_COVERED");
+
+    expect(updateComplianceMatrixEntryAction).toHaveBeenCalledWith("tender-1", "deliverable-2", "entry-1", { coverageStatus: "NOT_COVERED" });
+  });
+
+  it("no longer sends coverageStatus at all when only the response text changes", async () => {
+    const user = userEvent.setup();
+    render(
+      <OverlayDeliverable
+        tenderId="tender-1"
+        deliverable={complianceDeliverable()}
+        actorRole="OWNER"
+        complianceEntries={[{ id: "entry-1", source: "CCTP art. 3.2", mandatory: true, criticality: "MEDIUM", coverageStatus: "NOT_COVERED", response: "" }]}
+      />,
+    );
+
+    // index 0 = le champ "Ajouter une exigence", index 1 = le champ Réponse de la ligne.
+    const responseInput = screen.getAllByRole("textbox")[1]!;
+    await user.type(responseInput, "oui");
+    await user.tab();
+
+    expect(updateComplianceMatrixEntryAction).toHaveBeenCalledWith("tender-1", "deliverable-2", "entry-1", { response: "oui" });
+  });
+
+  it("shows the coverage status translated in French for a read-only actor, never a raw select", () => {
+    render(
+      <OverlayDeliverable
+        tenderId="tender-1"
+        deliverable={complianceDeliverable()}
+        actorRole="READ_ONLY"
+        complianceEntries={[{ id: "entry-1", source: "CCTP art. 3.2", mandatory: true, criticality: "MEDIUM", coverageStatus: "PARTIALLY_COVERED", response: "oui" }]}
+      />,
+    );
+
+    expect(screen.getByText("Partiellement couvert")).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 });
