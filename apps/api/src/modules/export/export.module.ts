@@ -73,6 +73,12 @@ import { ExportTemplatesController } from "./interfaces/http/export-templates.co
     PreviewExportUseCase,
     EXPORT_JOB_REPOSITORY,
     EXPORT_TEMPLATE_REPOSITORY,
+    // Sprint 8C Phase 3 — réexporté pour `administrative-dossier` (génération PDF des pièces
+    // structurées), même moteur de rendu que Deliverables/Export, jamais un second moteur.
+    PDF_RENDERER,
+    // Sprint 8C.1 — réexporté pour `administrative-dossier` (Annexe TenderOS des formulaires
+    // officiels, DOCX), même moteur de rendu, jamais un second moteur.
+    DOCUMENT_RENDERER,
   ],
 })
 export class ExportModule {}

@@ -161,6 +161,11 @@ describe("SubmissionPackage — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.exportArtifact.deleteMany({ where: { organizationId: orgAId } });
     await prisma.exportJob.deleteMany({ where: { organizationId: orgAId } });
     await prisma.exportTemplate.deleteMany({ where: { organizationId: orgAId } });
+    // Sprint 8C Phase 2 — les pièces administratives uploadées via /documents ont leur propre FK
+    // directe vers organization_id (pas seulement via tender, qui cascade déjà les tables
+    // administrative_*), donc jamais laissées derrière avant la suppression de l'organisation.
+    await prisma.documentVersion.deleteMany({ where: { organizationId: orgAId } });
+    await prisma.document.deleteMany({ where: { organizationId: orgAId } });
     await prisma.tender.deleteMany({ where: { organizationId: orgAId } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: orgAId } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -253,6 +258,69 @@ describe("SubmissionPackage — real HTTP + PostgreSQL (NestJS)", () => {
 
       const stillThere = await fetch(`${baseUrl}/api/v1/packages/${packageId}`, { headers: authHeaders(tokenOwnerA, orgAId) });
       expect(stillThere.status).toBe(200);
+    });
+  });
+
+  describe("Sprint 8C Phase 2 — validated administrative documents are included as package sources", () => {
+    async function uploadDocument(filename: string): Promise<string> {
+      const form = new FormData();
+      form.append("title", filename);
+      form.append("origin", "USER_UPLOAD");
+      form.append("domain", "TENDER");
+      form.append("file", new Blob([`content-${filename}`], { type: "application/pdf" }), filename);
+      const res = await fetch(`${baseUrl}/api/v1/documents`, { method: "POST", headers: { Authorization: `Bearer ${tokenOwnerA}`, "X-Organization-Id": orgAId }, body: form });
+      expect(res.status).toBe(201);
+      const document = (await res.json()) as { id: string };
+      return document.id;
+    }
+
+    it("a validated administrative document appears in the ZIP under administratif/ and in the manifest as ADMINISTRATIVE_DOCUMENT", async () => {
+      const { tenderId } = await seedApprovedTender(ownerAUserId);
+
+      const ensureDossierRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/administrative-dossier`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+      expect(ensureDossierRes.status).toBe(200);
+
+      const createDocRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/administrative-documents`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ documentType: "RIB", label: "RIB" }),
+      });
+      expect(createDocRes.status).toBe(201);
+      const administrativeDocument = (await createDocRes.json()) as { id: string; revisions: readonly { id: string }[] };
+
+      const uploadedDocumentId = await uploadDocument("rib-package.pdf");
+      const attachRes = await fetch(`${baseUrl}/api/v1/administrative-documents/${administrativeDocument.id}/revisions`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ documentId: uploadedDocumentId }),
+      });
+      expect(attachRes.status).toBe(201);
+      const attached = (await attachRes.json()) as { revisions: readonly { id: string }[] };
+      const revisionId = attached.revisions[0]!.id;
+
+      const validateRes = await fetch(`${baseUrl}/api/v1/administrative-documents/${administrativeDocument.id}/validate`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ revisionId }),
+      });
+      expect(validateRes.status).toBe(200);
+
+      const createPackageRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/packages`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+      expect(createPackageRes.status).toBe(201);
+      const pkg = (await createPackageRes.json()) as { id: string; files: readonly { archivePath: string; sourceType: string }[] };
+      const adminEntry = pkg.files.find((f) => f.sourceType === "ADMINISTRATIVE_DOCUMENT");
+      expect(adminEntry?.archivePath).toContain("administratif/");
+      expect(adminEntry?.archivePath).toContain(administrativeDocument.id);
+
+      const downloadRes = await fetch(`${baseUrl}/api/v1/packages/${pkg.id}/download`, { headers: authHeaders(tokenOwnerA, orgAId) });
+      expect(downloadRes.status).toBe(200);
+      const zip = await JSZip.loadAsync(Buffer.from(await downloadRes.arrayBuffer()));
+      const zipPaths = Object.keys(zip.files);
+      expect(zipPaths.some((p) => p.startsWith("administratif/") && p.includes(administrativeDocument.id))).toBe(true);
+
+      const manifestText = await zip.file("manifest.json")!.async("string");
+      const manifest = JSON.parse(manifestText) as { files: readonly { sourceType: string; sourceId?: string }[] };
+      expect(manifest.files.some((f) => f.sourceType === "ADMINISTRATIVE_DOCUMENT" && f.sourceId === administrativeDocument.id)).toBe(true);
     });
   });
 

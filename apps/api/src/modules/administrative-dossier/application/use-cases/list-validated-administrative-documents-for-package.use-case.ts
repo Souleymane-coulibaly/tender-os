@@ -1,0 +1,70 @@
+import { Inject, Injectable } from "@nestjs/common";
+import { ClientPermission } from "../../../client-portfolio";
+import { ADMINISTRATIVE_DOCUMENT_REPOSITORY, type AdministrativeDocumentRepository } from "../ports/administrative-document.repository";
+import { ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY, type AdministrativeDocumentRevisionRepository } from "../ports/administrative-document-revision.repository";
+import { ADMINISTRATIVE_DOSSIER_REPOSITORY, type AdministrativeDossierRepository } from "../ports/administrative-dossier.repository";
+import { AdministrativeDossierAccessService } from "../services/administrative-dossier-access.service";
+
+export type ListValidatedAdministrativeDocumentsForPackageQuery = Readonly<{ organizationId: string; actorId: string; actorRole: string; tenderId: string }>;
+
+/** Une pièce administrative validée, prête à être incluse dans un package de soumission — la
+ *  référence document/version est déjà VÉRIFIÉE (posée uniquement via `verifyAttachableDocument` au
+ *  moment de l'attachement, mission §21), jamais un second accès Documents ici. */
+export type AdministrativeDocumentForPackage = Readonly<{
+  administrativeDocumentId: string;
+  label: string;
+  documentType: string;
+  documentId: string;
+  documentVersionId: string;
+  documentChecksum: string;
+  documentFileName: string;
+  documentMimeType: string;
+}>;
+
+/**
+ * Sprint 8C Phase 2 — mission §"intégration package" : port en LECTURE SEULE réexporté pour
+ * `submission-package` (même motif que `ListDeliverablesUseCase` réexporté pour `cockpit`) — ne
+ * retourne QUE les pièces dont `validatedRevisionId` est posé ET dont la révision validée porte
+ * bien une référence Documents complète (une révision validée sans fichier attaché ne devrait pas
+ * exister en pratique, mais n'est jamais supposée ici).
+ */
+@Injectable()
+export class ListValidatedAdministrativeDocumentsForPackageUseCase {
+  constructor(
+    private readonly accessService: AdministrativeDossierAccessService,
+    @Inject(ADMINISTRATIVE_DOSSIER_REPOSITORY) private readonly dossierRepository: AdministrativeDossierRepository,
+    @Inject(ADMINISTRATIVE_DOCUMENT_REPOSITORY) private readonly documentRepository: AdministrativeDocumentRepository,
+    @Inject(ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY) private readonly revisionRepository: AdministrativeDocumentRevisionRepository,
+  ) {}
+
+  async execute(query: ListValidatedAdministrativeDocumentsForPackageQuery): Promise<readonly AdministrativeDocumentForPackage[]> {
+    await this.accessService.assertTenderAccess({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: query.tenderId, permission: ClientPermission.ReadAdministrativeDossier });
+
+    const dossier = await this.dossierRepository.findByTenderId({ organizationId: query.organizationId, tenderId: query.tenderId });
+    if (!dossier) return [];
+
+    const documents = await this.documentRepository.listByDossier({ organizationId: query.organizationId, administrativeDossierId: dossier.id });
+    const result: AdministrativeDocumentForPackage[] = [];
+
+    for (const document of documents) {
+      if (!document.validatedRevisionId) continue;
+      const revisions = await this.revisionRepository.listByDocument({ organizationId: query.organizationId, administrativeDocumentId: document.id });
+      const validatedRevision = revisions.find((r) => r.id === document.validatedRevisionId);
+      if (!validatedRevision?.documentId || !validatedRevision.documentVersionId || !validatedRevision.documentChecksum || !validatedRevision.documentFileName || !validatedRevision.documentMimeType) {
+        continue;
+      }
+      result.push({
+        administrativeDocumentId: document.id,
+        label: document.label,
+        documentType: document.documentType,
+        documentId: validatedRevision.documentId,
+        documentVersionId: validatedRevision.documentVersionId,
+        documentChecksum: validatedRevision.documentChecksum,
+        documentFileName: validatedRevision.documentFileName,
+        documentMimeType: validatedRevision.documentMimeType,
+      });
+    }
+
+    return result;
+  }
+}

@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { HealthModule } from "./health/health.module";
+import { AdministrativeDossierModule } from "./modules/administrative-dossier";
 import { AiBenchmarkModule, RoutingPolicyBridgeModule } from "./modules/ai-benchmark";
 import { AnalysisModule } from "./modules/analysis/analysis.module";
 import { ClientPortfolioModule } from "./modules/client-portfolio/client-portfolio.module";
@@ -52,6 +53,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     DeliverablesModule,
     ExportThemeResolverBridgeModule,
     CockpitModule,
+    AdministrativeDossierModule,
   ],
 })
 export class AppModule {}

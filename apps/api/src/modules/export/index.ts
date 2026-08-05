@@ -34,3 +34,14 @@ export { ExportSectionSource } from "./domain/export-section-source";
 export { ExportMode } from "./domain/export-mode";
 export { ExportStatus } from "./domain/export-status";
 export { ExportJobNotFoundError, ExportArtifactNotFoundError } from "./domain/errors";
+
+// Réexporté pour Sprint 8C Phase 3 (`administrative-dossier`) — génère des PDF pour les pièces
+// administratives structurées (DC1/DC2/DC4/DUME/Acte d'engagement) en réutilisant DIRECTEMENT ce
+// renderer, jamais un second moteur PDF parallèle (règle absolue du projet).
+export { PDF_RENDERER } from "./application/ports/pdf-renderer";
+export type { PdfRendererPort } from "./application/ports/pdf-renderer";
+
+// Réexporté pour Sprint 8C.1 (`administrative-dossier`) — génère l'Annexe TenderOS (DOCX) des
+// formulaires officiels (DC1/DC2/DC4/ATTRI1) via ce MÊME renderer, jamais un second moteur DOCX.
+export { DOCUMENT_RENDERER } from "./application/ports/document-renderer";
+export type { DocumentRendererPort } from "./application/ports/document-renderer";

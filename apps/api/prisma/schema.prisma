@@ -325,38 +325,50 @@ model Tender {
   /// Concurrence optimiste (docs/04-architecture/DATABASE_DESIGN.md §23 — Tender y figure explicitement).
   version Int @default(1)
 
-  lots                     TenderLot[]
-  checklistItems           TenderChecklistItem[]
-  awardCriteria            TenderAwardCriterion[]
-  requestedDocuments       TenderRequestedDocument[]
-  milestones               TenderMilestone[]
-  risks                    TenderRisk[]
-  alerts                   TenderAlert[]
-  statusHistory            TenderStatusHistoryEntry[]
-  documentAssociations     DocumentTenderAssociation[]
-  dces                     Dce[]
-  dceImportJobs            DceImportJob[]
-  analysisJobs             AnalysisJob[]
-  documentBusinessAnalyses DocumentBusinessAnalysis[]
-  deadlineFindings         TenderDeadlineFinding[]
-  criterionFindings        TenderCriterionFinding[]
-  requirementFindings      TenderRequirementFinding[]
-  clauseFindings           TenderClauseFinding[]
-  riskFindings             TenderRiskFinding[]
-  questionFindings         TenderQuestionFinding[]
-  analysisSummaries        TenderAnalysisSummary[]
-  generations              Generation[]
-  pricingEstimates         PricingEstimate[]
-  exportJobs               ExportJob[]
-  validationRuns           ValidationRun[]
-  finalApprovals           FinalApproval[]
-  signatureRequirements    SignatureRequirement[]
-  signatories              Signatory[]
-  signatureTransactions    SignatureTransaction[]
-  submissionPackages       SubmissionPackage[]
-  deliverables             Deliverable[]
-  deliverableTemplates     DeliverableTemplate[]
-  documentThemes           DocumentTheme[]
+  lots                       TenderLot[]
+  checklistItems             TenderChecklistItem[]
+  awardCriteria              TenderAwardCriterion[]
+  requestedDocuments         TenderRequestedDocument[]
+  milestones                 TenderMilestone[]
+  risks                      TenderRisk[]
+  alerts                     TenderAlert[]
+  statusHistory              TenderStatusHistoryEntry[]
+  documentAssociations       DocumentTenderAssociation[]
+  dces                       Dce[]
+  dceImportJobs              DceImportJob[]
+  analysisJobs               AnalysisJob[]
+  documentBusinessAnalyses   DocumentBusinessAnalysis[]
+  deadlineFindings           TenderDeadlineFinding[]
+  criterionFindings          TenderCriterionFinding[]
+  requirementFindings        TenderRequirementFinding[]
+  clauseFindings             TenderClauseFinding[]
+  riskFindings               TenderRiskFinding[]
+  questionFindings           TenderQuestionFinding[]
+  analysisSummaries          TenderAnalysisSummary[]
+  generations                Generation[]
+  pricingEstimates           PricingEstimate[]
+  exportJobs                 ExportJob[]
+  validationRuns             ValidationRun[]
+  finalApprovals             FinalApproval[]
+  signatureRequirements      SignatureRequirement[]
+  signatories                Signatory[]
+  signatureTransactions      SignatureTransaction[]
+  submissionPackages         SubmissionPackage[]
+  deliverables               Deliverable[]
+  deliverableTemplates       DeliverableTemplate[]
+  documentThemes             DocumentTheme[]
+  administrativeDossiers     AdministrativeDossier[]
+  administrativeRequirements AdministrativeRequirement[]
+  administrativeDocuments    AdministrativeDocument[]
+  consortiums                Consortium[]
+  dc1Declarations            Dc1Declaration[]
+  dc2Declarations            Dc2Declaration[]
+  dumeDeclarations           DumeDeclaration[]
+  subcontractorDeclarations  SubcontractorDeclaration[]
+  engagementActs             EngagementAct[]
+  signingPowers              SigningPower[]
+  administrativeFormDrafts   AdministrativeFormDraft[]
+  buyerProvidedFormTemplates BuyerProvidedFormTemplate[]
 
   /// AUDIT-007 : contrainte composite support de la FK composée de TenderLot ci-dessous — garantit
   /// au niveau base de données qu'un TenderLot ne peut jamais référencer un couple
@@ -1663,21 +1675,22 @@ model ClientAccount {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  assignments           ClientAssignment[]
-  tenders               Tender[]
-  knowledgeEntries      KnowledgeEntry[]
-  generations           Generation[]
-  pricingEstimates      PricingEstimate[]
-  exportJobs            ExportJob[]
-  validationRuns        ValidationRun[]
-  finalApprovals        FinalApproval[]
-  signatureRequirements SignatureRequirement[]
-  signatories           Signatory[]
-  signatureTransactions SignatureTransaction[]
-  submissionPackages    SubmissionPackage[]
-  deliverables          Deliverable[]
-  deliverableTemplates  DeliverableTemplate[]
-  documentThemes        DocumentTheme[]
+  assignments            ClientAssignment[]
+  tenders                Tender[]
+  knowledgeEntries       KnowledgeEntry[]
+  generations            Generation[]
+  pricingEstimates       PricingEstimate[]
+  exportJobs             ExportJob[]
+  validationRuns         ValidationRun[]
+  finalApprovals         FinalApproval[]
+  signatureRequirements  SignatureRequirement[]
+  signatories            Signatory[]
+  signatureTransactions  SignatureTransaction[]
+  submissionPackages     SubmissionPackage[]
+  deliverables           Deliverable[]
+  deliverableTemplates   DeliverableTemplate[]
+  documentThemes         DocumentTheme[]
+  administrativeDossiers AdministrativeDossier[]
 
   @@unique([id, organizationId])
   @@unique([organizationId, nameNormalized])
@@ -3069,8 +3082,8 @@ model PackageFile {
   /// nommage sûre"), jamais dérivé directement d'une entrée utilisateur non assainie.
   archivePath String @map("archive_path") @db.VarChar(300)
 
-  /// EXPORT_ARTIFACT | SIGNATURE_ARTIFACT | MANIFEST — CHECK (migration).
-  sourceType String  @map("source_type") @db.VarChar(20)
+  /// EXPORT_ARTIFACT | SIGNATURE_ARTIFACT | MANIFEST | ADMINISTRATIVE_DOCUMENT — CHECK (migration).
+  sourceType String  @map("source_type") @db.VarChar(24)
   sourceId   String? @map("source_id") @db.Uuid
 
   fileName String @map("file_name") @db.VarChar(255)
@@ -3604,4 +3617,493 @@ model DeliverableAnnex {
 
   @@index([organizationId, deliverableId])
   @@map("deliverable_annexes")
+}
+
+/// Sprint 8C Phase 1 — mission §6 : un dossier administratif PRINCIPAL par Tender (création
+/// idempotente). `status`/`completionPercentage` sont CALCULÉS côté backend (jamais posés
+/// directement), `validationStatus` reste un fait humain séparé — ne code jamais la signature ni
+/// la sélection package (modules distincts, phase ultérieure).
+model AdministrativeDossier {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// INCOMPLETE | TO_COMPLETE | IN_VERIFICATION | READY | BLOCKED — CHECK.
+  status               String @default("INCOMPLETE") @db.VarChar(16)
+  completionPercentage Int    @default(0) @map("completion_percentage")
+
+  /// NOT_VALIDATED | VALIDATED | OUTDATED — CHECK.
+  validationStatus String    @default("NOT_VALIDATED") @map("validation_status") @db.VarChar(14)
+  lastValidatedBy  String?   @map("last_validated_by") @db.Uuid
+  lastValidatedAt  DateTime? @map("last_validated_at")
+
+  version Int @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  documents AdministrativeDocument[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, tenderId])
+  @@map("administrative_dossiers")
+}
+
+/// Sprint 8C Phase 1 — mission §8 : une exigence administrative pour un Tender précis, extraite du
+/// DCE ou saisie manuellement. `validationStatus` démarre TOUJOURS à SUGGESTED pour une exigence
+/// `DCE_ANALYSIS` (règle appliquée dans le domaine, `AdministrativeRequirement.create`) — jamais
+/// validée automatiquement.
+model AdministrativeRequirement {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  sourceDocumentId      String? @map("source_document_id") @db.Uuid
+  sourceDocumentVersion Int?    @map("source_document_version")
+  sourceLocation        String? @map("source_location")
+
+  title                String  @db.VarChar(300)
+  description          String?
+  requirementType      String  @map("requirement_type") @db.VarChar(40)
+  /// Catalogue canonique `AdministrativeDocumentType` (23 codes) — CHECK.
+  expectedDocumentType String  @map("expected_document_type") @db.VarChar(40)
+
+  required              Boolean   @default(true)
+  applicable            Boolean   @default(true)
+  dueDate               DateTime? @map("due_date")
+  validityRule          String?   @map("validity_rule")
+  signatureRequired     Boolean   @default(false) @map("signature_required")
+  originalTextReference String?   @map("original_text_reference")
+  confidence            Float?
+
+  /// MANUAL | DCE_ANALYSIS | BUYER_TEMPLATE | TENDEROS_RULE — CHECK.
+  origin String @db.VarChar(20)
+
+  createdBy        String  @map("created_by") @db.Uuid
+  validatedBy      String? @map("validated_by") @db.Uuid
+  /// SUGGESTED | CONFIRMED | REJECTED | NOT_APPLICABLE — CHECK.
+  validationStatus String  @default("SUGGESTED") @map("validation_status") @db.VarChar(14)
+
+  /// Dénormalisé en LECTURE SEULE vers `AdministrativeDocument.id` — jamais de FK stricte (même
+  /// motif que `requirementId` sur `ComplianceMatrixEntry`), la pièce pouvant être créée après
+  /// l'exigence.
+  matchedDocumentId String? @map("matched_document_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId])
+  @@map("administrative_requirements")
+}
+
+/// Sprint 8C Phase 1 — mission §4/§21 : une pièce administrative du dossier. `validatedRevisionId`
+/// est un pointeur EXPLICITE et GELÉ vers une révision EXACTE — jamais "la dernière" implicite.
+model AdministrativeDocument {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  administrativeDossierId String                @map("administrative_dossier_id") @db.Uuid
+  administrativeDossier   AdministrativeDossier @relation(fields: [administrativeDossierId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Catalogue canonique `AdministrativeDocumentType` (23 codes) — CHECK.
+  documentType  String  @map("document_type") @db.VarChar(40)
+  label         String  @db.VarChar(300)
+  /// Dénormalisé en LECTURE SEULE vers `AdministrativeRequirement.id` — jamais de FK stricte.
+  requirementId String? @map("requirement_id") @db.Uuid
+
+  validatedRevisionId String?   @map("validated_revision_id") @db.Uuid
+  validatedAt         DateTime? @map("validated_at")
+  validatedBy         String?   @map("validated_by") @db.Uuid
+
+  /// Sprint 8C Phase 2 — mission §18, signature LOCALE jamais obligatoire globalement.
+  /// NOT_REQUIRED | MANUAL | ELECTRONIC | EXTERNAL — CHECK.
+  signatureMode   String @default("NOT_REQUIRED") @map("signature_mode") @db.VarChar(12)
+  /// NOT_REQUIRED | PENDING | SIGNED | REJECTED | EXPIRED | CANCELLED — CHECK.
+  signatureStatus String @default("NOT_REQUIRED") @map("signature_status") @db.VarChar(12)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  revisions AdministrativeDocumentRevision[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, administrativeDossierId])
+  @@index([organizationId, tenderId])
+  @@map("administrative_documents")
+}
+
+/// Sprint 8C Phase 1 — mission §21 : une ancienne révision n'est jamais écrasée. Une révision peut
+/// exister vide (DRAFT, aucun fichier attaché) avant qu'un document vérifié y soit associé.
+model AdministrativeDocumentRevision {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  administrativeDocumentId String                 @map("administrative_document_id") @db.Uuid
+  administrativeDocument   AdministrativeDocument @relation(fields: [administrativeDocumentId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  revisionNumber Int @map("revision_number")
+
+  /// Correctif audit Codex P1-003 — dénormalisés en LECTURE SEULE depuis un document du module
+  /// Documents déjà VÉRIFIÉ (jamais fournis directement par le client), même motif que
+  /// `ChecklistPieceEntry`.
+  documentId        String?   @map("document_id") @db.Uuid
+  documentVersionId String?   @map("document_version_id") @db.Uuid
+  documentChecksum  String?   @map("document_checksum") @db.VarChar(128)
+  documentFileName  String?   @map("document_file_name") @db.VarChar(300)
+  documentMimeType  String?   @map("document_mime_type") @db.VarChar(120)
+  expiresAt         DateTime? @map("expires_at")
+
+  /// DRAFT | IN_REVIEW | VALIDATED | REJECTED | REPLACED | ARCHIVED — CHECK.
+  status String  @default("DRAFT") @db.VarChar(10)
+  notes  String?
+
+  /// Sprint 8C.1 — dénormalisés en LECTURE SEULE : quel gabarit officiel et quelles valeurs exactes
+  /// ont produit cette révision, pour une reproductibilité totale même si les données sources
+  /// changent ensuite (mission §9 "jamais régénérer une ancienne révision avec les données
+  /// actuelles") — jamais posés pour une révision qui n'est pas un formulaire officiel généré.
+  officialTemplateId String? @map("official_template_id") @db.Uuid
+  formDataSnapshot   Json?   @map("form_data_snapshot")
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@unique([administrativeDocumentId, revisionNumber])
+  @@index([organizationId, administrativeDocumentId])
+  @@map("administrative_document_revisions")
+}
+
+/// Sprint 8C Phase 2 — mission §15 : un groupement par Tender (candidat individuel = pas de ligne
+/// du tout). `members` en JSON — données de valeur bornées à la vie du groupement, aucun cycle de
+/// vie propre (même motif que `PricingEstimateVersion.breakdown`).
+model Consortium {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// JOINT | SOLIDARITY | OTHER — CHECK.
+  type               String  @db.VarChar(12)
+  legalForm          String? @map("legal_form") @db.VarChar(200)
+  liabilityMode      String? @map("liability_mode") @db.VarChar(200)
+  mandataireMemberId String? @map("mandataire_member_id") @db.VarChar(80)
+  members            Json    @default("[]")
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  dc1Declarations Dc1Declaration[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, tenderId])
+  @@map("administrative_consortiums")
+}
+
+/// Sprint 8C Phase 2 — mission §10 : lettre de candidature, une par Tender.
+model Dc1Declaration {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// INDIVIDUAL | CONSORTIUM — CHECK.
+  candidateType String      @map("candidate_type") @db.VarChar(12)
+  consortiumId  String?     @map("consortium_id") @db.Uuid
+  consortium    Consortium? @relation(fields: [consortiumId, organizationId], references: [id, organizationId])
+
+  declarations             String?
+  signatoryName            String? @map("signatory_name") @db.VarChar(200)
+  signatoryCapacity        String? @map("signatory_capacity") @db.VarChar(200)
+  signingPowerId           String? @map("signing_power_id") @db.Uuid
+  administrativeDocumentId String? @map("administrative_document_id") @db.Uuid
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, tenderId])
+  @@map("administrative_dc1_declarations")
+}
+
+/// Sprint 8C Phase 2 — mission §11 : le parent ne porte AUCUNE donnée métier, seulement le pointeur
+/// vers la version courante (même séparation que `DeliverableTemplate`/`...Version`).
+model Dc2Declaration {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  currentVersionNumber Int @default(0) @map("current_version_number")
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  versions Dc2DeclarationVersion[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, tenderId])
+  @@map("administrative_dc2_declarations")
+}
+
+/// Sprint 8C Phase 2 — mission §11 : snapshot IMMUABLE, jamais modifié après création.
+model Dc2DeclarationVersion {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  dc2DeclarationId String         @map("dc2_declaration_id") @db.Uuid
+  dc2Declaration   Dc2Declaration @relation(fields: [dc2DeclarationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  version Int
+  data    Json
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([id, organizationId])
+  @@unique([dc2DeclarationId, version])
+  @@map("administrative_dc2_declaration_versions")
+}
+
+/// Sprint 8C Phase 2 — mission §13 : même motif que DC2, capture structurée uniquement, aucun
+/// export XML officiel prétendu.
+model DumeDeclaration {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  currentVersionNumber Int @default(0) @map("current_version_number")
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  versions DumeDeclarationVersion[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, tenderId])
+  @@map("administrative_dume_declarations")
+}
+
+model DumeDeclarationVersion {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  dumeDeclarationId String          @map("dume_declaration_id") @db.Uuid
+  dumeDeclaration   DumeDeclaration @relation(fields: [dumeDeclarationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  version Int
+  data    Json
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([id, organizationId])
+  @@unique([dumeDeclarationId, version])
+  @@map("administrative_dume_declaration_versions")
+}
+
+/// Sprint 8C Phase 2 — mission §12 : PLUSIEURS déclarations de sous-traitance (DC4) possibles par
+/// Tender — jamais une seule.
+model SubcontractorDeclaration {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  subcontractorName            String  @map("subcontractor_name") @db.VarChar(300)
+  subcontractorLegalIdentifier String? @map("subcontractor_legal_identifier") @db.VarChar(80)
+  servicesDescription          String  @map("services_description")
+
+  amountValue       Decimal @map("amount_value") @db.Decimal(14, 2)
+  amountCurrency    String  @map("amount_currency") @db.VarChar(3)
+  percentageOfTotal Float?  @map("percentage_of_total")
+
+  paymentTerms             String?  @map("payment_terms")
+  directPaymentApplicable  Boolean? @map("direct_payment_applicable")
+  requiredDocuments        Json     @default("[]") @map("required_documents")
+  administrativeDocumentId String?  @map("administrative_document_id") @db.Uuid
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId])
+  @@map("administrative_subcontractor_declarations")
+}
+
+/// Sprint 8C Phase 2 — mission §14 : un Acte d'engagement par Tender. Le montant provient TOUJOURS
+/// d'une version de pricing explicitement gelée (correctif audit Codex P1-002, même motif que
+/// `Deliverable.costReportPricingEstimateId`) — dénormalisé en LECTURE SEULE, jamais de FK
+/// inter-module.
+model EngagementAct {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  reference                String? @db.VarChar(200)
+  lotReference             String? @map("lot_reference") @db.VarChar(200)
+  object                   String?
+  durationMonths           Int?    @map("duration_months")
+  variants                 String?
+  subcontractingSummary    String? @map("subcontracting_summary")
+  ribDocumentId            String? @map("rib_document_id") @db.Uuid
+  signatoryName            String? @map("signatory_name") @db.VarChar(200)
+  signatoryCapacity        String? @map("signatory_capacity") @db.VarChar(200)
+  administrativeDocumentId String? @map("administrative_document_id") @db.Uuid
+
+  pricingEstimateId            String?   @map("pricing_estimate_id") @db.Uuid
+  pricingEstimateVersionNumber Int?      @map("pricing_estimate_version_number")
+  frozenAmountValue            Decimal?  @map("frozen_amount_value") @db.Decimal(14, 2)
+  frozenAmountCurrency         String?   @map("frozen_amount_currency") @db.VarChar(3)
+  frozenAt                     DateTime? @map("frozen_at")
+  frozenBy                     String?   @map("frozen_by") @db.Uuid
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, tenderId])
+  @@map("administrative_engagement_acts")
+}
+
+/// Sprint 8C Phase 2 — mission §17 : PLUSIEURS pouvoirs possibles par Tender. Le statut
+/// (UNVERIFIED/VALID/EXPIRED) est DÉRIVÉ, jamais stocké.
+model SigningPower {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  holderName                   String    @map("holder_name") @db.VarChar(200)
+  representedEntityDescription String    @map("represented_entity_description") @db.VarChar(300)
+  administrativeDocumentId     String?   @map("administrative_document_id") @db.Uuid
+  validFrom                    DateTime? @map("valid_from")
+  expiresAt                    DateTime? @map("expires_at")
+  scope                        String    @db.VarChar(300)
+  limitations                  String?
+  verifiedBy                   String?   @map("verified_by") @db.Uuid
+  verifiedAt                   DateTime? @map("verified_at")
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId])
+  @@map("administrative_signing_powers")
+}
+
+/// Sprint 8C.1 — gabarit officiel DAJ (DC1/DC2/DC4/ATTRI1), stocké TEL QUEL — jamais modifié,
+/// jamais patché — comme un `Document` réel du module Documents (`fileDocumentId`). Une seule ligne
+/// `active` par (organizationId, documentType) — `organizationId` nul = gabarit système par défaut
+/// (les 4 gabarits de cette passe) ; une organisation pourra fournir le sien plus tard (champ
+/// prévu, non exploité cette passe). Activation gérée en transaction courte côté application (même
+/// motif que `ExportTemplateVersion.activateAtomically`), jamais un remplacement en place.
+model OfficialAdministrativeTemplate {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String? @map("organization_id") @db.Uuid
+
+  /// DC1 | DC2 | DC4 | ACTE_ENGAGEMENT — CHECK, catalogue `AdministrativeDocumentType` réutilisé.
+  documentType String @map("document_type") @db.VarChar(40)
+
+  officialName    String    @map("official_name") @db.VarChar(300)
+  version         Int
+  sourceAuthority String    @map("source_authority") @db.VarChar(120)
+  sourceReference String    @map("source_reference") @db.VarChar(500)
+  publishedAt     DateTime? @map("published_at")
+  importedAt      DateTime  @default(now()) @map("imported_at")
+
+  /// Dénormalisés en LECTURE SEULE vers un Document déjà vérifié — jamais de FK stricte inter-module.
+  fileDocumentId        String @map("file_document_id") @db.Uuid
+  fileDocumentVersionId String @map("file_document_version_id") @db.Uuid
+  hash                  String @db.VarChar(128)
+
+  active Boolean @default(true)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, documentType, active])
+  @@map("official_administrative_templates")
+}
+
+/// Sprint 8C.1 — brouillon éditable d'un formulaire officiel avant génération de l'Annexe TenderOS.
+/// Un blob JSON borné (mission : pas de moteur de formulaire dynamique abstrait) — même motif que
+/// `Consortium.members`. `scopeId` non-nul avec défaut `""` (jamais `NULL`) pour que la contrainte
+/// unique protège réellement l'upsert même pour les formulaires sans sous-portée (DC1/ATTRI1).
+model AdministrativeFormDraft {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// DC1 | DC2 | DC4 | ACTE_ENGAGEMENT — CHECK.
+  documentType String @map("document_type") @db.VarChar(40)
+  /// Sous-portée facultative : subcontractorDeclarationId (DC4) ou groupMemberId (DC2 groupement) —
+  /// chaîne vide si sans objet, jamais `NULL` (voir commentaire de tête).
+  scopeId      String @default("") @map("scope_id") @db.VarChar(80)
+
+  data Json @default("{}")
+
+  updatedBy String   @map("updated_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, tenderId, documentType, scopeId])
+  @@map("administrative_form_drafts")
+}
+
+/// Sprint 8C.1 — désignation manuelle explicite d'un document DCE comme modèle acheteur prioritaire
+/// pour un type de formulaire — jamais une détection automatique par contenu (mission — réduction de
+/// périmètre assumée, une heuristique serait fragile).
+model BuyerProvidedFormTemplate {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// DC1 | DC2 | DC4 | ACTE_ENGAGEMENT — CHECK.
+  documentType String @map("document_type") @db.VarChar(40)
+
+  /// Dénormalisés en LECTURE SEULE vers un Document déjà vérifié — jamais de FK stricte inter-module.
+  documentId        String @map("document_id") @db.Uuid
+  documentVersionId String @map("document_version_id") @db.Uuid
+
+  designatedBy String   @map("designated_by") @db.Uuid
+  designatedAt DateTime @default(now()) @map("designated_at")
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, tenderId, documentType])
+  @@map("buyer_provided_form_templates")
 }

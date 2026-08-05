@@ -52,6 +52,16 @@ export const ClientPermission = {
   ReadDeliverable: "CLIENT_READ_DELIVERABLE",
   ManageDeliverable: "CLIENT_MANAGE_DELIVERABLE",
   ValidateDeliverable: "CLIENT_VALIDATE_DELIVERABLE",
+  /** Sprint 8C Phase 1 (Dossier administratif) — même motif additif que `ReadDeliverable`/
+   *  `ManageDeliverable`/`ValidateDeliverable` : consulter le dossier/la checklist vs. créer/éditer
+   *  une exigence ou une pièce vs. valider une exigence/un document ("règle stricte" — même palier
+   *  que `ValidateDeliverable`/`ApproveExport`). Distingue en plus la gestion du DOSSIER (exigences)
+   *  de celle des DOCUMENTS (pièces/révisions) — deux surfaces différentes de la mission §22. */
+  ReadAdministrativeDossier: "CLIENT_READ_ADMINISTRATIVE_DOSSIER",
+  ManageAdministrativeDossier: "CLIENT_MANAGE_ADMINISTRATIVE_DOSSIER",
+  ValidateAdministrativeDossier: "CLIENT_VALIDATE_ADMINISTRATIVE_DOSSIER",
+  ManageAdministrativeDocuments: "CLIENT_MANAGE_ADMINISTRATIVE_DOCUMENTS",
+  ValidateAdministrativeDocuments: "CLIENT_VALIDATE_ADMINISTRATIVE_DOCUMENTS",
 } as const;
 
 export type ClientPermission = (typeof ClientPermission)[keyof typeof ClientPermission];
@@ -94,6 +104,11 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ReadDeliverable,
   ClientPermission.ManageDeliverable,
   ClientPermission.ValidateDeliverable,
+  ClientPermission.ReadAdministrativeDossier,
+  ClientPermission.ManageAdministrativeDossier,
+  ClientPermission.ValidateAdministrativeDossier,
+  ClientPermission.ManageAdministrativeDocuments,
+  ClientPermission.ValidateAdministrativeDocuments,
 ];
 
 export const ROLE_CLIENT_PORTFOLIO_PERMISSIONS: Record<string, readonly ClientPermission[]> = {
@@ -138,6 +153,13 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     /** Mission §17 "Valider : Selon politique" — accordé au CLIENT_MANAGER, même palier que
      *  `ApproveExport` ("règle stricte"), jamais au CONTRIBUTOR. */
     ClientPermission.ValidateDeliverable,
+    /** Sprint 8C Phase 1 — même palier "règle stricte" que `ValidateDeliverable` : le CLIENT_MANAGER
+     *  peut consulter/gérer/valider le dossier et ses documents. */
+    ClientPermission.ReadAdministrativeDossier,
+    ClientPermission.ManageAdministrativeDossier,
+    ClientPermission.ValidateAdministrativeDossier,
+    ClientPermission.ManageAdministrativeDocuments,
+    ClientPermission.ValidateAdministrativeDocuments,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -163,6 +185,11 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ManageExport,
     ClientPermission.ReadDeliverable,
     ClientPermission.ManageDeliverable,
+    /** Sprint 8C Phase 1 — le CONTRIBUTOR peut consulter/gérer (créer/éditer des exigences et
+     *  documents) mais jamais valider ("règle stricte" réservée au CLIENT_MANAGER ci-dessus). */
+    ClientPermission.ReadAdministrativeDossier,
+    ClientPermission.ManageAdministrativeDossier,
+    ClientPermission.ManageAdministrativeDocuments,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -174,6 +201,7 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadPricing,
     ClientPermission.ReadExport,
     ClientPermission.ReadDeliverable,
+    ClientPermission.ReadAdministrativeDossier,
   ],
 };
 

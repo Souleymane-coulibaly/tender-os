@@ -1,5 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { ListValidatedAdministrativeDocumentsForPackageUseCase } from "../../../administrative-dossier";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
+import { DOCUMENT_VERSION_REPOSITORY, type DocumentVersionRepository } from "../../../documents";
 import { EXPORT_JOB_REPOSITORY, ExportArtifactNotFoundError, type ExportJobRepository } from "../../../export";
 import {
   isTerminalSignatureTransactionStatus,
@@ -35,6 +37,8 @@ export class CreateSubmissionPackageUseCase {
     @Inject(EXPORT_JOB_REPOSITORY) private readonly exportJobRepository: ExportJobRepository,
     @Inject(SIGNATURE_REQUIREMENT_REPOSITORY) private readonly signatureRequirementRepository: SignatureRequirementRepository,
     @Inject(SIGNATURE_TRANSACTION_REPOSITORY) private readonly signatureTransactionRepository: SignatureTransactionRepository,
+    @Inject(DOCUMENT_VERSION_REPOSITORY) private readonly documentVersionRepository: DocumentVersionRepository,
+    private readonly listValidatedAdministrativeDocumentsForPackageUseCase: ListValidatedAdministrativeDocumentsForPackageUseCase,
     private readonly packageAssemblyService: PackageAssemblyService,
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
@@ -110,6 +114,39 @@ export class CreateSubmissionPackageUseCase {
           });
         }
       }
+    }
+
+    // Sprint 8C Phase 2 — mission "intégration package" : les pièces administratives VALIDÉES
+    // (DC1/DC2/DC4/DUME/AE/attestations/pouvoirs...) sont incluses comme des sources de plus,
+    // jamais un blocage supplémentaire — un dossier administratif absent/incomplet ne bloque pas la
+    // création du package (le blocage métier reste porté par Validation/Signature ci-dessus).
+    const administrativeDocuments = await this.listValidatedAdministrativeDocumentsForPackageUseCase.execute({
+      organizationId: command.organizationId,
+      actorId: command.actorId,
+      actorRole: command.actorRole,
+      tenderId: command.tenderId,
+    });
+    let administrativeOrder = sources.length;
+    for (const administrativeDocument of administrativeDocuments) {
+      const version = await this.documentVersionRepository.findById({
+        organizationId: command.organizationId,
+        documentId: administrativeDocument.documentId,
+        versionId: administrativeDocument.documentVersionId,
+      });
+      if (!version) continue; // référence dénormalisée obsolète — jamais bloquant pour le package.
+      sources.push({
+        // Préfixé par l'id de la pièce — plusieurs pièces peuvent porter le même nom de fichier
+        // (ex. deux "attestation.pdf" distinctes), jamais une collision de chemin dans le ZIP.
+        archivePath: `administratif/${administrativeDocument.administrativeDocumentId}-${administrativeDocument.documentFileName}`,
+        sourceType: "ADMINISTRATIVE_DOCUMENT",
+        sourceId: administrativeDocument.administrativeDocumentId,
+        fileName: administrativeDocument.documentFileName,
+        mimeType: administrativeDocument.documentMimeType,
+        fileSize: version.sizeBytes,
+        fileHash: administrativeDocument.documentChecksum,
+        sourceStorageKey: version.storageKey,
+        order: administrativeOrder++,
+      });
     }
 
     const readinessStatus = mandatoryConfirmed.length > 0 ? "READY_FOR_SUBMISSION" : "APPROVED";

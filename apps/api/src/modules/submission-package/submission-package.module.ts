@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AdministrativeDossierModule } from "../administrative-dossier";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { DocumentsModule } from "../documents";
 import { ExportModule } from "../export";
@@ -19,13 +20,13 @@ import { PrismaSubmissionPackageRepository } from "./infrastructure/prisma-submi
 import { SubmissionPackageController } from "./interfaces/http/submission-package.controller";
 
 /**
- * Module SubmissionPackage (Sprint 8A bis) — dernier maillon de la chaîne
- * Export ← {Validation, Signature} ← Package (mission — un package lit les TROIS modules
- * précédents en LECTURE SEULE via leurs use cases/ports réexportés, jamais une seconde écriture
- * sur leurs tables) : aucun de ces modules n'importe jamais Package en retour.
+ * Module SubmissionPackage (Sprint 8A bis, étendu Sprint 8C Phase 2) — dernier maillon de la chaîne
+ * Export ← {Validation, Signature, AdministrativeDossier} ← Package (mission — un package lit ces
+ * modules en LECTURE SEULE via leurs use cases/ports réexportés, jamais une seconde écriture sur
+ * leurs tables) : aucun de ces modules n'importe jamais Package en retour.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, ExportModule, ValidationModule, SignatureModule, DocumentsModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, ExportModule, ValidationModule, SignatureModule, DocumentsModule, AdministrativeDossierModule],
   controllers: [SubmissionPackageController],
   providers: [
     CreateSubmissionPackageUseCase,

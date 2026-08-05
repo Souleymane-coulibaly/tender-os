@@ -4,6 +4,9 @@ export const PackageFileSourceType = {
   ExportArtifact: "EXPORT_ARTIFACT",
   SignatureArtifact: "SIGNATURE_ARTIFACT",
   Manifest: "MANIFEST",
+  /** Sprint 8C Phase 2 — pièce administrative validée (DC1/DC2/DC4/DUME/AE/attestations/pouvoirs...),
+   *  incluse en LECTURE SEULE depuis `administrative-dossier`. */
+  AdministrativeDocument: "ADMINISTRATIVE_DOCUMENT",
 } as const;
 export type PackageFileSourceType = (typeof PackageFileSourceType)[keyof typeof PackageFileSourceType];
 
