@@ -369,6 +369,7 @@ model Tender {
   signingPowers              SigningPower[]
   administrativeFormDrafts   AdministrativeFormDraft[]
   buyerProvidedFormTemplates BuyerProvidedFormTemplate[]
+  tenderSubmissions          TenderSubmission[]
 
   /// AUDIT-007 : contrainte composite support de la FK composée de TenderLot ci-dessous — garantit
   /// au niveau base de données qu'un TenderLot ne peut jamais référencer un couple
@@ -4106,4 +4107,112 @@ model BuyerProvidedFormTemplate {
   @@unique([id, organizationId])
   @@unique([organizationId, tenderId, documentType])
   @@map("buyer_provided_form_templates")
+}
+
+// ============================================================================
+// Sprint 9 — Dépôt manuel assisté et suivi de soumission.
+//
+// TenderSubmission référence un SubmissionPackage EXACT (packageId + packageVersion + packageHash
+// dénormalisés, jamais recalculés) — mission §18 "jamais une référence implicite à latestPackage".
+// L'index unique partiel "une soumission en vol par Tender" (mission §31/§32) est hand-appended
+// dans la migration, jamais déclaré ici (même motif que official_administrative_templates_*_key,
+// Sprint 8C.1 — Prisma ne modélise pas nativement les index partiels dans le schéma déclaratif).
+// ============================================================================
+
+/// Mission §6 — un dépôt manuel d'un Tender sur une plateforme acheteur, prouvable (qui/quoi/où/
+/// quand/quelle version/quelle preuve). Immuable dans sa référence de package une fois créée ; seuls
+/// le statut et les métadonnées de suivi évoluent via des transitions contrôlées (mission §7).
+model TenderSubmission {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Dénormalisés en LECTURE SEULE depuis `submission-package` (module distinct) — jamais de FK
+  /// stricte inter-module, jamais recalculés après coup (mission §18).
+  packageId      String  @map("package_id") @db.Uuid
+  packageVersion Int     @map("package_version")
+  packageHash    String  @map("package_hash") @db.VarChar(64)
+  manifestHash   String? @map("manifest_hash") @db.VarChar(64)
+
+  /// SUBMISSION_IN_PROGRESS | SUBMITTED | RECEIPT_CONFIRMED | SUBMISSION_REJECTED | WITHDRAWN |
+  /// REPLACED | CANCELLED — CHECK (migration). NOT_SUBMITTED/READY_FOR_SUBMISSION ne sont jamais
+  /// persistés (calculés avant qu'aucune ligne n'existe, mission §7).
+  status String @db.VarChar(24)
+
+  submittedByUserId String?   @map("submitted_by_user_id") @db.Uuid
+  submittedAt       DateTime? @map("submitted_at")
+
+  /// PLACE | AWS_ACHAT | MARCHES_SECURISES | MAXIMILIEN | ACHATPUBLIC | MEGALIS |
+  /// E_MARCHES_PUBLICS | PLATEFORME_ACHETEUR | OTHER — CHECK (migration).
+  platform           String  @db.VarChar(30)
+  customPlatformName String? @map("custom_platform_name") @db.VarChar(200)
+
+  platformReference String? @map("platform_reference") @db.VarChar(300)
+  receiptReference  String? @map("receipt_reference") @db.VarChar(300)
+  notes             String?
+
+  /// Chaîne de remplacement — dénormalisée, pas de relation Prisma (auto-référence optionnelle
+  /// double sens, résolue côté application via le repository, même motif que les autres références
+  /// dénormalisées de ce fichier).
+  supersedesSubmissionId String? @map("supersedes_submission_id") @db.Uuid
+  replacedBySubmissionId String? @map("replaced_by_submission_id") @db.Uuid
+
+  withdrawnAt       DateTime? @map("withdrawn_at")
+  withdrawnByUserId String?   @map("withdrawn_by_user_id") @db.Uuid
+  withdrawalReason  String?   @map("withdrawal_reason")
+
+  cancelledAt        DateTime? @map("cancelled_at")
+  cancelledByUserId  String?   @map("cancelled_by_user_id") @db.Uuid
+  cancellationReason String?   @map("cancellation_reason")
+
+  /// FILE_REJECTED | SIZE_EXCEEDED | INVALID_FORMAT | ANTIVIRUS | SIGNATURE_REJECTED |
+  /// SESSION_EXPIRED | OTHER — CHECK (migration).
+  rejectionCategory    String? @map("rejection_category") @db.VarChar(30)
+  rejectionDescription String? @map("rejection_description")
+
+  receiptConfirmedAt       DateTime? @map("receipt_confirmed_at")
+  receiptConfirmedByUserId String?   @map("receipt_confirmed_by_user_id") @db.Uuid
+
+  externalSubmissionUrl String? @map("external_submission_url") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  proofs SubmissionProof[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId])
+  @@index([organizationId, status])
+  @@index([submittedAt])
+  @@index([packageId])
+  @@index([supersedesSubmissionId])
+  @@index([replacedBySubmissionId])
+  @@map("tender_submissions")
+}
+
+/// Mission §12 — une preuve de dépôt (reçu/accusé/capture...), liée à un `Document` déjà vérifié.
+/// Plusieurs preuves possibles par soumission — jamais une preuve remplacée en place.
+model SubmissionProof {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  submissionId String           @map("submission_id") @db.Uuid
+  submission   TenderSubmission @relation(fields: [submissionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Dénormalisés en LECTURE SEULE vers un Document déjà vérifié — jamais de FK stricte inter-module.
+  documentId        String @map("document_id") @db.Uuid
+  documentVersionId String @map("document_version_id") @db.Uuid
+
+  /// RECEIPT | ACKNOWLEDGEMENT | SCREENSHOT | PLATFORM_CONFIRMATION | OTHER — CHECK (migration).
+  proofType String @map("proof_type") @db.VarChar(30)
+  hash      String @db.VarChar(64)
+
+  uploadedByUserId String   @map("uploaded_by_user_id") @db.Uuid
+  uploadedAt       DateTime @default(now()) @map("uploaded_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, submissionId])
+  @@map("submission_proofs")
 }

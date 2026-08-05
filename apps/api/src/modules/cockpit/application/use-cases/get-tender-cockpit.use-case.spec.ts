@@ -9,6 +9,7 @@ import { DeliverableStatus, type ListDeliverablesUseCase } from "../../../delive
 import { ExportStatus, type ListExportHistoryUseCase } from "../../../export";
 import { ReadinessStatus, type GetReadinessStatusUseCase } from "../../../validation";
 import type { ListSignatureRequirementsUseCase } from "../../../signature";
+import type { ListTenderSubmissionsUseCase } from "../../../submission";
 import type { ListSubmissionPackagesUseCase } from "../../../submission-package";
 import type { GetTenderUseCase } from "../../../tenders";
 import { CockpitModuleKey, CockpitModuleStatus, CockpitNextAction, CockpitStep } from "../dtos";
@@ -26,6 +27,8 @@ function buildUseCase(
     readiness: { status: string; latestValidationRunId?: string; activeApprovalId?: string };
     mandatoryRequirements: number;
     packageCount: number;
+    submissionStatuses: string[];
+    activeSubmissionId: string;
   }> = {},
 ) {
   const organizationId = randomUUID();
@@ -74,6 +77,10 @@ function buildUseCase(
   const listSubmissionPackagesUseCase: Pick<ListSubmissionPackagesUseCase, "execute"> = {
     execute: vi.fn(async () => Array.from({ length: overrides.packageCount ?? 0 }, () => ({}) as never)),
   };
+  const submissions = (overrides.submissionStatuses ?? []).map((status, index) => ({ id: `submission-${index}`, status }) as never);
+  const listTenderSubmissionsUseCase: Pick<ListTenderSubmissionsUseCase, "execute"> = {
+    execute: vi.fn(async () => submissions),
+  };
 
   const useCase = new GetTenderCockpitUseCase(
     getTenderUseCase as GetTenderUseCase,
@@ -88,6 +95,7 @@ function buildUseCase(
     getReadinessStatusUseCase as GetReadinessStatusUseCase,
     listSignatureRequirementsUseCase as ListSignatureRequirementsUseCase,
     listSubmissionPackagesUseCase as ListSubmissionPackagesUseCase,
+    listTenderSubmissionsUseCase as ListTenderSubmissionsUseCase,
   );
 
   return { useCase, organizationId, tenderId };
@@ -226,15 +234,57 @@ describe("GetTenderCockpitUseCase", () => {
     expect(result.nextAction).toBe(CockpitNextAction.CreatePackage);
   });
 
-  it("reports DONE once a submission package has actually been created", async () => {
+  it("mission Sprint 9 — reports SUBMISSION (not DONE) once a package exists but no deposit has been recorded yet, asking to download it", async () => {
     const { useCase, organizationId, tenderId } = buildUseCase({
       readiness: { status: ReadinessStatus.ReadyForSubmission, activeApprovalId: "approval-1" },
       mandatoryRequirements: 1,
       packageCount: 1,
     });
     const result = await useCase.execute({ organizationId, actorId: randomUUID(), actorRole: "OWNER", tenderId });
+    expect(result.currentStep).toBe(CockpitStep.Submission);
+    expect(result.nextAction).toBe(CockpitNextAction.DownloadPackage);
+    expect(moduleStatus(result.modules as never, CockpitModuleKey.Package)).toBe(CockpitModuleStatus.Done);
+    expect(moduleStatus(result.modules as never, CockpitModuleKey.Submission)).toBe(CockpitModuleStatus.NotStarted);
+  });
+
+  it("mission Sprint 9 — asks to confirm the receipt once a deposit was recorded (SUBMITTED)", async () => {
+    const { useCase, organizationId, tenderId } = buildUseCase({
+      readiness: { status: ReadinessStatus.ReadyForSubmission, activeApprovalId: "approval-1" },
+      mandatoryRequirements: 1,
+      packageCount: 1,
+      submissionStatuses: ["SUBMITTED"],
+      activeSubmissionId: "submission-0",
+    });
+    const result = await useCase.execute({ organizationId, actorId: randomUUID(), actorRole: "OWNER", tenderId });
+    expect(result.currentStep).toBe(CockpitStep.Submission);
+    expect(result.nextAction).toBe(CockpitNextAction.ConfirmReceipt);
+    expect(moduleStatus(result.modules as never, CockpitModuleKey.Submission)).toBe(CockpitModuleStatus.InProgress);
+  });
+
+  it("mission Sprint 9 — flags a rejected deposit with an ATTENTION module status, a BLOCKER alert, and FIX_TECHNICAL_REJECTION", async () => {
+    const { useCase, organizationId, tenderId } = buildUseCase({
+      readiness: { status: ReadinessStatus.ReadyForSubmission, activeApprovalId: "approval-1" },
+      mandatoryRequirements: 1,
+      packageCount: 1,
+      submissionStatuses: ["SUBMISSION_REJECTED"],
+    });
+    const result = await useCase.execute({ organizationId, actorId: randomUUID(), actorRole: "OWNER", tenderId });
+    expect(result.nextAction).toBe(CockpitNextAction.FixTechnicalRejection);
+    expect(moduleStatus(result.modules as never, CockpitModuleKey.Submission)).toBe(CockpitModuleStatus.Attention);
+    expect(result.alerts.some((a) => a.code === "SUBMISSION_REJECTED" && a.level === "BLOCKER")).toBe(true);
+  });
+
+  it("mission Sprint 9 — reports DONE only once the receipt is actually confirmed (RECEIPT_CONFIRMED), never at package creation alone", async () => {
+    const { useCase, organizationId, tenderId } = buildUseCase({
+      readiness: { status: ReadinessStatus.ReadyForSubmission, activeApprovalId: "approval-1" },
+      mandatoryRequirements: 1,
+      packageCount: 1,
+      submissionStatuses: ["SUBMITTED", "RECEIPT_CONFIRMED"],
+      activeSubmissionId: "submission-1",
+    });
+    const result = await useCase.execute({ organizationId, actorId: randomUUID(), actorRole: "OWNER", tenderId });
     expect(result.currentStep).toBe(CockpitStep.Done);
     expect(result.nextAction).toBe(CockpitNextAction.None);
-    expect(moduleStatus(result.modules as never, CockpitModuleKey.Package)).toBe(CockpitModuleStatus.Done);
+    expect(moduleStatus(result.modules as never, CockpitModuleKey.Submission)).toBe(CockpitModuleStatus.Done);
   });
 });

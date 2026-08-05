@@ -48,3 +48,9 @@ export { DocumentDomain } from "./domain/document-domain";
 // un Tender pour la vue d'ensemble, jamais un second accès direct aux repositories.
 export { ListTenderDocumentsUseCase } from "./application/use-cases/list-tender-documents.use-case";
 export type { ListTenderDocumentsQuery } from "./application/use-cases/list-tender-documents.use-case";
+
+// Réexporté pour Sprint 9 (module `submission`) — garantit qu'une preuve de dépôt est
+// structurellement rattachée au Tender de la soumission (correctif audit Codex P1 : "preuve non
+// garantie comme appartenant au même Tender"), jamais un second mécanisme d'association.
+export { AttachDocumentToTenderUseCase } from "./application/use-cases/attach-document-to-tender.use-case";
+export type { AttachDocumentToTenderCommand } from "./application/use-cases/attach-document-to-tender.use-case";

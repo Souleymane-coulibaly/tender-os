@@ -142,6 +142,9 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         <Link href={`/app/tenders/${tender.id}/submission-package`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
           Dossier de soumission
         </Link>
+        <Link href={`/app/tenders/${tender.id}/submission`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
+          Dépôt
+        </Link>
       </nav>
 
       <CockpitSection tenderId={tender.id} cockpit={cockpit} />

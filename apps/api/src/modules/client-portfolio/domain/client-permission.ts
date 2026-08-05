@@ -62,6 +62,15 @@ export const ClientPermission = {
   ValidateAdministrativeDossier: "CLIENT_VALIDATE_ADMINISTRATIVE_DOSSIER",
   ManageAdministrativeDocuments: "CLIENT_MANAGE_ADMINISTRATIVE_DOCUMENTS",
   ValidateAdministrativeDocuments: "CLIENT_VALIDATE_ADMINISTRATIVE_DOCUMENTS",
+  /** Sprint 9 (Dépôt manuel assisté) — même motif additif que `ReadAdministrativeDossier`/
+   *  `ManageAdministrativeDossier`/`ValidateAdministrativeDossier` : consulter le suivi de dépôt vs.
+   *  préparer/enregistrer/ajouter une preuve/remplacer/rejeter vs. confirmer un reçu ("règle simple"
+   *  déléguée au CONTRIBUTOR) vs. retirer un dépôt ("règle stricte", même palier que
+   *  `ValidateAdministrativeDossier` — mission §15/§20 "Retrait : réservé au palier le plus élevé"). */
+  ReadSubmission: "CLIENT_READ_SUBMISSION",
+  ManageSubmission: "CLIENT_MANAGE_SUBMISSION",
+  ConfirmSubmission: "CLIENT_CONFIRM_SUBMISSION",
+  WithdrawSubmission: "CLIENT_WITHDRAW_SUBMISSION",
 } as const;
 
 export type ClientPermission = (typeof ClientPermission)[keyof typeof ClientPermission];
@@ -109,6 +118,10 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ValidateAdministrativeDossier,
   ClientPermission.ManageAdministrativeDocuments,
   ClientPermission.ValidateAdministrativeDocuments,
+  ClientPermission.ReadSubmission,
+  ClientPermission.ManageSubmission,
+  ClientPermission.ConfirmSubmission,
+  ClientPermission.WithdrawSubmission,
 ];
 
 export const ROLE_CLIENT_PORTFOLIO_PERMISSIONS: Record<string, readonly ClientPermission[]> = {
@@ -160,6 +173,12 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ValidateAdministrativeDossier,
     ClientPermission.ManageAdministrativeDocuments,
     ClientPermission.ValidateAdministrativeDocuments,
+    /** Sprint 9 — le CLIENT_MANAGER a tous les droits de suivi de dépôt, y compris le retrait
+     *  ("règle stricte"). */
+    ClientPermission.ReadSubmission,
+    ClientPermission.ManageSubmission,
+    ClientPermission.ConfirmSubmission,
+    ClientPermission.WithdrawSubmission,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -190,6 +209,12 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadAdministrativeDossier,
     ClientPermission.ManageAdministrativeDossier,
     ClientPermission.ManageAdministrativeDocuments,
+    /** Sprint 9 — le CONTRIBUTOR peut consulter/préparer/enregistrer/ajouter une preuve/remplacer/
+     *  rejeter (`ManageSubmission`) et confirmer un reçu ("règle simple"), mais jamais retirer un
+     *  dépôt ("règle stricte" réservée au CLIENT_MANAGER ci-dessus, mission §15/§20). */
+    ClientPermission.ReadSubmission,
+    ClientPermission.ManageSubmission,
+    ClientPermission.ConfirmSubmission,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -202,6 +227,7 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadExport,
     ClientPermission.ReadDeliverable,
     ClientPermission.ReadAdministrativeDossier,
+    ClientPermission.ReadSubmission,
   ],
 };
 

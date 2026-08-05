@@ -9,6 +9,7 @@ import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
 import { PricingModule } from "../pricing";
 import { SignatureModule } from "../signature";
+import { SubmissionModule } from "../submission";
 import { SubmissionPackageModule } from "../submission-package";
 import { TendersModule } from "../tenders";
 import { ValidationModule } from "../validation";
@@ -46,6 +47,7 @@ import { CockpitController } from "./interfaces/http/cockpit.controller";
     ValidationModule,
     SignatureModule,
     SubmissionPackageModule,
+    SubmissionModule,
   ],
   controllers: [CockpitController],
   providers: [GetTenderCockpitUseCase],

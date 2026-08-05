@@ -15,6 +15,9 @@ export const CockpitModuleKey = {
   Validation: "VALIDATION",
   Signature: "SIGNATURE",
   Package: "PACKAGE",
+  /** Sprint 9 — distinct de `Package` (l'artefact généré) : le SUIVI du dépôt manuel réel
+   *  (déclaré/preuve/reçu), jamais confondu avec la simple existence d'un package. */
+  Submission: "SUBMISSION",
 } as const;
 export type CockpitModuleKey = (typeof CockpitModuleKey)[keyof typeof CockpitModuleKey];
 
@@ -55,6 +58,13 @@ export const CockpitNextAction = {
   StartSignature: "START_SIGNATURE",
   FollowSignature: "FOLLOW_SIGNATURE",
   CreatePackage: "CREATE_PACKAGE",
+  /** Sprint 9 — mission §26 : prochaines actions déterministes du suivi de dépôt, jamais une
+   *  réponse IA libre. */
+  DownloadPackage: "DOWNLOAD_PACKAGE",
+  SubmitPackage: "SUBMIT_PACKAGE",
+  RecordSubmissionProof: "RECORD_SUBMISSION_PROOF",
+  ConfirmReceipt: "CONFIRM_RECEIPT",
+  FixTechnicalRejection: "FIX_TECHNICAL_REJECTION",
   None: "NONE",
 } as const;
 export type CockpitNextAction = (typeof CockpitNextAction)[keyof typeof CockpitNextAction];

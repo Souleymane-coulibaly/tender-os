@@ -9,6 +9,7 @@ import { ListDeliverablesUseCase, DeliverableStatus } from "../../../deliverable
 import { ListExportHistoryUseCase, ExportStatus } from "../../../export";
 import { GetReadinessStatusUseCase, ReadinessStatus } from "../../../validation";
 import { ListSignatureRequirementsUseCase } from "../../../signature";
+import { ListTenderSubmissionsUseCase, TenderSubmissionStatus } from "../../../submission";
 import { ListSubmissionPackagesUseCase } from "../../../submission-package";
 import { GetTenderUseCase } from "../../../tenders";
 import {
@@ -56,6 +57,7 @@ export class GetTenderCockpitUseCase {
     private readonly getReadinessStatusUseCase: GetReadinessStatusUseCase,
     private readonly listSignatureRequirementsUseCase: ListSignatureRequirementsUseCase,
     private readonly listSubmissionPackagesUseCase: ListSubmissionPackagesUseCase,
+    private readonly listTenderSubmissionsUseCase: ListTenderSubmissionsUseCase,
   ) {}
 
   async execute(query: GetTenderCockpitQuery): Promise<TenderCockpitResult> {
@@ -79,7 +81,7 @@ export class GetTenderCockpitUseCase {
 
     const baseQuery = { organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: query.tenderId };
 
-    const [dceModule, documents, analysisModule, pricingModule, deliverables, exportHistory, readiness, signatureRequirements, packages] = await Promise.all([
+    const [dceModule, documents, analysisModule, pricingModule, deliverables, exportHistory, readiness, signatureRequirements, packages, submissions] = await Promise.all([
       this.resolveDceModule(baseQuery),
       this.listTenderDocumentsUseCase.execute(baseQuery),
       this.resolveAnalysisModule(baseQuery),
@@ -89,7 +91,12 @@ export class GetTenderCockpitUseCase {
       this.getReadinessStatusUseCase.execute(baseQuery),
       this.listSignatureRequirementsUseCase.execute(baseQuery),
       this.listSubmissionPackagesUseCase.execute(baseQuery),
+      this.listTenderSubmissionsUseCase.execute(baseQuery),
     ]);
+    // Le DERNIER dépôt (pas seulement celui "en vol") — un REJECTED/WITHDRAWN n'est plus "actif"
+    // au sens de `findActiveForTender` mais reste ce que le cockpit doit afficher comme "dernier
+    // dépôt" (mission §26 "dernier dépôt").
+    const latestSubmission = submissions[submissions.length - 1];
 
     const deliverablesDone = deliverables.filter((d) => DELIVERABLE_DONE_STATUSES.has(d.status)).length;
     const deliverablesBlocked = deliverables.some((d) => d.status === DeliverableStatus.Blocked);
@@ -145,6 +152,8 @@ export class GetTenderCockpitUseCase {
       count: dceModule.documentCount + documents.length,
     };
 
+    const submissionModule = this.resolveSubmissionModule({ hasPackage: packages.length > 0, latestSubmissionStatus: latestSubmission?.status });
+
     const modules: CockpitModuleSummary[] = [
       documentsModule,
       analysisModule,
@@ -154,6 +163,7 @@ export class GetTenderCockpitUseCase {
       validationModule,
       signatureModule,
       packageModule,
+      submissionModule,
     ];
 
     const currentStep = this.resolveCurrentStep({
@@ -166,6 +176,9 @@ export class GetTenderCockpitUseCase {
       // affichée : `resolveNextAction` propose IMPORT_DOCUMENTS pour ce cas précis).
       dceDone: documentsModule.status === CockpitModuleStatus.Done,
       analysisStarted: analysisModule.status !== CockpitModuleStatus.NotStarted,
+      // Sprint 9 — l'étape SUBMISSION n'est DONE qu'une fois le reçu confirmé, jamais à la simple
+      // existence d'un package (mission §9/§26).
+      submissionReceiptConfirmed: latestSubmission?.status === TenderSubmissionStatus.ReceiptConfirmed,
     });
 
     const nextAction = this.resolveNextAction({
@@ -176,9 +189,11 @@ export class GetTenderCockpitUseCase {
       exportModule,
       readinessStatus: readiness.status,
       signatureModule,
+      hasPackage: packages.length > 0,
+      latestSubmissionStatus: latestSubmission?.status,
     });
 
-    const alerts = this.buildAlerts({ dceModule: documentsModule, deliverablesBlocked, readinessStatus: readiness.status });
+    const alerts = this.buildAlerts({ dceModule: documentsModule, deliverablesBlocked, readinessStatus: readiness.status, latestSubmissionStatus: latestSubmission?.status });
 
     return { tenderId: query.tenderId, currentStep, nextAction, modules, alerts };
   }
@@ -233,6 +248,25 @@ export class GetTenderCockpitUseCase {
     return { key: CockpitModuleKey.Signature, status: CockpitModuleStatus.NotStarted };
   }
 
+  /** Sprint 9 — aucune règle recalculée : dérive UNIQUEMENT du statut RÉEL de la DERNIÈRE
+   *  `TenderSubmission` (déjà calculé par `submission`), jamais une seconde dérivation. */
+  private resolveSubmissionModule(input: { hasPackage: boolean; latestSubmissionStatus?: string | undefined }): CockpitModuleSummary {
+    if (!input.hasPackage) {
+      return { key: CockpitModuleKey.Submission, status: CockpitModuleStatus.NotStarted };
+    }
+    switch (input.latestSubmissionStatus) {
+      case TenderSubmissionStatus.ReceiptConfirmed:
+        return { key: CockpitModuleKey.Submission, status: CockpitModuleStatus.Done };
+      case TenderSubmissionStatus.SubmissionRejected:
+        return { key: CockpitModuleKey.Submission, status: CockpitModuleStatus.Attention };
+      case TenderSubmissionStatus.Submitted:
+      case TenderSubmissionStatus.SubmissionInProgress:
+        return { key: CockpitModuleKey.Submission, status: CockpitModuleStatus.InProgress };
+      default:
+        return { key: CockpitModuleKey.Submission, status: CockpitModuleStatus.NotStarted };
+    }
+  }
+
   private resolveCurrentStep(input: {
     hasPackage: boolean;
     readinessStatus: string;
@@ -240,8 +274,12 @@ export class GetTenderCockpitUseCase {
     hasValidationRun: boolean;
     dceDone: boolean;
     analysisStarted: boolean;
+    submissionReceiptConfirmed: boolean;
   }): CockpitStep {
-    if (input.hasPackage) return CockpitStep.Done;
+    // Sprint 9 — `DONE` uniquement une fois le reçu confirmé, jamais à la simple existence d'un
+    // package (mission §9 "préparer le suivi APRÈS dépôt").
+    if (input.submissionReceiptConfirmed) return CockpitStep.Done;
+    if (input.hasPackage) return CockpitStep.Submission;
     if (input.hasActiveApproval) {
       if (input.readinessStatus === ReadinessStatus.ReadyForSubmission || input.readinessStatus === ReadinessStatus.Approved) return CockpitStep.Submission;
       return CockpitStep.Signature;
@@ -260,6 +298,8 @@ export class GetTenderCockpitUseCase {
     exportModule: CockpitModuleSummary;
     readinessStatus: string;
     signatureModule: CockpitModuleSummary;
+    hasPackage: boolean;
+    latestSubmissionStatus?: string | undefined;
   }): CockpitNextAction {
     switch (input.currentStep) {
       case CockpitStep.Discovery:
@@ -276,7 +316,13 @@ export class GetTenderCockpitUseCase {
       case CockpitStep.Signature:
         return input.signatureModule.status === CockpitModuleStatus.NotStarted ? CockpitNextAction.StartSignature : CockpitNextAction.FollowSignature;
       case CockpitStep.Submission:
-        return CockpitNextAction.CreatePackage;
+        // Sprint 9 — mission §26 : "Télécharger le package" / "Déposer" / "Enregistrer la preuve" /
+        // "Corriger le rejet" / "Confirmer l'accusé de réception", jamais une réponse IA libre.
+        if (!input.hasPackage) return CockpitNextAction.CreatePackage;
+        if (input.latestSubmissionStatus === TenderSubmissionStatus.SubmissionRejected) return CockpitNextAction.FixTechnicalRejection;
+        if (input.latestSubmissionStatus === TenderSubmissionStatus.Submitted) return CockpitNextAction.ConfirmReceipt;
+        if (input.latestSubmissionStatus === TenderSubmissionStatus.SubmissionInProgress) return CockpitNextAction.SubmitPackage;
+        return CockpitNextAction.DownloadPackage;
       case CockpitStep.Done:
         return CockpitNextAction.None;
       default:
@@ -284,7 +330,7 @@ export class GetTenderCockpitUseCase {
     }
   }
 
-  private buildAlerts(input: { dceModule: CockpitModuleSummary; deliverablesBlocked: boolean; readinessStatus: string }): CockpitAlert[] {
+  private buildAlerts(input: { dceModule: CockpitModuleSummary; deliverablesBlocked: boolean; readinessStatus: string; latestSubmissionStatus?: string | undefined }): CockpitAlert[] {
     const alerts: CockpitAlert[] = [];
     if (input.dceModule.status === CockpitModuleStatus.InProgress) {
       alerts.push({ level: CockpitAlertLevel.Warning, code: "DCE_EMPTY" });
@@ -297,6 +343,9 @@ export class GetTenderCockpitUseCase {
     }
     if (input.readinessStatus === ReadinessStatus.ReadyWithWarnings) {
       alerts.push({ level: CockpitAlertLevel.Warning, code: "VALIDATION_WARNINGS" });
+    }
+    if (input.latestSubmissionStatus === TenderSubmissionStatus.SubmissionRejected) {
+      alerts.push({ level: CockpitAlertLevel.Blocker, code: "SUBMISSION_REJECTED" });
     }
     return alerts;
   }

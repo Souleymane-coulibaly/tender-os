@@ -79,6 +79,10 @@ import { TenderDocumentsController } from "./interfaces/http/tender-documents.co
     STORAGE_PROVIDER,
     // Réexporté pour Sprint 8A.2 (module `cockpit`, lecture seule).
     ListTenderDocumentsUseCase,
+    // Réexporté pour Sprint 9 (module `submission`) — garantit qu'une preuve de dépôt est
+    // structurellement rattachée au Tender de la soumission (correctif audit Codex P1), jamais un
+    // second mécanisme d'association.
+    AttachDocumentToTenderUseCase,
   ],
 })
 export class DocumentsModule {}

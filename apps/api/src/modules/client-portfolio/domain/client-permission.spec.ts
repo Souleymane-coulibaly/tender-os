@@ -100,3 +100,46 @@ describe("Deliverables permission matrix (mission Sprint 8A.1 §17)", () => {
     }
   });
 });
+
+/**
+ * Mission Sprint 9 §20 — matrice de permissions Dépôt : CLIENT_MANAGER a tout, y compris le retrait
+ * ("règle stricte") ; CONTRIBUTOR peut consulter/préparer/enregistrer/ajouter une preuve/remplacer/
+ * rejeter ET confirmer un reçu, mais jamais retirer ; VIEWER peut uniquement consulter.
+ */
+describe("Submission permission matrix (mission Sprint 9 §20)", () => {
+  it("CLIENT_MANAGER can read, manage, confirm, AND withdraw a submission", () => {
+    expect(clientRoleHasActionPermission(ClientRole.ClientManager, ClientPermission.ReadSubmission)).toBe(true);
+    expect(clientRoleHasActionPermission(ClientRole.ClientManager, ClientPermission.ManageSubmission)).toBe(true);
+    expect(clientRoleHasActionPermission(ClientRole.ClientManager, ClientPermission.ConfirmSubmission)).toBe(true);
+    expect(clientRoleHasActionPermission(ClientRole.ClientManager, ClientPermission.WithdrawSubmission)).toBe(true);
+  });
+
+  it("CONTRIBUTOR can read/manage/confirm a submission, but never withdraw it", () => {
+    expect(clientRoleHasActionPermission(ClientRole.Contributor, ClientPermission.ReadSubmission)).toBe(true);
+    expect(clientRoleHasActionPermission(ClientRole.Contributor, ClientPermission.ManageSubmission)).toBe(true);
+    expect(clientRoleHasActionPermission(ClientRole.Contributor, ClientPermission.ConfirmSubmission)).toBe(true);
+    expect(clientRoleHasActionPermission(ClientRole.Contributor, ClientPermission.WithdrawSubmission)).toBe(false);
+  });
+
+  it("VIEWER can only read a submission — never manage, confirm, or withdraw", () => {
+    expect(clientRoleHasActionPermission(ClientRole.Viewer, ClientPermission.ReadSubmission)).toBe(true);
+    expect(clientRoleHasActionPermission(ClientRole.Viewer, ClientPermission.ManageSubmission)).toBe(false);
+    expect(clientRoleHasActionPermission(ClientRole.Viewer, ClientPermission.ConfirmSubmission)).toBe(false);
+    expect(clientRoleHasActionPermission(ClientRole.Viewer, ClientPermission.WithdrawSubmission)).toBe(false);
+  });
+
+  it("an unassigned member (no client role at all) has no Submission capability", () => {
+    expect(clientRoleHasActionPermission("SOME_UNKNOWN_CLIENT_ROLE", ClientPermission.ReadSubmission)).toBe(false);
+    expect(clientRoleHasActionPermission("SOME_UNKNOWN_CLIENT_ROLE", ClientPermission.ManageSubmission)).toBe(false);
+    expect(clientRoleHasActionPermission("SOME_UNKNOWN_CLIENT_ROLE", ClientPermission.WithdrawSubmission)).toBe(false);
+  });
+
+  it("OWNER/ORGANIZATION_ADMIN always have every Submission capability at the portfolio tier", () => {
+    for (const role of ["OWNER", "ORGANIZATION_ADMIN"]) {
+      expect(roleHasClientPortfolioPermission(role, ClientPermission.ReadSubmission)).toBe(true);
+      expect(roleHasClientPortfolioPermission(role, ClientPermission.ManageSubmission)).toBe(true);
+      expect(roleHasClientPortfolioPermission(role, ClientPermission.ConfirmSubmission)).toBe(true);
+      expect(roleHasClientPortfolioPermission(role, ClientPermission.WithdrawSubmission)).toBe(true);
+    }
+  });
+});

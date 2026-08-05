@@ -19,6 +19,7 @@ import { OrganizationsModule } from "./modules/organizations/organizations.modul
 import { PlatformAdministrationModule } from "./modules/platform-administration/platform-administration.module";
 import { PricingModule } from "./modules/pricing/pricing.module";
 import { SignatureModule } from "./modules/signature";
+import { SubmissionModule } from "./modules/submission";
 import { SubmissionPackageModule } from "./modules/submission-package";
 import { TendersModule } from "./modules/tenders/tenders.module";
 import { ValidationModule } from "./modules/validation";
@@ -54,6 +55,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     ExportThemeResolverBridgeModule,
     CockpitModule,
     AdministrativeDossierModule,
+    SubmissionModule,
   ],
 })
 export class AppModule {}
