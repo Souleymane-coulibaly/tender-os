@@ -4216,3 +4216,143 @@ model SubmissionProof {
   @@index([organizationId, submissionId])
   @@map("submission_proofs")
 }
+
+// V2 Sprint 1 — Socle métier et fondations transverses (skills/platform-foundation/DATABASE_PATTERNS.md
+// §36-41 Outbox, §66 données IA ; TenderOS-V2.0-Blueprint-Technique-Final.md §1/§4). Table append-only :
+// seules status/attemptCount/availableAt/publishedAt/lastError sont mutables après insertion — jamais le
+// contenu métier (payload/eventType/aggregateType/aggregateId).
+model OutboxEvent {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  eventType    String @map("event_type") @db.VarChar(100)
+  eventVersion Int    @default(1) @map("event_version")
+
+  aggregateType String @map("aggregate_type") @db.VarChar(60)
+  aggregateId   String @map("aggregate_id") @db.Uuid
+
+  payload Json
+
+  occurredAt    DateTime @map("occurred_at")
+  correlationId String?  @map("correlation_id") @db.VarChar(100)
+
+  /// PENDING | PROCESSING | PUBLISHED | FAILED | DEAD_LETTER — CHECK (migration).
+  status       String   @default("PENDING") @db.VarChar(16)
+  attemptCount Int      @default(0) @map("attempt_count")
+  availableAt  DateTime @default(now()) @map("available_at")
+  publishedAt  DateTime? @map("published_at")
+  lastError    String?  @map("last_error")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  processedEvents ProcessedEvent[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, status, availableAt])
+  @@index([status, availableAt, createdAt])
+  @@index([aggregateType, aggregateId])
+  @@map("outbox_events")
+}
+
+/// Ledger d'idempotence de CONSOMMATION (distinct de tout mécanisme d'idempotence API-level) : un couple
+/// (outboxEventId, consumerName) ne peut être traité qu'une seule fois, même si plusieurs workers/consumers
+/// futurs lisent le même événement — garantit "aucun double traitement produisant un effet métier dupliqué".
+model ProcessedEvent {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  outboxEventId String      @map("outbox_event_id") @db.Uuid
+  outboxEvent   OutboxEvent @relation(fields: [outboxEventId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  consumerName String @map("consumer_name") @db.VarChar(100)
+  result       String? @db.VarChar(20)
+
+  processedAt DateTime @default(now()) @map("processed_at")
+
+  @@unique([outboxEventId, consumerName])
+  @@unique([id, organizationId])
+  @@index([organizationId, consumerName])
+  @@map("processed_events")
+}
+
+/// Copie dédiée d'un OutboxEvent ayant épuisé ses tentatives — surface de requête/alerte opérationnelle
+/// séparée, sans avoir à scanner outbox_events entier. La ligne OutboxEvent d'origine reste inchangée
+/// (append-only), seul son status bascule à DEAD_LETTER en parallèle de cette insertion.
+model DeadLetterEvent {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  outboxEventId String @map("outbox_event_id") @db.Uuid
+
+  eventType     String @map("event_type") @db.VarChar(100)
+  aggregateType String @map("aggregate_type") @db.VarChar(60)
+  aggregateId   String @map("aggregate_id") @db.Uuid
+  payload       Json
+
+  failureReason String @map("failure_reason")
+  attemptCount  Int    @map("attempt_count")
+
+  movedAt DateTime @default(now()) @map("moved_at")
+
+  @@unique([id, organizationId])
+  @@unique([outboxEventId])
+  @@index([organizationId, movedAt])
+  @@map("dead_letter_events")
+}
+
+/// V2 Sprint 1 — socle générique de suggestion IA (skills/platform-foundation/AI_PATTERNS.md §18-19/§27/§37 ;
+/// mission Sprint 1 §3). Zone tampon uniquement : aucun module aval ne doit lire cette table comme source de
+/// vérité — seule l'entité métier cible, une fois la suggestion validée, fait foi. `entityType` est un
+/// catalogue fermé (CHECK, migration), étendu explicitement sprint par sprint (jamais de texte libre).
+model AiSuggestion {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// TENDER_LOT | CHECKLIST_ITEM | SUBCONTRACTOR_PROFILE | DC1 | DC2 | DC4 | ATTRI1 |
+  /// TECHNICAL_MEMO_SECTION | PRICING_LINE | COMPANY_LEGAL_IDENTITY — CHECK (migration).
+  entityType String @map("entity_type") @db.VarChar(40)
+  entityId   String @map("entity_id") @db.Uuid
+  fieldName  String @map("field_name") @db.VarChar(100)
+
+  /// Validé par un schéma Zod spécifique à (entityType, fieldName) avant toute persistance — jamais un
+  /// JSON libre non validé (mission Sprint 1 §3, AI_PATTERNS.md §41 "Sortie IA non validée par schéma...").
+  proposedValue Json   @map("proposed_value")
+  /// Score continu 0..1, cohérent avec le ProvenanceSchema déjà en production (module analysis) — jamais
+  /// un enum LOW/MEDIUM/HIGH, pour éviter un second système de représentation de la confiance IA.
+  confidence    Float
+
+  /// Provenance — références dénormalisées en LECTURE SEULE, jamais de FK stricte inter-module.
+  sourceDocumentId        String? @map("source_document_id") @db.Uuid
+  sourceDocumentVersionId String? @map("source_document_version_id") @db.Uuid
+  sourcePage              Int?    @map("source_page")
+  sourceChunkReference    String? @map("source_chunk_reference") @db.VarChar(200)
+  sourceAnalysisAttemptId String? @map("source_analysis_attempt_id") @db.Uuid
+
+  /// Modèle/tentative d'analyse IA à l'origine — colonnes plates, même précédent que AnalysisJob.provider/model.
+  aiProvider String? @map("ai_provider") @db.VarChar(30)
+  aiModel    String? @map("ai_model") @db.VarChar(60)
+
+  /// PENDING | ACCEPTED | MODIFIED | REJECTED — CHECK (migration). Mutation interdite une fois hors PENDING
+  /// (mission Sprint 1 §3 "empêcher toute modification silencieuse d'une suggestion déjà traitée").
+  status String @default("PENDING") @db.VarChar(16)
+
+  /// Processus/use-case créateur (ex. "analysis.suggest-checklist") — jamais un humain, une AiSuggestion
+  /// est par construction d'origine IA.
+  createdByProcess String @map("created_by_process") @db.VarChar(100)
+
+  validatedByUserId String?   @map("validated_by_user_id") @db.Uuid
+  validatedAt       DateTime? @map("validated_at")
+  rejectedAt        DateTime? @map("rejected_at")
+  decisionReason    String?   @map("decision_reason")
+
+  /// Valeur réellement retenue (== proposedValue si ACCEPTED, différente si MODIFIED, absente si REJECTED).
+  appliedValue Json? @map("applied_value")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, entityType, entityId])
+  @@index([organizationId, status])
+  @@map("ai_suggestions")
+}

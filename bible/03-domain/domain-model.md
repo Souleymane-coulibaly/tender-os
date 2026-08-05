@@ -1,5 +1,13 @@
 # Domain Model V1
 
+> **⚠️ Correction d'architecture (V2 Sprint 1)** — Ce document mentionne un objet `Workspace`
+> distinct du `Tender`. **Cet objet n'existe pas et ne sera pas créé.** Le code réel (et
+> `bible/04-architecture/system-architecture.md` §46-54, qui fait autorité) a tranché : `Tender`
+> est directement l'agrégat racine du travail de réponse, `DCE` s'y rattache directement
+> (`tenderId`), jamais via un `Workspace` intermédiaire. Toute mention de `Workspace` ci-dessous
+> reste une cible non implémentée décrite au moment de la conception initiale — à lire comme telle,
+> pas comme une description de l'existant.
+
 Aujourd'hui, nous commençons par le document le plus important : le Domain Model.
 
 **Pourquoi ?**
@@ -74,11 +82,12 @@ Exemples :
 
 ---
 
-### Workspace
+### Workspace [NON IMPLÉMENTÉ — cet objet n'existe pas dans le code, voir bannière en tête de document]
 
-Le cœur du produit.
+Le cœur du produit *tel qu'imaginé à la conception initiale*. Le code réel n'a pas retenu cette
+indirection : `Tender` (module `tenders`) joue directement ce rôle d'agrégat racine.
 
-Chaque appel d'offres devient un Workspace.
+Chaque appel d'offres devient un Workspace *dans cette conception non implémentée*.
 
 Il contient :
 

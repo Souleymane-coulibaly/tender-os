@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { HealthModule } from "./health/health.module";
 import { AdministrativeDossierModule } from "./modules/administrative-dossier";
 import { AiBenchmarkModule, RoutingPolicyBridgeModule } from "./modules/ai-benchmark";
+import { AiSuggestionModule } from "./modules/ai-suggestion";
 import { AnalysisModule } from "./modules/analysis/analysis.module";
 import { ClientPortfolioModule } from "./modules/client-portfolio/client-portfolio.module";
 import { CockpitModule } from "./modules/cockpit";
@@ -16,6 +17,7 @@ import { IdentityModule } from "./modules/identity/identity.module";
 import { KnowledgeBaseModule } from "./modules/knowledge-base/knowledge-base.module";
 import { MembershipsModule } from "./modules/memberships/memberships.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
+import { OutboxModule } from "./modules/outbox";
 import { PlatformAdministrationModule } from "./modules/platform-administration/platform-administration.module";
 import { PricingModule } from "./modules/pricing/pricing.module";
 import { SignatureModule } from "./modules/signature";
@@ -30,11 +32,13 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
   imports: [
     SharedKernelModule,
     DatabaseModule,
+    OutboxModule,
     HealthModule,
     IdentityModule,
     OrganizationsModule,
     MembershipsModule,
     PlatformAdministrationModule,
+    AiSuggestionModule,
     ClientPortfolioModule,
     TendersModule,
     DocumentsModule,

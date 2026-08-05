@@ -6,6 +6,12 @@ Propriétaires : Product, Domain & Engineering
 
 Ce document transforme les règles métier en processus concrets. Il décrit : les étapes, les acteurs, les décisions, les automatisations, les statuts, les erreurs possibles, les interventions de l'IA.
 
+> **⚠️ Correction d'architecture (V2 Sprint 1)** — Certains workflows ci-dessous mentionnent un
+> objet `Workspace` distinct du `Tender`. **Cet objet n'existe pas et ne sera pas créé** —
+> `bible/04-architecture/system-architecture.md` §46-54 fait autorité : `Tender` est directement
+> l'agrégat racine du travail de réponse. Toute mention de `Workspace` reste une cible non
+> implémentée, pas une description de l'existant.
+
 ---
 
 ## 1. Objectif
@@ -245,9 +251,12 @@ Décision humaine
 
 ---
 
-## 8. Workflow WF-005 — Créer un Tender Workspace
+## 8. Workflow WF-005 — Créer un Tender Workspace [NON IMPLÉMENTÉ]
 
-**Objectif** — Créer l'espace de travail interne destiné à traiter le Tender.
+**Non implémenté** : à la décision GO, le code réel ne crée aucun objet "Workspace" séparé — le
+`Tender` existant EST l'espace de travail, sans étape de création distincte.
+
+**Objectif *(conception initiale)*** — Créer l'espace de travail interne destiné à traiter le Tender.
 
 **Déclencheur** — Décision GO.
 
@@ -840,9 +849,12 @@ Demande de confirmation si action sensible
 
 ---
 
-## 26. Workflow WF-023 — Archiver un Workspace
+## 26. Workflow WF-023 — Archiver un Workspace [NON IMPLÉMENTÉ]
 
-**Objectif** — Clôturer un Workspace sans supprimer ses données.
+**Non implémenté** : l'archivage réel porte sur `Tender` directement (voir module `tenders`),
+jamais sur un objet "Workspace" séparé.
+
+**Objectif *(conception initiale)*** — Clôturer un Workspace sans supprimer ses données.
 
 **Préconditions** — le Workspace est terminé ou annulé ; les tâches critiques sont traitées ; les connaissances utiles ont été évaluées ; l'utilisateur possède la permission.
 

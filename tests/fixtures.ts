@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Page } from "@playwright/test";
 
-export type E2eFixture = { email: string; password: string; organizationId: string; userId: string; clientAccountId: string; tenderId: string };
+export type E2eOtherOrgFixture = { email: string; password: string; organizationId: string; userId: string; clientAccountId: string; tenderId: string };
+
+/** `other` (V2 Sprint 1 §5) — seconde organisation isolée, réservée aux scénarios anti-IDOR
+ *  (`multi-tenant-isolation.spec.ts`). Champ additif : n'affecte aucun test préexistant. */
+export type E2eFixture = E2eOtherOrgFixture & { other: E2eOtherOrgFixture };
 
 /** Correctif audit Codex P2-003 — relit les identifiants réellement créés en base par
  *  `tests/global-setup.ts` (jamais une valeur en dur). */
@@ -12,8 +16,9 @@ export function readFixture(): E2eFixture {
 }
 
 /** Connexion réelle via le formulaire (jamais un cookie injecté directement) — preuve que le
- *  flux d'authentification HTTP + redirection fonctionne réellement pour chaque test. */
-export async function login(page: Page, fixture: E2eFixture): Promise<void> {
+ *  flux d'authentification HTTP + redirection fonctionne réellement pour chaque test. Accepte
+ *  aussi bien le fixture principal que `fixture.other` (même forme minimale email/password). */
+export async function login(page: Page, fixture: Pick<E2eOtherOrgFixture, "email" | "password">): Promise<void> {
   await page.goto("/app/login");
   await page.getByLabel("Email").fill(fixture.email);
   await page.getByLabel("Mot de passe").fill(fixture.password);

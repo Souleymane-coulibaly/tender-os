@@ -6,6 +6,12 @@ Propriétaires : Product, Domain & Engineering
 Document parent : `bible/03-domain/workflow.md`
 Documents associés : `bible/03-domain/domain-model.md`, `bible/03-domain/business-rules.md`, `skills/platform-foundation/ARCHITECTURE_RULES.md` §23, `skills/platform-foundation/DATABASE_PATTERNS.md` §38
 
+> **⚠️ Correction d'architecture (V2 Sprint 1)** — Les événements ci-dessous mentionnent parfois un
+> objet `Workspace` distinct du `Tender`. **Cet objet n'existe pas et ne sera pas créé** —
+> `bible/04-architecture/system-architecture.md` §46-54 fait autorité : `Tender` est directement
+> l'agrégat racine, `DCE` s'y rattache directement. Toute mention de `Workspace` reste une cible non
+> implémentée, pas une description de l'existant.
+
 ---
 
 ## 1. Objectif
@@ -69,9 +75,10 @@ Source : `workflow.md` WF-003, WF-004.
 
 ---
 
-## 6. Workspace
+## 6. Workspace [NON IMPLÉMENTÉ — aucun de ces événements n'est publié par le code réel]
 
-Source : `workflow.md` WF-005, WF-023.
+Source : `workflow.md` WF-005, WF-023 — deux workflows eux-mêmes non implémentés (l'agrégat `Tender`
+réel ne connaît ni création ni archivage d'un "Workspace" séparé).
 
 | Événement | Workflow | Description |
 |---|---|---|

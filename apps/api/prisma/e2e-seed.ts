@@ -16,7 +16,42 @@ import { PrismaService } from "../src/shared-kernel/prisma.service";
  * exécution (préfixe aléatoire), pour donner aux tests e2e un état réel et isolé — jamais une
  * simulation. Écrit le résultat en JSON sur stdout (dernière ligne) pour que
  * `tests/global-setup.ts` puisse le récupérer sans dépendance à un fichier partagé.
+ *
+ * V2 Sprint 1 §5 — ajoute une seconde organisation isolée (`other`) : nécessaire au scénario E2E
+ * anti-IDOR (`tests/multi-tenant-isolation.spec.ts`), qui doit prouver qu'un utilisateur
+ * authentifié d'une organisation ne peut pas accéder à une ressource d'une autre organisation via
+ * l'UI/API réelle. Champ additif — ne modifie aucun champ existant du fixture.
  */
+async function createOrgWithOwnerAndTender(input: { runId: string; label: string; passwordHasher: ScryptPasswordHasher; userRepository: PrismaUserRepository; membershipRepository: PrismaMembershipRepository; prisma: PrismaService }) {
+  const { runId, label, passwordHasher, userRepository, membershipRepository, prisma } = input;
+  const email = `e2e-${label}-${runId}@playwright.test`;
+  const password = "PlaywrightE2E#12345";
+
+  const organizationId = randomUUID();
+  await prisma.organization.create({
+    data: { id: organizationId, name: `E2E Org ${label} ${runId}`, slug: `e2e-org-${label}-${runId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
+  });
+
+  const passwordHash = await passwordHasher.hash(password);
+  const user = User.register({ id: UserId.from(randomUUID()), email: EmailAddress.create(email), displayName: `Playwright E2E ${label}`, passwordHash, occurredAt: new Date() });
+  await userRepository.save(user);
+  const userId = user.id.value;
+
+  await membershipRepository.save(OrganizationMembership.create({ id: MembershipId.from(randomUUID()), organizationId, userId, role: OrganizationRole.Owner, occurredAt: new Date() }));
+
+  const clientAccountId = randomUUID();
+  await prisma.clientAccount.create({
+    data: { id: clientAccountId, organizationId, name: `Client E2E ${label} ${runId}`, nameNormalized: `client e2e ${label} ${runId}`, status: "ACTIVE", createdBy: userId },
+  });
+
+  const tenderId = randomUUID();
+  await prisma.tender.create({
+    data: { id: tenderId, organizationId, clientAccountId, title: `Marché Playwright ${label} ${runId}`, status: "DRAFT", tags: [], createdBy: userId },
+  });
+
+  return { email, password, organizationId, userId, clientAccountId, tenderId };
+}
+
 async function main(): Promise<void> {
   const prisma = new PrismaService();
   await prisma.$connect();
@@ -68,7 +103,9 @@ async function main(): Promise<void> {
       data: { id: randomUUID(), organizationId, deliverableTemplateVersionId: templateVersionId, code: "INTRO", title: "Introduction", order: 0, headingLevel: 1, requirement: "MANDATORY" },
     });
 
-    console.log(JSON.stringify({ email, password, organizationId, userId, clientAccountId, tenderId }));
+    const other = await createOrgWithOwnerAndTender({ runId, label: "other", passwordHasher, userRepository, membershipRepository, prisma });
+
+    console.log(JSON.stringify({ email, password, organizationId, userId, clientAccountId, tenderId, other }));
   } finally {
     await prisma.$disconnect();
   }

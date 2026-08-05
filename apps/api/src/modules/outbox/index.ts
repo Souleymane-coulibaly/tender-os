@@ -1,0 +1,12 @@
+export { OUTBOX_WRITER } from "./application/ports/outbox-writer";
+export type { OutboxEventInput, OutboxTransaction, OutboxWriter } from "./application/ports/outbox-writer";
+export { OUTBOX_EVENT_DISPATCHER } from "./application/ports/outbox-event-dispatcher";
+export type { OutboxEventDispatcher, OutboxEventToDispatch } from "./application/ports/outbox-event-dispatcher";
+export { OUTBOX_EVENT_HANDLERS } from "./application/ports/outbox-event-handler";
+export type { OutboxEventHandler } from "./application/ports/outbox-event-handler";
+export { NoOutboxHandlerRegisteredError, OutboxEventNotFoundError } from "./domain/errors";
+export { PublishPendingOutboxEventsUseCase } from "./application/use-cases/publish-pending-outbox-events.use-case";
+export type { PublishPendingOutboxEventsResult } from "./application/use-cases/publish-pending-outbox-events.use-case";
+export { RecordEventProcessedByConsumerUseCase } from "./application/use-cases/record-event-processed-by-consumer.use-case";
+export { OutboxEventStatus } from "./domain/outbox-event-status";
+export { OutboxModule } from "./outbox.module";

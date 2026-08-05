@@ -11,6 +11,8 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: 'html',
   globalSetup: './tests/global-setup.ts',
+  // V2 Sprint 1 §5 — nettoyage reproductible : supprime les organisations seedées après la suite.
+  globalTeardown: './tests/global-teardown.ts',
   // Next.js en mode dev compile chaque route à la demande (premier accès plus lent) — délai
   // généreux plutôt qu'un flake sur la toute première navigation vers une route dynamique.
   expect: { timeout: 15000 },

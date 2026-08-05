@@ -6,6 +6,13 @@ Propriétaires : Product, Security & Engineering
 
 Ce document définit précisément les droits d'accès dans TenderOS.
 
+> **⚠️ Correction d'architecture (V2 Sprint 1)** — §5 et d'autres sections ci-dessous mentionnent un
+> objet `Workspace` distinct du `Tender`, avec des rôles Workspace-scoped propres. **Cet objet
+> n'existe pas et ne sera pas créé** — `bible/04-architecture/system-architecture.md` §46-54 fait
+> autorité : `Tender` est directement l'agrégat racine, les permissions s'appliquent à son échelle
+> (via `OrganizationRole`/`ClientPermission`, déjà implémentés). Toute mention de `Workspace` reste
+> une cible non implémentée, pas une description de l'existant.
+
 Le modèle recommandé combine :
 
 - **RBAC** : permissions selon le rôle ;
@@ -81,9 +88,15 @@ Masquer un bouton dans l'interface ne suffit pas.
 
 Chaque utilisateur reçoit uniquement les permissions nécessaires à sa fonction.
 
-### PERM-005 — Accès explicite aux Workspaces
+### PERM-005 — Accès explicite aux Workspaces [NON IMPLÉMENTÉ tel quel — transposé à `Tender`]
 
-L'appartenance à une Organization ne donne pas nécessairement accès à tous ses Workspaces.
+Non implémenté sous cette forme : il n'existe pas de "Workspace" distinct du `Tender` auquel
+appliquer un accès explicite séparé. Le principe (l'appartenance à une organisation ne donne pas
+automatiquement accès à toute ressource) reste appliqué, mais directement à l'échelle du `Tender`
+via `ClientPermission`/`ClientRole` (module `client-portfolio`, déjà implémenté).
+
+L'appartenance à une Organization ne donne pas nécessairement accès à tous ses Workspaces *(termes
+de la conception initiale — lire "Tenders" dans le système réel)*.
 
 L'accès peut être limité à : toute l'organisation ; certains Workspaces ; certaines ressources ; une durée déterminée.
 
@@ -206,9 +219,16 @@ Peut consulter les données autorisées sans les modifier.
 
 ---
 
-## 5. Rôles de Workspace
+## 5. Rôles de Workspace [NON IMPLÉMENTÉ — remplacé par `ClientRole` sur `ClientAccount`]
 
-Un utilisateur peut avoir un rôle différent dans chaque Workspace.
+**Non implémenté** : aucun second niveau de rôle "par Workspace" n'existe dans le code. Le rôle
+contextuel effectivement implémenté est `ClientRole` (`CLIENT_MANAGER`/`CONTRIBUTOR`/`VIEWER`,
+module `client-portfolio`), attribué par entreprise cliente (`ClientAccount`) — pas par Tender/
+Workspace individuel. La granularité ci-dessous (7 rôles Workspace distincts) n'a pas d'équivalent
+réel et ne doit pas être implémentée telle quelle.
+
+Un utilisateur peut avoir un rôle différent dans chaque Workspace *(conception initiale, non
+retenue)*.
 
 - **Workspace Owner** — Responsable principal de l'espace. Peut : gérer les membres ; modifier les paramètres ; attribuer les responsabilités ; lancer les workflows ; archiver le Workspace selon les règles.
 - **Workspace Bid Manager** — Pilote opérationnel du Workspace.
@@ -318,7 +338,11 @@ tender:export
 
 ---
 
-## 9. Permissions Workspace
+## 9. Permissions Workspace [NON IMPLÉMENTÉ — voir `TenderPermission`/`ClientPermission` réels]
+
+**Non implémenté** : ce catalogue `workspace:*` n'existe pas. Les permissions réellement câblées
+portent le préfixe `tender:*` (module `tenders`) et `client:*`/`ClientPermission` (module
+`client-portfolio`) — mêmes intentions (lister/lire/créer/modifier/archiver), échelle différente.
 
 ```text
 workspace:list

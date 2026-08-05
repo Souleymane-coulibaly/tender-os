@@ -1,0 +1,164 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, master, develop]
+
+env:
+  NODE_VERSION: "20.x"
+  DATABASE_URL: postgresql://tenderos:tenderos_ci@localhost:5432/tenderos_ci
+  AUTH_SECRET: ci-only-secret-not-used-outside-this-workflow-min-32-chars
+  DOCUMENT_LOCAL_STORAGE_PATH: ./.local-storage/documents
+  DOCUMENT_MAX_FILE_SIZE_MB: 25
+  DCE_MAX_FILE_SIZE_MB: 25
+  DCE_MAX_FILES_PER_IMPORT: 20
+  DCE_ZIP_MAX_ENTRIES: 200
+  DCE_ZIP_MAX_TOTAL_UNCOMPRESSED_MB: 200
+  DCE_ZIP_MAX_SINGLE_ENTRY_UNCOMPRESSED_MB: 50
+  DCE_ZIP_MAX_COMPRESSION_RATIO: 100
+  OCR_PROVIDER: tesseract
+  OCR_TIMEOUT_MS: 30000
+  OCR_MAX_RETRIES: 2
+  OCR_RETRY_DELAY_MS: 1000
+  OCR_MAX_FILE_SIZE_MB: 25
+  OCR_SUPPORTED_MIME_TYPES: image/png,image/jpeg
+  EXTRACTION_MAX_PAGES: 200
+  EXTRACTION_MAX_CHARACTERS: 2000000
+  EXTRACTION_CHUNK_SIZE: 2000
+  EXTRACTION_CHUNK_OVERLAP: 200
+  EXTRACTION_MIN_TEXT_LENGTH: 20
+  EXTRACTION_MAX_FILE_SIZE_MB: 50
+  EXTRACTION_MAX_SHEETS: 50
+  EXTRACTION_MAX_ROWS_PER_SHEET: 50000
+  EXTRACTION_MAX_IMAGE_DIMENSION_PX: 10000
+  API_PORT: 4000
+  WEB_PORT: 3000
+  NEXT_PUBLIC_API_BASE_URL: http://localhost:4000
+
+jobs:
+  # skills/platform-foundation/DEPLOYMENT_PATTERNS.md §14 — pipeline de vérification rapide.
+  # "pnpm migrate:validate" n'existe pas comme script dédié dans ce monorepo : appliquer les
+  # migrations depuis zéro sur une base éphémère (db:migrate:deploy) EST la validation réelle
+  # (une migration invalide ou dépendant d'un état implicite échoue ici).
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tenderos
+          POSTGRES_PASSWORD: tenderos_ci
+          POSTGRES_DB: tenderos_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Migrate (validation — applique toutes les migrations depuis zéro)
+        run: pnpm --filter @tenderos/api db:migrate:deploy
+
+      - name: Unit tests (API)
+        run: pnpm --filter @tenderos/api test
+
+      - name: Integration tests (API — base PostgreSQL réelle du service ci-dessus)
+        run: pnpm --filter @tenderos/api test:integration
+
+      - name: Unit tests (Web)
+        run: pnpm --filter @tenderos/web test
+
+      - name: Build
+        run: pnpm build
+
+  # skills/platform-foundation/DEPLOYMENT_PATTERNS.md §14 — "un job distinct exécute les tests
+  # E2E Playwright... séparément du job de vérification rapide". Base PostgreSQL dédiée à ce job
+  # uniquement (éphémère, détruite avec le job) — c'est la stratégie d'isolation retenue en
+  # l'absence de toute convention TEST_DATABASE_URL préexistante dans le projet (gap confirmé,
+  # voir rapport Sprint 1 §5).
+  e2e:
+    runs-on: ubuntu-latest
+    needs: verify
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tenderos
+          POSTGRES_PASSWORD: tenderos_ci
+          POSTGRES_DB: tenderos_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Migrate
+        run: pnpm --filter @tenderos/api db:migrate:deploy
+
+      - name: Build
+        run: pnpm build
+
+      - name: Start API
+        run: pnpm --filter @tenderos/api start &
+        env:
+          NODE_ENV: production
+
+      - name: Start Web
+        run: pnpm --filter @tenderos/web start &
+        env:
+          NODE_ENV: production
+
+      - name: Wait for servers
+        run: |
+          npx wait-on http://localhost:${{ env.API_PORT }}/health http://localhost:${{ env.WEB_PORT }} --timeout 60000
+
+      - name: Run Playwright E2E
+        run: pnpm test:e2e
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
