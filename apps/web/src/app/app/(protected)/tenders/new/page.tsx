@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { appApiFetch } from "../../../../../lib/app-api-client";
 import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../../lib/client-portfolio-types";
+import type { Buyer } from "../../../../../lib/tenders-types";
 import { ApiErrorState } from "../../api-error-state";
 import { CreateTenderForm } from "./create-tender-form";
 
@@ -11,8 +12,12 @@ export default async function NewTenderPage() {
   // Mission Sprint 5.1 §"Tenders" — jamais un client archivé sélectionnable pour une nouvelle
   // création : le paramètre par défaut `includeArchived=false` de /clients l'exclut déjà.
   let clients: ClientPortfolioPage<ClientAccountSummary>;
+  let buyers: Buyer[];
   try {
-    clients = await appApiFetch<ClientPortfolioPage<ClientAccountSummary>>("/api/v1/clients?limit=100&status=ACTIVE");
+    [clients, buyers] = await Promise.all([
+      appApiFetch<ClientPortfolioPage<ClientAccountSummary>>("/api/v1/clients?limit=100&status=ACTIVE"),
+      appApiFetch<Buyer[]>("/api/v1/buyers"),
+    ]);
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
@@ -35,7 +40,7 @@ export default async function NewTenderPage() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">Nouvel appel d&apos;offres</h1>
-      <CreateTenderForm clients={clients.items} />
+      <CreateTenderForm clients={clients.items} buyers={buyers} />
     </div>
   );
 }

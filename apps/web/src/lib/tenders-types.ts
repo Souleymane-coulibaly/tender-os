@@ -21,15 +21,36 @@ export type Tender = {
   title: string;
   reference?: string;
   buyerName?: string;
+  buyerId?: string;
   description?: string;
   publicationDate?: string;
   submissionDeadline?: string;
+  submissionDeadlineTimezone?: string;
+  questionsDeadline?: string;
+  visitDate?: string;
+  visitMandatory?: boolean;
+  contractDurationMonths?: number;
+  renewalDurationMonths?: number;
+  renewalCount?: number;
+  estimatedStartDate?: string;
+  executionLocation?: string;
+  geographicZone?: string;
+  isFrameworkAgreement?: boolean;
+  awardType?: string;
+  variantsAllowed?: boolean;
+  pseAllowed?: boolean;
+  electronicResponseMandatory?: boolean;
+  signatureRequired?: boolean;
+  submissionPlatformUrl?: string;
+  internalNotes?: string;
   procedureType?: string;
   marketType?: string;
   country?: string;
   language?: string;
   source?: string;
   estimatedAmount?: string;
+  minimumAmount?: string;
+  maximumAmount?: string;
   currency?: string;
   internalOwnerId?: string;
   status: TenderStatus;
@@ -39,6 +60,87 @@ export type Tender = {
   updatedAt: string;
   archivedAt?: string;
   version: number;
+};
+
+/** V2 Sprint 3 §5 — acheteur/donneur d'ordre, jamais un ClientAccount, reutilisable par plusieurs
+ *  Tenders de la meme organisation (voir apps/api/.../domain/buyer.entity.ts). */
+export type Buyer = {
+  id: string;
+  organizationId: string;
+  name: string;
+  legalName?: string;
+  identifier?: string;
+  siret?: string;
+  addressLine?: string;
+  postalCode?: string;
+  city?: string;
+  country?: string;
+  buyerType?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  profileUrl?: string;
+  notes?: string;
+  archivedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const AWARD_TYPES = ["MONO_AWARDEE", "MULTI_AWARDEE"] as const;
+export type AwardType = (typeof AWARD_TYPES)[number];
+export const AWARD_TYPE_LABELS: Record<AwardType, string> = {
+  MONO_AWARDEE: "Mono-attributaire",
+  MULTI_AWARDEE: "Multi-attributaire",
+};
+
+/** V2 Sprint 3 §15 — indicateur de completude par categorie, jamais un score global ni GO/NO-GO. */
+export const TENDER_COMPLETENESS_STATUSES = ["COMPLETE", "PARTIAL", "MISSING", "INCONSISTENT", "TO_VERIFY"] as const;
+export type TenderCompletenessStatus = (typeof TENDER_COMPLETENESS_STATUSES)[number];
+export const TENDER_COMPLETENESS_STATUS_LABELS: Record<TenderCompletenessStatus, string> = {
+  COMPLETE: "Complet",
+  PARTIAL: "Partiel",
+  MISSING: "Manquant",
+  INCONSISTENT: "Incoherent",
+  TO_VERIFY: "A verifier",
+};
+
+export type TenderCompleteness = {
+  generalInformation: TenderCompletenessStatus;
+  candidate: TenderCompletenessStatus;
+  buyer: TenderCompletenessStatus;
+  dates: TenderCompletenessStatus;
+  lots: TenderCompletenessStatus;
+  criteria: TenderCompletenessStatus;
+  requestedDocuments: TenderCompletenessStatus;
+  milestones: TenderCompletenessStatus;
+  risks: TenderCompletenessStatus;
+};
+
+export const TENDER_COMPLETENESS_CATEGORY_LABELS: Record<keyof TenderCompleteness, string> = {
+  generalInformation: "Informations generales",
+  candidate: "Entreprise candidate",
+  buyer: "Acheteur",
+  dates: "Dates",
+  lots: "Lots",
+  criteria: "Criteres",
+  requestedDocuments: "Pieces demandees",
+  milestones: "Jalons",
+  risks: "Risques",
+};
+
+/** Profil consolide (mission §14) — jamais les donnees bancaires/sensibles du candidat, jamais un
+ *  score GO/NO-GO, jamais d'analyse IA. */
+export type TenderProfile = {
+  tender: Tender;
+  candidate: { id: string; name: string; status: string };
+  buyer: Buyer | null;
+  lots: TenderLot[];
+  criteria: AwardCriterion[];
+  requestedDocuments: RequestedDocument[];
+  milestones: Milestone[];
+  risks: Risk[];
+  statusHistory: StatusHistoryEntry[];
+  completeness: TenderCompleteness;
 };
 
 /**
@@ -129,6 +231,22 @@ export type TenderLot = {
   estimatedAmount?: string;
   currency?: string;
   displayOrder: number;
+  code?: string;
+  cpvMain?: string;
+  cpvSecondary: string[];
+  executionLocation?: string;
+  durationMonths?: number;
+  estimatedStartDate?: string;
+  minimumAmount?: string;
+  maximumAmount?: string;
+  selectedForResponse: boolean;
+  soloAllowed: boolean;
+  groupAllowed: boolean;
+  variantsAllowed?: boolean;
+  pseAllowed?: boolean;
+  specificVisitRequired?: boolean;
+  specificVisitDate?: string;
+  internalNotes?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -158,6 +276,11 @@ export type AwardCriterion = {
   weight: string;
   parentCriterionId?: string;
   displayOrder: number;
+  lotId?: string;
+  type?: string;
+  scoringMethod?: string;
+  eliminationThreshold?: string;
+  status: string;
 };
 
 export type RequestedDocumentStatus = "PENDING" | "PROVIDED" | "VALIDATED" | "REJECTED";
@@ -174,6 +297,11 @@ export type RequestedDocument = {
   status: RequestedDocumentStatus;
   documentId?: string;
   displayOrder: number;
+  isEliminatory: boolean;
+  lotId?: string;
+  requestedFormat?: string;
+  signatureRequired: boolean;
+  buyerProvidedTemplate: boolean;
 };
 
 export type MilestoneType =
@@ -194,6 +322,10 @@ export type Milestone = {
   status: MilestoneStatus;
   responsibleUserId?: string;
   overdue: boolean;
+  timezone?: string;
+  lotId?: string;
+  mandatory: boolean;
+  completedAt?: string;
 };
 
 export type RiskSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
@@ -210,6 +342,11 @@ export type Risk = {
   mitigation?: string;
   assignedTo?: string;
   resolvedAt?: string;
+  category?: string;
+  probability?: string;
+  impact?: string;
+  lotId?: string;
+  origin: string;
 };
 
 export type AlertSeverity = "CRITICAL" | "WARNING" | "INFO";
@@ -284,7 +421,9 @@ export const ALLOWED_TENDER_TRANSITIONS: Record<TenderStatus, TenderStatus[]> = 
   SUBMITTED: ["WON", "LOST", "ARCHIVED"],
   WON: ["ARCHIVED"],
   LOST: ["ARCHIVED"],
-  ARCHIVED: [],
+  // V2 Sprint 3 §7/§29 — correctif : la restauration (ARCHIVED -> DRAFT) est desormais possible,
+  // via une action dediee (bouton "Restaurer"), jamais via ce selecteur de statut generique.
+  ARCHIVED: ["DRAFT"],
 };
 
 /** Colonnes actives du Kanban — ARCHIVED est un statut terminal retire du pilotage actif,
@@ -355,6 +494,24 @@ export function canManageTenderLots(role: string | undefined): boolean {
  *  type de marche, pays...) exige la meme permission que gerer les lots. */
 export function canEditTenderDetails(role: string | undefined): boolean {
   return canManageTenderLots(role);
+}
+
+/** Miroir de ClientPermission.ChangeTenderCandidate (mission §4/§16) — reserve au palier
+ *  organisation ici (le detail fin CLIENT_MANAGER-vs-CONTRIBUTOR reste une decision serveur,
+ *  cette fonction ne fait que grossierement afficher/masquer le controle cote UI). */
+const ROLES_ALLOWED_TO_CHANGE_CANDIDATE = ["OWNER", "ORGANIZATION_ADMIN", "BID_MANAGER"];
+
+export function canChangeTenderCandidate(role: string | undefined): boolean {
+  return role !== undefined && ROLES_ALLOWED_TO_CHANGE_CANDIDATE.includes(role);
+}
+
+/** Miroir de Tender.CANDIDATE_CHANGE_ALLOWED_STATUSES (domain/tender.aggregate.ts) — le
+ *  changement d'entreprise candidate n'est propose que tant que la preparation de la reponse n'a
+ *  pas vraiment commence. Affichage seul ; le backend revalide systematiquement. */
+const CANDIDATE_CHANGE_ALLOWED_STATUSES: TenderStatus[] = ["DRAFT", "IN_ANALYSIS"];
+
+export function canOfferCandidateChange(status: TenderStatus): boolean {
+  return CANDIDATE_CHANGE_ALLOWED_STATUSES.includes(status);
 }
 
 export type TenderFiltersState = {

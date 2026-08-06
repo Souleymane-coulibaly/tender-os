@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type { TenderAwardCriterion as CriterionRecord } from "@prisma/client";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
 import type { AwardCriterionRepository } from "../application/ports/award-criterion.repository";
-import { AwardCriterion } from "../domain/award-criterion.entity";
+import { AwardCriterion, type AwardCriterionStatus, type AwardCriterionType } from "../domain/award-criterion.entity";
 
 function toDomain(record: CriterionRecord): AwardCriterion {
   return AwardCriterion.rehydrate({
@@ -14,6 +14,11 @@ function toDomain(record: CriterionRecord): AwardCriterion {
     weight: record.weight.toString(),
     parentCriterionId: record.parentCriterionId ?? undefined,
     displayOrder: record.displayOrder,
+    lotId: record.lotId ?? undefined,
+    type: (record.type as AwardCriterionType | null) ?? undefined,
+    scoringMethod: record.scoringMethod ?? undefined,
+    eliminationThreshold: record.eliminationThreshold?.toString(),
+    status: record.status as AwardCriterionStatus,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   });
@@ -29,6 +34,11 @@ function toPersistence(criterion: AwardCriterion) {
     weight: criterion.weight,
     parentCriterionId: criterion.parentCriterionId ?? null,
     displayOrder: criterion.displayOrder,
+    lotId: criterion.lotId ?? null,
+    type: criterion.type ?? null,
+    scoringMethod: criterion.scoringMethod ?? null,
+    eliminationThreshold: criterion.eliminationThreshold ?? null,
+    status: criterion.status,
     createdAt: criterion.createdAt,
     updatedAt: criterion.updatedAt,
   };

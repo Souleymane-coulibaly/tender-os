@@ -3,14 +3,15 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import { AssertClientAccessUseCase } from "../../../client-portfolio";
 import { RiskNotFoundError } from "../../domain/errors";
-import type { RiskSeverity, RiskStatus } from "../../domain/risk.entity";
+import type { RiskCategory, RiskLevel, RiskSeverity, RiskStatus } from "../../domain/risk.entity";
 import { TenderPermission } from "../../domain/tender-permission";
 import { toRiskSummary, type RiskSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { RISK_REPOSITORY, type RiskRepository } from "../ports/risk.repository";
+import { TENDER_LOT_REPOSITORY, type TenderLotRepository } from "../ports/tender-lot.repository";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
-import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
+import { assertLotBelongsToTender, assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 
 async function loadRisk(
   repository: RiskRepository,
@@ -35,6 +36,10 @@ export type UpdateRiskCommand = Readonly<{
   source?: string | undefined;
   mitigation?: string | undefined;
   assignedTo?: string | undefined;
+  category?: RiskCategory | undefined;
+  probability?: RiskLevel | undefined;
+  impact?: RiskLevel | undefined;
+  lotId?: string | undefined;
 }>;
 
 @Injectable()
@@ -43,6 +48,7 @@ export class UpdateRiskUseCase {
     @Inject(RISK_REPOSITORY) private readonly riskRepository: RiskRepository,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    @Inject(TENDER_LOT_REPOSITORY) private readonly lotRepository: TenderLotRepository,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
@@ -50,6 +56,7 @@ export class UpdateRiskUseCase {
     assertHasTenderPermission(command.actorRole, TenderPermission.ManageRisks);
 
     await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
+    await assertLotBelongsToTender(this.lotRepository, command);
 
     const risk = await loadRisk(this.riskRepository, {
       organizationId: command.organizationId,
@@ -65,6 +72,10 @@ export class UpdateRiskUseCase {
         source: command.source,
         mitigation: command.mitigation,
         assignedTo: command.assignedTo,
+        category: command.category,
+        probability: command.probability,
+        impact: command.impact,
+        lotId: command.lotId,
       },
       this.clock.now(),
     );

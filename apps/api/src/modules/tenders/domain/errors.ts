@@ -155,3 +155,62 @@ export class InvalidLotEstimatedAmountError extends DomainError {
     );
   }
 }
+
+/** V2 Sprint 3 — correctif audit Codex P1 (2e passe) : même règle que
+ *  `InvalidTenderAmountRangeError`, appliquée au niveau du lot (minimumAmount/maximumAmount du
+ *  lot lui-même, distinct des montants du Tender). */
+export class InvalidLotAmountRangeError extends DomainError {
+  readonly code = "INVALID_LOT_AMOUNT_RANGE";
+  constructor() {
+    super("Le montant minimum du lot ne peut pas être supérieur au montant maximum.");
+  }
+}
+
+/** V2 Sprint 3 §4 — changement d'entreprise candidate refusé car le Tender a dépassé DRAFT/
+ *  IN_ANALYSIS (préparation de la réponse déjà commencée). */
+export class TenderCandidateChangeNotAllowedError extends DomainError {
+  readonly code = "TENDER_CANDIDATE_CHANGE_NOT_ALLOWED";
+  constructor(input: { status: string }) {
+    super(`Impossible de changer l'entreprise candidate : ce Tender est au statut ${input.status}, seuls DRAFT et IN_ANALYSIS l'autorisent.`);
+  }
+}
+
+export class BuyerNotFoundError extends DomainError {
+  readonly code = "BUYER_NOT_FOUND";
+  constructor() {
+    super("Cet acheteur est introuvable.");
+  }
+}
+
+/** V2 Sprint 3 — correctif audit Codex P1 : les montants globaux du Tender (estimatedAmount/
+ *  minimumAmount/maximumAmount) doivent être validés exactement comme ceux d'un lot, jamais
+ *  persistés tels quels. Code distinct de INVALID_LOT_ESTIMATED_AMOUNT pour ne jamais faire
+ *  croire à l'appelant qu'un lot est en cause. */
+export class InvalidTenderEstimatedAmountError extends DomainError {
+  readonly code = "INVALID_TENDER_ESTIMATED_AMOUNT";
+  constructor(input: { value: string }) {
+    super(
+      `"${input.value}" is not a valid amount (must be a positive decimal number with at most 15 integer digits and 4 decimal digits).`,
+    );
+  }
+}
+
+/** V2 Sprint 3 — correctif audit Codex P1 : minimumAmount ne peut jamais dépasser maximumAmount
+ *  lorsque les deux sont renseignés (mission §6 "montant estimatif/min/max" cohérents). */
+export class InvalidTenderAmountRangeError extends DomainError {
+  readonly code = "INVALID_TENDER_AMOUNT_RANGE";
+  constructor() {
+    super("Le montant minimum ne peut pas être supérieur au montant maximum.");
+  }
+}
+
+/** V2 Sprint 3 — correctif audit Codex P1 (IDOR horizontal) : un `lotId` fourni à une sous-
+ *  ressource du Tender (critère, pièce demandée, jalon, risque) doit appartenir à CE Tender —
+ *  la contrainte FK composite `(lotId, organizationId)` ne suffit pas, elle ne protège que le
+ *  tenant, jamais le Tender précis (un lot du Tender B de la même organisation la satisferait). */
+export class TenderLotMismatchError extends DomainError {
+  readonly code = "TENDER_LOT_MISMATCH";
+  constructor() {
+    super("Ce lot n'appartient pas à cet appel d'offres.");
+  }
+}

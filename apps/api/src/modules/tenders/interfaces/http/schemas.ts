@@ -21,14 +21,38 @@ export const TENDER_COUNTRIES = ["FR", "BE", "DE", "ES", "IT", "LU", "NL", "EU",
 export const TENDER_LANGUAGES = ["fr", "en", "de", "es", "it", "nl"] as const;
 export const TENDER_SOURCES = ["MANUAL", "BOAMP", "TED", "PRIVATE", "OTHER"] as const;
 
+// V2 Sprint 3 §6 — informations générales enrichies (~35 champs de la mission), toutes optionnelles
+// (mission "ne jamais bloquer la création d'un Tender incomplet"). §5 : `buyerId` référence un
+// `Buyer` existant (résolu/validé côté use-case), distinct de `buyerName` (V1, conservé).
+export const AWARD_TYPES = ["MONO_AWARDEE", "MULTI_AWARDEE"] as const;
+
 const TenderDetailsBodySchema = z
   .object({
     title: z.string().trim().min(1).max(500),
     reference: z.string().trim().min(1).max(255).optional(),
     buyerName: z.string().trim().min(1).max(300).optional(),
+    buyerId: z.string().uuid().optional(),
     description: z.string().trim().min(1).optional(),
     publicationDate: z.string().datetime().optional(),
     submissionDeadline: z.string().datetime().optional(),
+    submissionDeadlineTimezone: z.string().trim().min(1).max(80).optional(),
+    questionsDeadline: z.string().datetime().optional(),
+    visitDate: z.string().datetime().optional(),
+    visitMandatory: z.boolean().optional(),
+    contractDurationMonths: z.number().int().min(0).optional(),
+    renewalDurationMonths: z.number().int().min(0).optional(),
+    renewalCount: z.number().int().min(0).optional(),
+    estimatedStartDate: z.string().datetime().optional(),
+    executionLocation: z.string().trim().min(1).max(300).optional(),
+    geographicZone: z.string().trim().min(1).max(300).optional(),
+    isFrameworkAgreement: z.boolean().optional(),
+    awardType: z.enum(AWARD_TYPES).optional(),
+    variantsAllowed: z.boolean().optional(),
+    pseAllowed: z.boolean().optional(),
+    electronicResponseMandatory: z.boolean().optional(),
+    signatureRequired: z.boolean().optional(),
+    submissionPlatformUrl: z.string().trim().url().max(2048).optional(),
+    internalNotes: z.string().trim().min(1).optional(),
     procedureType: z.string().trim().min(1).max(80).optional(),
     marketType: z.enum(MARKET_TYPES).optional(),
     country: z.enum(TENDER_COUNTRIES).optional(),
@@ -37,6 +61,8 @@ const TenderDetailsBodySchema = z
     externalReference: z.string().trim().min(1).max(255).optional(),
     sourceUrl: z.string().trim().url().max(2048).optional(),
     estimatedAmount: z.string().trim().min(1).optional(),
+    minimumAmount: z.string().trim().min(1).optional(),
+    maximumAmount: z.string().trim().min(1).optional(),
     currency: z.string().trim().length(3).optional(),
     internalOwnerId: z.string().uuid().optional(),
     tags: z.array(z.string().trim().min(1).max(60)).optional(),
@@ -63,6 +89,19 @@ export const ArchiveTenderBodySchema = z
   .strict()
   .default({});
 export type ArchiveTenderBody = z.infer<typeof ArchiveTenderBodySchema>;
+
+export const RestoreTenderBodySchema = z
+  .object({ reason: z.string().trim().min(1).max(500).optional() })
+  .strict()
+  .default({});
+export type RestoreTenderBody = z.infer<typeof RestoreTenderBodySchema>;
+
+// V2 Sprint 3 §4 — jamais fusionné avec UpdateTenderBodySchema : changement contrôlé, distinct de
+// la mise à jour des informations générales (permission dédiée `ChangeTenderCandidate`).
+export const ChangeTenderCandidateBodySchema = z
+  .object({ clientAccountId: z.string().uuid(), reason: z.string().trim().min(1).max(500).optional() })
+  .strict();
+export type ChangeTenderCandidateBody = z.infer<typeof ChangeTenderCandidateBodySchema>;
 
 export const ListTendersQuerySchema = z
   .object({
@@ -98,6 +137,22 @@ export const CreateTenderLotBodySchema = z
     description: z.string().trim().min(1).optional(),
     estimatedAmount: z.string().trim().min(1).optional(),
     currency: z.string().trim().length(3).optional(),
+    code: z.string().trim().min(1).max(80).optional(),
+    cpvMain: z.string().trim().min(1).max(20).optional(),
+    cpvSecondary: z.array(z.string().trim().min(1).max(20)).optional(),
+    executionLocation: z.string().trim().min(1).max(300).optional(),
+    durationMonths: z.number().int().min(0).optional(),
+    estimatedStartDate: z.string().datetime().optional(),
+    minimumAmount: z.string().trim().min(1).optional(),
+    maximumAmount: z.string().trim().min(1).optional(),
+    selectedForResponse: z.boolean().optional(),
+    soloAllowed: z.boolean().optional(),
+    groupAllowed: z.boolean().optional(),
+    variantsAllowed: z.boolean().optional(),
+    pseAllowed: z.boolean().optional(),
+    specificVisitRequired: z.boolean().optional(),
+    specificVisitDate: z.string().datetime().optional(),
+    internalNotes: z.string().trim().min(1).optional(),
   })
   .strict();
 export type CreateTenderLotBody = z.infer<typeof CreateTenderLotBodySchema>;
@@ -130,6 +185,8 @@ export const ChangeChecklistItemStatusBodySchema = z
   .strict();
 export type ChangeChecklistItemStatusBody = z.infer<typeof ChangeChecklistItemStatusBodySchema>;
 
+export const AWARD_CRITERION_TYPES = ["PRICE", "TECHNICAL_VALUE", "DELAY", "ENVIRONMENTAL", "SOCIAL", "OTHER"] as const;
+
 export const CreateAwardCriterionBodySchema = z
   .object({
     name: z.string().trim().min(1).max(300),
@@ -137,6 +194,10 @@ export const CreateAwardCriterionBodySchema = z
     weight: z.string().trim().min(1),
     parentCriterionId: z.string().uuid().optional(),
     displayOrder: z.number().int().min(0).optional(),
+    lotId: z.string().uuid().optional(),
+    type: z.enum(AWARD_CRITERION_TYPES).optional(),
+    scoringMethod: z.string().trim().min(1).max(300).optional(),
+    eliminationThreshold: z.string().trim().min(1).optional(),
   })
   .strict();
 export type CreateAwardCriterionBody = z.infer<typeof CreateAwardCriterionBodySchema>;
@@ -154,6 +215,11 @@ export const CreateRequestedDocumentBodySchema = z
     description: z.string().trim().min(1).optional(),
     expirationDate: z.string().datetime().optional(),
     displayOrder: z.number().int().min(0).optional(),
+    isEliminatory: z.boolean().optional(),
+    lotId: z.string().uuid().optional(),
+    requestedFormat: z.string().trim().min(1).max(80).optional(),
+    signatureRequired: z.boolean().optional(),
+    buyerProvidedTemplate: z.boolean().optional(),
   })
   .strict();
 export type CreateRequestedDocumentBody = z.infer<typeof CreateRequestedDocumentBodySchema>;
@@ -180,11 +246,26 @@ export const CreateMilestoneBodySchema = z
     date: z.string().datetime(),
     type: z.enum(MILESTONE_TYPES),
     responsibleUserId: z.string().uuid().optional(),
+    timezone: z.string().trim().min(1).max(80).optional(),
+    lotId: z.string().uuid().optional(),
+    mandatory: z.boolean().optional(),
   })
   .strict();
 export type CreateMilestoneBody = z.infer<typeof CreateMilestoneBodySchema>;
 export const UpdateMilestoneBodySchema = CreateMilestoneBodySchema.partial();
 export type UpdateMilestoneBody = z.infer<typeof UpdateMilestoneBodySchema>;
+
+export const RISK_CATEGORIES = [
+  "ADMINISTRATIVE",
+  "LEGAL",
+  "TECHNICAL",
+  "FINANCIAL",
+  "PLANNING",
+  "RESOURCE",
+  "SECURITY",
+  "OTHER",
+] as const;
+export const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH"] as const;
 
 export const CreateRiskBodySchema = z
   .object({
@@ -193,6 +274,10 @@ export const CreateRiskBodySchema = z
     severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
     source: z.string().trim().min(1).max(120).optional(),
     assignedTo: z.string().uuid().optional(),
+    category: z.enum(RISK_CATEGORIES).optional(),
+    probability: z.enum(RISK_LEVELS).optional(),
+    impact: z.enum(RISK_LEVELS).optional(),
+    lotId: z.string().uuid().optional(),
   })
   .strict();
 export type CreateRiskBody = z.infer<typeof CreateRiskBodySchema>;
@@ -214,3 +299,39 @@ export const CreateAlertBodySchema = z
   })
   .strict();
 export type CreateAlertBody = z.infer<typeof CreateAlertBodySchema>;
+
+// ---- Buyer (V2 Sprint 3 §5) — jamais un ClientAccount, tous les champs optionnels sauf `name`
+// (mission "les données peuvent être incomplètes ; ne pas inventer un SIRET"). ----
+
+const BuyerFieldsBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(300),
+    legalName: z.string().trim().min(1).max(300).optional(),
+    identifier: z.string().trim().min(1).max(100).optional(),
+    siret: z.string().trim().length(14).optional(),
+    addressLine: z.string().trim().min(1).max(300).optional(),
+    postalCode: z.string().trim().min(1).max(20).optional(),
+    city: z.string().trim().min(1).max(120).optional(),
+    country: z.string().trim().min(1).max(10).optional(),
+    buyerType: z.string().trim().min(1).max(120).optional(),
+    contactName: z.string().trim().min(1).max(200).optional(),
+    contactEmail: z.string().trim().email().max(320).optional(),
+    contactPhone: z.string().trim().min(1).max(40).optional(),
+    profileUrl: z.string().trim().url().max(2048).optional(),
+    notes: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+export const CreateBuyerBodySchema = BuyerFieldsBodySchema;
+export type CreateBuyerBody = z.infer<typeof CreateBuyerBodySchema>;
+
+export const UpdateBuyerBodySchema = BuyerFieldsBodySchema.partial();
+export type UpdateBuyerBody = z.infer<typeof UpdateBuyerBodySchema>;
+
+export const ListBuyersQuerySchema = z
+  .object({
+    search: z.string().trim().min(1).max(200).optional(),
+    includeArchived: z.coerce.boolean().optional(),
+  })
+  .strict();
+export type ListBuyersQuery = z.infer<typeof ListBuyersQuerySchema>;

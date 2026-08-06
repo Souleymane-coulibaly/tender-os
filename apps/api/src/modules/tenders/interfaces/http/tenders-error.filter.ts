@@ -25,6 +25,15 @@ const STATUS_BY_CODE: Record<string, number> = {
   INVALID_TENDER_COUNTRY: HttpStatus.UNPROCESSABLE_ENTITY,
   INVALID_TENDER_LANGUAGE: HttpStatus.UNPROCESSABLE_ENTITY,
   INVALID_TENDER_SOURCE: HttpStatus.UNPROCESSABLE_ENTITY,
+  INVALID_LOT_ESTIMATED_AMOUNT: HttpStatus.UNPROCESSABLE_ENTITY,
+  TENDER_CANDIDATE_CHANGE_NOT_ALLOWED: HttpStatus.CONFLICT,
+  BUYER_NOT_FOUND: HttpStatus.NOT_FOUND,
+  INVALID_TENDER_ESTIMATED_AMOUNT: HttpStatus.UNPROCESSABLE_ENTITY,
+  INVALID_TENDER_AMOUNT_RANGE: HttpStatus.UNPROCESSABLE_ENTITY,
+  INVALID_LOT_AMOUNT_RANGE: HttpStatus.UNPROCESSABLE_ENTITY,
+  // IDOR horizontal (audit Codex P1) : jamais révéler qu'un lot existe ailleurs — 404, même
+  // convention que TENDER_LOT_NOT_FOUND ci-dessus.
+  TENDER_LOT_MISMATCH: HttpStatus.NOT_FOUND,
 
   // Erreurs cross-module réelles (mission Sprint 5.1) — Tenders délègue à Client Portfolio
   // (CreateTenderUseCase, GetTenderUseCase) et laisse ses erreurs remonter telles quelles, même

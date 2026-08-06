@@ -10,9 +10,10 @@ import {
   REQUESTED_DOCUMENT_REPOSITORY,
   type RequestedDocumentRepository,
 } from "../ports/requested-document.repository";
+import { TENDER_LOT_REPOSITORY, type TenderLotRepository } from "../ports/tender-lot.repository";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
-import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
+import { assertLotBelongsToTender, assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 
 async function loadDocument(
   repository: RequestedDocumentRepository,
@@ -39,6 +40,11 @@ export type UpdateRequestedDocumentCommand = Readonly<{
   expirationDate?: string | undefined;
   documentRef?: string | undefined;
   displayOrder?: number | undefined;
+  isEliminatory?: boolean | undefined;
+  lotId?: string | undefined;
+  requestedFormat?: string | undefined;
+  signatureRequired?: boolean | undefined;
+  buyerProvidedTemplate?: boolean | undefined;
 }>;
 
 @Injectable()
@@ -47,6 +53,7 @@ export class UpdateRequestedDocumentUseCase {
     @Inject(REQUESTED_DOCUMENT_REPOSITORY) private readonly documentRepository: RequestedDocumentRepository,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    @Inject(TENDER_LOT_REPOSITORY) private readonly lotRepository: TenderLotRepository,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
@@ -54,6 +61,7 @@ export class UpdateRequestedDocumentUseCase {
     assertHasTenderPermission(command.actorRole, TenderPermission.Update);
 
     await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
+    await assertLotBelongsToTender(this.lotRepository, command);
 
     const document = await loadDocument(this.documentRepository, {
       organizationId: command.organizationId,
@@ -70,6 +78,11 @@ export class UpdateRequestedDocumentUseCase {
         description: command.description,
         expirationDate: command.expirationDate ? new Date(command.expirationDate) : undefined,
         documentId: command.documentRef,
+        isEliminatory: command.isEliminatory,
+        lotId: command.lotId,
+        requestedFormat: command.requestedFormat,
+        signatureRequired: command.signatureRequired,
+        buyerProvidedTemplate: command.buyerProvidedTemplate,
       },
       this.clock.now(),
     );

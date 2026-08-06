@@ -1,6 +1,7 @@
 import type {
   AlertSummary,
   AwardCriterionSummary,
+  BuyerSummary,
   ChecklistItemSummary,
   MilestoneSummary,
   RequestedDocumentSummary,
@@ -8,6 +9,7 @@ import type {
   TenderLotSummary,
   TenderSummary,
 } from "../../application/dtos";
+import type { TenderProfile } from "../../application/use-cases/get-tender-profile.use-case";
 import type { TenderBoardDto, TenderListItemDto, TenderStatisticsDto } from "../../application/board-dtos";
 import type { ReadinessResult } from "../../domain/readiness-calculator";
 import type { TenderStatusHistoryEntry } from "../../application/ports/tender-status-history.repository";
@@ -49,6 +51,12 @@ export function presentAlert(alert: AlertSummary): AlertSummary {
 }
 export function presentStatusHistoryEntry(entry: TenderStatusHistoryEntry): TenderStatusHistoryEntry {
   return { ...entry };
+}
+export function presentBuyer(buyer: BuyerSummary): BuyerSummary {
+  return { ...buyer };
+}
+export function presentTenderProfile(profile: TenderProfile): TenderProfile {
+  return { ...profile };
 }
 
 export type ReadinessResponse = ReadinessResult & Readonly<{ disclaimer: string }>;

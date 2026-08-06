@@ -4,6 +4,7 @@ import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { AssertClientAccessUseCase, ClientAccountArchivedError, ClientPermission, GetClientAccountUseCase } from "../../../client-portfolio";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { TenderPermission } from "../../domain/tender-permission";
 import { Tender } from "../../domain/tender.aggregate";
 import { TenderId } from "../../domain/tender-id.value-object";
@@ -11,8 +12,10 @@ import { MarketType, parseMarketType } from "../../domain/market-type";
 import { TenderCountry, parseTenderCountry } from "../../domain/tender-country";
 import { TenderLanguage, parseTenderLanguage } from "../../domain/tender-language";
 import { TenderSource, parseTenderSource } from "../../domain/tender-source";
+import { BuyerNotFoundError } from "../../domain/errors";
 import { toTenderSummary, type TenderSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
+import { BUYER_REPOSITORY, type BuyerRepository } from "../ports/buyer.repository";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
 
@@ -26,9 +29,28 @@ export type CreateTenderCommand = Readonly<{
   title: string;
   reference?: string | undefined;
   buyerName?: string | undefined;
+  buyerId?: string | undefined;
   description?: string | undefined;
   publicationDate?: string | undefined;
   submissionDeadline?: string | undefined;
+  submissionDeadlineTimezone?: string | undefined;
+  questionsDeadline?: string | undefined;
+  visitDate?: string | undefined;
+  visitMandatory?: boolean | undefined;
+  contractDurationMonths?: number | undefined;
+  renewalDurationMonths?: number | undefined;
+  renewalCount?: number | undefined;
+  estimatedStartDate?: string | undefined;
+  executionLocation?: string | undefined;
+  geographicZone?: string | undefined;
+  isFrameworkAgreement?: boolean | undefined;
+  awardType?: string | undefined;
+  variantsAllowed?: boolean | undefined;
+  pseAllowed?: boolean | undefined;
+  electronicResponseMandatory?: boolean | undefined;
+  signatureRequired?: boolean | undefined;
+  submissionPlatformUrl?: string | undefined;
+  internalNotes?: string | undefined;
   procedureType?: string | undefined;
   marketType?: string | undefined;
   country?: string | undefined;
@@ -37,6 +59,8 @@ export type CreateTenderCommand = Readonly<{
   externalReference?: string | undefined;
   sourceUrl?: string | undefined;
   estimatedAmount?: string | undefined;
+  minimumAmount?: string | undefined;
+  maximumAmount?: string | undefined;
   currency?: string | undefined;
   internalOwnerId?: string | undefined;
   tags?: string[] | undefined;
@@ -49,9 +73,11 @@ export type CreateTenderResult = TenderSummary;
 export class CreateTenderUseCase {
   constructor(
     @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    @Inject(BUYER_REPOSITORY) private readonly buyerRepository: BuyerRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
     private readonly getClientAccountUseCase: GetClientAccountUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
@@ -80,6 +106,15 @@ export class CreateTenderUseCase {
       permission: ClientPermission.CreateTender,
     });
 
+    // V2 Sprint 3 §5 — un `buyerId` fourni doit exister et appartenir à l'organisation, jamais
+    // fait confiance directement (même motif que `clientAccountId` ci-dessus).
+    if (command.buyerId !== undefined) {
+      const buyer = await this.buyerRepository.findById({ organizationId: command.organizationId, buyerId: command.buyerId });
+      if (!buyer) {
+        throw new BuyerNotFoundError();
+      }
+    }
+
     const occurredAt = this.clock.now();
 
     // Mission architecture §5 — valeurs par défaut appliquées uniquement à la création (jamais
@@ -91,9 +126,28 @@ export class CreateTenderUseCase {
       title: command.title,
       reference: command.reference,
       buyerName: command.buyerName,
+      buyerId: command.buyerId,
       description: command.description,
       publicationDate: command.publicationDate ? new Date(command.publicationDate) : undefined,
       submissionDeadline: command.submissionDeadline ? new Date(command.submissionDeadline) : undefined,
+      submissionDeadlineTimezone: command.submissionDeadlineTimezone,
+      questionsDeadline: command.questionsDeadline ? new Date(command.questionsDeadline) : undefined,
+      visitDate: command.visitDate ? new Date(command.visitDate) : undefined,
+      visitMandatory: command.visitMandatory,
+      contractDurationMonths: command.contractDurationMonths,
+      renewalDurationMonths: command.renewalDurationMonths,
+      renewalCount: command.renewalCount,
+      estimatedStartDate: command.estimatedStartDate ? new Date(command.estimatedStartDate) : undefined,
+      executionLocation: command.executionLocation,
+      geographicZone: command.geographicZone,
+      isFrameworkAgreement: command.isFrameworkAgreement,
+      awardType: command.awardType,
+      variantsAllowed: command.variantsAllowed,
+      pseAllowed: command.pseAllowed,
+      electronicResponseMandatory: command.electronicResponseMandatory,
+      signatureRequired: command.signatureRequired,
+      submissionPlatformUrl: command.submissionPlatformUrl,
+      internalNotes: command.internalNotes,
       procedureType: command.procedureType,
       marketType: command.marketType ? parseMarketType(command.marketType) : MarketType.Public,
       country: command.country ? parseTenderCountry(command.country) : TenderCountry.FR,
@@ -102,6 +156,8 @@ export class CreateTenderUseCase {
       externalReference: command.externalReference,
       sourceUrl: command.sourceUrl,
       estimatedAmount: command.estimatedAmount,
+      minimumAmount: command.minimumAmount,
+      maximumAmount: command.maximumAmount,
       currency: command.currency ?? DEFAULT_CURRENCY,
       internalOwnerId: command.internalOwnerId,
       tags: command.tags,
@@ -118,6 +174,19 @@ export class CreateTenderUseCase {
       resourceType: "tender",
       resourceId: tender.id.value,
       requestId: command.requestId,
+    });
+
+    await this.outboxWriter.write({
+      organizationId: command.organizationId,
+      events: [
+        {
+          eventType: "TenderCreated",
+          aggregateType: "Tender",
+          aggregateId: tender.id.value,
+          payload: { tenderId: tender.id.value, clientAccountId: tender.clientAccountId },
+          occurredAt,
+        },
+      ],
     });
 
     return toTenderSummary(tender);

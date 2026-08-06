@@ -5,6 +5,7 @@ import { TenderId } from "../../domain/tender-id.value-object";
 import { Tender } from "../../domain/tender.aggregate";
 import {
   createClientPortfolioTestFixture,
+  FakeOutboxWriter,
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryTenderRepository,
@@ -29,6 +30,7 @@ describe("ChangeTenderStatusUseCase", () => {
       statusHistoryRepository,
       auditLogWriter,
       new FixedClock(),
+      new FakeOutboxWriter(),
       clientPortfolio.assertClientAccessUseCase,
     );
 

@@ -23,7 +23,12 @@ export type TenderStatus = (typeof TenderStatus)[keyof typeof TenderStatus];
 /**
  * Funnel explicite (mission §4) : archivage possible depuis tout état non déjà archivé ;
  * SUBMITTED atteignable uniquement depuis READY_TO_SUBMIT ; WON/LOST uniquement depuis
- * SUBMITTED ; ARCHIVED est terminal (aucune transition sortante normale).
+ * SUBMITTED. V2 Sprint 3 §7 (correctif) : ARCHIVED n'est plus totalement terminal — une seule
+ * transition sortante, `ARCHIVED -> DRAFT`, sert de restauration (mission §17
+ * `POST /tenders/:id/restore` ; §29 DoD "archivage/restauration") : avant ce sprint, aucune
+ * transition sortante n'existait, rendant un Tender archivé irrécupérable, ce que la mission ne
+ * prévoyait pas. Retour à DRAFT (jamais à l'état précédent l'archivage, non conservé) — même
+ * discipline que la restauration d'un ClientAccount/SubcontractorProfile ailleurs dans le projet.
  */
 export const ALLOWED_TENDER_TRANSITIONS: Record<TenderStatus, readonly TenderStatus[]> = {
   [TenderStatus.Draft]: [TenderStatus.InAnalysis, TenderStatus.Archived],
@@ -34,7 +39,7 @@ export const ALLOWED_TENDER_TRANSITIONS: Record<TenderStatus, readonly TenderSta
   [TenderStatus.Submitted]: [TenderStatus.Won, TenderStatus.Lost, TenderStatus.Archived],
   [TenderStatus.Won]: [TenderStatus.Archived],
   [TenderStatus.Lost]: [TenderStatus.Archived],
-  [TenderStatus.Archived]: [],
+  [TenderStatus.Archived]: [TenderStatus.Draft],
 };
 
 export function isTenderStatus(value: string): value is TenderStatus {

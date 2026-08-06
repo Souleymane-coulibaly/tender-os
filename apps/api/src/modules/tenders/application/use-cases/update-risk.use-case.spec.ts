@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { ClientAccountNotFoundError } from "../../../client-portfolio";
 import { Risk } from "../../domain/risk.entity";
-import { RiskNotFoundError, TenderNotFoundError, TenderPermissionMissingError } from "../../domain/errors";
+import { RiskNotFoundError, TenderLotMismatchError, TenderNotFoundError, TenderPermissionMissingError } from "../../domain/errors";
 import { TenderId } from "../../domain/tender-id.value-object";
+import { TenderLot } from "../../domain/tender-lot.entity";
 import { Tender } from "../../domain/tender.aggregate";
 import {
   createClientPortfolioTestFixture,
@@ -10,6 +11,7 @@ import {
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryRiskRepository,
+  InMemoryTenderLotRepository,
   InMemoryTenderRepository,
 } from "../../test-support/fakes";
 import { ChangeRiskStatusUseCase, UpdateRiskUseCase } from "./update-risk.use-case";
@@ -17,6 +19,7 @@ import { ChangeRiskStatusUseCase, UpdateRiskUseCase } from "./update-risk.use-ca
 describe("UpdateRiskUseCase / ChangeRiskStatusUseCase", () => {
   let riskRepository: InMemoryRiskRepository;
   let tenderRepository: InMemoryTenderRepository;
+  let lotRepository: InMemoryTenderLotRepository;
   let clientPortfolio: Awaited<ReturnType<typeof createClientPortfolioTestFixture>>;
   let updateUseCase: UpdateRiskUseCase;
   let changeStatusUseCase: ChangeRiskStatusUseCase;
@@ -24,11 +27,13 @@ describe("UpdateRiskUseCase / ChangeRiskStatusUseCase", () => {
   beforeEach(async () => {
     riskRepository = new InMemoryRiskRepository();
     tenderRepository = new InMemoryTenderRepository();
+    lotRepository = new InMemoryTenderLotRepository();
     clientPortfolio = await createClientPortfolioTestFixture("org-1");
     updateUseCase = new UpdateRiskUseCase(
       riskRepository,
       new FixedClock(),
       tenderRepository,
+      lotRepository,
       clientPortfolio.assertClientAccessUseCase,
     );
     changeStatusUseCase = new ChangeRiskStatusUseCase(
@@ -125,6 +130,41 @@ describe("UpdateRiskUseCase / ChangeRiskStatusUseCase", () => {
           title: "x",
         }),
       ).rejects.toBeInstanceOf(ClientAccountNotFoundError);
+    });
+
+    it("correction audit Codex P1 — refuses a lotId that belongs to a DIFFERENT tender of the same organization (IDOR horizontal)", async () => {
+      await tenderRepository.seed(
+        Tender.create({
+          id: TenderId.from("tender-2"),
+          organizationId: "org-1",
+          clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+          title: "Autre marche",
+          createdBy: "user-1",
+          occurredAt: new Date(),
+        }),
+      );
+      await lotRepository.seed(
+        TenderLot.create({
+          id: "lot-tender-2",
+          organizationId: "org-1",
+          tenderId: "tender-2",
+          lotNumber: "01",
+          title: "Lot du tender 2",
+          displayOrder: 0,
+          occurredAt: new Date(),
+        }),
+      );
+
+      await expect(
+        updateUseCase.execute({
+          organizationId: "org-1",
+          tenderId: "tender-1",
+          riskId: "risk-1",
+          actorId: "user-1",
+          actorRole: "BID_MANAGER",
+          lotId: "lot-tender-2",
+        }),
+      ).rejects.toThrow(TenderLotMismatchError);
     });
   });
 

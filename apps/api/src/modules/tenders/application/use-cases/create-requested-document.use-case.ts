@@ -11,9 +11,10 @@ import {
   REQUESTED_DOCUMENT_REPOSITORY,
   type RequestedDocumentRepository,
 } from "../ports/requested-document.repository";
+import { TENDER_LOT_REPOSITORY, type TenderLotRepository } from "../ports/tender-lot.repository";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
-import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
+import { assertLotBelongsToTender, assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 
 export type CreateRequestedDocumentCommand = Readonly<{
   organizationId: string;
@@ -27,6 +28,11 @@ export type CreateRequestedDocumentCommand = Readonly<{
   description?: string | undefined;
   expirationDate?: string | undefined;
   displayOrder?: number | undefined;
+  isEliminatory?: boolean | undefined;
+  lotId?: string | undefined;
+  requestedFormat?: string | undefined;
+  signatureRequired?: boolean | undefined;
+  buyerProvidedTemplate?: boolean | undefined;
 }>;
 
 @Injectable()
@@ -36,6 +42,7 @@ export class CreateRequestedDocumentUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    @Inject(TENDER_LOT_REPOSITORY) private readonly lotRepository: TenderLotRepository,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
@@ -43,6 +50,7 @@ export class CreateRequestedDocumentUseCase {
     assertHasTenderPermission(command.actorRole, TenderPermission.Update);
 
     await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
+    await assertLotBelongsToTender(this.lotRepository, command);
 
     const document = RequestedDocument.create({
       id: this.idGenerator.generate(),
@@ -55,6 +63,11 @@ export class CreateRequestedDocumentUseCase {
       description: command.description,
       expirationDate: command.expirationDate ? new Date(command.expirationDate) : undefined,
       displayOrder: command.displayOrder,
+      isEliminatory: command.isEliminatory,
+      lotId: command.lotId,
+      requestedFormat: command.requestedFormat,
+      signatureRequired: command.signatureRequired,
+      buyerProvidedTemplate: command.buyerProvidedTemplate,
       occurredAt: this.clock.now(),
     });
 

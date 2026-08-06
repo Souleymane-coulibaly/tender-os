@@ -11,7 +11,10 @@ export function StatusChangeForm({ tenderId, status }: { tenderId: string; statu
   const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
   const nextStatuses = ALLOWED_TENDER_TRANSITIONS[status].filter((next) => next !== "ARCHIVED");
 
-  if (nextStatuses.length === 0) {
+  // V2 Sprint 3 §7/§29 — la restauration (ARCHIVED -> DRAFT) est desormais une transition
+  // valide cote domaine, mais reste proposee UNIQUEMENT via le RestoreButton dedie (action et
+  // journal d'audit distincts : "tender.restored"), jamais via ce selecteur generique.
+  if (status === "ARCHIVED" || nextStatuses.length === 0) {
     return null;
   }
 

@@ -22,9 +22,22 @@ vi.mock("../../../actions", () => ({
   reorderLotsAction: (tenderId: string, lotIds: string[]) => reorderLotsAction(tenderId, lotIds),
 }));
 
+function makeLot(overrides: Partial<TenderLot> & Pick<TenderLot, "id" | "lotNumber" | "title" | "displayOrder">): TenderLot {
+  return {
+    tenderId: "tender-1",
+    cpvSecondary: [],
+    selectedForResponse: true,
+    soloAllowed: true,
+    groupAllowed: true,
+    createdAt: "",
+    updatedAt: "",
+    ...overrides,
+  };
+}
+
 const lots: TenderLot[] = [
-  { id: "lot-1", tenderId: "tender-1", lotNumber: "01", title: "Lot travaux", displayOrder: 0, createdAt: "", updatedAt: "" },
-  { id: "lot-2", tenderId: "tender-1", lotNumber: "02", title: "Lot equipements", displayOrder: 1, createdAt: "", updatedAt: "" },
+  makeLot({ id: "lot-1", lotNumber: "01", title: "Lot travaux", displayOrder: 0 }),
+  makeLot({ id: "lot-2", lotNumber: "02", title: "Lot equipements", displayOrder: 1 }),
 ];
 
 describe("LotsSection", () => {

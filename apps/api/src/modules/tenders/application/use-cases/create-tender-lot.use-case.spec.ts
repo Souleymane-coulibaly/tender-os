@@ -12,6 +12,7 @@ import { Tender } from "../../domain/tender.aggregate";
 import { TenderStatus } from "../../domain/tender-status";
 import {
   createClientPortfolioTestFixture,
+  FakeOutboxWriter,
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryTenderLotRepository,
@@ -38,6 +39,7 @@ describe("CreateTenderLotUseCase", () => {
       auditLogWriter,
       new FixedClock(),
       new SequentialIdGenerator(),
+      new FakeOutboxWriter(),
       clientPortfolio.assertClientAccessUseCase,
     );
 

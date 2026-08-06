@@ -19,6 +19,12 @@ export type RequestedDocumentProps = {
   status: RequestedDocumentStatus;
   documentId?: string | undefined;
   displayOrder: number;
+  isEliminatory: boolean;
+  /** Absent = pièce au niveau Tender global, renseigné = spécifique à ce lot. */
+  lotId?: string | undefined;
+  requestedFormat?: string | undefined;
+  signatureRequired: boolean;
+  buyerProvidedTemplate: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -32,6 +38,11 @@ export type RequestedDocumentUpdate = {
   expirationDate?: Date | undefined;
   documentId?: string | undefined;
   displayOrder?: number | undefined;
+  isEliminatory?: boolean | undefined;
+  lotId?: string | undefined;
+  requestedFormat?: string | undefined;
+  signatureRequired?: boolean | undefined;
+  buyerProvidedTemplate?: boolean | undefined;
 };
 
 /**
@@ -51,6 +62,11 @@ export class RequestedDocument {
     description?: string | undefined;
     expirationDate?: Date | undefined;
     displayOrder?: number | undefined;
+    isEliminatory?: boolean | undefined;
+    lotId?: string | undefined;
+    requestedFormat?: string | undefined;
+    signatureRequired?: boolean | undefined;
+    buyerProvidedTemplate?: boolean | undefined;
     occurredAt: Date;
   }): RequestedDocument {
     return new RequestedDocument({
@@ -66,6 +82,11 @@ export class RequestedDocument {
       status: RequestedDocumentStatus.Pending,
       documentId: undefined,
       displayOrder: input.displayOrder ?? 0,
+      isEliminatory: input.isEliminatory ?? false,
+      lotId: input.lotId,
+      requestedFormat: input.requestedFormat,
+      signatureRequired: input.signatureRequired ?? false,
+      buyerProvidedTemplate: input.buyerProvidedTemplate ?? false,
       createdAt: input.occurredAt,
       updatedAt: input.occurredAt,
     });
@@ -84,6 +105,11 @@ export class RequestedDocument {
     if (update.expirationDate !== undefined) this.props.expirationDate = update.expirationDate;
     if (update.documentId !== undefined) this.props.documentId = update.documentId;
     if (update.displayOrder !== undefined) this.props.displayOrder = update.displayOrder;
+    if (update.isEliminatory !== undefined) this.props.isEliminatory = update.isEliminatory;
+    if (update.lotId !== undefined) this.props.lotId = update.lotId;
+    if (update.requestedFormat !== undefined) this.props.requestedFormat = update.requestedFormat;
+    if (update.signatureRequired !== undefined) this.props.signatureRequired = update.signatureRequired;
+    if (update.buyerProvidedTemplate !== undefined) this.props.buyerProvidedTemplate = update.buyerProvidedTemplate;
     this.props.updatedAt = occurredAt;
   }
 
@@ -127,6 +153,21 @@ export class RequestedDocument {
   }
   get displayOrder(): number {
     return this.props.displayOrder;
+  }
+  get isEliminatory(): boolean {
+    return this.props.isEliminatory;
+  }
+  get lotId(): string | undefined {
+    return this.props.lotId;
+  }
+  get requestedFormat(): string | undefined {
+    return this.props.requestedFormat;
+  }
+  get signatureRequired(): boolean {
+    return this.props.signatureRequired;
+  }
+  get buyerProvidedTemplate(): boolean {
+    return this.props.buyerProvidedTemplate;
   }
   get createdAt(): Date {
     return this.props.createdAt;

@@ -5,8 +5,10 @@ import { ClientAccount } from "../../client-portfolio/domain/client-account.aggr
 import { ClientAssignment } from "../../client-portfolio/domain/client-assignment.entity";
 import { ClientRole } from "../../client-portfolio/domain/client-role";
 import { InMemoryClientAccountRepository, InMemoryClientAssignmentRepository } from "../../client-portfolio/test-support/fakes";
+import type { OutboxEventInput, OutboxWriter } from "../../outbox";
 import type { Alert } from "../domain/alert.entity";
 import type { AwardCriterion } from "../domain/award-criterion.entity";
+import type { Buyer } from "../domain/buyer.entity";
 import type { ChecklistItem } from "../domain/checklist-item.entity";
 import type { Milestone } from "../domain/milestone.entity";
 import type { RequestedDocument } from "../domain/requested-document.entity";
@@ -27,6 +29,7 @@ import type {
   TenderStatusHistoryRepository,
 } from "../application/ports/tender-status-history.repository";
 import type { TenderLotRepository } from "../application/ports/tender-lot.repository";
+import type { BuyerRepository } from "../application/ports/buyer.repository";
 import type { TenderPage, TenderRepository } from "../application/ports/tender.repository";
 import { TenderStatus } from "../domain/tender-status";
 
@@ -61,6 +64,37 @@ export class InMemoryAuditLogWriter implements AuditLogWriter {
 
   async record(entry: TenderAuditLogEntry): Promise<void> {
     this.entries.push(entry);
+  }
+}
+
+/** V2 Sprint 3 — double de test minimal pour `OutboxWriter` (mission "événements tenantés,
+ *  idempotents, versionnés") : enregistre les événements écrits pour d'éventuelles assertions,
+ *  jamais de comportement métier réel. */
+export class FakeOutboxWriter implements OutboxWriter {
+  readonly writes: { organizationId: string; events: OutboxEventInput[] }[] = [];
+
+  async write(input: { organizationId: string; events: OutboxEventInput[] }): Promise<void> {
+    this.writes.push(input);
+  }
+}
+
+export class InMemoryBuyerRepository implements BuyerRepository {
+  private readonly buyers = new Map<string, Buyer>();
+
+  async findById(input: { organizationId: string; buyerId: string }): Promise<Buyer | null> {
+    const buyer = this.buyers.get(input.buyerId);
+    if (!buyer || buyer.organizationId !== input.organizationId) return null;
+    return buyer;
+  }
+
+  async list(input: { organizationId: string; search?: string | undefined; includeArchived?: boolean | undefined }): Promise<Buyer[]> {
+    return [...this.buyers.values()].filter(
+      (buyer) => buyer.organizationId === input.organizationId && (input.includeArchived || buyer.archivedAt === undefined),
+    );
+  }
+
+  async save(buyer: Buyer): Promise<void> {
+    this.buyers.set(buyer.id, buyer);
   }
 }
 

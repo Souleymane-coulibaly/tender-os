@@ -9,8 +9,10 @@ import {
 import {
   createClientPortfolioTestFixture,
   DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+  FakeOutboxWriter,
   FixedClock,
   InMemoryAuditLogWriter,
+  InMemoryBuyerRepository,
   InMemoryTenderRepository,
   SequentialIdGenerator,
 } from "../../test-support/fakes";
@@ -19,17 +21,21 @@ import { CreateTenderUseCase } from "./create-tender.use-case";
 describe("CreateTenderUseCase", () => {
   let tenderRepository: InMemoryTenderRepository;
   let auditLogWriter: InMemoryAuditLogWriter;
+  let outboxWriter: FakeOutboxWriter;
   let useCase: CreateTenderUseCase;
 
   beforeEach(async () => {
     tenderRepository = new InMemoryTenderRepository();
     auditLogWriter = new InMemoryAuditLogWriter();
+    outboxWriter = new FakeOutboxWriter();
     const clientPortfolio = await createClientPortfolioTestFixture("org-1");
     useCase = new CreateTenderUseCase(
       tenderRepository,
+      new InMemoryBuyerRepository(),
       auditLogWriter,
       new FixedClock(),
       new SequentialIdGenerator(),
+      outboxWriter,
       clientPortfolio.getClientAccountUseCase,
       clientPortfolio.assertClientAccessUseCase,
     );

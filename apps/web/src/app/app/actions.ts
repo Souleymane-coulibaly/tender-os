@@ -11,11 +11,14 @@ import {
   appApiFetchWithToken,
 } from "../../lib/app-api-client";
 import {
+  AWARD_TYPES,
   DEFAULT_TENDER_SOURCE,
   isValidEstimatedAmount,
   MARKET_TYPES,
   TENDER_COUNTRIES,
   TENDER_LANGUAGES,
+  type AwardType,
+  type Buyer,
   type MarketType,
   type TenderCountry,
   type TenderLanguage,
@@ -78,14 +81,48 @@ function describeTenderActionError(error: unknown): string {
 type ParsedTenderFields = {
   reference?: string | undefined;
   buyerName?: string | undefined;
+  buyerId?: string | undefined;
   procedureType?: string | undefined;
   marketType?: MarketType | undefined;
   country?: TenderCountry | undefined;
   language?: TenderLanguage | undefined;
   currency?: string | undefined;
   estimatedAmount?: string | undefined;
+  minimumAmount?: string | undefined;
+  maximumAmount?: string | undefined;
   submissionDeadline?: string | undefined;
+  submissionDeadlineTimezone?: string | undefined;
+  questionsDeadline?: string | undefined;
+  visitDate?: string | undefined;
+  visitMandatory?: boolean | undefined;
+  isFrameworkAgreement?: boolean | undefined;
+  awardType?: AwardType | undefined;
+  variantsAllowed?: boolean | undefined;
+  submissionPlatformUrl?: string | undefined;
+  internalNotes?: string | undefined;
 };
+
+/** Date+heure optionnelle -> ISO 8601, meme regle que submissionDeadline (mission §6 : tous les
+ *  champs de dates restent optionnels, jamais bloquant si absent/invalide non fourni). */
+function parseOptionalIsoDate(value: FormDataEntryValue | null, fieldLabel: string): { error: string } | { value: string | undefined } {
+  if (typeof value !== "string" || !value) {
+    return { value: undefined };
+  }
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return { error: `${fieldLabel} invalide.` };
+  }
+  return { value: parsedDate.toISOString() };
+}
+
+/** Tri-etat "ne pas preciser / oui / non" (mission §6 : champs optionnels) — un select plutot
+ *  qu'une case a cocher, pour pouvoir explicitement REMETTRE un booleen a "non renseigne" sans
+ *  ambiguite (une case a cocher ne peut representer que deux etats, jamais trois). */
+function optionalBoolean(value: FormDataEntryValue | null): boolean | undefined {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return undefined;
+}
 
 function parseTenderFormFields(formData: FormData): { error: string } | { fields: ParsedTenderFields } {
   const marketType = optional(formData.get("marketType"));
@@ -108,28 +145,49 @@ function parseTenderFormFields(formData: FormData): { error: string } | { fields
   if (estimatedAmount && !isValidEstimatedAmount(estimatedAmount)) {
     return { error: "Montant estime invalide (nombre positif attendu, par exemple 50000 ou 50000.50)." };
   }
-
-  const submissionDeadlineRaw = formData.get("submissionDeadline");
-  let submissionDeadline: string | undefined;
-  if (typeof submissionDeadlineRaw === "string" && submissionDeadlineRaw) {
-    const parsedDate = new Date(submissionDeadlineRaw);
-    if (Number.isNaN(parsedDate.getTime())) {
-      return { error: "Date limite de remise invalide." };
-    }
-    submissionDeadline = parsedDate.toISOString();
+  const minimumAmount = optional(formData.get("minimumAmount"));
+  if (minimumAmount && !isValidEstimatedAmount(minimumAmount)) {
+    return { error: "Montant minimum invalide (nombre positif attendu)." };
   }
+  const maximumAmount = optional(formData.get("maximumAmount"));
+  if (maximumAmount && !isValidEstimatedAmount(maximumAmount)) {
+    return { error: "Montant maximum invalide (nombre positif attendu)." };
+  }
+  const awardTypeRaw = optional(formData.get("awardType"));
+  if (awardTypeRaw && !(AWARD_TYPES as readonly string[]).includes(awardTypeRaw)) {
+    return { error: "Type d'attribution invalide." };
+  }
+
+  const submissionDeadline = parseOptionalIsoDate(formData.get("submissionDeadline"), "Date limite de remise");
+  if ("error" in submissionDeadline) return submissionDeadline;
+  const questionsDeadline = parseOptionalIsoDate(formData.get("questionsDeadline"), "Date limite des questions");
+  if ("error" in questionsDeadline) return questionsDeadline;
+  const visitDate = parseOptionalIsoDate(formData.get("visitDate"), "Date de visite");
+  if ("error" in visitDate) return visitDate;
 
   return {
     fields: {
       reference: optional(formData.get("reference")),
       buyerName: optional(formData.get("buyerName")),
+      buyerId: optional(formData.get("buyerId")),
       procedureType: optional(formData.get("procedureType")),
       marketType: marketType as MarketType | undefined,
       country: country as TenderCountry | undefined,
       language: language as TenderLanguage | undefined,
       currency,
       estimatedAmount,
-      submissionDeadline,
+      minimumAmount,
+      maximumAmount,
+      submissionDeadline: submissionDeadline.value,
+      submissionDeadlineTimezone: optional(formData.get("submissionDeadlineTimezone")),
+      questionsDeadline: questionsDeadline.value,
+      visitDate: visitDate.value,
+      visitMandatory: optionalBoolean(formData.get("visitMandatory")),
+      isFrameworkAgreement: optionalBoolean(formData.get("isFrameworkAgreement")),
+      awardType: awardTypeRaw as AwardType | undefined,
+      variantsAllowed: optionalBoolean(formData.get("variantsAllowed")),
+      submissionPlatformUrl: optional(formData.get("submissionPlatformUrl")),
+      internalNotes: optional(formData.get("internalNotes")),
     },
   };
 }
@@ -361,6 +419,98 @@ export async function archiveTenderAction(
 
   revalidatePath(`/app/tenders/${tenderId}`);
   revalidatePath("/app/tenders");
+  return {};
+}
+
+/** Correctif V2 Sprint 3 §7/§29 — la restauration transitionne toujours vers DRAFT (jamais le
+ *  statut precedent l'archivage, non conserve), meme endpoint dedie que le backend
+ *  (RestoreTenderUseCase), jamais via changeTenderStatusAction. */
+export async function restoreTenderAction(
+  tenderId: string,
+  _prevState: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
+  const reason = optional(formData.get("reason"));
+
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/restore`, {
+      method: "POST",
+      body: JSON.stringify(reason ? { reason } : {}),
+    });
+  } catch (error) {
+    return { error: describeTenderActionError(error) };
+  }
+
+  revalidatePath(`/app/tenders/${tenderId}`);
+  revalidatePath("/app/tenders");
+  return {};
+}
+
+/**
+ * V2 Sprint 3 §4 — changement CONTROLE de l'entreprise candidate, jamais fusionne avec
+ * updateTenderAction (le backend rejette de toute facon tout `clientAccountId` glisse dans un
+ * PATCH general). Route dediee POST /tenders/:id/candidate (ChangeTenderClientAccountUseCase).
+ */
+export async function changeTenderCandidateAction(
+  tenderId: string,
+  _prevState: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
+  const clientAccountId = formData.get("clientAccountId");
+  if (typeof clientAccountId !== "string" || !clientAccountId.trim()) {
+    return { error: "Selectionnez une entreprise candidate." };
+  }
+
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/candidate`, {
+      method: "POST",
+      body: JSON.stringify({ clientAccountId, reason: optional(formData.get("reason")) }),
+    });
+  } catch (error) {
+    return { error: describeTenderActionError(error) };
+  }
+
+  revalidatePath(`/app/tenders/${tenderId}`);
+  return {};
+}
+
+// ---- Acheteurs (Buyer, V2 Sprint 3 §5) ----
+
+export async function createBuyerAction(
+  redirectToTenderId: string | undefined,
+  _prevState: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
+  const name = formData.get("name");
+  if (typeof name !== "string" || !name.trim()) {
+    return { error: "Le nom de l'acheteur est obligatoire." };
+  }
+
+  try {
+    await appApiFetch<Buyer>("/api/v1/buyers", {
+      method: "POST",
+      body: JSON.stringify({
+        name: name.trim(),
+        legalName: optional(formData.get("legalName")),
+        siret: optional(formData.get("siret")),
+        addressLine: optional(formData.get("addressLine")),
+        postalCode: optional(formData.get("postalCode")),
+        city: optional(formData.get("city")),
+        buyerType: optional(formData.get("buyerType")),
+        contactName: optional(formData.get("contactName")),
+        contactEmail: optional(formData.get("contactEmail")),
+        contactPhone: optional(formData.get("contactPhone")),
+        profileUrl: optional(formData.get("profileUrl")),
+      }),
+    });
+  } catch (error) {
+    return { error: describeTenderActionError(error) };
+  }
+
+  if (redirectToTenderId) {
+    revalidatePath(`/app/tenders/${redirectToTenderId}`);
+  }
+  revalidatePath("/app/tenders/new");
   return {};
 }
 

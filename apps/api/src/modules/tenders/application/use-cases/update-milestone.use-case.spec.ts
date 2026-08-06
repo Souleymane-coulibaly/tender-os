@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { ClientAccountNotFoundError } from "../../../client-portfolio";
 import { Milestone } from "../../domain/milestone.entity";
-import { MilestoneNotFoundError, TenderNotFoundError, TenderPermissionMissingError } from "../../domain/errors";
+import {
+  MilestoneNotFoundError,
+  TenderLotMismatchError,
+  TenderNotFoundError,
+  TenderPermissionMissingError,
+} from "../../domain/errors";
 import { TenderId } from "../../domain/tender-id.value-object";
+import { TenderLot } from "../../domain/tender-lot.entity";
 import { Tender } from "../../domain/tender.aggregate";
 import {
   createClientPortfolioTestFixture,
@@ -10,6 +16,7 @@ import {
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryMilestoneRepository,
+  InMemoryTenderLotRepository,
   InMemoryTenderRepository,
 } from "../../test-support/fakes";
 import { DeleteMilestoneUseCase, MarkMilestoneDoneUseCase, UpdateMilestoneUseCase } from "./update-milestone.use-case";
@@ -17,6 +24,7 @@ import { DeleteMilestoneUseCase, MarkMilestoneDoneUseCase, UpdateMilestoneUseCas
 describe("UpdateMilestoneUseCase / MarkMilestoneDoneUseCase / DeleteMilestoneUseCase", () => {
   let milestoneRepository: InMemoryMilestoneRepository;
   let tenderRepository: InMemoryTenderRepository;
+  let lotRepository: InMemoryTenderLotRepository;
   let clientPortfolio: Awaited<ReturnType<typeof createClientPortfolioTestFixture>>;
   let updateUseCase: UpdateMilestoneUseCase;
   let markDoneUseCase: MarkMilestoneDoneUseCase;
@@ -25,12 +33,14 @@ describe("UpdateMilestoneUseCase / MarkMilestoneDoneUseCase / DeleteMilestoneUse
   beforeEach(async () => {
     milestoneRepository = new InMemoryMilestoneRepository();
     tenderRepository = new InMemoryTenderRepository();
+    lotRepository = new InMemoryTenderLotRepository();
     clientPortfolio = await createClientPortfolioTestFixture("org-1");
     updateUseCase = new UpdateMilestoneUseCase(
       milestoneRepository,
       new InMemoryAuditLogWriter(),
       new FixedClock(),
       tenderRepository,
+      lotRepository,
       clientPortfolio.assertClientAccessUseCase,
     );
     markDoneUseCase = new MarkMilestoneDoneUseCase(
@@ -132,6 +142,41 @@ describe("UpdateMilestoneUseCase / MarkMilestoneDoneUseCase / DeleteMilestoneUse
           title: "x",
         }),
       ).rejects.toBeInstanceOf(ClientAccountNotFoundError);
+    });
+
+    it("correction audit Codex P1 — refuses a lotId that belongs to a DIFFERENT tender of the same organization (IDOR horizontal)", async () => {
+      await tenderRepository.seed(
+        Tender.create({
+          id: TenderId.from("tender-2"),
+          organizationId: "org-1",
+          clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+          title: "Autre marche",
+          createdBy: "user-1",
+          occurredAt: new Date(),
+        }),
+      );
+      await lotRepository.seed(
+        TenderLot.create({
+          id: "lot-tender-2",
+          organizationId: "org-1",
+          tenderId: "tender-2",
+          lotNumber: "01",
+          title: "Lot du tender 2",
+          displayOrder: 0,
+          occurredAt: new Date(),
+        }),
+      );
+
+      await expect(
+        updateUseCase.execute({
+          organizationId: "org-1",
+          tenderId: "tender-1",
+          milestoneId: "milestone-1",
+          actorId: "user-1",
+          actorRole: "BID_MANAGER",
+          lotId: "lot-tender-2",
+        }),
+      ).rejects.toThrow(TenderLotMismatchError);
     });
   });
 

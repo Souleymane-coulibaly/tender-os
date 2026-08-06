@@ -1,7 +1,8 @@
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
-import { TenderNotFoundError } from "../../domain/errors";
+import { TenderLotMismatchError, TenderNotFoundError } from "../../domain/errors";
 import type { Tender } from "../../domain/tender.aggregate";
 import type { TenderRepository } from "../ports/tender.repository";
+import type { TenderLotRepository } from "../ports/tender-lot.repository";
 
 /**
  * Correction anomalie P0 ("Mutations Tenders non client-aware") — point d'application UNIQUE pour
@@ -39,4 +40,27 @@ export async function assertTenderMutationAllowed(
   });
 
   return tender;
+}
+
+/**
+ * Correction audit Codex P1 (V2 Sprint 3, IDOR horizontal) — un `lotId` fourni à une sous-ressource
+ * du Tender (critère, pièce demandée, jalon, risque) doit appartenir au `tenderId` de la route. La
+ * contrainte FK composite `(lotId, organizationId)` posée par la migration ne protège que le
+ * tenant, jamais le Tender précis : un lot du Tender B de la MÊME organisation la satisfait tout
+ * autant. Sans ce contrôle, un acteur autorisé sur le Tender A peut rattacher une sous-ressource du
+ * Tender A à un lot du Tender B. `lotRepository.findById` scope déjà par `(organizationId,
+ * tenderId, lotId)` (et exclut les lots supprimés) — le réutiliser ici évite toute seconde requête
+ * ad hoc. Ne fait rien si `lotId` est absent (rattachement au niveau Tender global, cas normal).
+ */
+export async function assertLotBelongsToTender(
+  lotRepository: TenderLotRepository,
+  input: { organizationId: string; tenderId: string; lotId?: string | undefined },
+): Promise<void> {
+  if (input.lotId === undefined) {
+    return;
+  }
+  const lot = await lotRepository.findById({ organizationId: input.organizationId, tenderId: input.tenderId, lotId: input.lotId });
+  if (!lot) {
+    throw new TenderLotMismatchError();
+  }
 }

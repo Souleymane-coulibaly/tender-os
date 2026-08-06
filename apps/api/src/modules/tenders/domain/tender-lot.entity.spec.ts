@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { TenderLotDeletedError, TenderLotNotDeletedError } from "./errors";
+import { InvalidLotAmountRangeError, InvalidLotEstimatedAmountError, TenderLotDeletedError, TenderLotNotDeletedError } from "./errors";
 import { TenderLot } from "./tender-lot.entity";
 
-function createLot(displayOrder = 0): TenderLot {
+function createLot(displayOrder = 0, overrides: Partial<Parameters<typeof TenderLot.create>[0]> = {}): TenderLot {
   return TenderLot.create({
     id: "lot-1",
     organizationId: "org-1",
@@ -11,6 +11,7 @@ function createLot(displayOrder = 0): TenderLot {
     title: "Lot travaux",
     displayOrder,
     occurredAt: new Date("2026-01-01T00:00:00Z"),
+    ...overrides,
   });
 }
 
@@ -104,5 +105,28 @@ describe("TenderLot#restore", () => {
     const lot = createLot();
 
     expect(() => lot.restore(0, new Date())).toThrow(TenderLotNotDeletedError);
+  });
+});
+
+describe("TenderLot amounts — correction audit Codex P1 (2e passe)", () => {
+  it("refuses a non-numeric minimumAmount/maximumAmount at creation", () => {
+    expect(() => createLot(0, { minimumAmount: "not-a-number" })).toThrow(InvalidLotEstimatedAmountError);
+    expect(() => createLot(0, { maximumAmount: "not-a-number" })).toThrow(InvalidLotEstimatedAmountError);
+  });
+
+  it("refuses minimumAmount > maximumAmount at creation", () => {
+    expect(() => createLot(0, { minimumAmount: "600000", maximumAmount: "400000" })).toThrow(InvalidLotAmountRangeError);
+  });
+
+  it("accepts minimumAmount <= maximumAmount at creation", () => {
+    const lot = createLot(0, { minimumAmount: "400000", maximumAmount: "600000" });
+    expect(lot.minimumAmount).toBe("400000");
+    expect(lot.maximumAmount).toBe("600000");
+  });
+
+  it("refuses update when the resulting range is inconsistent, even if only one bound is touched", () => {
+    const lot = createLot(0, { minimumAmount: "400000", maximumAmount: "600000" });
+
+    expect(() => lot.update({ minimumAmount: "700000" }, new Date())).toThrow(InvalidLotAmountRangeError);
   });
 });

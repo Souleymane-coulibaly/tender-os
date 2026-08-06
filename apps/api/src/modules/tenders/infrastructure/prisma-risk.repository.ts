@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type { TenderRisk as RiskRecord } from "@prisma/client";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
 import type { RiskRepository } from "../application/ports/risk.repository";
-import { Risk, type RiskSeverity, type RiskStatus } from "../domain/risk.entity";
+import { Risk, type RiskCategory, type RiskLevel, type RiskOrigin, type RiskSeverity, type RiskStatus } from "../domain/risk.entity";
 
 function toDomain(record: RiskRecord): Risk {
   return Risk.rehydrate({
@@ -17,6 +17,11 @@ function toDomain(record: RiskRecord): Risk {
     mitigation: record.mitigation ?? undefined,
     assignedTo: record.assignedTo ?? undefined,
     resolvedAt: record.resolvedAt ?? undefined,
+    category: (record.category as RiskCategory | null) ?? undefined,
+    probability: (record.probability as RiskLevel | null) ?? undefined,
+    impact: (record.impact as RiskLevel | null) ?? undefined,
+    lotId: record.lotId ?? undefined,
+    origin: record.origin as RiskOrigin,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   });
@@ -35,6 +40,11 @@ function toPersistence(risk: Risk) {
     mitigation: risk.mitigation ?? null,
     assignedTo: risk.assignedTo ?? null,
     resolvedAt: risk.resolvedAt ?? null,
+    category: risk.category ?? null,
+    probability: risk.probability ?? null,
+    impact: risk.impact ?? null,
+    lotId: risk.lotId ?? null,
+    origin: risk.origin,
     createdAt: risk.createdAt,
     updatedAt: risk.updatedAt,
   };

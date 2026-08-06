@@ -308,11 +308,53 @@ model Tender {
 
   estimatedAmount Decimal? @map("estimated_amount") @db.Decimal(19, 4)
   currency        String?  @default("EUR") @db.Char(3)
+  /// V2 Sprint 3 §6 — montant plancher/plafond quand le marché en prévoit (accord-cadre à bons de
+  /// commande notamment), distincts de `estimatedAmount` (valeur ponctuelle unique).
+  minimumAmount   Decimal? @map("minimum_amount") @db.Decimal(19, 4)
+  maximumAmount   Decimal? @map("maximum_amount") @db.Decimal(19, 4)
 
   internalOwnerId String? @map("internal_owner_id") @db.Uuid
 
   /// DRAFT | IN_ANALYSIS | READY | IN_PREPARATION | READY_TO_SUBMIT | SUBMITTED | WON | LOST | ARCHIVED
   status String @db.VarChar(40)
+
+  /// V2 Sprint 3 §5 — acheteur/donneur d'ordre structuré, distinct de l'entreprise candidate
+  /// (`clientAccountId` ci-dessus) et de `buyerName` (conservé pour compatibilité V1 : simple
+  /// libellé texte). `Buyer` n'existait pas avant ce sprint (audit préalable confirmé) — jamais
+  /// un `ClientAccount`, jamais fusionné avec les données du candidat.
+  buyerId String? @map("buyer_id") @db.Uuid
+  buyer   Buyer?  @relation(fields: [buyerId, organizationId], references: [id, organizationId])
+
+  /// V2 Sprint 3 §6 — dates/échéances au-delà de `submissionDeadline` (déjà existant). Le fuseau
+  /// horaire s'applique à `submissionDeadline` (stocké en UTC) pour un affichage local correct ;
+  /// la question et la visite restent également modélisables comme `TenderMilestone` typés
+  /// (QUESTION_DEADLINE/MANDATORY_VISIT) pour l'historique/les jalons — ces deux colonnes servent
+  /// uniquement à l'affichage rapide de la fiche sans devoir agréger les jalons.
+  submissionDeadlineTimezone String?   @default("Europe/Paris") @map("submission_deadline_timezone") @db.VarChar(60)
+  questionsDeadline          DateTime? @map("questions_deadline")
+  visitDate                  DateTime? @map("visit_date")
+  visitMandatory             Boolean?  @map("visit_mandatory")
+
+  /// V2 Sprint 3 §6 — durée et démarrage.
+  contractDurationMonths Int?      @map("contract_duration_months")
+  renewalDurationMonths  Int?      @map("renewal_duration_months")
+  renewalCount           Int?      @map("renewal_count")
+  estimatedStartDate     DateTime? @map("estimated_start_date")
+
+  /// V2 Sprint 3 §6 — lieu d'exécution.
+  executionLocation String? @map("execution_location") @db.VarChar(300)
+  geographicZone    String? @map("geographic_zone") @db.VarChar(300)
+
+  /// V2 Sprint 3 §6 — caractéristiques de la procédure. `awardType` : MONO_AWARDEE | MULTI_AWARDEE
+  /// (CHECK, migration) — nullable tant que l'information n'est pas connue.
+  isFrameworkAgreement        Boolean? @map("is_framework_agreement")
+  awardType                   String?  @map("award_type") @db.VarChar(20)
+  variantsAllowed             Boolean? @map("variants_allowed")
+  pseAllowed                  Boolean? @map("pse_allowed")
+  electronicResponseMandatory Boolean? @map("electronic_response_mandatory")
+  signatureRequired           Boolean? @map("signature_required")
+  submissionPlatformUrl       String?  @map("submission_platform_url") @db.VarChar(2048)
+  internalNotes               String?  @map("internal_notes")
 
   tags String[]
 
@@ -388,6 +430,58 @@ model Tender {
   @@map("tenders")
 }
 
+/// V2 Sprint 3 §5 — acheteur/donneur d'ordre. Audit préalable confirmé : aucune entité Buyer
+/// n'existait (seul `Tender.buyerName`, simple libellé texte, conservé pour compatibilité V1).
+/// Jamais un `ClientAccount` : les données de l'acheteur ne portent aucune permission Client
+/// Portfolio, aucune donnée légale/bancaire, jamais utilisées comme données du candidat (mission
+/// §5 "ne jamais utiliser les données de l'acheteur comme données du candidat"). Réutilisable par
+/// plusieurs Tenders de la même organisation (mission §5 "éviter la duplication si l'acheteur est
+/// réutilisable") — jamais recréé automatiquement, jamais rempli depuis une extraction DCE ce
+/// sprint.
+model Buyer {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  name       String  @db.VarChar(300)
+  legalName  String? @map("legal_name") @db.VarChar(300)
+  identifier String? @db.VarChar(100)
+  /// SIRET si connu — jamais inventé (mission §5 "ne pas inventer de SIRET"), aucune validation
+  /// de checksum imposée côté acheteur (contrairement à `company-profile`) : donnée déclarative
+  /// tierce, potentiellement incomplète.
+  siret      String? @db.VarChar(14)
+
+  addressLine String? @map("address_line") @db.VarChar(300)
+  postalCode  String? @map("postal_code") @db.VarChar(20)
+  city        String? @db.VarChar(120)
+  country     String? @db.VarChar(10)
+
+  /// Libre (ex. "Collectivité territoriale", "État", "Établissement public") — aucun catalogue
+  /// fermé documenté par la mission, mêmes précédents que `Tender.procedureType`.
+  buyerType String? @map("buyer_type") @db.VarChar(120)
+
+  contactName  String? @map("contact_name") @db.VarChar(200)
+  contactEmail String? @map("contact_email") @db.VarChar(320)
+  contactPhone String? @map("contact_phone") @db.VarChar(40)
+
+  /// URL du profil acheteur générique (réutilisable), distincte de `Tender.sourceUrl`/
+  /// `Tender.submissionPlatformUrl` qui restent spécifiques à CHAQUE consultation.
+  profileUrl String? @map("profile_url") @db.VarChar(2048)
+
+  notes String?
+
+  createdBy  String    @map("created_by") @db.Uuid
+  updatedBy  String?   @map("updated_by") @db.Uuid
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  tenders Tender[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, name])
+  @@map("buyers")
+}
+
 model TenderLot {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
@@ -406,6 +500,29 @@ model TenderLot {
   currency        String?  @db.Char(3)
   displayOrder    Int      @default(0) @map("display_order")
 
+  /// V2 Sprint 3 §8 — enrichissement additif (audit préalable : aucun de ces champs n'existait).
+  /// Pas de colonne `status` distincte : `deletedAt` porte déjà l'archivage/la restauration
+  /// (mission "ne pas dupliquer"), `selectedForResponse` porte la seule décision métier
+  /// actionnable manquante ("lot sélectionné ou non pour réponse").
+  code                  String?   @db.VarChar(100)
+  cpvMain               String?   @map("cpv_main") @db.VarChar(20)
+  cpvSecondary          String[]  @map("cpv_secondary")
+  executionLocation     String?   @map("execution_location") @db.VarChar(300)
+  durationMonths        Int?      @map("duration_months")
+  estimatedStartDate    DateTime? @map("estimated_start_date")
+  minimumAmount         Decimal?  @map("minimum_amount") @db.Decimal(19, 4)
+  maximumAmount         Decimal?  @map("maximum_amount") @db.Decimal(19, 4)
+  selectedForResponse   Boolean   @default(true) @map("selected_for_response")
+  /// Mission §13 : l'architecture ne doit pas empêcher les futurs besoins de groupement — ces deux
+  /// indicateurs déclaratifs suffisent ce sprint, aucun Consortium/DC4 rattaché ici.
+  soloAllowed           Boolean   @default(true) @map("solo_allowed")
+  groupAllowed          Boolean   @default(true) @map("group_allowed")
+  variantsAllowed       Boolean?  @map("variants_allowed")
+  pseAllowed            Boolean?  @map("pse_allowed")
+  specificVisitRequired Boolean?  @map("specific_visit_required")
+  specificVisitDate     DateTime? @map("specific_visit_date")
+  internalNotes         String?   @map("internal_notes")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   /// Suppression logique (conception Lots §D) — un lot supprimé reste soumis à la contrainte
@@ -413,6 +530,15 @@ model TenderLot {
   /// toujours sûr (jamais de collision possible avec un lot créé entretemps).
   deletedAt DateTime? @map("deleted_at")
 
+  awardCriteria      TenderAwardCriterion[]
+  requestedDocuments TenderRequestedDocument[]
+  milestones         TenderMilestone[]
+  risks              TenderRisk[]
+
+  /// V2 Sprint 3 (AUDIT-007, même motif que Tender/Document) — support des FK composées
+  /// (lotId, organizationId) des satellites ci-dessous vers ce lot : empêche structurellement
+  /// qu'un critère/document/jalon/risque d'une autre organisation référence ce lot.
+  @@unique([id, organizationId])
   @@unique([tenderId, lotNumber])
   @@index([organizationId, tenderId])
   @@index([organizationId, tenderId, displayOrder])
@@ -461,12 +587,25 @@ model TenderAwardCriterion {
 
   parentCriterionId String? @map("parent_criterion_id") @db.Uuid
 
+  /// V2 Sprint 3 §9 — enrichissement additif. `lotId` nullable : absent = critère au niveau
+  /// Tender global, renseigné = critère spécifique à ce lot (FK composée, même motif AUDIT-007
+  /// que TenderLot lui-même).
+  lotId                String?    @map("lot_id") @db.Uuid
+  lot                  TenderLot? @relation(fields: [lotId, organizationId], references: [id, organizationId])
+  /// PRICE | TECHNICAL_VALUE | DELAY | ENVIRONMENTAL | SOCIAL | OTHER — CHECK (migration), nullable.
+  type                 String?    @db.VarChar(40)
+  scoringMethod        String?    @map("scoring_method")
+  eliminationThreshold Decimal?   @map("elimination_threshold") @db.Decimal(5, 2)
+  /// ACTIVE | ARCHIVED — CHECK (migration).
+  status               String     @default("ACTIVE") @db.VarChar(20)
+
   displayOrder Int @default(0) @map("display_order")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId, tenderId, displayOrder])
+  @@index([organizationId, lotId])
   @@map("tender_award_criteria")
 }
 
@@ -494,12 +633,21 @@ model TenderRequestedDocument {
   documentId String?   @map("document_id") @db.Uuid
   document   Document? @relation(fields: [documentId], references: [id])
 
+  /// V2 Sprint 3 §10 — enrichissement additif.
+  isEliminatory         Boolean    @default(false) @map("is_eliminatory")
+  lotId                 String?    @map("lot_id") @db.Uuid
+  lot                   TenderLot? @relation(fields: [lotId, organizationId], references: [id, organizationId])
+  requestedFormat       String?    @map("requested_format") @db.VarChar(100)
+  signatureRequired     Boolean    @default(false) @map("signature_required")
+  buyerProvidedTemplate Boolean    @default(false) @map("buyer_provided_template")
+
   displayOrder Int @default(0) @map("display_order")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId, tenderId, displayOrder])
+  @@index([organizationId, lotId])
   @@map("tender_requested_documents")
 }
 
@@ -522,10 +670,18 @@ model TenderMilestone {
 
   responsibleUserId String? @map("responsible_user_id") @db.Uuid
 
+  /// V2 Sprint 3 §11 — enrichissement additif.
+  timezone    String?    @default("Europe/Paris") @db.VarChar(60)
+  lotId       String?    @map("lot_id") @db.Uuid
+  lot         TenderLot? @relation(fields: [lotId, organizationId], references: [id, organizationId])
+  mandatory   Boolean    @default(true)
+  completedAt DateTime?  @map("completed_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId, tenderId, date])
+  @@index([organizationId, lotId])
   @@map("tender_milestones")
 }
 
@@ -538,7 +694,8 @@ model TenderRisk {
   title       String  @db.VarChar(300)
   description String?
 
-  /// LOW | MEDIUM | HIGH | CRITICAL
+  /// LOW | MEDIUM | HIGH | CRITICAL — criticité déclarée (jamais recalculée automatiquement à
+  /// partir de probability/impact ci-dessous : aucune formule n'est spécifiée par la mission).
   severity String  @db.VarChar(20)
   source   String? @db.VarChar(120)
 
@@ -549,10 +706,23 @@ model TenderRisk {
   assignedTo String?   @map("assigned_to") @db.Uuid
   resolvedAt DateTime? @map("resolved_at")
 
+  /// V2 Sprint 3 §12 — enrichissement additif.
+  /// ADMINISTRATIVE | LEGAL | TECHNICAL | FINANCIAL | PLANNING | RESOURCE | SECURITY | OTHER — CHECK.
+  category    String?    @db.VarChar(40)
+  /// LOW | MEDIUM | HIGH — CHECK, descriptif, distinct de `severity`.
+  probability String?    @db.VarChar(20)
+  impact      String?    @db.VarChar(20)
+  lotId       String?    @map("lot_id") @db.Uuid
+  lot         TenderLot? @relation(fields: [lotId, organizationId], references: [id, organizationId])
+  /// MANUAL uniquement ce sprint (CHECK) — Sprint 4 étendra la contrainte pour une origine IA,
+  /// jamais introduite ici (mission §12 "ne pas ajouter encore l'origine IA").
+  origin      String     @default("MANUAL") @db.VarChar(20)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId, tenderId, status])
+  @@index([organizationId, lotId])
   @@map("tender_risks")
 }
 

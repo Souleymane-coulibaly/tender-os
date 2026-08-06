@@ -140,6 +140,9 @@ describe("Tender Lots — isolation HTTP inter-tenant (NestJS + PostgreSQL réel
   afterAll(async () => {
     await prisma.tenderLot.deleteMany({ where: { tenderId: tenderAId } });
     await prisma.tender.deleteMany({ where: { id: tenderAId } });
+    // V2 Sprint 3 — CreateTenderUseCase/CreateTenderLotUseCase écrivent désormais dans l'Outbox
+    // (TenderCreated/TenderLotCreated) : à supprimer avant l'organisation, sinon FK violée.
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: [orgAId, orgBId] } } } });

@@ -4,6 +4,7 @@ import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { AssertClientAccessUseCase } from "../../../client-portfolio";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { DuplicateTenderLotNumberError } from "../../domain/errors";
 import { TenderLot } from "../../domain/tender-lot.entity";
 import { TenderPermission } from "../../domain/tender-permission";
@@ -25,6 +26,22 @@ export type CreateTenderLotCommand = Readonly<{
   description?: string | undefined;
   estimatedAmount?: string | undefined;
   currency?: string | undefined;
+  code?: string | undefined;
+  cpvMain?: string | undefined;
+  cpvSecondary?: string[] | undefined;
+  executionLocation?: string | undefined;
+  durationMonths?: number | undefined;
+  estimatedStartDate?: string | undefined;
+  minimumAmount?: string | undefined;
+  maximumAmount?: string | undefined;
+  selectedForResponse?: boolean | undefined;
+  soloAllowed?: boolean | undefined;
+  groupAllowed?: boolean | undefined;
+  variantsAllowed?: boolean | undefined;
+  pseAllowed?: boolean | undefined;
+  specificVisitRequired?: boolean | undefined;
+  specificVisitDate?: string | undefined;
+  internalNotes?: string | undefined;
   requestId?: string | undefined;
 }>;
 
@@ -46,6 +63,7 @@ export class CreateTenderLotUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
@@ -66,6 +84,7 @@ export class CreateTenderLotUseCase {
       throw new DuplicateTenderLotNumberError();
     }
 
+    const occurredAt = this.clock.now();
     const lot = TenderLot.create({
       id: this.idGenerator.generate(),
       organizationId: command.organizationId,
@@ -75,8 +94,24 @@ export class CreateTenderLotUseCase {
       description: command.description,
       estimatedAmount: command.estimatedAmount,
       currency: command.currency,
+      code: command.code,
+      cpvMain: command.cpvMain,
+      cpvSecondary: command.cpvSecondary,
+      executionLocation: command.executionLocation,
+      durationMonths: command.durationMonths,
+      estimatedStartDate: command.estimatedStartDate ? new Date(command.estimatedStartDate) : undefined,
+      minimumAmount: command.minimumAmount,
+      maximumAmount: command.maximumAmount,
+      selectedForResponse: command.selectedForResponse,
+      soloAllowed: command.soloAllowed,
+      groupAllowed: command.groupAllowed,
+      variantsAllowed: command.variantsAllowed,
+      pseAllowed: command.pseAllowed,
+      specificVisitRequired: command.specificVisitRequired,
+      specificVisitDate: command.specificVisitDate ? new Date(command.specificVisitDate) : undefined,
+      internalNotes: command.internalNotes,
       displayOrder: 0, // provisoire — écrasé de façon atomique par createAppendedAtEnd (AUDIT-002)
-      occurredAt: this.clock.now(),
+      occurredAt,
     });
 
     const created = await this.lotRepository.createAppendedAtEnd(lot);
@@ -89,6 +124,19 @@ export class CreateTenderLotUseCase {
       resourceId: created.id,
       requestId: command.requestId,
       metadata: { tenderId: command.tenderId, lotNumber: created.lotNumber },
+    });
+
+    await this.outboxWriter.write({
+      organizationId: command.organizationId,
+      events: [
+        {
+          eventType: "TenderLotCreated",
+          aggregateType: "Tender",
+          aggregateId: command.tenderId,
+          payload: { tenderId: command.tenderId, lotId: created.id, lotNumber: created.lotNumber },
+          occurredAt,
+        },
+      ],
     });
 
     return toTenderLotSummary(created);

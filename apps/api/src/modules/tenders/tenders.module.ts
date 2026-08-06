@@ -2,9 +2,11 @@ import { Module } from "@nestjs/common";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
+import { OutboxModule } from "../outbox";
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
 import { ALERT_REPOSITORY } from "./application/ports/alert.repository";
 import { AWARD_CRITERION_REPOSITORY } from "./application/ports/award-criterion.repository";
+import { BUYER_REPOSITORY } from "./application/ports/buyer.repository";
 import { CHECKLIST_ITEM_REPOSITORY } from "./application/ports/checklist-item.repository";
 import { MILESTONE_REPOSITORY } from "./application/ports/milestone.repository";
 import { REQUESTED_DOCUMENT_REPOSITORY } from "./application/ports/requested-document.repository";
@@ -15,9 +17,12 @@ import { TENDER_STATUS_HISTORY_REPOSITORY } from "./application/ports/tender-sta
 import { TENDER_REPOSITORY } from "./application/ports/tender.repository";
 
 import { ArchiveTenderUseCase } from "./application/use-cases/archive-tender.use-case";
+import { RestoreTenderUseCase } from "./application/use-cases/restore-tender.use-case";
 import { ChangeTenderStatusUseCase } from "./application/use-cases/change-tender-status.use-case";
+import { ChangeTenderClientAccountUseCase } from "./application/use-cases/change-tender-client-account.use-case";
 import { CreateTenderUseCase } from "./application/use-cases/create-tender.use-case";
 import { GetTenderUseCase } from "./application/use-cases/get-tender.use-case";
+import { GetTenderProfileUseCase } from "./application/use-cases/get-tender-profile.use-case";
 import { GetTenderBoardUseCase } from "./application/use-cases/get-tender-board.use-case";
 import { GetTenderListViewUseCase } from "./application/use-cases/get-tender-list-view.use-case";
 import { GetTenderReadinessUseCase } from "./application/use-cases/get-tender-readiness.use-case";
@@ -25,6 +30,14 @@ import { GetTenderStatisticsUseCase } from "./application/use-cases/get-tender-s
 import { ListTendersUseCase } from "./application/use-cases/list-tenders.use-case";
 import { ListTenderStatusHistoryUseCase } from "./application/use-cases/list-tender-status-history.use-case";
 import { UpdateTenderUseCase } from "./application/use-cases/update-tender.use-case";
+import {
+  ArchiveBuyerUseCase,
+  CreateBuyerUseCase,
+  GetBuyerUseCase,
+  ListBuyersUseCase,
+  RestoreBuyerUseCase,
+  UpdateBuyerUseCase,
+} from "./application/use-cases/buyer.use-cases";
 
 import { CreateTenderLotUseCase } from "./application/use-cases/create-tender-lot.use-case";
 import { DeleteTenderLotUseCase, UpdateTenderLotUseCase } from "./application/use-cases/update-tender-lot.use-case";
@@ -74,6 +87,7 @@ import { ListAlertsUseCase } from "./application/use-cases/list-alerts.use-case"
 import { PrismaAlertRepository } from "./infrastructure/prisma-alert.repository";
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
 import { PrismaAwardCriterionRepository } from "./infrastructure/prisma-award-criterion.repository";
+import { PrismaBuyerRepository } from "./infrastructure/prisma-buyer.repository";
 import { PrismaChecklistItemRepository } from "./infrastructure/prisma-checklist-item.repository";
 import { PrismaIlikeTenderSearchProvider } from "./infrastructure/prisma-ilike-tender-search.provider";
 import { PrismaMilestoneRepository } from "./infrastructure/prisma-milestone.repository";
@@ -82,24 +96,35 @@ import { PrismaRiskRepository } from "./infrastructure/prisma-risk.repository";
 import { PrismaTenderLotRepository } from "./infrastructure/prisma-tender-lot.repository";
 import { PrismaTenderStatusHistoryRepository } from "./infrastructure/prisma-tender-status-history.repository";
 import { PrismaTenderRepository } from "./infrastructure/prisma-tender.repository";
+import { BuyersController } from "./interfaces/http/buyers.controller";
 import { TenderLotsController } from "./interfaces/http/tender-lots.controller";
 import { TendersController } from "./interfaces/http/tenders.controller";
 
 @Module({
-  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule],
-  controllers: [TendersController, TenderLotsController],
+  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, OutboxModule],
+  controllers: [TendersController, TenderLotsController, BuyersController],
   providers: [
     CreateTenderUseCase,
     UpdateTenderUseCase,
     GetTenderUseCase,
+    GetTenderProfileUseCase,
     ListTendersUseCase,
     GetTenderBoardUseCase,
     GetTenderListViewUseCase,
     GetTenderStatisticsUseCase,
     ChangeTenderStatusUseCase,
+    ChangeTenderClientAccountUseCase,
     ArchiveTenderUseCase,
+    RestoreTenderUseCase,
     ListTenderStatusHistoryUseCase,
     GetTenderReadinessUseCase,
+
+    ListBuyersUseCase,
+    GetBuyerUseCase,
+    CreateBuyerUseCase,
+    UpdateBuyerUseCase,
+    ArchiveBuyerUseCase,
+    RestoreBuyerUseCase,
 
     CreateTenderLotUseCase,
     UpdateTenderLotUseCase,
@@ -141,6 +166,7 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     ListAlertsUseCase,
 
     { provide: TENDER_REPOSITORY, useClass: PrismaTenderRepository },
+    { provide: BUYER_REPOSITORY, useClass: PrismaBuyerRepository },
     { provide: TENDER_SEARCH_PROVIDER, useClass: PrismaIlikeTenderSearchProvider },
     { provide: TENDER_LOT_REPOSITORY, useClass: PrismaTenderLotRepository },
     { provide: CHECKLIST_ITEM_REPOSITORY, useClass: PrismaChecklistItemRepository },

@@ -1,14 +1,21 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { ClientAccountNotFoundError } from "../../../client-portfolio";
 import { AwardCriterion } from "../../domain/award-criterion.entity";
-import { AwardCriterionNotFoundError, TenderNotFoundError, TenderPermissionMissingError } from "../../domain/errors";
+import {
+  AwardCriterionNotFoundError,
+  TenderLotMismatchError,
+  TenderNotFoundError,
+  TenderPermissionMissingError,
+} from "../../domain/errors";
 import { TenderId } from "../../domain/tender-id.value-object";
+import { TenderLot } from "../../domain/tender-lot.entity";
 import { Tender } from "../../domain/tender.aggregate";
 import {
   createClientPortfolioTestFixture,
   DEFAULT_TEST_CLIENT_ACCOUNT_ID,
   FixedClock,
   InMemoryAwardCriterionRepository,
+  InMemoryTenderLotRepository,
   InMemoryTenderRepository,
 } from "../../test-support/fakes";
 import { DeleteAwardCriterionUseCase, UpdateAwardCriterionUseCase } from "./update-award-criterion.use-case";
@@ -16,6 +23,7 @@ import { DeleteAwardCriterionUseCase, UpdateAwardCriterionUseCase } from "./upda
 describe("UpdateAwardCriterionUseCase / DeleteAwardCriterionUseCase", () => {
   let criterionRepository: InMemoryAwardCriterionRepository;
   let tenderRepository: InMemoryTenderRepository;
+  let lotRepository: InMemoryTenderLotRepository;
   let clientPortfolio: Awaited<ReturnType<typeof createClientPortfolioTestFixture>>;
   let updateUseCase: UpdateAwardCriterionUseCase;
   let deleteUseCase: DeleteAwardCriterionUseCase;
@@ -23,11 +31,13 @@ describe("UpdateAwardCriterionUseCase / DeleteAwardCriterionUseCase", () => {
   beforeEach(async () => {
     criterionRepository = new InMemoryAwardCriterionRepository();
     tenderRepository = new InMemoryTenderRepository();
+    lotRepository = new InMemoryTenderLotRepository();
     clientPortfolio = await createClientPortfolioTestFixture("org-1");
     updateUseCase = new UpdateAwardCriterionUseCase(
       criterionRepository,
       new FixedClock(),
       tenderRepository,
+      lotRepository,
       clientPortfolio.assertClientAccessUseCase,
     );
     deleteUseCase = new DeleteAwardCriterionUseCase(
@@ -122,6 +132,41 @@ describe("UpdateAwardCriterionUseCase / DeleteAwardCriterionUseCase", () => {
           name: "x",
         }),
       ).rejects.toBeInstanceOf(ClientAccountNotFoundError);
+    });
+
+    it("correction audit Codex P1 — refuses a lotId that belongs to a DIFFERENT tender of the same organization (IDOR horizontal)", async () => {
+      await tenderRepository.seed(
+        Tender.create({
+          id: TenderId.from("tender-2"),
+          organizationId: "org-1",
+          clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+          title: "Autre marche",
+          createdBy: "user-1",
+          occurredAt: new Date(),
+        }),
+      );
+      await lotRepository.seed(
+        TenderLot.create({
+          id: "lot-tender-2",
+          organizationId: "org-1",
+          tenderId: "tender-2",
+          lotNumber: "01",
+          title: "Lot du tender 2",
+          displayOrder: 0,
+          occurredAt: new Date(),
+        }),
+      );
+
+      await expect(
+        updateUseCase.execute({
+          organizationId: "org-1",
+          tenderId: "tender-1",
+          criterionId: "criterion-1",
+          actorId: "user-1",
+          actorRole: "BID_MANAGER",
+          lotId: "lot-tender-2",
+        }),
+      ).rejects.toThrow(TenderLotMismatchError);
     });
   });
 

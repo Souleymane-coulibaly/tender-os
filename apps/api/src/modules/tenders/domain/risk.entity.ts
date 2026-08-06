@@ -9,6 +9,26 @@ export const RiskStatus = {
 } as const;
 export type RiskStatus = (typeof RiskStatus)[keyof typeof RiskStatus];
 
+export const RiskCategory = {
+  Administrative: "ADMINISTRATIVE",
+  Legal: "LEGAL",
+  Technical: "TECHNICAL",
+  Financial: "FINANCIAL",
+  Planning: "PLANNING",
+  Resource: "RESOURCE",
+  Security: "SECURITY",
+  Other: "OTHER",
+} as const;
+export type RiskCategory = (typeof RiskCategory)[keyof typeof RiskCategory];
+
+export const RiskLevel = { Low: "LOW", Medium: "MEDIUM", High: "HIGH" } as const;
+export type RiskLevel = (typeof RiskLevel)[keyof typeof RiskLevel];
+
+/** MANUAL uniquement ce sprint (mission §12 "ne pas ajouter encore l'origine IA") — Sprint 4
+ *  étendra ce catalogue, jamais anticipé ici. */
+export const RiskOrigin = { Manual: "MANUAL" } as const;
+export type RiskOrigin = (typeof RiskOrigin)[keyof typeof RiskOrigin];
+
 export type RiskProps = {
   id: string;
   organizationId: string;
@@ -21,6 +41,11 @@ export type RiskProps = {
   mitigation?: string | undefined;
   assignedTo?: string | undefined;
   resolvedAt?: Date | undefined;
+  category?: RiskCategory | undefined;
+  probability?: RiskLevel | undefined;
+  impact?: RiskLevel | undefined;
+  lotId?: string | undefined;
+  origin: RiskOrigin;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -32,6 +57,10 @@ export type RiskUpdate = {
   source?: string | undefined;
   mitigation?: string | undefined;
   assignedTo?: string | undefined;
+  category?: RiskCategory | undefined;
+  probability?: RiskLevel | undefined;
+  impact?: RiskLevel | undefined;
+  lotId?: string | undefined;
 };
 
 export class Risk {
@@ -46,6 +75,10 @@ export class Risk {
     severity: RiskSeverity;
     source?: string | undefined;
     assignedTo?: string | undefined;
+    category?: RiskCategory | undefined;
+    probability?: RiskLevel | undefined;
+    impact?: RiskLevel | undefined;
+    lotId?: string | undefined;
     occurredAt: Date;
   }): Risk {
     return new Risk({
@@ -60,6 +93,11 @@ export class Risk {
       mitigation: undefined,
       assignedTo: input.assignedTo,
       resolvedAt: undefined,
+      category: input.category,
+      probability: input.probability,
+      impact: input.impact,
+      lotId: input.lotId,
+      origin: RiskOrigin.Manual,
       createdAt: input.occurredAt,
       updatedAt: input.occurredAt,
     });
@@ -76,6 +114,10 @@ export class Risk {
     if (update.source !== undefined) this.props.source = update.source;
     if (update.mitigation !== undefined) this.props.mitigation = update.mitigation;
     if (update.assignedTo !== undefined) this.props.assignedTo = update.assignedTo;
+    if (update.category !== undefined) this.props.category = update.category;
+    if (update.probability !== undefined) this.props.probability = update.probability;
+    if (update.impact !== undefined) this.props.impact = update.impact;
+    if (update.lotId !== undefined) this.props.lotId = update.lotId;
     this.props.updatedAt = occurredAt;
   }
 
@@ -118,6 +160,21 @@ export class Risk {
   }
   get resolvedAt(): Date | undefined {
     return this.props.resolvedAt;
+  }
+  get category(): RiskCategory | undefined {
+    return this.props.category;
+  }
+  get probability(): RiskLevel | undefined {
+    return this.props.probability;
+  }
+  get impact(): RiskLevel | undefined {
+    return this.props.impact;
+  }
+  get lotId(): string | undefined {
+    return this.props.lotId;
+  }
+  get origin(): RiskOrigin {
+    return this.props.origin;
   }
   get createdAt(): Date {
     return this.props.createdAt;

@@ -22,6 +22,22 @@ export type UpdateTenderLotCommand = Readonly<{
   description?: string | undefined;
   estimatedAmount?: string | undefined;
   currency?: string | undefined;
+  code?: string | undefined;
+  cpvMain?: string | undefined;
+  cpvSecondary?: string[] | undefined;
+  executionLocation?: string | undefined;
+  durationMonths?: number | undefined;
+  estimatedStartDate?: string | undefined;
+  minimumAmount?: string | undefined;
+  maximumAmount?: string | undefined;
+  selectedForResponse?: boolean | undefined;
+  soloAllowed?: boolean | undefined;
+  groupAllowed?: boolean | undefined;
+  variantsAllowed?: boolean | undefined;
+  pseAllowed?: boolean | undefined;
+  specificVisitRequired?: boolean | undefined;
+  specificVisitDate?: string | undefined;
+  internalNotes?: string | undefined;
   requestId?: string | undefined;
 }>;
 
@@ -59,6 +75,22 @@ export class UpdateTenderLotUseCase {
         description: command.description,
         estimatedAmount: command.estimatedAmount,
         currency: command.currency,
+        code: command.code,
+        cpvMain: command.cpvMain,
+        cpvSecondary: command.cpvSecondary,
+        executionLocation: command.executionLocation,
+        durationMonths: command.durationMonths,
+        estimatedStartDate: command.estimatedStartDate ? new Date(command.estimatedStartDate) : undefined,
+        minimumAmount: command.minimumAmount,
+        maximumAmount: command.maximumAmount,
+        selectedForResponse: command.selectedForResponse,
+        soloAllowed: command.soloAllowed,
+        groupAllowed: command.groupAllowed,
+        variantsAllowed: command.variantsAllowed,
+        pseAllowed: command.pseAllowed,
+        specificVisitRequired: command.specificVisitRequired,
+        specificVisitDate: command.specificVisitDate ? new Date(command.specificVisitDate) : undefined,
+        internalNotes: command.internalNotes,
       },
       this.clock.now(),
     );

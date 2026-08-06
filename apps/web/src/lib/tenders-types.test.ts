@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  ALLOWED_TENDER_TRANSITIONS,
+  canChangeTenderCandidate,
   canChangeTenderStatus,
   canEditTenderDetails,
+  canOfferCandidateChange,
   DEFAULT_TENDER_COUNTRY,
   DEFAULT_TENDER_CURRENCY,
   DEFAULT_TENDER_LANGUAGE,
@@ -38,6 +41,30 @@ describe("canEditTenderDetails", () => {
     expect(canEditTenderDetails("BID_MANAGER")).toBe(true);
     expect(canEditTenderDetails("READ_ONLY")).toBe(false);
     expect(canEditTenderDetails(undefined)).toBe(false);
+  });
+});
+
+describe("ALLOWED_TENDER_TRANSITIONS — ARCHIVED (V2 Sprint 3 §7/§29 correctif restauration)", () => {
+  it("allows a restore-to-DRAFT transition, unlike before this sprint (was an empty terminal state)", () => {
+    expect(ALLOWED_TENDER_TRANSITIONS.ARCHIVED).toEqual(["DRAFT"]);
+  });
+});
+
+describe("canOfferCandidateChange (mirror of Tender.CANDIDATE_CHANGE_ALLOWED_STATUSES)", () => {
+  it("offers the change only for DRAFT and IN_ANALYSIS", () => {
+    expect(canOfferCandidateChange("DRAFT")).toBe(true);
+    expect(canOfferCandidateChange("IN_ANALYSIS")).toBe(true);
+    expect(canOfferCandidateChange("READY")).toBe(false);
+    expect(canOfferCandidateChange("ARCHIVED")).toBe(false);
+  });
+});
+
+describe("canChangeTenderCandidate", () => {
+  it("mirrors the same role gate as canChangeTenderStatus (display-only, backend revalidates)", () => {
+    expect(canChangeTenderCandidate("OWNER")).toBe(true);
+    expect(canChangeTenderCandidate("BID_MANAGER")).toBe(true);
+    expect(canChangeTenderCandidate("READ_ONLY")).toBe(false);
+    expect(canChangeTenderCandidate(undefined)).toBe(false);
   });
 });
 

@@ -18,6 +18,11 @@ function toDomain(record: RequestedDocumentRecord): RequestedDocument {
     status: record.status as RequestedDocumentStatus,
     documentId: record.documentId ?? undefined,
     displayOrder: record.displayOrder,
+    isEliminatory: record.isEliminatory,
+    lotId: record.lotId ?? undefined,
+    requestedFormat: record.requestedFormat ?? undefined,
+    signatureRequired: record.signatureRequired,
+    buyerProvidedTemplate: record.buyerProvidedTemplate,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   });
@@ -37,6 +42,11 @@ function toPersistence(document: RequestedDocument) {
     status: document.status,
     documentId: document.documentId ?? null,
     displayOrder: document.displayOrder,
+    isEliminatory: document.isEliminatory,
+    lotId: document.lotId ?? null,
+    requestedFormat: document.requestedFormat ?? null,
+    signatureRequired: document.signatureRequired,
+    buyerProvidedTemplate: document.buyerProvidedTemplate,
     createdAt: document.createdAt,
     updatedAt: document.updatedAt,
   };

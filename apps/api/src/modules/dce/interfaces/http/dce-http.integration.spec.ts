@@ -282,6 +282,9 @@ describe("DCE — real HTTP + PostgreSQL (NestJS)", () => {
     });
     await prisma.document.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.tender.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    // V2 Sprint 3 — CreateTenderUseCase (Tenders) écrit désormais dans l'Outbox (TenderCreated) :
+    // à supprimer avant l'organisation, sinon FK violée.
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: [orgAId, orgBId] } } } });

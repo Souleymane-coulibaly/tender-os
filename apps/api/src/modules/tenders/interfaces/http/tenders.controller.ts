@@ -4,9 +4,12 @@ import { CurrentMembershipContext, OrganizationMembershipGuard, type MembershipC
 import type { RequestWithId } from "../../../../shared-kernel/request-id.middleware";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
 import { ArchiveTenderUseCase } from "../../application/use-cases/archive-tender.use-case";
+import { RestoreTenderUseCase } from "../../application/use-cases/restore-tender.use-case";
 import { ChangeTenderStatusUseCase } from "../../application/use-cases/change-tender-status.use-case";
+import { ChangeTenderClientAccountUseCase } from "../../application/use-cases/change-tender-client-account.use-case";
 import { CreateTenderUseCase } from "../../application/use-cases/create-tender.use-case";
 import { GetTenderUseCase } from "../../application/use-cases/get-tender.use-case";
+import { GetTenderProfileUseCase } from "../../application/use-cases/get-tender-profile.use-case";
 import { GetTenderBoardUseCase } from "../../application/use-cases/get-tender-board.use-case";
 import { GetTenderListViewUseCase } from "../../application/use-cases/get-tender-list-view.use-case";
 import { GetTenderReadinessUseCase } from "../../application/use-cases/get-tender-readiness.use-case";
@@ -65,6 +68,7 @@ import {
   presentTender,
   presentTenderBoard,
   presentTenderListItem,
+  presentTenderProfile,
   presentTenderStatistics,
 } from "./presenters";
 import { TendersErrorFilter } from "./tenders-error.filter";
@@ -73,6 +77,7 @@ import {
   ChangeChecklistItemStatusBodySchema,
   ChangeRequestedDocumentStatusBodySchema,
   ChangeRiskStatusBodySchema,
+  ChangeTenderCandidateBodySchema,
   ChangeTenderStatusBodySchema,
   CreateAlertBodySchema,
   CreateAwardCriterionBodySchema,
@@ -83,6 +88,7 @@ import {
   CreateTenderBodySchema,
   IdParamSchema,
   ListTendersQuerySchema,
+  RestoreTenderBodySchema,
   TenderBoardQuerySchema,
   UpdateAwardCriterionBodySchema,
   UpdateChecklistItemBodySchema,
@@ -94,6 +100,7 @@ import {
   type ChangeChecklistItemStatusBody,
   type ChangeRequestedDocumentStatusBody,
   type ChangeRiskStatusBody,
+  type ChangeTenderCandidateBody,
   type ChangeTenderStatusBody,
   type CreateAlertBody,
   type CreateAwardCriterionBody,
@@ -103,6 +110,7 @@ import {
   type CreateRiskBody,
   type CreateTenderBody,
   type ListTendersQuery,
+  type RestoreTenderBody,
   type TenderBoardQuery,
   type UpdateAwardCriterionBody,
   type UpdateChecklistItemBody,
@@ -120,11 +128,14 @@ export class TendersController {
     private readonly createTenderUseCase: CreateTenderUseCase,
     private readonly updateTenderUseCase: UpdateTenderUseCase,
     private readonly getTenderUseCase: GetTenderUseCase,
+    private readonly getTenderProfileUseCase: GetTenderProfileUseCase,
     private readonly getTenderBoardUseCase: GetTenderBoardUseCase,
     private readonly getTenderListViewUseCase: GetTenderListViewUseCase,
     private readonly getTenderStatisticsUseCase: GetTenderStatisticsUseCase,
     private readonly changeTenderStatusUseCase: ChangeTenderStatusUseCase,
+    private readonly changeTenderClientAccountUseCase: ChangeTenderClientAccountUseCase,
     private readonly archiveTenderUseCase: ArchiveTenderUseCase,
+    private readonly restoreTenderUseCase: RestoreTenderUseCase,
     private readonly listTenderStatusHistoryUseCase: ListTenderStatusHistoryUseCase,
     private readonly getTenderReadinessUseCase: GetTenderReadinessUseCase,
 
@@ -301,6 +312,65 @@ export class TendersController {
       requestId: request.id,
     });
     return presentTender(result);
+  }
+
+  @Post(":tenderId/restore")
+  @HttpCode(HttpStatus.OK)
+  async restore(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Body(new ZodValidationPipe(RestoreTenderBodySchema)) body: RestoreTenderBody,
+    @Req() request: RequestWithId,
+  ) {
+    const result = await this.restoreTenderUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      reason: body.reason,
+      requestId: request.id,
+    });
+    return presentTender(result);
+  }
+
+  // V2 Sprint 3 §4 — changement CONTRÔLÉ de l'entreprise candidate, jamais via `PATCH :tenderId`
+  // (`clientAccountId` est volontairement absent de `UpdateTenderBodySchema`).
+  @Post(":tenderId/candidate")
+  @HttpCode(HttpStatus.OK)
+  async changeCandidate(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Body(new ZodValidationPipe(ChangeTenderCandidateBodySchema)) body: ChangeTenderCandidateBody,
+    @Req() request: RequestWithId,
+  ) {
+    const result = await this.changeTenderClientAccountUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      clientAccountId: body.clientAccountId,
+      reason: body.reason,
+      requestId: request.id,
+    });
+    return presentTender(result);
+  }
+
+  @Get(":tenderId/profile")
+  @HttpCode(HttpStatus.OK)
+  async profile(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    const result = await this.getTenderProfileUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+    });
+    return presentTenderProfile(result);
   }
 
   @Get(":tenderId/history")

@@ -8,9 +8,10 @@ import { TenderPermission } from "../../domain/tender-permission";
 import { toMilestoneSummary, type MilestoneSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { MILESTONE_REPOSITORY, type MilestoneRepository } from "../ports/milestone.repository";
+import { TENDER_LOT_REPOSITORY, type TenderLotRepository } from "../ports/tender-lot.repository";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
-import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
+import { assertLotBelongsToTender, assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 
 async function loadMilestone(
   repository: MilestoneRepository,
@@ -34,6 +35,9 @@ export type UpdateMilestoneCommand = Readonly<{
   date?: string | undefined;
   type?: MilestoneType | undefined;
   responsibleUserId?: string | undefined;
+  timezone?: string | undefined;
+  lotId?: string | undefined;
+  mandatory?: boolean | undefined;
   requestId?: string | undefined;
 }>;
 
@@ -44,6 +48,7 @@ export class UpdateMilestoneUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    @Inject(TENDER_LOT_REPOSITORY) private readonly lotRepository: TenderLotRepository,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
@@ -51,6 +56,7 @@ export class UpdateMilestoneUseCase {
     assertHasTenderPermission(command.actorRole, TenderPermission.Update);
 
     await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
+    await assertLotBelongsToTender(this.lotRepository, command);
 
     const milestone = await loadMilestone(this.milestoneRepository, {
       organizationId: command.organizationId,
@@ -68,6 +74,9 @@ export class UpdateMilestoneUseCase {
         date: command.date ? new Date(command.date) : undefined,
         type: command.type,
         responsibleUserId: command.responsibleUserId,
+        timezone: command.timezone,
+        lotId: command.lotId,
+        mandatory: command.mandatory,
       },
       now,
     );

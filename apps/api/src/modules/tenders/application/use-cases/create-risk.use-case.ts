@@ -4,14 +4,15 @@ import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { AssertClientAccessUseCase } from "../../../client-portfolio";
-import { Risk, type RiskSeverity } from "../../domain/risk.entity";
+import { Risk, type RiskCategory, type RiskLevel, type RiskSeverity } from "../../domain/risk.entity";
 import { TenderPermission } from "../../domain/tender-permission";
 import { toRiskSummary, type RiskSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { RISK_REPOSITORY, type RiskRepository } from "../ports/risk.repository";
+import { TENDER_LOT_REPOSITORY, type TenderLotRepository } from "../ports/tender-lot.repository";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
-import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
+import { assertLotBelongsToTender, assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 
 export type CreateRiskCommand = Readonly<{
   organizationId: string;
@@ -23,6 +24,10 @@ export type CreateRiskCommand = Readonly<{
   severity: RiskSeverity;
   source?: string | undefined;
   assignedTo?: string | undefined;
+  category?: RiskCategory | undefined;
+  probability?: RiskLevel | undefined;
+  impact?: RiskLevel | undefined;
+  lotId?: string | undefined;
   requestId?: string | undefined;
 }>;
 
@@ -34,6 +39,7 @@ export class CreateRiskUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    @Inject(TENDER_LOT_REPOSITORY) private readonly lotRepository: TenderLotRepository,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
@@ -41,6 +47,7 @@ export class CreateRiskUseCase {
     assertHasTenderPermission(command.actorRole, TenderPermission.ManageRisks);
 
     await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
+    await assertLotBelongsToTender(this.lotRepository, command);
 
     const risk = Risk.create({
       id: this.idGenerator.generate(),
@@ -51,6 +58,10 @@ export class CreateRiskUseCase {
       severity: command.severity,
       source: command.source,
       assignedTo: command.assignedTo,
+      category: command.category,
+      probability: command.probability,
+      impact: command.impact,
+      lotId: command.lotId,
       occurredAt: this.clock.now(),
     });
 

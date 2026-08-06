@@ -4,16 +4,17 @@ import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { AssertClientAccessUseCase } from "../../../client-portfolio";
-import { AwardCriterion } from "../../domain/award-criterion.entity";
+import { AwardCriterion, type AwardCriterionType } from "../../domain/award-criterion.entity";
 import { TenderPermission } from "../../domain/tender-permission";
 import { toAwardCriterionSummary, type AwardCriterionSummary } from "../dtos";
 import {
   AWARD_CRITERION_REPOSITORY,
   type AwardCriterionRepository,
 } from "../ports/award-criterion.repository";
+import { TENDER_LOT_REPOSITORY, type TenderLotRepository } from "../ports/tender-lot.repository";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
-import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
+import { assertLotBelongsToTender, assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 
 export type CreateAwardCriterionCommand = Readonly<{
   organizationId: string;
@@ -25,6 +26,10 @@ export type CreateAwardCriterionCommand = Readonly<{
   weight: string;
   parentCriterionId?: string | undefined;
   displayOrder?: number | undefined;
+  lotId?: string | undefined;
+  type?: AwardCriterionType | undefined;
+  scoringMethod?: string | undefined;
+  eliminationThreshold?: string | undefined;
 }>;
 
 @Injectable()
@@ -34,6 +39,7 @@ export class CreateAwardCriterionUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    @Inject(TENDER_LOT_REPOSITORY) private readonly lotRepository: TenderLotRepository,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
@@ -41,6 +47,7 @@ export class CreateAwardCriterionUseCase {
     assertHasTenderPermission(command.actorRole, TenderPermission.Update);
 
     await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
+    await assertLotBelongsToTender(this.lotRepository, command);
 
     const criterion = AwardCriterion.create({
       id: this.idGenerator.generate(),
@@ -51,6 +58,10 @@ export class CreateAwardCriterionUseCase {
       weight: command.weight,
       parentCriterionId: command.parentCriterionId,
       displayOrder: command.displayOrder,
+      lotId: command.lotId,
+      type: command.type,
+      scoringMethod: command.scoringMethod,
+      eliminationThreshold: command.eliminationThreshold,
       occurredAt: this.clock.now(),
     });
 

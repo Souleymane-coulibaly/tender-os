@@ -1,5 +1,6 @@
 import type { Alert } from "../domain/alert.entity";
 import type { AwardCriterion } from "../domain/award-criterion.entity";
+import type { Buyer } from "../domain/buyer.entity";
 import type { ChecklistItem } from "../domain/checklist-item.entity";
 import type { Milestone } from "../domain/milestone.entity";
 import type { RequestedDocument } from "../domain/requested-document.entity";
@@ -14,9 +15,28 @@ export type TenderSummary = {
   title: string;
   reference?: string | undefined;
   buyerName?: string | undefined;
+  buyerId?: string | undefined;
   description?: string | undefined;
   publicationDate?: string | undefined;
   submissionDeadline?: string | undefined;
+  submissionDeadlineTimezone?: string | undefined;
+  questionsDeadline?: string | undefined;
+  visitDate?: string | undefined;
+  visitMandatory?: boolean | undefined;
+  contractDurationMonths?: number | undefined;
+  renewalDurationMonths?: number | undefined;
+  renewalCount?: number | undefined;
+  estimatedStartDate?: string | undefined;
+  executionLocation?: string | undefined;
+  geographicZone?: string | undefined;
+  isFrameworkAgreement?: boolean | undefined;
+  awardType?: string | undefined;
+  variantsAllowed?: boolean | undefined;
+  pseAllowed?: boolean | undefined;
+  electronicResponseMandatory?: boolean | undefined;
+  signatureRequired?: boolean | undefined;
+  submissionPlatformUrl?: string | undefined;
+  internalNotes?: string | undefined;
   procedureType?: string | undefined;
   marketType?: string | undefined;
   country?: string | undefined;
@@ -25,6 +45,8 @@ export type TenderSummary = {
   externalReference?: string | undefined;
   sourceUrl?: string | undefined;
   estimatedAmount?: string | undefined;
+  minimumAmount?: string | undefined;
+  maximumAmount?: string | undefined;
   currency?: string | undefined;
   internalOwnerId?: string | undefined;
   status: string;
@@ -44,9 +66,28 @@ export function toTenderSummary(tender: Tender): TenderSummary {
     title: tender.title,
     reference: tender.reference,
     buyerName: tender.buyerName,
+    buyerId: tender.buyerId,
     description: tender.description,
     publicationDate: tender.publicationDate?.toISOString(),
     submissionDeadline: tender.submissionDeadline?.toISOString(),
+    submissionDeadlineTimezone: tender.submissionDeadlineTimezone,
+    questionsDeadline: tender.questionsDeadline?.toISOString(),
+    visitDate: tender.visitDate?.toISOString(),
+    visitMandatory: tender.visitMandatory,
+    contractDurationMonths: tender.contractDurationMonths,
+    renewalDurationMonths: tender.renewalDurationMonths,
+    renewalCount: tender.renewalCount,
+    estimatedStartDate: tender.estimatedStartDate?.toISOString(),
+    executionLocation: tender.executionLocation,
+    geographicZone: tender.geographicZone,
+    isFrameworkAgreement: tender.isFrameworkAgreement,
+    awardType: tender.awardType,
+    variantsAllowed: tender.variantsAllowed,
+    pseAllowed: tender.pseAllowed,
+    electronicResponseMandatory: tender.electronicResponseMandatory,
+    signatureRequired: tender.signatureRequired,
+    submissionPlatformUrl: tender.submissionPlatformUrl,
+    internalNotes: tender.internalNotes,
     procedureType: tender.procedureType,
     marketType: tender.marketType,
     country: tender.country,
@@ -55,6 +96,8 @@ export function toTenderSummary(tender: Tender): TenderSummary {
     externalReference: tender.externalReference,
     sourceUrl: tender.sourceUrl,
     estimatedAmount: tender.estimatedAmount,
+    minimumAmount: tender.minimumAmount,
+    maximumAmount: tender.maximumAmount,
     currency: tender.currency,
     internalOwnerId: tender.internalOwnerId,
     status: tender.status,
@@ -67,6 +110,52 @@ export function toTenderSummary(tender: Tender): TenderSummary {
   };
 }
 
+export type BuyerSummary = {
+  id: string;
+  organizationId: string;
+  name: string;
+  legalName?: string | undefined;
+  identifier?: string | undefined;
+  siret?: string | undefined;
+  addressLine?: string | undefined;
+  postalCode?: string | undefined;
+  city?: string | undefined;
+  country?: string | undefined;
+  buyerType?: string | undefined;
+  contactName?: string | undefined;
+  contactEmail?: string | undefined;
+  contactPhone?: string | undefined;
+  profileUrl?: string | undefined;
+  notes?: string | undefined;
+  archivedAt?: string | undefined;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function toBuyerSummary(buyer: Buyer): BuyerSummary {
+  return {
+    id: buyer.id,
+    organizationId: buyer.organizationId,
+    name: buyer.name,
+    legalName: buyer.legalName,
+    identifier: buyer.identifier,
+    siret: buyer.siret,
+    addressLine: buyer.addressLine,
+    postalCode: buyer.postalCode,
+    city: buyer.city,
+    country: buyer.country,
+    buyerType: buyer.buyerType,
+    contactName: buyer.contactName,
+    contactEmail: buyer.contactEmail,
+    contactPhone: buyer.contactPhone,
+    profileUrl: buyer.profileUrl,
+    notes: buyer.notes,
+    archivedAt: buyer.archivedAt?.toISOString(),
+    createdAt: buyer.createdAt.toISOString(),
+    updatedAt: buyer.updatedAt.toISOString(),
+  };
+}
+
 export type TenderLotSummary = {
   id: string;
   tenderId: string;
@@ -76,6 +165,22 @@ export type TenderLotSummary = {
   estimatedAmount?: string | undefined;
   currency?: string | undefined;
   displayOrder: number;
+  code?: string | undefined;
+  cpvMain?: string | undefined;
+  cpvSecondary: string[];
+  executionLocation?: string | undefined;
+  durationMonths?: number | undefined;
+  estimatedStartDate?: string | undefined;
+  minimumAmount?: string | undefined;
+  maximumAmount?: string | undefined;
+  selectedForResponse: boolean;
+  soloAllowed: boolean;
+  groupAllowed: boolean;
+  variantsAllowed?: boolean | undefined;
+  pseAllowed?: boolean | undefined;
+  specificVisitRequired?: boolean | undefined;
+  specificVisitDate?: string | undefined;
+  internalNotes?: string | undefined;
   createdAt: string;
   updatedAt: string;
 };
@@ -90,6 +195,22 @@ export function toTenderLotSummary(lot: TenderLot): TenderLotSummary {
     estimatedAmount: lot.estimatedAmount,
     currency: lot.currency,
     displayOrder: lot.displayOrder,
+    code: lot.code,
+    cpvMain: lot.cpvMain,
+    cpvSecondary: lot.cpvSecondary,
+    executionLocation: lot.executionLocation,
+    durationMonths: lot.durationMonths,
+    estimatedStartDate: lot.estimatedStartDate?.toISOString(),
+    minimumAmount: lot.minimumAmount,
+    maximumAmount: lot.maximumAmount,
+    selectedForResponse: lot.selectedForResponse,
+    soloAllowed: lot.soloAllowed,
+    groupAllowed: lot.groupAllowed,
+    variantsAllowed: lot.variantsAllowed,
+    pseAllowed: lot.pseAllowed,
+    specificVisitRequired: lot.specificVisitRequired,
+    specificVisitDate: lot.specificVisitDate?.toISOString(),
+    internalNotes: lot.internalNotes,
     createdAt: lot.createdAt.toISOString(),
     updatedAt: lot.updatedAt.toISOString(),
   };
@@ -135,6 +256,11 @@ export type AwardCriterionSummary = {
   weight: string;
   parentCriterionId?: string | undefined;
   displayOrder: number;
+  lotId?: string | undefined;
+  type?: string | undefined;
+  scoringMethod?: string | undefined;
+  eliminationThreshold?: string | undefined;
+  status: string;
 };
 
 export function toAwardCriterionSummary(criterion: AwardCriterion): AwardCriterionSummary {
@@ -146,6 +272,11 @@ export function toAwardCriterionSummary(criterion: AwardCriterion): AwardCriteri
     weight: criterion.weight,
     parentCriterionId: criterion.parentCriterionId,
     displayOrder: criterion.displayOrder,
+    lotId: criterion.lotId,
+    type: criterion.type,
+    scoringMethod: criterion.scoringMethod,
+    eliminationThreshold: criterion.eliminationThreshold,
+    status: criterion.status,
   };
 }
 
@@ -161,6 +292,11 @@ export type RequestedDocumentSummary = {
   status: string;
   documentId?: string | undefined;
   displayOrder: number;
+  isEliminatory: boolean;
+  lotId?: string | undefined;
+  requestedFormat?: string | undefined;
+  signatureRequired: boolean;
+  buyerProvidedTemplate: boolean;
 };
 
 export function toRequestedDocumentSummary(document: RequestedDocument): RequestedDocumentSummary {
@@ -176,6 +312,11 @@ export function toRequestedDocumentSummary(document: RequestedDocument): Request
     status: document.status,
     documentId: document.documentId,
     displayOrder: document.displayOrder,
+    isEliminatory: document.isEliminatory,
+    lotId: document.lotId,
+    requestedFormat: document.requestedFormat,
+    signatureRequired: document.signatureRequired,
+    buyerProvidedTemplate: document.buyerProvidedTemplate,
   };
 }
 
@@ -189,6 +330,10 @@ export type MilestoneSummary = {
   status: string;
   responsibleUserId?: string | undefined;
   overdue: boolean;
+  timezone?: string | undefined;
+  lotId?: string | undefined;
+  mandatory: boolean;
+  completedAt?: string | undefined;
 };
 
 export function toMilestoneSummary(milestone: Milestone, now: Date): MilestoneSummary {
@@ -202,6 +347,10 @@ export function toMilestoneSummary(milestone: Milestone, now: Date): MilestoneSu
     status: milestone.status,
     responsibleUserId: milestone.responsibleUserId,
     overdue: milestone.isOverdue(now),
+    timezone: milestone.timezone,
+    lotId: milestone.lotId,
+    mandatory: milestone.mandatory,
+    completedAt: milestone.completedAt?.toISOString(),
   };
 }
 
@@ -216,6 +365,11 @@ export type RiskSummary = {
   mitigation?: string | undefined;
   assignedTo?: string | undefined;
   resolvedAt?: string | undefined;
+  category?: string | undefined;
+  probability?: string | undefined;
+  impact?: string | undefined;
+  lotId?: string | undefined;
+  origin: string;
 };
 
 export function toRiskSummary(risk: Risk): RiskSummary {
@@ -230,6 +384,11 @@ export function toRiskSummary(risk: Risk): RiskSummary {
     mitigation: risk.mitigation,
     assignedTo: risk.assignedTo,
     resolvedAt: risk.resolvedAt?.toISOString(),
+    category: risk.category,
+    probability: risk.probability,
+    impact: risk.impact,
+    lotId: risk.lotId,
+    origin: risk.origin,
   };
 }
 

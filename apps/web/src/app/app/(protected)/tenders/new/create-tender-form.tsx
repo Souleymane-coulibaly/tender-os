@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { createTenderAction, type FormActionState } from "../../../actions";
 import type { ClientAccountSummary } from "../../../../../lib/client-portfolio-types";
+import { BuyerQuickCreateForm } from "../buyer-quick-create-form";
 import {
   DEFAULT_TENDER_COUNTRY,
   DEFAULT_TENDER_CURRENCY,
@@ -17,11 +18,12 @@ import {
   TENDER_LANGUAGES,
   TENDER_LANGUAGE_LABELS,
   TENDER_SOURCE_LABELS,
+  type Buyer,
 } from "../../../../../lib/tenders-types";
 
 const INITIAL_STATE: FormActionState = {};
 
-export function CreateTenderForm({ clients }: { clients: ClientAccountSummary[] }) {
+export function CreateTenderForm({ clients, buyers }: { clients: ClientAccountSummary[]; buyers: Buyer[] }) {
   const [state, formAction, isPending] = useActionState(createTenderAction, INITIAL_STATE);
 
   return (
@@ -61,9 +63,24 @@ export function CreateTenderForm({ clients }: { clients: ClientAccountSummary[] 
 
       <div className="flex flex-col gap-1">
         <label htmlFor="buyerName" className="text-sm font-medium text-neutral-700">
-          Acheteur
+          Acheteur (texte libre)
         </label>
         <input id="buyerName" name="buyerName" type="text" className="rounded border border-neutral-300 px-3 py-2 text-sm" />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="buyerId" className="text-sm font-medium text-neutral-700">
+          Acheteur (fiche structuree)
+        </label>
+        <select id="buyerId" name="buyerId" defaultValue="" className="rounded border border-neutral-300 px-3 py-2 text-sm">
+          <option value="">— Aucun —</option>
+          {buyers.map((buyer) => (
+            <option key={buyer.id} value={buyer.id}>
+              {buyer.name}
+            </option>
+          ))}
+        </select>
+        <BuyerQuickCreateForm />
       </div>
 
       <div className="grid grid-cols-2 gap-4">

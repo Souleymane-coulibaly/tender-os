@@ -15,6 +15,10 @@ function toDomain(record: MilestoneRecord): Milestone {
     type: record.type as MilestoneType,
     status: record.status as MilestoneStatus,
     responsibleUserId: record.responsibleUserId ?? undefined,
+    timezone: record.timezone ?? undefined,
+    lotId: record.lotId ?? undefined,
+    mandatory: record.mandatory,
+    completedAt: record.completedAt ?? undefined,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   });
@@ -31,6 +35,10 @@ function toPersistence(milestone: Milestone) {
     type: milestone.type,
     status: milestone.status,
     responsibleUserId: milestone.responsibleUserId ?? null,
+    timezone: milestone.timezone ?? null,
+    lotId: milestone.lotId ?? null,
+    mandatory: milestone.mandatory,
+    completedAt: milestone.completedAt ?? null,
     createdAt: milestone.createdAt,
     updatedAt: milestone.updatedAt,
   };

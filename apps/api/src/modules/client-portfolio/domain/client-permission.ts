@@ -18,6 +18,11 @@ export const ClientPermission = {
   CreateTender: "CLIENT_CREATE_TENDER",
   ReadTender: "CLIENT_READ_TENDER",
   UpdateTender: "CLIENT_UPDATE_TENDER",
+  /** V2 Sprint 3 §4/§16 — "un changement d'entreprise candidate doit être... fortement contrôlé" :
+   *  palier distinct et plus restreint qu'`UpdateTender` (même motif que `ReadCompanyBanking` vs
+   *  `ReadCompanyProfile`), vérifié à la fois sur le ClientAccount ACTUEL et sur le NOUVEAU
+   *  ClientAccount cible (voir `ChangeTenderClientAccountUseCase`) — jamais délégué au CONTRIBUTOR. */
+  ChangeTenderCandidate: "CLIENT_CHANGE_TENDER_CANDIDATE",
   ReadDocuments: "CLIENT_READ_DOCUMENTS",
   ReadAnalysis: "CLIENT_READ_ANALYSIS",
   ReadKnowledge: "CLIENT_READ_KNOWLEDGE",
@@ -118,6 +123,7 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.CreateTender,
   ClientPermission.ReadTender,
   ClientPermission.UpdateTender,
+  ClientPermission.ChangeTenderCandidate,
   ClientPermission.ReadDocuments,
   ClientPermission.ReadAnalysis,
   ClientPermission.ReadKnowledge,
@@ -173,6 +179,9 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.CreateTender,
     ClientPermission.ReadTender,
     ClientPermission.UpdateTender,
+    /** V2 Sprint 3 — réservé au CLIENT_MANAGER (et au palier organisation ci-dessus), jamais au
+     *  CONTRIBUTOR ni au VIEWER (mission §4 "fortement contrôlé"). */
+    ClientPermission.ChangeTenderCandidate,
     ClientPermission.ReadDocuments,
     ClientPermission.ReadAnalysis,
     ClientPermission.ReadKnowledge,

@@ -5,6 +5,7 @@ import { EditTenderForm } from "./edit-tender-form";
 
 vi.mock("../../../actions", () => ({
   updateTenderAction: vi.fn(() => vi.fn(async (_prevState: unknown, _formData: FormData) => ({}))),
+  createBuyerAction: vi.fn(() => vi.fn(async (_prevState: unknown, _formData: FormData) => ({}))),
 }));
 
 const BASE_TENDER: Tender = {
@@ -32,11 +33,11 @@ const BASE_TENDER: Tender = {
 
 describe("EditTenderForm", () => {
   it("preloads every existing value, including the newly added business fields", () => {
-    render(<EditTenderForm tender={BASE_TENDER} />);
+    render(<EditTenderForm tender={BASE_TENDER} buyers={[]} />);
 
     expect(screen.getByLabelText("Titre *")).toHaveValue(BASE_TENDER.title);
     expect(screen.getByLabelText("Reference")).toHaveValue("AO-2026-001");
-    expect(screen.getByLabelText("Acheteur")).toHaveValue("Mairie de Lyon");
+    expect(screen.getByLabelText("Acheteur (texte libre — compatibilite V1)")).toHaveValue("Mairie de Lyon");
     expect(screen.getByLabelText("Type de procedure")).toHaveValue("OPEN");
     expect(screen.getByLabelText("Type de marche *")).toHaveValue("PUBLIC");
     expect(screen.getByLabelText("Montant estime")).toHaveValue("50000");
@@ -63,7 +64,7 @@ describe("EditTenderForm", () => {
       version: 1,
     };
 
-    render(<EditTenderForm tender={legacyTender} />);
+    render(<EditTenderForm tender={legacyTender} buyers={[]} />);
 
     expect(screen.getByLabelText("Pays *")).toHaveValue("FR");
     expect(screen.getByLabelText("Langue *")).toHaveValue("fr");
@@ -77,7 +78,7 @@ describe("EditTenderForm", () => {
     // Correction securite : la source n'est jamais soumise depuis ce formulaire (voir
     // actions.ts) — aucun input, meme cache, ne doit porter ce nom, pour qu'aucune valeur
     // falsifiee ne puisse jamais etre envoyee au serveur.
-    const { container } = render(<EditTenderForm tender={BASE_TENDER} />);
+    const { container } = render(<EditTenderForm tender={BASE_TENDER} buyers={[]} />);
 
     expect(screen.getByLabelText("Source")).toBeDisabled();
     expect(container.querySelector('[name="source"]')).toBeNull();

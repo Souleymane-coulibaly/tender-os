@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import { AssertClientAccessUseCase } from "../../../client-portfolio";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { TenderPermission } from "../../domain/tender-permission";
 import { parseTenderStatus } from "../../domain/tender-status";
 import { toTenderSummary, type TenderSummary } from "../dtos";
@@ -34,6 +35,7 @@ export class ChangeTenderStatusUseCase {
     private readonly statusHistoryRepository: TenderStatusHistoryRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
@@ -68,6 +70,19 @@ export class ChangeTenderStatusUseCase {
       resourceId: tender.id.value,
       requestId: command.requestId,
       metadata: { previousStatus, newStatus: nextStatus },
+    });
+
+    await this.outboxWriter.write({
+      organizationId: command.organizationId,
+      events: [
+        {
+          eventType: "TenderStatusChanged",
+          aggregateType: "Tender",
+          aggregateId: tender.id.value,
+          payload: { tenderId: tender.id.value, previousStatus, newStatus: nextStatus },
+          occurredAt,
+        },
+      ],
     });
 
     return toTenderSummary(tender);

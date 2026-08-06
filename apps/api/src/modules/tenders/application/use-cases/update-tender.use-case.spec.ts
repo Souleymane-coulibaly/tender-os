@@ -5,8 +5,10 @@ import { TenderId } from "../../domain/tender-id.value-object";
 import { Tender } from "../../domain/tender.aggregate";
 import {
   createClientPortfolioTestFixture,
+  FakeOutboxWriter,
   FixedClock,
   InMemoryAuditLogWriter,
+  InMemoryBuyerRepository,
   InMemoryTenderRepository,
 } from "../../test-support/fakes";
 import { UpdateTenderUseCase } from "./update-tender.use-case";
@@ -21,7 +23,14 @@ describe("UpdateTenderUseCase", () => {
     tenderRepository = new InMemoryTenderRepository();
     auditLogWriter = new InMemoryAuditLogWriter();
     clientPortfolio = await createClientPortfolioTestFixture("org-1");
-    useCase = new UpdateTenderUseCase(tenderRepository, auditLogWriter, new FixedClock(), clientPortfolio.assertClientAccessUseCase);
+    useCase = new UpdateTenderUseCase(
+      tenderRepository,
+      new InMemoryBuyerRepository(),
+      auditLogWriter,
+      new FixedClock(),
+      new FakeOutboxWriter(),
+      clientPortfolio.assertClientAccessUseCase,
+    );
 
     await tenderRepository.seed(
       Tender.create({

@@ -8,9 +8,10 @@ import { Milestone, type MilestoneType } from "../../domain/milestone.entity";
 import { TenderPermission } from "../../domain/tender-permission";
 import { toMilestoneSummary, type MilestoneSummary } from "../dtos";
 import { MILESTONE_REPOSITORY, type MilestoneRepository } from "../ports/milestone.repository";
+import { TENDER_LOT_REPOSITORY, type TenderLotRepository } from "../ports/tender-lot.repository";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
-import { assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
+import { assertLotBelongsToTender, assertTenderMutationAllowed } from "../policies/tender-mutation-client-access.helper";
 
 export type CreateMilestoneCommand = Readonly<{
   organizationId: string;
@@ -22,6 +23,9 @@ export type CreateMilestoneCommand = Readonly<{
   date: string;
   type: MilestoneType;
   responsibleUserId?: string | undefined;
+  timezone?: string | undefined;
+  lotId?: string | undefined;
+  mandatory?: boolean | undefined;
 }>;
 
 @Injectable()
@@ -31,6 +35,7 @@ export class CreateMilestoneUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    @Inject(TENDER_LOT_REPOSITORY) private readonly lotRepository: TenderLotRepository,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
@@ -38,6 +43,7 @@ export class CreateMilestoneUseCase {
     assertHasTenderPermission(command.actorRole, TenderPermission.Update);
 
     await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
+    await assertLotBelongsToTender(this.lotRepository, command);
 
     const now = this.clock.now();
 
@@ -50,6 +56,9 @@ export class CreateMilestoneUseCase {
       date: new Date(command.date),
       type: command.type,
       responsibleUserId: command.responsibleUserId,
+      timezone: command.timezone,
+      lotId: command.lotId,
+      mandatory: command.mandatory,
       occurredAt: now,
     });
 

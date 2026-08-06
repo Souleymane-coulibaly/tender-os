@@ -178,6 +178,9 @@ describe("Tenders — isolation HTTP inter-client au sein d'une même organisati
     await prisma.tenderLot.deleteMany({ where: { tenderId: { in: [tenderAId, tenderBId] } } });
     await prisma.tenderChecklistItem.deleteMany({ where: { tenderId: { in: [tenderAId, tenderBId] } } });
     await prisma.tender.deleteMany({ where: { id: { in: [tenderAId, tenderBId] } } });
+    // V2 Sprint 3 — CreateTenderUseCase/CreateTenderLotUseCase écrivent désormais dans l'Outbox
+    // (TenderCreated/TenderLotCreated) : à supprimer avant l'organisation, sinon FK violée.
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: orgId } });
     await prisma.clientAssignment.deleteMany({ where: { organizationId: orgId } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: orgId } });
     await prisma.auditLog.deleteMany({ where: { organizationId: orgId } });

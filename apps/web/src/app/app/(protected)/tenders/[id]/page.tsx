@@ -7,12 +7,15 @@ import { fetchDceSectionData } from "../../../dce-actions";
 import { canDeleteDceDocument, canImportOrReplaceDceDocument, type DceDocumentSummary, type DceSummary } from "../../../../../lib/dce-types";
 import type { TenderCockpit } from "../../../../../lib/cockpit-types";
 import { canUploadOrEditDocument, type DocumentSummary } from "../../../../../lib/documents-types";
+import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../../lib/client-portfolio-types";
 import {
   TENDER_STATUS_LABELS,
+  canChangeTenderCandidate,
   canEditTenderDetails,
   canManageTenderLots,
   type Alert,
   type AwardCriterion,
+  type Buyer,
   type ChecklistItem,
   type Milestone,
   type Readiness,
@@ -21,14 +24,17 @@ import {
   type StatusHistoryEntry,
   type Tender,
   type TenderLot,
+  type TenderProfile,
 } from "../../../../../lib/tenders-types";
 import { ApiErrorState } from "../../api-error-state";
 import { TenderStatusBadge } from "../tender-status-badge";
 import { AlertsSection } from "./alerts-section";
 import { AnalysisSection } from "./analysis-section";
 import { ArchiveButton } from "./archive-button";
+import { CandidateSection } from "./candidate-section";
 import { ChecklistSection } from "./checklist-section";
 import { CockpitSection } from "./cockpit-section";
+import { CompletenessSection } from "./completeness-section";
 import { CriteriaSection } from "./criteria-section";
 import { DceSection } from "./dce-section";
 import { DocumentsSection } from "./documents-section";
@@ -36,6 +42,7 @@ import { EditTenderForm } from "./edit-tender-form";
 import { LotsSection } from "./lots-section";
 import { MilestonesSection } from "./milestones-section";
 import { RequestedDocumentsSection } from "./requested-documents-section";
+import { RestoreButton } from "./restore-button";
 import { RisksSection } from "./risks-section";
 import { StatusChangeForm } from "./status-change-form";
 
@@ -73,27 +80,52 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   let analysisCapabilities: AnalysisCapability[];
   let role: string | undefined;
   let cockpit: TenderCockpit;
+  let profile: TenderProfile;
+  let buyers: Buyer[];
+  let accessibleClients: ClientAccountSummary[];
 
   try {
-    [tender, lots, checklistItems, criteria, requestedDocuments, milestones, risks, alerts, readiness, history, documents, dceSection, analysisData, analysisCapabilities, role, cockpit] =
-      await Promise.all([
-        appApiFetch<Tender>(`/api/v1/tenders/${id}`),
-        appApiFetch<TenderLot[]>(`/api/v1/tenders/${id}/lots`),
-        appApiFetch<ChecklistItem[]>(`/api/v1/tenders/${id}/checklist`),
-        appApiFetch<AwardCriterion[]>(`/api/v1/tenders/${id}/criteria`),
-        appApiFetch<RequestedDocument[]>(`/api/v1/tenders/${id}/requested-documents`),
-        appApiFetch<Milestone[]>(`/api/v1/tenders/${id}/milestones`),
-        appApiFetch<Risk[]>(`/api/v1/tenders/${id}/risks`),
-        appApiFetch<Alert[]>(`/api/v1/tenders/${id}/alerts`),
-        appApiFetch<Readiness>(`/api/v1/tenders/${id}/readiness`),
-        appApiFetch<StatusHistoryEntry[]>(`/api/v1/tenders/${id}/history`),
-        appApiFetch<DocumentSummary[]>(`/api/v1/tenders/${id}/documents`),
-        fetchDceSectionData(id),
-        fetchAnalysisSectionData(id),
-        fetchAnalysisCapabilities(id),
-        getCurrentMembershipRole(),
-        appApiFetch<TenderCockpit>(`/api/v1/tenders/${id}/cockpit`),
-      ]);
+    [
+      tender,
+      lots,
+      checklistItems,
+      criteria,
+      requestedDocuments,
+      milestones,
+      risks,
+      alerts,
+      readiness,
+      history,
+      documents,
+      dceSection,
+      analysisData,
+      analysisCapabilities,
+      role,
+      cockpit,
+      profile,
+      buyers,
+      accessibleClients,
+    ] = await Promise.all([
+      appApiFetch<Tender>(`/api/v1/tenders/${id}`),
+      appApiFetch<TenderLot[]>(`/api/v1/tenders/${id}/lots`),
+      appApiFetch<ChecklistItem[]>(`/api/v1/tenders/${id}/checklist`),
+      appApiFetch<AwardCriterion[]>(`/api/v1/tenders/${id}/criteria`),
+      appApiFetch<RequestedDocument[]>(`/api/v1/tenders/${id}/requested-documents`),
+      appApiFetch<Milestone[]>(`/api/v1/tenders/${id}/milestones`),
+      appApiFetch<Risk[]>(`/api/v1/tenders/${id}/risks`),
+      appApiFetch<Alert[]>(`/api/v1/tenders/${id}/alerts`),
+      appApiFetch<Readiness>(`/api/v1/tenders/${id}/readiness`),
+      appApiFetch<StatusHistoryEntry[]>(`/api/v1/tenders/${id}/history`),
+      appApiFetch<DocumentSummary[]>(`/api/v1/tenders/${id}/documents`),
+      fetchDceSectionData(id),
+      fetchAnalysisSectionData(id),
+      fetchAnalysisCapabilities(id),
+      getCurrentMembershipRole(),
+      appApiFetch<TenderCockpit>(`/api/v1/tenders/${id}/cockpit`),
+      appApiFetch<TenderProfile>(`/api/v1/tenders/${id}/profile`),
+      appApiFetch<Buyer[]>("/api/v1/buyers"),
+      appApiFetch<ClientPortfolioPage<ClientAccountSummary>>("/api/v1/clients?limit=100&status=ACTIVE").then((page) => page.items),
+    ]);
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
@@ -113,7 +145,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         </div>
         <div className="flex items-center gap-3">
           <TenderStatusBadge status={tender.status} />
-          {tender.status !== "ARCHIVED" ? <ArchiveButton tenderId={tender.id} /> : null}
+          {tender.status !== "ARCHIVED" ? <ArchiveButton tenderId={tender.id} /> : <RestoreButton tenderId={tender.id} />}
         </div>
       </div>
 
@@ -149,6 +181,36 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
 
       <CockpitSection tenderId={tender.id} cockpit={cockpit} />
 
+      <CompletenessSection completeness={profile.completeness} />
+
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <CandidateSection
+          tenderId={tender.id}
+          status={tender.status}
+          currentClientAccountId={tender.clientAccountId}
+          currentClientName={profile.candidate.name}
+          accessibleClients={accessibleClients}
+          canChange={canChangeTenderCandidate(role)}
+        />
+        <section className="rounded border border-neutral-200 p-4">
+          <h2 className="text-sm font-semibold text-neutral-700">Acheteur</h2>
+          {profile.buyer ? (
+            <div className="mt-1 text-sm text-neutral-900">
+              <p className="font-medium">{profile.buyer.name}</p>
+              {profile.buyer.city ? <p className="text-xs text-neutral-600">{profile.buyer.city}</p> : null}
+              {profile.buyer.siret ? <p className="text-xs text-neutral-600">SIRET : {profile.buyer.siret}</p> : null}
+            </div>
+          ) : (
+            <p className="mt-1 text-sm text-neutral-500">
+              {tender.buyerName ?? "Aucun acheteur structure rattache."}
+            </p>
+          )}
+          <p className="mt-2 text-xs text-neutral-500">
+            Modifiable depuis « Modifier les informations de l&apos;appel d&apos;offres » ci-dessous.
+          </p>
+        </section>
+      </div>
+
       {tender.status !== "ARCHIVED" ? <StatusChangeForm tenderId={tender.id} status={tender.status} /> : null}
 
       {canEditTenderDetails(role) ? (
@@ -157,7 +219,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
             Modifier les informations de l&apos;appel d&apos;offres
           </summary>
           <div className="mt-4">
-            <EditTenderForm tender={tender} />
+            <EditTenderForm tender={tender} buyers={buyers} />
           </div>
         </details>
       ) : null}
