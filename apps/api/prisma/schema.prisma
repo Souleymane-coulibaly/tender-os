@@ -645,8 +645,9 @@ model Document {
   /// exposé dans les listes normales, protège aussi le téléchargement (conception §F).
   deletedAt  DateTime? @map("deleted_at")
 
-  versions                    DocumentVersion[]           @relation("AllVersions")
+  versions                    DocumentVersion[]                  @relation("AllVersions")
   tenderAssociations          DocumentTenderAssociation[]
+  clientAccountAssociations   DocumentClientAccountAssociation[]
   requestedDocumentReferences TenderRequestedDocument[]
   dceDocuments                DceDocument[]
   documentExtraction          DocumentExtraction?
@@ -1692,6 +1693,17 @@ model ClientAccount {
   deliverableTemplates   DeliverableTemplate[]
   documentThemes         DocumentTheme[]
   administrativeDossiers AdministrativeDossier[]
+
+  // V2 Sprint 2 — satellites additifs "Entreprise candidate" (aucun champ de ClientAccount modifié).
+  legalIdentity        CompanyLegalIdentity?
+  representatives      CompanyRepresentative[]
+  bankAccounts         CompanyBankAccount[]
+  insurances           CompanyInsurance[]
+  certifications       CompanyCertification[]
+  references           CompanyReference[]
+  humanResources       CompanyHumanResource[]
+  materialResources    CompanyMaterialResource[]
+  documentAssociations DocumentClientAccountAssociation[]
 
   @@unique([id, organizationId])
   @@unique([organizationId, nameNormalized])
@@ -3937,6 +3949,12 @@ model SubcontractorDeclaration {
   subcontractorLegalIdentifier String? @map("subcontractor_legal_identifier") @db.VarChar(80)
   servicesDescription          String  @map("services_description")
 
+  /// V2 Sprint 2 — relation FUTURE nullable vers le répertoire réutilisable (mission §6), non
+  /// exploitée ce sprint (aucun DC4 ni logique de sélection modifiés) : jamais de FK stricte
+  /// inter-module, référence dénormalisée en lecture seule comme les autres colonnes *Id de ce
+  /// modèle (`administrativeDocumentId`).
+  subcontractorProfileId String? @map("subcontractor_profile_id") @db.Uuid
+
   amountValue       Decimal @map("amount_value") @db.Decimal(14, 2)
   amountCurrency    String  @map("amount_currency") @db.VarChar(3)
   percentageOfTotal Float?  @map("percentage_of_total")
@@ -4237,11 +4255,11 @@ model OutboxEvent {
   correlationId String?  @map("correlation_id") @db.VarChar(100)
 
   /// PENDING | PROCESSING | PUBLISHED | FAILED | DEAD_LETTER — CHECK (migration).
-  status       String   @default("PENDING") @db.VarChar(16)
-  attemptCount Int      @default(0) @map("attempt_count")
-  availableAt  DateTime @default(now()) @map("available_at")
+  status       String    @default("PENDING") @db.VarChar(16)
+  attemptCount Int       @default(0) @map("attempt_count")
+  availableAt  DateTime  @default(now()) @map("available_at")
   publishedAt  DateTime? @map("published_at")
-  lastError    String?  @map("last_error")
+  lastError    String?   @map("last_error")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -4264,7 +4282,7 @@ model ProcessedEvent {
   outboxEventId String      @map("outbox_event_id") @db.Uuid
   outboxEvent   OutboxEvent @relation(fields: [outboxEventId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
-  consumerName String @map("consumer_name") @db.VarChar(100)
+  consumerName String  @map("consumer_name") @db.VarChar(100)
   result       String? @db.VarChar(20)
 
   processedAt DateTime @default(now()) @map("processed_at")
@@ -4316,7 +4334,7 @@ model AiSuggestion {
 
   /// Validé par un schéma Zod spécifique à (entityType, fieldName) avant toute persistance — jamais un
   /// JSON libre non validé (mission Sprint 1 §3, AI_PATTERNS.md §41 "Sortie IA non validée par schéma...").
-  proposedValue Json   @map("proposed_value")
+  proposedValue Json  @map("proposed_value")
   /// Score continu 0..1, cohérent avec le ProvenanceSchema déjà en production (module analysis) — jamais
   /// un enum LOW/MEDIUM/HIGH, pour éviter un second système de représentation de la confiance IA.
   confidence    Float
@@ -4355,4 +4373,532 @@ model AiSuggestion {
   @@index([organizationId, entityType, entityId])
   @@index([organizationId, status])
   @@map("ai_suggestions")
+}
+
+// ============================================================================
+// V2 Sprint 2 — Entreprise candidate (satellites additifs de ClientAccount) et
+// répertoire organisationnel de sous-traitants. ClientAccount reste la racine
+// technique inchangée ; "Entreprise candidate" est un vocabulaire fonctionnel/UI.
+// ============================================================================
+
+/// Identité légale — one-to-one avec ClientAccount. Aucune valeur inventée : tous les champs sont
+/// nullables (mission §4.1 "autoriser les champs partiellement renseignés"), la complétude est
+/// signalée par `GetCompanyProfileUseCase`, jamais bloquée à la création.
+model CompanyLegalIdentity {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  legalName            String?   @map("legal_name") @db.VarChar(240)
+  tradeName            String?   @map("trade_name") @db.VarChar(240)
+  siren                String?   @db.VarChar(9)
+  siretPrincipal       String?   @map("siret_principal") @db.VarChar(14)
+  vatNumber            String?   @map("vat_number") @db.VarChar(20)
+  legalForm            String?   @map("legal_form") @db.VarChar(120)
+  shareCapitalAmount   Decimal?  @map("share_capital_amount") @db.Decimal(14, 2)
+  shareCapitalCurrency String?   @map("share_capital_currency") @db.VarChar(3)
+  apeCode              String?   @map("ape_code") @db.VarChar(10)
+  incorporatedAt       DateTime? @map("incorporated_at")
+  rcsNumber            String?   @map("rcs_number") @db.VarChar(40)
+  rcsCity              String?   @map("rcs_city") @db.VarChar(120)
+  registrationCountry  String?   @map("registration_country") @db.VarChar(10)
+
+  /// Coordonnées (mission §4.2) — aucun modèle Address/Contact générique réutilisable trouvé dans
+  /// le code existant (audit préalable), regroupées ici plutôt que de créer un second système.
+  addressLine       String? @map("address_line") @db.VarChar(300)
+  addressComplement String? @map("address_complement") @db.VarChar(300)
+  postalCode        String? @map("postal_code") @db.VarChar(20)
+  city              String? @db.VarChar(120)
+  region            String? @db.VarChar(120)
+  country           String? @db.VarChar(10)
+  phone             String? @db.VarChar(40)
+  generalEmail      String? @map("general_email") @db.VarChar(320)
+  website           String? @db.VarChar(2048)
+
+  /// ACTIVE | ARCHIVED — CHECK (migration).
+  status String @default("ACTIVE") @db.VarChar(20)
+
+  lastValidatedAt       DateTime? @map("last_validated_at")
+  lastValidatedByUserId String?   @map("last_validated_by_user_id") @db.Uuid
+
+  createdBy String   @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@unique([clientAccountId, organizationId])
+  @@index([organizationId, siretPrincipal])
+  @@map("company_legal_identities")
+}
+
+/// Représentant/signataire/contact d'une entreprise candidate. Le pouvoir de signature réel et
+/// opposable reste porté par `SigningPower` (module administrative-dossier, scopé Tender) — ce
+/// modèle ne recrée jamais un second système de pouvoirs (mission §4.3), il décrit seulement le
+/// périmètre général déclaré au niveau entreprise via `signatureScope`/`signatureLimitations`.
+model CompanyRepresentative {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  firstName String @map("first_name") @db.VarChar(120)
+  lastName  String @map("last_name") @db.VarChar(120)
+
+  /// LEGAL_REPRESENTATIVE | SIGNATORY | ADMINISTRATIVE_CONTACT | COMMERCIAL_CONTACT |
+  /// TECHNICAL_CONTACT — CHECK (migration).
+  type     String  @db.VarChar(30)
+  jobTitle String? @map("job_title") @db.VarChar(200)
+  email    String? @db.VarChar(320)
+  phone    String? @db.VarChar(40)
+
+  /// Description libre du périmètre déclaré (type = SIGNATORY uniquement) — jamais un pouvoir
+  /// juridique opposable, voir note ci-dessus.
+  signatureScope       String? @map("signature_scope")
+  signatureLimitations String? @map("signature_limitations")
+
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  /// ACTIVE | ARCHIVED — CHECK (migration). Mission §4.3 : "aucun signataire ne doit être
+  /// sélectionné automatiquement comme signataire final d'un Tender" — ce statut ne pilote donc
+  /// aucune sélection automatique, purement informatif au niveau du profil.
+  status String @default("ACTIVE") @db.VarChar(20)
+
+  createdBy String   @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, clientAccountId])
+  @@map("company_representatives")
+}
+
+/// Compte bancaire — jamais de suppression physique si utilisé dans un document/package existant
+/// (mission §4.4) : uniquement `status = ARCHIVED`. IBAN/BIC jamais journalisés en clair, masqués
+/// en liste par le présentateur (interfaces/http), accès protégé par une permission dédiée
+/// (`ClientPermission.ReadCompanyBanking`/`ManageCompanyBanking`, distincte du profil général).
+model CompanyBankAccount {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  accountHolder String  @map("account_holder") @db.VarChar(240)
+  bankName      String? @map("bank_name") @db.VarChar(200)
+  iban          String  @db.VarChar(34)
+  bic           String? @db.VarChar(11)
+  country       String? @db.VarChar(10)
+  currency      String? @db.VarChar(3)
+
+  /// Référence dénormalisée en LECTURE SEULE vers un Document (RIB/justificatif) — jamais de FK
+  /// stricte inter-module (même motif que SubmissionProof.documentId).
+  documentId String? @map("document_id") @db.Uuid
+
+  isPrimary Boolean @default(false) @map("is_primary")
+
+  validatedAt       DateTime? @map("validated_at")
+  validatedByUserId String?   @map("validated_by_user_id") @db.Uuid
+
+  /// ACTIVE | ARCHIVED — CHECK (migration).
+  status String @default("ACTIVE") @db.VarChar(20)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, clientAccountId])
+  @@map("company_bank_accounts")
+}
+
+/// Assurance. `status` en base ne porte QUE ce que l'utilisateur décide (ACTIVE|ARCHIVED) — les
+/// états dépendants du temps (valide/bientôt expirée/expirée, mission §4.5) sont calculés à la
+/// lecture depuis `expiresAt` par `GetCompanyProfileUseCase`, jamais persistés : un champ calculable
+/// stocké deviendrait faux dès le lendemain sans job de rafraîchissement (même discipline que le
+/// score de complétude, volontairement déterministe et non stocké).
+model CompanyInsurance {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// PROFESSIONAL_LIABILITY | DECENNIAL | OPERATING_LIABILITY | SECTOR_SPECIFIC | OTHER — CHECK
+  /// (migration). Catalogue volontairement large avec échappatoire OTHER + libellé libre (mission
+  /// §4.5 "ne pas figer un catalogue trop restrictif").
+  type           String  @db.VarChar(40)
+  otherTypeLabel String? @map("other_type_label") @db.VarChar(200)
+
+  insurer          String?   @db.VarChar(200)
+  policyNumber     String?   @map("policy_number") @db.VarChar(100)
+  startDate        DateTime? @map("start_date")
+  expiresAt        DateTime? @map("expires_at")
+  coverageScope    String?   @map("coverage_scope")
+  coverageAmount   Decimal?  @map("coverage_amount") @db.Decimal(14, 2)
+  coverageCurrency String?   @map("coverage_currency") @db.VarChar(3)
+
+  documentId     String?   @map("document_id") @db.Uuid
+  lastVerifiedAt DateTime? @map("last_verified_at")
+
+  /// ACTIVE | ARCHIVED — CHECK (migration).
+  status String @default("ACTIVE") @db.VarChar(20)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, clientAccountId])
+  @@map("company_insurances")
+}
+
+/// Certification/qualification — expiration nullable (mission §4.6 "permettre les certifications
+/// sans expiration"). Même discipline que CompanyInsurance : statut temporel calculé, jamais stocké.
+model CompanyCertification {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  name       String    @db.VarChar(200)
+  issuer     String?   @db.VarChar(200)
+  number     String?   @db.VarChar(100)
+  type       String?   @db.VarChar(100)
+  scope      String?   @db.VarChar(300)
+  obtainedAt DateTime? @map("obtained_at")
+  expiresAt  DateTime? @map("expires_at")
+
+  documentId String? @map("document_id") @db.Uuid
+
+  /// ACTIVE | ARCHIVED — CHECK (migration).
+  status String @default("ACTIVE") @db.VarChar(20)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, clientAccountId])
+  @@map("company_certifications")
+}
+
+/// Référence commerciale — jamais réutilisée automatiquement (mission §4.7), préparée pour de
+/// futurs usages (mémoire technique, GO/NO-GO) qui ne sont PAS implémentés ce sprint.
+model CompanyReference {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  projectName          String    @map("project_name") @db.VarChar(300)
+  referenceClientName  String?   @map("reference_client_name") @db.VarChar(240)
+  sector               String?   @db.VarChar(120)
+  description          String?
+  startDate            DateTime? @map("start_date")
+  endDate              DateTime? @map("end_date")
+  amountValue          Decimal?  @map("amount_value") @db.Decimal(14, 2)
+  amountCurrency       String?   @map("amount_currency") @db.VarChar(3)
+  companyRole          String?   @map("company_role") @db.VarChar(200)
+  lotsOrServices       String?   @map("lots_or_services")
+  skillsOrTechnologies String?   @map("skills_or_technologies")
+  results              String?
+  contactName          String?   @map("contact_name") @db.VarChar(200)
+  contactEmail         String?   @map("contact_email") @db.VarChar(320)
+  contactPhone         String?   @map("contact_phone") @db.VarChar(40)
+
+  /// STANDARD | CONFIDENTIAL — CHECK (migration). Mission §4.7 : "une référence confidentielle ne
+  /// doit pas être exportée sans validation" — appliqué par les futurs consommateurs (export,
+  /// mémoire technique), pas encore développés ce sprint.
+  confidentiality String @default("STANDARD") @db.VarChar(20)
+
+  /// DRAFT | VALIDATED | ARCHIVED — CHECK (migration).
+  status String @default("DRAFT") @db.VarChar(20)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  documents CompanyReferenceDocument[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, clientAccountId])
+  @@map("company_references")
+}
+
+/// Documents associés à une référence (plusieurs possibles) — join dédié, distinct de
+/// `DocumentClientAccountAssociation` (mission §5 : jamais de relation polymorphe libre).
+model CompanyReferenceDocument {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  companyReferenceId String           @map("company_reference_id") @db.Uuid
+  companyReference   CompanyReference @relation(fields: [companyReferenceId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  documentId      String   @map("document_id") @db.Uuid
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([companyReferenceId, documentId])
+  @@index([organizationId, companyReferenceId])
+  @@map("company_reference_documents")
+}
+
+/// Moyens humains structurés (mission §4.8) — données agrégées par catégorie, jamais un CV
+/// individuel (couvert par la Knowledge Base existante si besoin, hors périmètre ce sprint).
+model CompanyHumanResource {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  category               String  @db.VarChar(120)
+  title                  String  @db.VarChar(200)
+  headcount              Int     @default(1)
+  qualification          String? @db.VarChar(200)
+  averageExperienceYears Int?    @map("average_experience_years")
+  skills                 String?
+  certifications         String?
+  availabilityNote       String? @map("availability_note") @db.VarChar(300)
+  location               String? @db.VarChar(200)
+
+  /// ACTIVE | ARCHIVED — CHECK (migration).
+  status String @default("ACTIVE") @db.VarChar(20)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, clientAccountId])
+  @@map("company_human_resources")
+}
+
+/// Moyens matériels structurés (mission §4.9).
+model CompanyMaterialResource {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  category        String  @db.VarChar(120)
+  name            String  @db.VarChar(240)
+  description     String?
+  quantity        Int     @default(1)
+  characteristics String?
+  location        String? @db.VarChar(200)
+
+  /// AVAILABLE | IN_USE | UNAVAILABLE — CHECK (migration).
+  availabilityStatus String  @default("AVAILABLE") @map("availability_status") @db.VarChar(30)
+  /// OWNED | LEASED — CHECK (migration), nullable.
+  ownershipType      String? @map("ownership_type") @db.VarChar(20)
+
+  documentId String? @map("document_id") @db.Uuid
+
+  /// ACTIVE | ARCHIVED — CHECK (migration).
+  status String @default("ACTIVE") @db.VarChar(20)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, clientAccountId])
+  @@map("company_material_resources")
+}
+
+/// Rattachement d'un document justificatif générique (Kbis, attestations, statuts...) à une
+/// entreprise candidate — mission §5 : DocumentTenderAssociation ne couvre que le Tender, ce join
+/// dédié et typé couvre ClientAccount, jamais une relation polymorphe libre. Les justificatifs déjà
+/// rattachés à une entité structurée (assurance/certification/banque/référence) utilisent LEUR
+/// PROPRE référence `documentId` — pas celle-ci, pour éviter toute double comptabilisation.
+model DocumentClientAccountAssociation {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  documentId String   @map("document_id") @db.Uuid
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// KBIS | TAX_CERTIFICATE | SOCIAL_CERTIFICATE | ARTICLES_OF_ASSOCIATION | OTHER — CHECK
+  /// (migration).
+  category String @db.VarChar(40)
+
+  issuedAt  DateTime? @map("issued_at")
+  expiresAt DateTime? @map("expires_at")
+
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([documentId, clientAccountId])
+  @@index([organizationId, clientAccountId])
+  @@index([organizationId, documentId])
+  @@map("document_client_account_associations")
+}
+
+/// Répertoire ORGANISATIONNEL de sous-traitants (mission §6) — réutilisable par plusieurs
+/// entreprises candidates et Tenders de la même organisation. Jamais créé automatiquement par
+/// l'IA. `organizationId` en colonne plate, FK hand-appended (migration) — même précédent que
+/// OutboxEvent/AiSuggestion (Sprint 1), aucune donnée du candidat n'est recopiée ici.
+model SubcontractorProfile {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  legalName String  @map("legal_name") @db.VarChar(240)
+  tradeName String? @map("trade_name") @db.VarChar(240)
+  siren     String? @db.VarChar(9)
+  siret     String? @db.VarChar(14)
+  vatNumber String? @map("vat_number") @db.VarChar(20)
+  legalForm String? @map("legal_form") @db.VarChar(120)
+  apeCode   String? @map("ape_code") @db.VarChar(10)
+
+  addressLine String? @map("address_line") @db.VarChar(300)
+  postalCode  String? @map("postal_code") @db.VarChar(20)
+  city        String? @db.VarChar(120)
+  country     String? @db.VarChar(10)
+
+  legalRepresentativeName String? @map("legal_representative_name") @db.VarChar(200)
+  contactEmail            String? @map("contact_email") @db.VarChar(320)
+  contactPhone            String? @map("contact_phone") @db.VarChar(40)
+
+  skills                   String?
+  domains                  String?
+  /// Résumé texte, pas de tables satellites dédiées pour les moyens du sous-traitant — réduction
+  /// de périmètre assumée (mission §6 les détaille moins que §4.8/§4.9 pour l'entreprise candidate).
+  humanResourcesSummary    String? @map("human_resources_summary")
+  materialResourcesSummary String? @map("material_resources_summary")
+
+  bankAccountHolder String? @map("bank_account_holder") @db.VarChar(240)
+  iban              String? @db.VarChar(34)
+  bic               String? @db.VarChar(11)
+  bankDocumentId    String? @map("bank_document_id") @db.Uuid
+
+  /// ACTIVE | INACTIVE | ARCHIVED | TO_VERIFY — CHECK (migration).
+  status String @default("TO_VERIFY") @db.VarChar(20)
+
+  createdBy  String    @map("created_by") @db.Uuid
+  updatedBy  String?   @map("updated_by") @db.Uuid
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  references     SubcontractorReference[]
+  certifications SubcontractorCertification[]
+  insurances     SubcontractorInsurance[]
+  documents      SubcontractorProfileDocument[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, status])
+  @@map("subcontractor_profiles")
+}
+
+model SubcontractorReference {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  subcontractorProfileId String               @map("subcontractor_profile_id") @db.Uuid
+  subcontractorProfile   SubcontractorProfile @relation(fields: [subcontractorProfileId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  projectName String    @map("project_name") @db.VarChar(300)
+  clientName  String?   @map("client_name") @db.VarChar(240)
+  description String?
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
+
+  /// ACTIVE | ARCHIVED — CHECK (migration). Correctif audit Codex P1 : "ne jamais supprimer
+  /// physiquement", même discipline que tous les satellites `company-profile`.
+  status String @default("ACTIVE") @db.VarChar(20)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, subcontractorProfileId])
+  @@map("subcontractor_references")
+}
+
+model SubcontractorCertification {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  subcontractorProfileId String               @map("subcontractor_profile_id") @db.Uuid
+  subcontractorProfile   SubcontractorProfile @relation(fields: [subcontractorProfileId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  name       String    @db.VarChar(200)
+  issuer     String?   @db.VarChar(200)
+  number     String?   @db.VarChar(100)
+  obtainedAt DateTime? @map("obtained_at")
+  expiresAt  DateTime? @map("expires_at")
+  documentId String?   @map("document_id") @db.Uuid
+
+  /// ACTIVE | ARCHIVED — CHECK (migration). Correctif audit Codex P1.
+  status String @default("ACTIVE") @db.VarChar(20)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, subcontractorProfileId])
+  @@map("subcontractor_certifications")
+}
+
+model SubcontractorInsurance {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  subcontractorProfileId String               @map("subcontractor_profile_id") @db.Uuid
+  subcontractorProfile   SubcontractorProfile @relation(fields: [subcontractorProfileId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  type         String    @db.VarChar(40)
+  insurer      String?   @db.VarChar(200)
+  policyNumber String?   @map("policy_number") @db.VarChar(100)
+  expiresAt    DateTime? @map("expires_at")
+  documentId   String?   @map("document_id") @db.Uuid
+
+  /// ACTIVE | ARCHIVED — CHECK (migration). Correctif audit Codex P1.
+  status String @default("ACTIVE") @db.VarChar(20)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, subcontractorProfileId])
+  @@map("subcontractor_insurances")
+}
+
+/// Documents génériques du sous-traitant (Kbis, attestations, RIB, références) — même motif que
+/// `DocumentClientAccountAssociation`, jamais de relation polymorphe libre.
+model SubcontractorProfileDocument {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  subcontractorProfileId String               @map("subcontractor_profile_id") @db.Uuid
+  subcontractorProfile   SubcontractorProfile @relation(fields: [subcontractorProfileId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  documentId String @map("document_id") @db.Uuid
+
+  /// KBIS | TAX_CERTIFICATE | SOCIAL_CERTIFICATE | INSURANCE | CERTIFICATION | BANK_DETAILS |
+  /// REFERENCE | OTHER — CHECK (migration).
+  category String @db.VarChar(40)
+
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([documentId, subcontractorProfileId])
+  @@index([organizationId, subcontractorProfileId])
+  @@map("subcontractor_profile_documents")
 }

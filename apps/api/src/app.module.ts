@@ -6,6 +6,7 @@ import { AiSuggestionModule } from "./modules/ai-suggestion";
 import { AnalysisModule } from "./modules/analysis/analysis.module";
 import { ClientPortfolioModule } from "./modules/client-portfolio/client-portfolio.module";
 import { CockpitModule } from "./modules/cockpit";
+import { CompanyProfileModule } from "./modules/company-profile";
 import { DceModule } from "./modules/dce/dce.module";
 import { DeliverablesModule, ExportThemeResolverBridgeModule } from "./modules/deliverables";
 import { DocumentsModule } from "./modules/documents/documents.module";
@@ -21,6 +22,7 @@ import { OutboxModule } from "./modules/outbox";
 import { PlatformAdministrationModule } from "./modules/platform-administration/platform-administration.module";
 import { PricingModule } from "./modules/pricing/pricing.module";
 import { SignatureModule } from "./modules/signature";
+import { SubcontractorsModule } from "./modules/subcontractors";
 import { SubmissionModule } from "./modules/submission";
 import { SubmissionPackageModule } from "./modules/submission-package";
 import { TendersModule } from "./modules/tenders/tenders.module";
@@ -60,6 +62,8 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     CockpitModule,
     AdministrativeDossierModule,
     SubmissionModule,
+    CompanyProfileModule,
+    SubcontractorsModule,
   ],
 })
 export class AppModule {}

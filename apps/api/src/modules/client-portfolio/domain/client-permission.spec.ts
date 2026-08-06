@@ -143,3 +143,45 @@ describe("Submission permission matrix (mission Sprint 9 §20)", () => {
     }
   });
 });
+
+/**
+ * V2 Sprint 2 (Entreprise candidate) §7 — CLIENT_MANAGER a tout, y compris les données bancaires
+ * ("règle stricte") ; CONTRIBUTOR et VIEWER consultent/gèrent le profil général mais n'ont JAMAIS
+ * accès aux données bancaires (permission dédiée séparée, mission §7).
+ */
+describe("Company profile permission matrix (mission V2 Sprint 2 §7)", () => {
+  it("CLIENT_MANAGER can read/manage the profile AND read/manage banking data", () => {
+    expect(clientRoleHasActionPermission(ClientRole.ClientManager, ClientPermission.ReadCompanyProfile)).toBe(true);
+    expect(clientRoleHasActionPermission(ClientRole.ClientManager, ClientPermission.ManageCompanyProfile)).toBe(true);
+    expect(clientRoleHasActionPermission(ClientRole.ClientManager, ClientPermission.ReadCompanyBanking)).toBe(true);
+    expect(clientRoleHasActionPermission(ClientRole.ClientManager, ClientPermission.ManageCompanyBanking)).toBe(true);
+  });
+
+  it("CONTRIBUTOR can read/manage the profile but never touches banking data", () => {
+    expect(clientRoleHasActionPermission(ClientRole.Contributor, ClientPermission.ReadCompanyProfile)).toBe(true);
+    expect(clientRoleHasActionPermission(ClientRole.Contributor, ClientPermission.ManageCompanyProfile)).toBe(true);
+    expect(clientRoleHasActionPermission(ClientRole.Contributor, ClientPermission.ReadCompanyBanking)).toBe(false);
+    expect(clientRoleHasActionPermission(ClientRole.Contributor, ClientPermission.ManageCompanyBanking)).toBe(false);
+  });
+
+  it("VIEWER can only read the profile — never manage it, never touch banking data", () => {
+    expect(clientRoleHasActionPermission(ClientRole.Viewer, ClientPermission.ReadCompanyProfile)).toBe(true);
+    expect(clientRoleHasActionPermission(ClientRole.Viewer, ClientPermission.ManageCompanyProfile)).toBe(false);
+    expect(clientRoleHasActionPermission(ClientRole.Viewer, ClientPermission.ReadCompanyBanking)).toBe(false);
+    expect(clientRoleHasActionPermission(ClientRole.Viewer, ClientPermission.ManageCompanyBanking)).toBe(false);
+  });
+
+  it("an unassigned member (no client role at all) has no company profile capability", () => {
+    expect(clientRoleHasActionPermission("SOME_UNKNOWN_CLIENT_ROLE", ClientPermission.ReadCompanyProfile)).toBe(false);
+    expect(clientRoleHasActionPermission("SOME_UNKNOWN_CLIENT_ROLE", ClientPermission.ReadCompanyBanking)).toBe(false);
+  });
+
+  it("OWNER/ORGANIZATION_ADMIN always have every company profile capability at the portfolio tier", () => {
+    for (const role of ["OWNER", "ORGANIZATION_ADMIN"]) {
+      expect(roleHasClientPortfolioPermission(role, ClientPermission.ReadCompanyProfile)).toBe(true);
+      expect(roleHasClientPortfolioPermission(role, ClientPermission.ManageCompanyProfile)).toBe(true);
+      expect(roleHasClientPortfolioPermission(role, ClientPermission.ReadCompanyBanking)).toBe(true);
+      expect(roleHasClientPortfolioPermission(role, ClientPermission.ManageCompanyBanking)).toBe(true);
+    }
+  });
+});

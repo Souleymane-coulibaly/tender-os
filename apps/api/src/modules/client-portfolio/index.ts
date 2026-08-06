@@ -9,6 +9,11 @@ export type { AssertClientAccessQuery } from "./application/use-cases/assert-cli
 export { ListAccessibleClientsUseCase } from "./application/use-cases/list-accessible-clients.use-case";
 export type { ListAccessibleClientsQuery, ListAccessibleClientsResult } from "./application/use-cases/list-accessible-clients.use-case";
 export { GetClientAccountUseCase } from "./application/use-cases/get-client-account.use-case";
+export type { GetClientAccountQuery } from "./application/use-cases/get-client-account.use-case";
+// V2 Sprint 2 — nécessaire à `company-profile`/`subcontractors` pour typer le retour de
+// `GetClientAccountUseCase` sans dupliquer sa forme (mission "ne jamais dupliquer une donnée
+// métier lorsqu'une référence suffit").
+export type { ClientAccountSummary } from "./application/dtos";
 
 export { ClientPermission, roleHasClientPortfolioPermission } from "./domain/client-permission";
 // Réexporté pour permettre à Generation (Sprint 6) de typer sa "règle simple MEMBER" (validation)

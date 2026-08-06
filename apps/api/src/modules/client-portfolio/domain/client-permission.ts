@@ -71,6 +71,26 @@ export const ClientPermission = {
   ManageSubmission: "CLIENT_MANAGE_SUBMISSION",
   ConfirmSubmission: "CLIENT_CONFIRM_SUBMISSION",
   WithdrawSubmission: "CLIENT_WITHDRAW_SUBMISSION",
+  /** V2 Sprint 2 (Entreprise candidate) — même motif additif que `ReadSubmission`/
+   *  `ManageSubmission` : consulter vs. créer/éditer/archiver/restaurer l'identité légale, les
+   *  représentants, assurances, certifications, références, moyens humains/matériels et documents
+   *  génériques du profil. Les données BANCAIRES ont leurs propres permissions séparées
+   *  ci-dessous (mission §7 "les données bancaires et juridiques sensibles peuvent nécessiter une
+   *  permission dédiée") — jamais couvertes par celles-ci. */
+  ReadCompanyProfile: "CLIENT_READ_COMPANY_PROFILE",
+  ManageCompanyProfile: "CLIENT_MANAGE_COMPANY_PROFILE",
+  /** Palier séparé et volontairement plus restreint (mission §7) — voir
+   *  `ROLE_CLIENT_ACTION_PERMISSIONS` : jamais accordé au CONTRIBUTOR ni au VIEWER, réservé au
+   *  CLIENT_MANAGER et au palier organisation. */
+  ReadCompanyBanking: "CLIENT_READ_COMPANY_BANKING",
+  ManageCompanyBanking: "CLIENT_MANAGE_COMPANY_BANKING",
+  /** Répertoire organisationnel de sous-traitants (mission §6) — PAS scopé par ClientAccount
+   *  (réutilisable par plusieurs entreprises candidates de la même organisation), donc absent de
+   *  `ROLE_CLIENT_ACTION_PERMISSIONS` ci-dessous ; vérifié uniquement au palier organisation via
+   *  `roleHasClientPortfolioPermission`/`OrganizationRole`, jamais via une affectation client
+   *  précise (voir module `subcontractors`, `subcontractor-permission.ts`, qui réutilise le même
+   *  motif de matrice en code que ce fichier plutôt qu'un second système).
+   */
 } as const;
 
 export type ClientPermission = (typeof ClientPermission)[keyof typeof ClientPermission];
@@ -122,6 +142,10 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ManageSubmission,
   ClientPermission.ConfirmSubmission,
   ClientPermission.WithdrawSubmission,
+  ClientPermission.ReadCompanyProfile,
+  ClientPermission.ManageCompanyProfile,
+  ClientPermission.ReadCompanyBanking,
+  ClientPermission.ManageCompanyBanking,
 ];
 
 export const ROLE_CLIENT_PORTFOLIO_PERMISSIONS: Record<string, readonly ClientPermission[]> = {
@@ -179,6 +203,13 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ManageSubmission,
     ClientPermission.ConfirmSubmission,
     ClientPermission.WithdrawSubmission,
+    /** V2 Sprint 2 — le CLIENT_MANAGER a tous les droits sur le profil ET les données bancaires
+     *  (mission §7 "les données bancaires... peuvent nécessiter une permission dédiée" — seul le
+     *  CLIENT_MANAGER les reçoit, ni le CONTRIBUTOR ni le VIEWER ci-dessous). */
+    ClientPermission.ReadCompanyProfile,
+    ClientPermission.ManageCompanyProfile,
+    ClientPermission.ReadCompanyBanking,
+    ClientPermission.ManageCompanyBanking,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -215,6 +246,10 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadSubmission,
     ClientPermission.ManageSubmission,
     ClientPermission.ConfirmSubmission,
+    /** V2 Sprint 2 — le CONTRIBUTOR peut consulter/gérer le profil général mais jamais les
+     *  données bancaires (réservées au CLIENT_MANAGER ci-dessus). */
+    ClientPermission.ReadCompanyProfile,
+    ClientPermission.ManageCompanyProfile,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -223,6 +258,8 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadAnalysis,
     ClientPermission.ReadKnowledge,
     ClientPermission.ReadGeneration,
+    /** V2 Sprint 2 — le VIEWER consulte le profil général, jamais les données bancaires. */
+    ClientPermission.ReadCompanyProfile,
     ClientPermission.ReadPricing,
     ClientPermission.ReadExport,
     ClientPermission.ReadDeliverable,
