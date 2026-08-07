@@ -80,7 +80,7 @@ export class PrismaTenderLotRepository implements TenderLotRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(input: { organizationId: string; tenderId: string; lotId: string }): Promise<TenderLot | null> {
-    const record = await this.prisma.tenderLot.findFirst({
+    const record = await this.prisma.currentClient().tenderLot.findFirst({
       where: { id: input.lotId, tenderId: input.tenderId, organizationId: input.organizationId, deletedAt: null },
     });
     return record ? toDomain(record) : null;
@@ -91,14 +91,14 @@ export class PrismaTenderLotRepository implements TenderLotRepository {
     tenderId: string;
     lotId: string;
   }): Promise<TenderLot | null> {
-    const record = await this.prisma.tenderLot.findFirst({
+    const record = await this.prisma.currentClient().tenderLot.findFirst({
       where: { id: input.lotId, tenderId: input.tenderId, organizationId: input.organizationId },
     });
     return record ? toDomain(record) : null;
   }
 
   async listByTender(input: { organizationId: string; tenderId: string }): Promise<TenderLot[]> {
-    const records = await this.prisma.tenderLot.findMany({
+    const records = await this.prisma.currentClient().tenderLot.findMany({
       where: { tenderId: input.tenderId, organizationId: input.organizationId, deletedAt: null },
       orderBy: { displayOrder: "asc" },
     });
@@ -108,7 +108,7 @@ export class PrismaTenderLotRepository implements TenderLotRepository {
   async save(lot: TenderLot): Promise<void> {
     const data = toPersistence(lot);
     try {
-      await this.prisma.tenderLot.upsert({ where: { id: data.id }, create: data, update: data });
+      await this.prisma.currentClient().tenderLot.upsert({ where: { id: data.id }, create: data, update: data });
     } catch (error) {
       if (isUniqueConstraintViolation(error)) {
         throw new DuplicateTenderLotNumberError();
@@ -118,7 +118,10 @@ export class PrismaTenderLotRepository implements TenderLotRepository {
   }
 
   async createAppendedAtEnd(lot: TenderLot): Promise<TenderLot> {
-    return this.prisma.$transaction(async (tx) => {
+    // V2 Sprint 4 (audit Codex P1-001, round 4) — `withTransaction` rejoint la transaction ambiante
+    // déjà active (ApplyAiSuggestionUseCase) au lieu d'en ouvrir une nouvelle imbriquée ; sinon,
+    // comportement inchangé (ouvre sa propre transaction locale, verrou consultatif compris).
+    return this.prisma.withTransaction(async (tx) => {
       // Verrou consultatif Postgres scopé au tenderId (AUDIT-002) : sérialise les créations
       // concurrentes du même Tender le temps de calculer puis d'écrire displayOrder, sans
       // affecter les autres Tenders. Auto-libéré à la fin de la transaction (variante "xact").
@@ -145,7 +148,7 @@ export class PrismaTenderLotRepository implements TenderLotRepository {
 
   async restoreAppendedAtEnd(input: { lot: TenderLot; occurredAt: Date }): Promise<TenderLot> {
     const { lot, occurredAt } = input;
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.withTransaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lot.tenderId}))`;
 
       const aggregate = await tx.tenderLot.aggregate({
@@ -163,14 +166,17 @@ export class PrismaTenderLotRepository implements TenderLotRepository {
   }
 
   async saveReordered(lots: readonly TenderLot[]): Promise<void> {
-    await this.prisma.$transaction(
-      lots.map((lot) => {
+    // V2 Sprint 4 (audit Codex P1-001, round 4) — forme interactive (jamais la forme "tableau" de
+    // $transaction, qui ne peut pas rejoindre une transaction ambiante déjà active) : même garantie
+    // d'atomicité, compatible avec `withTransaction`.
+    await this.prisma.withTransaction(async (tx) => {
+      for (const lot of lots) {
         const data = toPersistence(lot);
-        return this.prisma.tenderLot.update({
+        await tx.tenderLot.update({
           where: { id: data.id },
           data: { displayOrder: data.displayOrder, updatedAt: data.updatedAt },
         });
-      }),
-    );
+      }
+    });
   }
 }

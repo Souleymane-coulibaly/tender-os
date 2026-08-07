@@ -1,6 +1,7 @@
 import type { Clock } from "../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../shared-kernel/id-generator";
 import { DceDocument } from "../domain/dce-document.entity";
+import type { DceDocumentCategory } from "../domain/dce-document-category";
 import type { DceDocumentProcessingStatus } from "../domain/dce-document-processing-status";
 import { Dce } from "../domain/dce.aggregate";
 import type { DceImportJob } from "../domain/dce-import-job.aggregate";
@@ -83,7 +84,17 @@ export class InMemoryDceDocumentRepository implements DceDocumentRepository {
   /** Simule les DocumentVersion réellement jointes en base — indexé par documentId. */
   readonly documentVersions = new Map<
     string,
-    { originalFilename: string; sanitizedFilename: string; mimeType: string; extension: string; sizeBytes: number; checksum: string; currentVersionNumber: number; deleted?: boolean }
+    {
+      originalFilename: string;
+      sanitizedFilename: string;
+      mimeType: string;
+      extension: string;
+      sizeBytes: number;
+      checksum: string;
+      currentVersionId?: string;
+      currentVersionNumber: number;
+      deleted?: boolean;
+    }
   >();
 
   async create(link: DceDocument): Promise<DceDocument> {
@@ -120,6 +131,7 @@ export class InMemoryDceDocumentRepository implements DceDocumentRepository {
       extension: version.extension,
       sizeBytes: version.sizeBytes,
       checksum: version.checksum,
+      currentVersionId: version.currentVersionId ?? `fake-version-${link.documentId}`,
       currentVersionNumber: version.currentVersionNumber,
       category: link.category,
       processingStatus: link.processingStatus,
@@ -169,6 +181,20 @@ export class InMemoryDceDocumentRepository implements DceDocumentRepository {
       return;
     }
     link.transitionProcessingStatus(input.processingStatus as DceDocumentProcessingStatus, input.updatedAt);
+  }
+
+  async updateCategory(input: {
+    organizationId: string;
+    dceId: string;
+    documentId: string;
+    category: string;
+    updatedAt: Date;
+  }): Promise<void> {
+    const link = await this.findByDceIdAndDocumentId(input);
+    if (!link) {
+      return;
+    }
+    link.correctCategory(input.category as DceDocumentCategory, input.updatedAt);
   }
 
   /** Ne simule aucun verrou réel (mono-thread, pas de concurrence possible en mémoire) —

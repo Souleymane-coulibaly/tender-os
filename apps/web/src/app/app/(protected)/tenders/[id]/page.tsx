@@ -3,6 +3,8 @@ import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import { fetchAnalysisCapabilities, fetchAnalysisSectionData } from "../../../analysis-actions";
 import { canTriggerAnalysis, type AnalysisCapability, type AnalysisSectionData } from "../../../../../lib/analysis-types";
+import { fetchTenderSuggestions } from "../../../ai-suggestion-actions";
+import { canManageAiSuggestions, type AiSuggestion } from "../../../../../lib/ai-suggestion-types";
 import { fetchDceSectionData } from "../../../dce-actions";
 import { canDeleteDceDocument, canImportOrReplaceDceDocument, type DceDocumentSummary, type DceSummary } from "../../../../../lib/dce-types";
 import type { TenderCockpit } from "../../../../../lib/cockpit-types";
@@ -28,6 +30,7 @@ import {
 } from "../../../../../lib/tenders-types";
 import { ApiErrorState } from "../../api-error-state";
 import { TenderStatusBadge } from "../tender-status-badge";
+import { AiSuggestionsSection } from "./ai-suggestions-section";
 import { AlertsSection } from "./alerts-section";
 import { AnalysisSection } from "./analysis-section";
 import { ArchiveButton } from "./archive-button";
@@ -78,6 +81,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   let dceSection: { dce: DceSummary | null; documents: DceDocumentSummary[] };
   let analysisData: AnalysisSectionData;
   let analysisCapabilities: AnalysisCapability[];
+  let aiSuggestions: AiSuggestion[];
   let role: string | undefined;
   let cockpit: TenderCockpit;
   let profile: TenderProfile;
@@ -100,6 +104,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       dceSection,
       analysisData,
       analysisCapabilities,
+      aiSuggestions,
       role,
       cockpit,
       profile,
@@ -120,6 +125,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       fetchDceSectionData(id),
       fetchAnalysisSectionData(id),
       fetchAnalysisCapabilities(id),
+      fetchTenderSuggestions(id),
       getCurrentMembershipRole(),
       appApiFetch<TenderCockpit>(`/api/v1/tenders/${id}/cockpit`),
       appApiFetch<TenderProfile>(`/api/v1/tenders/${id}/profile`),
@@ -261,6 +267,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         <RisksSection tenderId={tender.id} risks={risks} />
         <AlertsSection tenderId={tender.id} alerts={alerts} />
         <AnalysisSection tenderId={tender.id} initialData={analysisData} canTrigger={canTriggerAnalysis(role)} />
+        <AiSuggestionsSection tenderId={tender.id} initialSuggestions={aiSuggestions} canManage={canManageAiSuggestions(role)} />
 
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-neutral-700">Historique</h2>

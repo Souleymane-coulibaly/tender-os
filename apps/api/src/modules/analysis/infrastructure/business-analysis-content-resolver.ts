@@ -169,6 +169,7 @@ export class BusinessAnalysisContentResolver implements AnalysisContentResolver 
             dceId: job.dceId!,
             documentId: job.documentId!,
             extractionVersion: job.extractionVersion!,
+            documentVersionId: input.documentVersionId,
             output: parsed,
           });
         },
@@ -201,6 +202,15 @@ export class BusinessAnalysisContentResolver implements AnalysisContentResolver 
 
     const resultSummary = `${parsed.summary.goNoGoRecommendation}: ${parsed.summary.opportunitySummary}`.slice(0, 500);
 
+    // Audit Codex P1-004 (round 3) — snapshot documentId -> documentVersionId résolu ICI, une
+    // seule fois, à partir de `consolidatedAnalyses` déjà chargé ci-dessus pour la validation de
+    // provenance (jamais une seconde résolution plus tard qui pourrait pointer vers une version
+    // plus récente du document) : voir PersistTenderConsolidationInput.documentVersionsByDocumentId.
+    const documentVersionsByDocumentId: Record<string, string | undefined> = {};
+    for (const analysis of consolidatedAnalyses) {
+      documentVersionsByDocumentId[analysis.documentId] = analysis.documentVersionId;
+    }
+
     return {
       resultSummary,
       persist: async (tx) => {
@@ -210,6 +220,7 @@ export class BusinessAnalysisContentResolver implements AnalysisContentResolver 
           analysisVersion: job.analysisVersion,
           tenderId: job.tenderId,
           output: parsed,
+          documentVersionsByDocumentId,
         });
       },
     };

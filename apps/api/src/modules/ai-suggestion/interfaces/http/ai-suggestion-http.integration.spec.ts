@@ -57,6 +57,8 @@ describe("AiSuggestion — real HTTP + PostgreSQL (NestJS)", () => {
     return { Authorization: `Bearer ${token}`, "X-Organization-Id": organizationId, "Content-Type": "application/json" };
   }
 
+  let tenderAId: string;
+
   async function seedPendingSuggestion(organizationId: string): Promise<string> {
     const id = randomUUID();
     await prisma.aiSuggestion.create({
@@ -66,6 +68,7 @@ describe("AiSuggestion — real HTTP + PostgreSQL (NestJS)", () => {
         entityType: "TENDER_LOT",
         entityId: randomUUID(),
         fieldName: "title",
+        parentTenderId: tenderAId,
         proposedValue: "Lot 1 — Travaux",
         confidence: 0.8,
         status: "PENDING",
@@ -84,6 +87,7 @@ describe("AiSuggestion — real HTTP + PostgreSQL (NestJS)", () => {
         entityType: "TENDER_LOT",
         entityId: randomUUID(),
         fieldName: "no-schema-registered-for-this-field",
+        parentTenderId: tenderAId,
         proposedValue: "irrelevant",
         confidence: 0.5,
         status: "PENDING",
@@ -127,10 +131,35 @@ describe("AiSuggestion — real HTTP + PostgreSQL (NestJS)", () => {
     await addMembership({ organizationId: orgAId, userId: ownerA.userId, role: OrganizationRole.Owner });
     await addMembership({ organizationId: orgAId, userId: readOnlyA.userId, role: OrganizationRole.ReadOnly });
     await addMembership({ organizationId: orgBId, userId: ownerB.userId, role: OrganizationRole.Owner });
+
+    // V2 Sprint 4 — parentTenderId est désormais obligatoire (FK composée réelle) : un Tender
+    // (et son Client) doivent exister avant de pouvoir semer une suggestion.
+    const clientA = await prisma.clientAccount.create({
+      data: { id: randomUUID(), organizationId: orgAId, name: "Client AiSuggestion HTTP A", nameNormalized: "client ai suggestion http a", status: "ACTIVE", createdBy: ownerA.userId },
+    });
+    const tenderA = await prisma.tender.create({
+      data: { id: randomUUID(), organizationId: orgAId, clientAccountId: clientA.id, title: "Tender AiSuggestion HTTP A", status: "DRAFT", tags: [], createdBy: ownerA.userId },
+    });
+    tenderAId = tenderA.id;
+
+    // V2 Sprint 4 — `AI_SUGGESTION_TARGET_ACCESS_POLICY` est désormais rebindée globalement vers
+    // `TendersAiSuggestionTargetAccessPolicy`, qui vérifie l'accès au Tender via `GetTenderUseCase`
+    // (donc `AssertClientAccessUseCase` — READ_ONLY n'est ni OWNER ni ORGANIZATION_ADMIN, il lui
+    // faut une `ClientAssignment` explicite sur `clientA`, même exigence que partout ailleurs dans
+    // ce repo pour ce rôle organisationnel).
+    await prisma.clientAssignment.create({
+      data: { id: randomUUID(), organizationId: orgAId, clientAccountId: clientA.id, userId: readOnlyA.userId, role: "VIEWER", createdBy: ownerA.userId },
+    });
   }, 60000);
 
   afterAll(async () => {
     await prisma.aiSuggestion.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    // V2 Sprint 4 — Accept/Modify/Reject/Create écrivent désormais dans l'Outbox : à supprimer
+    // avant l'organisation, sinon FK violée (même correctif que les autres modules Tenders).
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.tender.deleteMany({ where: { organizationId: orgAId } });
+    await prisma.clientAssignment.deleteMany({ where: { organizationId: orgAId } });
+    await prisma.clientAccount.deleteMany({ where: { organizationId: orgAId } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: [orgAId, orgBId] } } } });
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });

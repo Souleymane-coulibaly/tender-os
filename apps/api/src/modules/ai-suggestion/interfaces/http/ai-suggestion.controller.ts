@@ -48,6 +48,7 @@ export class AiSuggestionController {
       actorRole: membership.role,
       entityType: query.entityType,
       entityId: query.entityId,
+      parentTenderId: query.parentTenderId,
       status: query.status,
     });
   }

@@ -53,14 +53,14 @@ export class PrismaMilestoneRepository implements MilestoneRepository {
     tenderId: string;
     milestoneId: string;
   }): Promise<Milestone | null> {
-    const record = await this.prisma.tenderMilestone.findFirst({
+    const record = await this.prisma.currentClient().tenderMilestone.findFirst({
       where: { id: input.milestoneId, tenderId: input.tenderId, organizationId: input.organizationId },
     });
     return record ? toDomain(record) : null;
   }
 
   async listByTender(input: { organizationId: string; tenderId: string }): Promise<Milestone[]> {
-    const records = await this.prisma.tenderMilestone.findMany({
+    const records = await this.prisma.currentClient().tenderMilestone.findMany({
       where: { tenderId: input.tenderId, organizationId: input.organizationId },
       orderBy: { date: "asc" },
     });
@@ -69,7 +69,7 @@ export class PrismaMilestoneRepository implements MilestoneRepository {
 
   async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<Milestone[]> {
     if (input.tenderIds.length === 0) return [];
-    const records = await this.prisma.tenderMilestone.findMany({
+    const records = await this.prisma.currentClient().tenderMilestone.findMany({
       where: { organizationId: input.organizationId, tenderId: { in: [...input.tenderIds] } },
     });
     return records.map(toDomain);
@@ -77,11 +77,11 @@ export class PrismaMilestoneRepository implements MilestoneRepository {
 
   async save(milestone: Milestone): Promise<void> {
     const data = toPersistence(milestone);
-    await this.prisma.tenderMilestone.upsert({ where: { id: data.id }, create: data, update: data });
+    await this.prisma.currentClient().tenderMilestone.upsert({ where: { id: data.id }, create: data, update: data });
   }
 
   async delete(input: { organizationId: string; tenderId: string; milestoneId: string }): Promise<void> {
-    await this.prisma.tenderMilestone.deleteMany({
+    await this.prisma.currentClient().tenderMilestone.deleteMany({
       where: { id: input.milestoneId, tenderId: input.tenderId, organizationId: input.organizationId },
     });
   }

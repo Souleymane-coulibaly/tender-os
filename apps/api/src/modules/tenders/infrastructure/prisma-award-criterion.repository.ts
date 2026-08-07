@@ -53,14 +53,14 @@ export class PrismaAwardCriterionRepository implements AwardCriterionRepository 
     tenderId: string;
     criterionId: string;
   }): Promise<AwardCriterion | null> {
-    const record = await this.prisma.tenderAwardCriterion.findFirst({
+    const record = await this.prisma.currentClient().tenderAwardCriterion.findFirst({
       where: { id: input.criterionId, tenderId: input.tenderId, organizationId: input.organizationId },
     });
     return record ? toDomain(record) : null;
   }
 
   async listByTender(input: { organizationId: string; tenderId: string }): Promise<AwardCriterion[]> {
-    const records = await this.prisma.tenderAwardCriterion.findMany({
+    const records = await this.prisma.currentClient().tenderAwardCriterion.findMany({
       where: { tenderId: input.tenderId, organizationId: input.organizationId },
       orderBy: { displayOrder: "asc" },
     });
@@ -72,7 +72,7 @@ export class PrismaAwardCriterionRepository implements AwardCriterionRepository 
     tenderIds: readonly string[];
   }): Promise<AwardCriterion[]> {
     if (input.tenderIds.length === 0) return [];
-    const records = await this.prisma.tenderAwardCriterion.findMany({
+    const records = await this.prisma.currentClient().tenderAwardCriterion.findMany({
       where: { organizationId: input.organizationId, tenderId: { in: [...input.tenderIds] } },
     });
     return records.map(toDomain);
@@ -80,11 +80,11 @@ export class PrismaAwardCriterionRepository implements AwardCriterionRepository 
 
   async save(criterion: AwardCriterion): Promise<void> {
     const data = toPersistence(criterion);
-    await this.prisma.tenderAwardCriterion.upsert({ where: { id: data.id }, create: data, update: data });
+    await this.prisma.currentClient().tenderAwardCriterion.upsert({ where: { id: data.id }, create: data, update: data });
   }
 
   async delete(input: { organizationId: string; tenderId: string; criterionId: string }): Promise<void> {
-    await this.prisma.tenderAwardCriterion.deleteMany({
+    await this.prisma.currentClient().tenderAwardCriterion.deleteMany({
       where: { id: input.criterionId, tenderId: input.tenderId, organizationId: input.organizationId },
     });
   }

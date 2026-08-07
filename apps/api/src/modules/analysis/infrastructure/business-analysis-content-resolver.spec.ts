@@ -18,6 +18,7 @@ const ORG = randomUUID();
 const TENDER = randomUUID();
 const DOCUMENT = randomUUID();
 const DCE = randomUUID();
+const DOCUMENT_VERSION = randomUUID();
 const NOW = new Date("2026-07-30T10:00:00Z");
 
 function fakeDocumentInput(overrides?: Partial<DocumentAnalysisInput>): DocumentAnalysisInput {
@@ -26,6 +27,7 @@ function fakeDocumentInput(overrides?: Partial<DocumentAnalysisInput>): Document
     tenderId: TENDER,
     dceId: DCE,
     documentId: DOCUMENT,
+    documentVersionId: DOCUMENT_VERSION,
     documentName: "cctp.pdf",
     documentType: "TECHNICAL",
     extractionId: DOCUMENT,
@@ -124,6 +126,7 @@ describe("BusinessAnalysisContentResolver", () => {
         dceId: DCE,
         documentId: DOCUMENT,
         extractionVersion: 1,
+        documentVersionId: DOCUMENT_VERSION,
         output: {
           documentType: "CCTP",
           language: "fr",
@@ -171,6 +174,9 @@ describe("BusinessAnalysisContentResolver", () => {
       const analyses = await businessAnalysisRepository.findLatestDocumentAnalyses({ organizationId: ORG, tenderId: TENDER });
       expect(analyses).toHaveLength(1);
       expect(analyses[0]!.documentId).toBe(DOCUMENT);
+      // Audit Codex P1-004 (round 3) — la version exacte fournie par Extraction est bien gravée
+      // sur l'analyse documentaire, jamais recalculée après coup.
+      expect(analyses[0]!.documentVersionId).toBe(DOCUMENT_VERSION);
     });
 
     it("throws AiSchemaValidationFailedError on a structurally invalid response — never persists it", async () => {
@@ -249,6 +255,7 @@ describe("BusinessAnalysisContentResolver", () => {
         dceId: DCE,
         documentId: DOCUMENT,
         extractionVersion: 1,
+        documentVersionId: DOCUMENT_VERSION,
         output: { documentType: "CCTP", language: "fr", metadata: {}, deadlines: [], criteria: [], requirements: [], clauses: [], warnings: [] },
       });
     }
@@ -320,6 +327,10 @@ describe("BusinessAnalysisContentResolver", () => {
 
       expect(capturedInput?.tenderId).toBe(TENDER);
       expect(capturedInput?.output.risks).toHaveLength(1);
+      // Audit Codex P1-004 (round 3) — le resolver construit le snapshot documentId ->
+      // documentVersionId à partir de `consolidatedAnalyses` (déjà chargé pour la validation de
+      // provenance), jamais une seconde résolution I/O au moment du mapping.
+      expect(capturedInput?.documentVersionsByDocumentId).toEqual({ [DOCUMENT]: DOCUMENT_VERSION });
     });
 
     it("throws AiProvenanceValidationFailedError when a finding cites a documentId never consolidated for this tender (invented source)", async () => {

@@ -4,8 +4,10 @@ export type AiSuggestionSummary = Readonly<{
   id: string;
   organizationId: string;
   entityType: string;
-  entityId: string;
+  entityId: string | undefined;
   fieldName: string;
+  parentTenderId: string;
+  parentLotId: string | undefined;
   proposedValue: unknown;
   confidence: number;
   sourceDocumentId: string | undefined;
@@ -21,6 +23,7 @@ export type AiSuggestionSummary = Readonly<{
   validatedAt: string | undefined;
   rejectedAt: string | undefined;
   decisionReason: string | undefined;
+  conflictResolution: string | undefined;
   appliedValue: unknown;
   createdAt: string;
   updatedAt: string;
@@ -31,8 +34,10 @@ export function toAiSuggestionSummary(record: AiSuggestionRecord): AiSuggestionS
     id: record.id,
     organizationId: record.organizationId,
     entityType: record.entityType,
-    entityId: record.entityId,
+    entityId: record.entityId ?? undefined,
     fieldName: record.fieldName,
+    parentTenderId: record.parentTenderId,
+    parentLotId: record.parentLotId ?? undefined,
     proposedValue: record.proposedValue,
     confidence: record.confidence,
     sourceDocumentId: record.sourceDocumentId ?? undefined,
@@ -48,6 +53,7 @@ export function toAiSuggestionSummary(record: AiSuggestionRecord): AiSuggestionS
     validatedAt: record.validatedAt?.toISOString() ?? undefined,
     rejectedAt: record.rejectedAt?.toISOString() ?? undefined,
     decisionReason: record.decisionReason ?? undefined,
+    conflictResolution: record.conflictResolution ?? undefined,
     appliedValue: record.appliedValue ?? undefined,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),

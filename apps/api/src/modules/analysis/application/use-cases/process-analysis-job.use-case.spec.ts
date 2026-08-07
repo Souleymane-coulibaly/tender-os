@@ -14,6 +14,7 @@ import {
   FakeAIProvider,
   FakeAIProviderRegistry,
   FakeAnalysisContentResolver,
+  FakeOutboxWriter,
   FakeRoutingPolicyResolver,
   FixedClock,
   InMemoryAnalysisAttemptRepository,
@@ -61,6 +62,7 @@ describe("ProcessAnalysisJobUseCase", () => {
   let jobRepository: InMemoryAnalysisJobRepository;
   let attemptRepository: InMemoryAnalysisAttemptRepository;
   let auditLogWriter: InMemoryAuditLogWriter;
+  let outboxWriter: FakeOutboxWriter;
 
   beforeEach(() => {
     attemptRepository = new InMemoryAnalysisAttemptRepository();
@@ -68,6 +70,7 @@ describe("ProcessAnalysisJobUseCase", () => {
     // l'atomicité job+historique de `PrismaAnalysisJobRepository.finalizeAttempt`.
     jobRepository = new InMemoryAnalysisJobRepository(attemptRepository);
     auditLogWriter = new InMemoryAuditLogWriter();
+    outboxWriter = new FakeOutboxWriter();
   });
 
   function buildUseCase(
@@ -82,6 +85,7 @@ describe("ProcessAnalysisJobUseCase", () => {
       new FakeAIProviderRegistry(provider),
       contentResolver,
       auditLogWriter,
+      outboxWriter,
       config,
       new FixedClock(NOW),
       new SequentialIdGenerator(),
@@ -108,6 +112,9 @@ describe("ProcessAnalysisJobUseCase", () => {
     expect(attempts[0]!.outcome).toBe("SUCCEEDED");
     expect(attempts[0]!.trigger).toBe("MANUAL");
     expect(auditLogWriter.entries.map((e) => e.action)).toContain("analysis.completed");
+
+    const eventTypes = outboxWriter.writes.flatMap((write) => write.events.map((event) => event.eventType));
+    expect(eventTypes).toEqual(["DceAnalysisStarted", "DceAnalysisCompleted"]);
   });
 
   it("fails with AI_PROVIDER_NOT_CONFIGURED when no provider is registered, without ever calling it", async () => {
@@ -119,6 +126,7 @@ describe("ProcessAnalysisJobUseCase", () => {
       registry,
       new FakeAnalysisContentResolver(),
       auditLogWriter,
+      outboxWriter,
       BASE_CONFIG,
       new FixedClock(NOW),
       new SequentialIdGenerator(),

@@ -3,6 +3,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import { GetDocumentAnalysisInputUseCase, type DocumentAnalysisInput } from "../../../extraction";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { AnalysisJob } from "../../domain/analysis-job.aggregate";
 import { AnalysisPermission } from "../../domain/analysis-permission";
 import { AnalysisScope } from "../../domain/analysis-scope";
@@ -47,6 +48,7 @@ export class StartDocumentAnalysisUseCase {
     @Inject(ANALYSIS_JOB_REPOSITORY) private readonly jobRepository: AnalysisJobRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(ANALYSIS_DISPATCHER) private readonly dispatcher: AnalysisDispatcher,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly getDocumentAnalysisInputUseCase: GetDocumentAnalysisInputUseCase,
   ) {}
@@ -114,6 +116,19 @@ export class StartDocumentAnalysisUseCase {
       resourceId: job.id,
       requestId: command.requestId,
       metadata: { scope: job.scope, documentId: command.documentId, analysisVersion: job.analysisVersion },
+    });
+
+    await this.outboxWriter.write({
+      organizationId: command.organizationId,
+      events: [
+        {
+          eventType: "DceAnalysisRequested",
+          aggregateType: "AnalysisJob",
+          aggregateId: job.id,
+          payload: { jobId: job.id, scope: job.scope, tenderId: command.tenderId, documentId: command.documentId, analysisVersion: job.analysisVersion },
+          occurredAt: job.createdAt,
+        },
+      ],
     });
 
     this.dispatcher.dispatch({ organizationId: command.organizationId, jobId: job.id, requestId: command.requestId });

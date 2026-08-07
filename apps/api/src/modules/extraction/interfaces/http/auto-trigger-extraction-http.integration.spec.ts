@@ -213,6 +213,10 @@ describe("Auto-trigger extraction — real HTTP + PostgreSQL (NestJS)", () => {
     // AI_PROVIDER_NOT_CONFIGURED intervient après la persistance de la décision), jamais nettoyée
     // par les suppressions "métier" ci-dessous (même motif que analysis-http.integration.spec.ts).
     await prisma.routingDecision.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    // Même motif que routingDecision ci-dessus — le dispatch d'analyse en arrière-plan continue
+    // d'écrire des évènements Outbox après que la réponse HTTP soit revenue, jamais nettoyés par
+    // les suppressions "métier" ci-dessous.
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.documentBusinessAnalysis.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.analysisAttempt.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.analysisJob.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });

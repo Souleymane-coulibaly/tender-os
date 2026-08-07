@@ -36,6 +36,7 @@ function fakeCreateDocumentUseCase(dceDocumentRepository: InMemoryDceDocumentRep
     execute: vi.fn(async (command: { title: string; file: { buffer: Buffer; originalFilename: string; mimeType: string } }) => {
       counter += 1;
       const documentId = `document-${counter}`;
+      const versionId = `document-${counter}-version-1`;
       const checksum = createHash("sha256").update(command.file.buffer).digest("hex");
       const extension = /\.([a-zA-Z0-9]+)$/.exec(command.file.originalFilename)?.[1]?.toLowerCase() ?? "";
       dceDocumentRepository.documentVersions.set(documentId, {
@@ -46,8 +47,9 @@ function fakeCreateDocumentUseCase(dceDocumentRepository: InMemoryDceDocumentRep
         sizeBytes: command.file.buffer.length,
         checksum,
         currentVersionNumber: 1,
+        currentVersionId: versionId,
       });
-      return { id: documentId, title: command.title, currentVersionNumber: 1 };
+      return { id: documentId, title: command.title, currentVersionNumber: 1, currentVersion: { id: versionId } };
     }),
   } as unknown as CreateDocumentWithFirstVersionUseCase;
 }

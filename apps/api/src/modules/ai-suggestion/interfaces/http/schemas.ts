@@ -11,6 +11,7 @@ export const ListAiSuggestionsQuerySchema = z
   .object({
     entityType: z.enum(ENTITY_TYPE_VALUES).optional(),
     entityId: z.string().uuid().optional(),
+    parentTenderId: z.string().uuid().optional(),
     status: z.enum(STATUS_VALUES).optional(),
   })
   .strict();

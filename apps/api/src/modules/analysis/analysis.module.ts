@@ -1,7 +1,10 @@
 import { Module } from "@nestjs/common";
+import { AiSuggestionModule } from "../ai-suggestion";
+import { DocumentsModule } from "../documents";
 import { ExtractionModule } from "../extraction";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
+import { OutboxModule } from "../outbox";
 import { TendersModule } from "../tenders";
 
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
@@ -12,6 +15,7 @@ import { ANALYSIS_DISPATCHER } from "./application/ports/analysis-dispatcher";
 import { ANALYSIS_JOB_REPOSITORY } from "./application/ports/analysis-job.repository";
 import { BUSINESS_ANALYSIS_REPOSITORY } from "./application/ports/business-analysis.repository";
 import { PROMPT_TEMPLATE } from "./application/ports/prompt-template.port";
+import { TENDER_ANALYSIS_SUMMARY_REVISION_REPOSITORY } from "./application/ports/tender-analysis-summary-revision.repository";
 
 import { CancelAnalysisUseCase } from "./application/use-cases/cancel-analysis.use-case";
 import { GetAnalysisCapabilitiesUseCase } from "./application/use-cases/get-analysis-capabilities.use-case";
@@ -23,8 +27,11 @@ import { ListTenderCriteriaUseCase } from "./application/use-cases/list-tender-c
 import { ListTenderDeadlinesUseCase } from "./application/use-cases/list-tender-deadlines.use-case";
 import { ListTenderQuestionsUseCase } from "./application/use-cases/list-tender-questions.use-case";
 import { ListTenderRequirementsUseCase } from "./application/use-cases/list-tender-requirements.use-case";
+import { ListTenderAnalysisSummaryRevisionsUseCase } from "./application/use-cases/list-tender-analysis-summary-revisions.use-case";
 import { ListTenderRisksUseCase } from "./application/use-cases/list-tender-risks.use-case";
+import { MapAnalysisFindingsToAiSuggestionsUseCase } from "./application/use-cases/map-analysis-findings-to-ai-suggestions.use-case";
 import { ProcessAnalysisJobUseCase } from "./application/use-cases/process-analysis-job.use-case";
+import { ReviseTenderAnalysisSummaryUseCase } from "./application/use-cases/revise-tender-analysis-summary.use-case";
 import { RetryAnalysisUseCase } from "./application/use-cases/retry-analysis.use-case";
 import { StartDocumentAnalysisUseCase } from "./application/use-cases/start-document-analysis.use-case";
 import { StartTenderAnalysisUseCase } from "./application/use-cases/start-tender-analysis.use-case";
@@ -37,12 +44,13 @@ import { PrismaAnalysisAttemptRepository } from "./infrastructure/prisma-analysi
 import { PrismaAnalysisJobRepository } from "./infrastructure/prisma-analysis-job.repository";
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
 import { PrismaBusinessAnalysisRepository } from "./infrastructure/prisma-business-analysis.repository";
+import { PrismaTenderAnalysisSummaryRevisionRepository } from "./infrastructure/prisma-tender-analysis-summary-revision.repository";
 import { StaticPromptTemplateProvider } from "./infrastructure/static-prompt-template.provider";
 
 import { AnalysisController } from "./interfaces/http/analysis.controller";
 
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ExtractionModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ExtractionModule, AiSuggestionModule, OutboxModule, DocumentsModule],
   controllers: [AnalysisController],
   providers: [
     StartTenderAnalysisUseCase,
@@ -60,10 +68,14 @@ import { AnalysisController } from "./interfaces/http/analysis.controller";
     ListTenderRequirementsUseCase,
     ListTenderRisksUseCase,
     ListTenderQuestionsUseCase,
+    MapAnalysisFindingsToAiSuggestionsUseCase,
+    ReviseTenderAnalysisSummaryUseCase,
+    ListTenderAnalysisSummaryRevisionsUseCase,
 
     { provide: ANALYSIS_JOB_REPOSITORY, useClass: PrismaAnalysisJobRepository },
     { provide: ANALYSIS_ATTEMPT_REPOSITORY, useClass: PrismaAnalysisAttemptRepository },
     { provide: BUSINESS_ANALYSIS_REPOSITORY, useClass: PrismaBusinessAnalysisRepository },
+    { provide: TENDER_ANALYSIS_SUMMARY_REVISION_REPOSITORY, useClass: PrismaTenderAnalysisSummaryRevisionRepository },
     { provide: ANALYSIS_CONTENT_RESOLVER, useClass: BusinessAnalysisContentResolver },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
     { provide: ANALYSIS_DISPATCHER, useClass: InProcessAnalysisDispatcher },

@@ -3,6 +3,7 @@ import { HealthModule } from "./health/health.module";
 import { AdministrativeDossierModule } from "./modules/administrative-dossier";
 import { AiBenchmarkModule, RoutingPolicyBridgeModule } from "./modules/ai-benchmark";
 import { AiSuggestionModule } from "./modules/ai-suggestion";
+import { AiSuggestionBridgeModule } from "./modules/ai-suggestion-bridge";
 import { AnalysisModule } from "./modules/analysis/analysis.module";
 import { ClientPortfolioModule } from "./modules/client-portfolio/client-portfolio.module";
 import { CockpitModule } from "./modules/cockpit";
@@ -48,6 +49,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     ExtractionModule,
     ExtractionTriggerBridgeModule,
     AnalysisModule,
+    AiSuggestionBridgeModule,
     KnowledgeBaseModule,
     RoutingPolicyBridgeModule,
     AiBenchmarkModule,

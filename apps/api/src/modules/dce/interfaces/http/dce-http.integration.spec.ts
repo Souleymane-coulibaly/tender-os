@@ -368,6 +368,56 @@ describe("DCE — real HTTP + PostgreSQL (NestJS)", () => {
     expect(downloadRes.headers.get("content-type")).toBe("application/pdf");
   });
 
+  it("V2 Sprint 4 — corrects a document's classification, journaling the previous/new value in the AuditLog", async () => {
+    const form = new FormData();
+    form.append("files", new Blob([Buffer.from(`%PDF-1.7 fake content ${randomUUID()}`)], { type: "application/pdf" }), "neutral-category.pdf");
+    const importRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/dce/documents`, { method: "POST", headers: authHeaders(tokenAdminA, orgAId), body: form });
+    const documentId = ((await importRes.json()) as { accepted: { documentId: string }[] }).accepted[0]!.documentId;
+
+    const patchRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/dce/documents/${documentId}/category`, {
+      method: "PATCH",
+      headers: { ...authHeaders(tokenAdminA, orgAId), "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "TECHNICAL", reason: "Il s'agit en réalité du CCTP." }),
+    });
+    expect(patchRes.status).toBe(200);
+    const patched = (await patchRes.json()) as { category: string };
+    expect(patched.category).toBe("TECHNICAL");
+
+    const auditEntry = await prisma.auditLog.findFirst({
+      where: { organizationId: orgAId, resourceType: "dce_document", resourceId: documentId, action: "dce.document_category_corrected" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(auditEntry?.metadata).toMatchObject({ newCategory: "TECHNICAL", reason: "Il s'agit en réalité du CCTP." });
+  });
+
+  it("READ_ONLY cannot correct a document's classification (403)", async () => {
+    const form = new FormData();
+    form.append("files", new Blob([Buffer.from(`%PDF-1.7 fake content ${randomUUID()}`)], { type: "application/pdf" }), "neutral-category-readonly.pdf");
+    const importRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/dce/documents`, { method: "POST", headers: authHeaders(tokenAdminA, orgAId), body: form });
+    const documentId = ((await importRes.json()) as { accepted: { documentId: string }[] }).accepted[0]!.documentId;
+
+    const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/dce/documents/${documentId}/category`, {
+      method: "PATCH",
+      headers: { ...authHeaders(tokenReadOnlyA, orgAId), "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "FINANCIAL" }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("org B cannot correct org A's document classification (404)", async () => {
+    const form = new FormData();
+    form.append("files", new Blob([Buffer.from(`%PDF-1.7 fake content ${randomUUID()}`)], { type: "application/pdf" }), "neutral-category-crossorg.pdf");
+    const importRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/dce/documents`, { method: "POST", headers: authHeaders(tokenAdminA, orgAId), body: form });
+    const documentId = ((await importRes.json()) as { accepted: { documentId: string }[] }).accepted[0]!.documentId;
+
+    const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/dce/documents/${documentId}/category`, {
+      method: "PATCH",
+      headers: { ...authHeaders(tokenAdminB, orgBId), "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "FINANCIAL" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
   /** Mission Sprint 8A.2 (correction bug #3 "import ZIP lourd échoue ou bloque") — l'import ZIP
    *  est désormais asynchrone : la requête HTTP répond IMMÉDIATEMENT avec un job à l'état CREATED
    *  (202), jamais un 422/201 synchrone qui obligerait à attendre l'extraction/l'import complets.

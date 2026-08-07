@@ -46,6 +46,11 @@ export type DocumentAnalysisInput = Readonly<{
   tenderId: string;
   dceId: string;
   documentId: string;
+  /** V2 Sprint 4 (audit Codex P1-004) — version EXACTE du document au moment de cette résolution
+   *  (jamais recalculée plus tard) : permet à Analysis de capturer, dès la persistance du résultat
+   *  documentaire, quelle version a réellement été analysée — jamais "la version courante au
+   *  moment où quelqu'un consulte la suggestion", qui peut avoir changé depuis. */
+  documentVersionId: string;
   documentName: string;
   /** Classification DCE (ADMINISTRATIVE/TECHNICAL/FINANCIAL/DRAWINGS/OTHER) — jamais une
    *  classification IA, une donnée déterministe déjà calculée à l'import (module DCE). */
@@ -141,6 +146,7 @@ export class GetDocumentAnalysisInputUseCase {
       tenderId: query.tenderId,
       dceId: dce.id.value,
       documentId: query.documentId,
+      documentVersionId: summary.currentVersionId,
       documentName: summary.originalFilename,
       documentType: summary.category,
       extractionId: extraction.documentId,

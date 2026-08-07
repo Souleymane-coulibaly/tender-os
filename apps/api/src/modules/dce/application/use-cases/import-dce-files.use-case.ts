@@ -210,6 +210,7 @@ export class ImportDceFilesUseCase {
               sizeBytes: validated.sizeBytes,
               checksum: validated.checksum,
               currentVersionNumber: 1,
+              currentVersionId: documentSummary.currentVersion!.id,
               category: link.category,
               processingStatus: link.processingStatus,
               createdByUserId: command.actorId,

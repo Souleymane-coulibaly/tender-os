@@ -15,6 +15,15 @@ export const AiSuggestionEntityType = {
   TechnicalMemoSection: "TECHNICAL_MEMO_SECTION",
   PricingLine: "PRICING_LINE",
   CompanyLegalIdentity: "COMPANY_LEGAL_IDENTITY",
+  // V2 Sprint 4 — mapping Finding → AiSuggestion (analyse IA du DCE). Additif, valeurs ci-dessus
+  // conservées (y compris celles encore réservées à de futurs sprints).
+  TenderField: "TENDER_FIELD",
+  TenderLotField: "TENDER_LOT_FIELD",
+  TenderAwardCriterion: "TENDER_AWARD_CRITERION",
+  TenderRequestedDocument: "TENDER_REQUESTED_DOCUMENT",
+  TenderMilestone: "TENDER_MILESTONE",
+  TenderRisk: "TENDER_RISK",
+  BuyerField: "BUYER_FIELD",
 } as const;
 
 export type AiSuggestionEntityType = (typeof AiSuggestionEntityType)[keyof typeof AiSuggestionEntityType];

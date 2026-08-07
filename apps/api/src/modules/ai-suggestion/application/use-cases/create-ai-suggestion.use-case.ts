@@ -2,17 +2,22 @@ import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { AI_SUGGESTION_ENTITY_TYPES } from "../../domain/ai-suggestion-entity-type";
 import { AiSuggestionInvalidProposedValueError, AiSuggestionSchemaNotRegisteredError } from "../../domain/errors";
 import { toAiSuggestionSummary, type AiSuggestionSummary } from "../dtos";
+import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { AI_SUGGESTION_REPOSITORY, type AiSuggestionRepository } from "../ports/ai-suggestion.repository";
 import { AiSuggestionFieldSchemaRegistry } from "../services/ai-suggestion-field-schema-registry";
 
 export type CreateAiSuggestionCommand = Readonly<{
   organizationId: string;
   entityType: string;
-  entityId: string;
+  entityId?: string | undefined;
   fieldName: string;
+  /** V2 Sprint 4 — contexte de cible explicite, jamais uniquement encodé dans proposedValue. */
+  parentTenderId: string;
+  parentLotId?: string | undefined;
   proposedValue: unknown;
   confidence: number;
   sourceDocumentId?: string | undefined;
@@ -23,6 +28,8 @@ export type CreateAiSuggestionCommand = Readonly<{
   aiProvider?: string | undefined;
   aiModel?: string | undefined;
   createdByProcess: string;
+  actorId?: string | undefined;
+  requestId?: string | undefined;
 }>;
 
 /**
@@ -32,8 +39,10 @@ export type CreateAiSuggestionCommand = Readonly<{
  * Correctif audit Codex P1-003 — le schéma de validation n'est plus fourni par l'appelant : il
  * est résolu depuis `AiSuggestionFieldSchemaRegistry` par (entityType, fieldName). Un producteur
  * qui n'a pas enregistré son schéma au préalable (dans son propre `onModuleInit`) se voit refuser
- * la création — c'est le comportement attendu en Sprint 1, où aucun schéma n'est encore enregistré
- * (aucun mapper métier créé, conformément à la mission).
+ * la création.
+ *
+ * V2 Sprint 4 — `parentTenderId` devient obligatoire (racine tenantée toujours connue et vérifiée
+ * par FK), `entityId` devient optionnel (absent pour une suggestion de CREATION).
  */
 @Injectable()
 export class CreateAiSuggestionUseCase {
@@ -41,6 +50,8 @@ export class CreateAiSuggestionUseCase {
     @Inject(AI_SUGGESTION_REPOSITORY) private readonly repository: AiSuggestionRepository,
     private readonly schemaRegistry: AiSuggestionFieldSchemaRegistry,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(command: CreateAiSuggestionCommand): Promise<AiSuggestionSummary> {
@@ -68,6 +79,8 @@ export class CreateAiSuggestionUseCase {
       entityType: command.entityType,
       entityId: command.entityId,
       fieldName: command.fieldName,
+      parentTenderId: command.parentTenderId,
+      parentLotId: command.parentLotId,
       proposedValue: parsed.data,
       confidence: command.confidence,
       sourceDocumentId: command.sourceDocumentId,
@@ -79,6 +92,29 @@ export class CreateAiSuggestionUseCase {
       aiModel: command.aiModel,
       createdByProcess: command.createdByProcess,
       createdAt: now,
+    });
+
+    await this.auditLogWriter.record({
+      organizationId: command.organizationId,
+      actorId: command.actorId ?? command.createdByProcess,
+      action: "ai_suggestion.created",
+      resourceType: "ai_suggestion",
+      resourceId: created.id,
+      requestId: command.requestId,
+      metadata: { entityType: created.entityType, fieldName: created.fieldName, parentTenderId: created.parentTenderId },
+    });
+
+    await this.outboxWriter.write({
+      organizationId: command.organizationId,
+      events: [
+        {
+          eventType: "AiSuggestionCreated",
+          aggregateType: "AiSuggestion",
+          aggregateId: created.id,
+          payload: { suggestionId: created.id, entityType: created.entityType, fieldName: created.fieldName, parentTenderId: created.parentTenderId },
+          occurredAt: now,
+        },
+      ],
     });
 
     return toAiSuggestionSummary(created);

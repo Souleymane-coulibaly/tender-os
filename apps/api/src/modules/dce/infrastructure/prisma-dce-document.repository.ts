@@ -37,6 +37,7 @@ function toSummary(record: DceDocumentWithDocument): DceDocumentSummary | null {
     extension: version.extension,
     sizeBytes: version.sizeBytes,
     checksum: version.checksum,
+    currentVersionId: version.id,
     currentVersionNumber: record.document.currentVersionNumber,
     category: record.category,
     processingStatus: record.processingStatus,
@@ -145,6 +146,19 @@ export class PrismaDceDocumentRepository implements DceDocumentRepository {
     await this.prisma.dceDocument.updateMany({
       where: { dceId: input.dceId, documentId: input.documentId, organizationId: input.organizationId },
       data: { processingStatus: input.processingStatus, updatedAt: input.updatedAt },
+    });
+  }
+
+  async updateCategory(input: {
+    organizationId: string;
+    dceId: string;
+    documentId: string;
+    category: string;
+    updatedAt: Date;
+  }): Promise<void> {
+    await this.prisma.dceDocument.updateMany({
+      where: { dceId: input.dceId, documentId: input.documentId, organizationId: input.organizationId },
+      data: { category: input.category, updatedAt: input.updatedAt },
     });
   }
 

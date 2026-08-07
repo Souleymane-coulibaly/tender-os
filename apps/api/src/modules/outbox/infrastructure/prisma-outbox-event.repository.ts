@@ -26,7 +26,10 @@ export class PrismaOutboxEventRepository implements OutboxEventRepository {
     if (input.events.length === 0) {
       return;
     }
-    const client = tx ?? this.prisma;
+    // V2 Sprint 4 (audit Codex P1-001, round 4) — priorité au `tx` explicite déjà établi (ex.
+    // AiSuggestion Accept/Modify/Reject, round 3), sinon rejoint la transaction ambiante active
+    // (ApplyAiSuggestionUseCase) si présente, voir PrismaService.currentClient().
+    const client = tx ?? this.prisma.currentClient();
     await client.outboxEvent.createMany({
       data: input.events.map((event) => ({
         id: randomUUID(),

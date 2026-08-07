@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GetTenderUseCase } from "../../../tenders";
 import {
+  FakeOutboxWriter,
   FixedClock,
   InMemoryAnalysisJobRepository,
   InMemoryAuditLogWriter,
@@ -22,6 +23,7 @@ describe("StartTenderAnalysisUseCase", () => {
       jobRepository,
       new InMemoryAuditLogWriter(),
       dispatcher,
+      new FakeOutboxWriter(),
       new FixedClock(NOW),
       getTenderUseCase as unknown as GetTenderUseCase,
     );

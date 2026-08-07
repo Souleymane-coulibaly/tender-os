@@ -7,6 +7,7 @@ import { AnalysisStatus } from "../domain/analysis-status";
 import { AnalysisNotFoundError } from "../domain/errors";
 import { AnalysisAttempt } from "../domain/analysis-attempt.entity";
 import type { AnalysisAuditLogEntry, AuditLogWriter } from "../application/ports/audit-log-writer";
+import type { OutboxEventInput, OutboxWriter } from "../../outbox";
 import type { AIProvider, AIProviderRequest, AIProviderResult, AIProviderUsage } from "../application/ports/ai-provider";
 import type { AIProviderRegistry } from "../application/ports/ai-provider-registry";
 import type { AnalysisAttemptRepository } from "../application/ports/analysis-attempt.repository";
@@ -45,6 +46,11 @@ import type {
   AnalysisSuccessResult,
   PreparedAnalysisRequest,
 } from "../application/ports/analysis-content-resolver";
+import type {
+  CreateTenderAnalysisSummaryRevisionInput,
+  TenderAnalysisSummaryRevisionRecord,
+  TenderAnalysisSummaryRevisionRepository,
+} from "../application/ports/tender-analysis-summary-revision.repository";
 
 export const FIXED_NOW = new Date("2026-07-29T14:00:00Z");
 
@@ -62,6 +68,14 @@ export class InMemoryAuditLogWriter implements AuditLogWriter {
   readonly entries: AnalysisAuditLogEntry[] = [];
   async record(entry: AnalysisAuditLogEntry): Promise<void> {
     this.entries.push(entry);
+  }
+}
+
+export class FakeOutboxWriter implements OutboxWriter {
+  readonly writes: { organizationId: string; events: OutboxEventInput[] }[] = [];
+
+  async write(input: { organizationId: string; events: OutboxEventInput[] }): Promise<void> {
+    this.writes.push(input);
   }
 }
 
@@ -437,6 +451,7 @@ export class InMemoryBusinessAnalysisRepository implements BusinessAnalysisRepos
       organizationId: input.organizationId,
       tenderId: input.tenderId,
       documentId: input.documentId,
+      documentVersionId: input.documentVersionId,
       analysisVersion: input.analysisVersion,
       documentType: input.output.documentType,
       language: input.output.language,
@@ -452,25 +467,29 @@ export class InMemoryBusinessAnalysisRepository implements BusinessAnalysisRepos
   async persistTenderConsolidation(_tx: PrismaTx, input: PersistTenderConsolidationInput): Promise<void> {
     const base = { organizationId: input.organizationId, tenderId: input.tenderId, analysisVersion: input.analysisVersion };
     const now = new Date().toISOString();
+    // Audit Codex P1-004 (round 3) — même comportement que PrismaBusinessAnalysisRepository :
+    // le documentVersionId gravé vient EXCLUSIVEMENT du snapshot fourni par l'appelant.
+    const documentVersionOf = (documentId: string | undefined | null): string | undefined =>
+      (documentId ? input.documentVersionsByDocumentId[documentId] : undefined) ?? undefined;
     for (const item of input.output.deadlines) {
-      this.deadlines.push({ id: randomUUID(), createdAt: now, ...item, ...base });
+      this.deadlines.push({ id: randomUUID(), createdAt: now, ...item, ...base, documentVersionId: documentVersionOf(item.documentId) });
     }
     for (const item of input.output.criteria) {
-      this.criteria.push({ id: randomUUID(), createdAt: now, ...item, ...base });
+      this.criteria.push({ id: randomUUID(), createdAt: now, ...item, ...base, documentVersionId: documentVersionOf(item.documentId) });
     }
     for (const item of input.output.requirements) {
-      this.requirements.push({ id: randomUUID(), createdAt: now, ...item, ...base });
+      this.requirements.push({ id: randomUUID(), createdAt: now, ...item, ...base, documentVersionId: documentVersionOf(item.documentId) });
     }
     for (const item of input.output.clauses) {
       this.clauses.push({ id: randomUUID(), createdAt: now, ...item, ...base });
     }
     for (const item of input.output.risks) {
-      this.risks.push({ id: randomUUID(), createdAt: now, ...item, ...base });
+      this.risks.push({ id: randomUUID(), createdAt: now, ...item, ...base, documentVersionId: documentVersionOf(item.documentId) });
     }
     for (const item of input.output.questions) {
       this.questions.push({ id: randomUUID(), createdAt: now, ...item, ...base });
     }
-    this.summaries.push({ ...base, ...input.output.summary, createdAt: now });
+    this.summaries.push({ id: randomUUID(), ...base, ...input.output.summary, createdAt: now });
   }
 
   async findLatestDocumentAnalyses(input: { organizationId: string; tenderId: string }): Promise<DocumentAnalysisRecord[]> {
@@ -537,5 +556,40 @@ export class InMemoryBusinessAnalysisRepository implements BusinessAnalysisRepos
     const matching = this.summaries.filter((summary) => summary.organizationId === input.organizationId && summary.tenderId === input.tenderId);
     if (matching.length === 0) return null;
     return matching.reduce((latest, current) => (current.analysisVersion > latest.analysisVersion ? current : latest));
+  }
+}
+
+export class InMemoryTenderAnalysisSummaryRevisionRepository implements TenderAnalysisSummaryRevisionRepository {
+  private readonly revisions: TenderAnalysisSummaryRevisionRecord[] = [];
+
+  async create(input: CreateTenderAnalysisSummaryRevisionInput): Promise<TenderAnalysisSummaryRevisionRecord> {
+    const revisionNumber =
+      this.revisions.filter((revision) => revision.organizationId === input.organizationId && revision.baseSummaryId === input.baseSummaryId).length + 1;
+    const record: TenderAnalysisSummaryRevisionRecord = {
+      id: input.id,
+      organizationId: input.organizationId,
+      tenderId: input.tenderId,
+      baseSummaryId: input.baseSummaryId,
+      revisionNumber,
+      opportunitySummary: input.opportunitySummary,
+      complexityLevel: input.complexityLevel,
+      mainCriteria: input.mainCriteria,
+      mainRisks: input.mainRisks,
+      mainObligations: input.mainObligations,
+      missingElements: input.missingElements,
+      pointsToClarify: input.pointsToClarify,
+      conflicts: input.conflicts,
+      editedByUserId: input.editedByUserId,
+      editedAt: input.editedAt.toISOString(),
+      reason: input.reason,
+    };
+    this.revisions.push(record);
+    return record;
+  }
+
+  async listByBaseSummaryId(input: { organizationId: string; baseSummaryId: string }): Promise<TenderAnalysisSummaryRevisionRecord[]> {
+    return this.revisions
+      .filter((revision) => revision.organizationId === input.organizationId && revision.baseSummaryId === input.baseSummaryId)
+      .sort((a, b) => b.revisionNumber - a.revisionNumber);
   }
 }

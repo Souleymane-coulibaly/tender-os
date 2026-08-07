@@ -271,6 +271,18 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    // V2 Sprint 4 — StartTenderAnalysisUseCase/StartDocumentAnalysisUseCase/ProcessAnalysisJobUseCase
+    // écrivent désormais des événements Outbox (DceAnalysisRequested/Started/Completed/Failed).
+    // Placé en tout dernier (juste avant `organization.deleteMany`, jamais avant) : `dispatch()`
+    // traite un job en arrière-plan sans être attendu par la requête HTTP qui le déclenche —
+    // `waitForTerminalAnalysis` n'observe que le STATUT terminal du job (déjà commité par
+    // `finalizeAttempt`), pas la fin de l'écriture Outbox qui le suit de quelques instants dans la
+    // même fonction ; les nombreuses autres suppressions ci-dessus laissent largement le temps à ce
+    // dernier écrit de se terminer avant d'arriver ici. `routingDecision` est nettoyée une seconde
+    // fois pour la même raison (`completeRoutingDecision` s'exécute dans cette même fenêtre
+    // asynchrone, observé en pratique comme source de la même classe de race).
+    await prisma.routingDecision.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
     await app.close();
   }, 30000);

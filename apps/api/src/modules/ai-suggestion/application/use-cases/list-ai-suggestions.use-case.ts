@@ -1,5 +1,6 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { AiSuggestionPermission, roleHasAiSuggestionPermission } from "../../domain/ai-suggestion-permission";
+import { DEFAULT_TARGET_ACCESS_POLICY } from "../../domain/default-target-access-policy";
 import { AiSuggestionPermissionDeniedError } from "../../domain/errors";
 import { toAiSuggestionSummary, type AiSuggestionSummary } from "../dtos";
 import { AI_SUGGESTION_TARGET_ACCESS_POLICY, type AiSuggestionTargetAccessPolicy } from "../ports/ai-suggestion-target-access-policy";
@@ -11,15 +12,20 @@ export type ListAiSuggestionsQuery = Readonly<{
   actorRole: string;
   entityType?: string | undefined;
   entityId?: string | undefined;
+  parentTenderId?: string | undefined;
   status?: string | undefined;
 }>;
 
 @Injectable()
 export class ListAiSuggestionsUseCase {
+  private readonly targetAccessPolicy: AiSuggestionTargetAccessPolicy;
+
   constructor(
     @Inject(AI_SUGGESTION_REPOSITORY) private readonly repository: AiSuggestionRepository,
-    @Inject(AI_SUGGESTION_TARGET_ACCESS_POLICY) private readonly targetAccessPolicy: AiSuggestionTargetAccessPolicy,
-  ) {}
+    @Optional() @Inject(AI_SUGGESTION_TARGET_ACCESS_POLICY) targetAccessPolicy?: AiSuggestionTargetAccessPolicy,
+  ) {
+    this.targetAccessPolicy = targetAccessPolicy ?? DEFAULT_TARGET_ACCESS_POLICY;
+  }
 
   async execute(query: ListAiSuggestionsQuery): Promise<AiSuggestionSummary[]> {
     if (!roleHasAiSuggestionPermission(query.actorRole, AiSuggestionPermission.Read)) {
@@ -30,6 +36,7 @@ export class ListAiSuggestionsUseCase {
       organizationId: query.organizationId,
       entityType: query.entityType,
       entityId: query.entityId,
+      parentTenderId: query.parentTenderId,
       status: query.status,
     });
 
@@ -50,7 +57,9 @@ export class ListAiSuggestionsUseCase {
             actorId: query.actorId,
             actorRole: query.actorRole,
             entityType: record.entityType,
-            entityId: record.entityId,
+            entityId: record.entityId ?? undefined,
+            parentTenderId: record.parentTenderId,
+            parentLotId: record.parentLotId ?? undefined,
           });
           return true;
         } catch {

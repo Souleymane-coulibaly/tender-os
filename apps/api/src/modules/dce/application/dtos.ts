@@ -77,6 +77,9 @@ export type DceDocumentSummary = {
   extension: string;
   sizeBytes: number;
   checksum: string;
+  /// V2 Sprint 4 (audit Codex P1-004) — identifiant stable de la version actuelle, distinct de
+  /// `currentVersionNumber` (un entier, jamais une clé étrangère utilisable ailleurs).
+  currentVersionId: string;
   currentVersionNumber: number;
   category: string;
   processingStatus: string;

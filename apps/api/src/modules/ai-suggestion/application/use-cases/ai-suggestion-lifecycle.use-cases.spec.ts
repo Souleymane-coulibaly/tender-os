@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { Clock } from "../../../../shared-kernel/clock";
+import type { OutboxEventInput, OutboxWriter } from "../../../outbox";
 import { AiSuggestionEntityType } from "../../domain/ai-suggestion-entity-type";
 import { AiSuggestionAlreadyProcessedError, AiSuggestionNotFoundError, AiSuggestionPermissionDeniedError } from "../../domain/errors";
+import type { AiSuggestionAuditLogEntry, AuditLogWriter } from "../ports/audit-log-writer";
 import type { AiSuggestionTargetAccessPolicy } from "../ports/ai-suggestion-target-access-policy";
 import type { AiSuggestionRecord, AiSuggestionRepository } from "../ports/ai-suggestion.repository";
 import { AiSuggestionFieldSchemaRegistry } from "../services/ai-suggestion-field-schema-registry";
@@ -17,11 +19,25 @@ class FakeClock implements Clock {
   }
 }
 
-/** Même comportement par défaut que `NoopAiSuggestionTargetAccessPolicy` (infrastructure) —
- *  aucune restriction au-delà d'organisation+rôle, cohérent avec le câblage Sprint 1 réel. */
+/** Même comportement par défaut que `DEFAULT_TARGET_ACCESS_POLICY` (Domain) — aucune restriction
+ *  au-delà d'organisation+rôle, cohérent avec le câblage réel en l'absence de bridge. */
 class AllowAllTargetAccessPolicy implements AiSuggestionTargetAccessPolicy {
   async assertCanAccessTarget(): Promise<void> {
     return Promise.resolve();
+  }
+}
+
+class FakeAuditLogWriter implements AuditLogWriter {
+  readonly entries: AiSuggestionAuditLogEntry[] = [];
+  async record(entry: AiSuggestionAuditLogEntry): Promise<void> {
+    this.entries.push(entry);
+  }
+}
+
+class FakeOutboxWriter implements OutboxWriter {
+  readonly writes: { organizationId: string; events: OutboxEventInput[] }[] = [];
+  async write(input: { organizationId: string; events: OutboxEventInput[] }): Promise<void> {
+    this.writes.push(input);
   }
 }
 
@@ -48,19 +64,28 @@ class FakeAiSuggestionRepository implements AiSuggestionRepository {
     return [...this.store.values()];
   }
 
-  async transitionFromPending(input: {
-    id: string;
-    organizationId: string;
-    newStatus: string;
-    validatedByUserId?: string | undefined;
-    validatedAt?: Date | undefined;
-    rejectedAt?: Date | undefined;
-    decisionReason?: string | undefined;
-    appliedValue?: unknown;
-    updatedAt: Date;
-  }): Promise<AiSuggestionRecord | null> {
+  async existsForAnalysisAttempt(): Promise<boolean> {
+    return false;
+  }
+
+  async transitionFromPending(
+    input: {
+      id: string;
+      organizationId: string;
+      fromStatus?: string | undefined;
+      newStatus: string;
+      validatedByUserId?: string | undefined;
+      validatedAt?: Date | undefined;
+      rejectedAt?: Date | undefined;
+      decisionReason?: string | undefined;
+      conflictResolution?: string | undefined;
+      appliedValue?: unknown;
+      updatedAt: Date;
+    },
+    onSuccessTx?: ((tx: never) => Promise<void>) | undefined,
+  ): Promise<AiSuggestionRecord | null> {
     const record = this.store.get(input.id);
-    if (!record || record.organizationId !== input.organizationId || record.status !== "PENDING") {
+    if (!record || record.organizationId !== input.organizationId || record.status !== (input.fromStatus ?? "PENDING")) {
       return null;
     }
     const updated: AiSuggestionRecord = {
@@ -70,10 +95,16 @@ class FakeAiSuggestionRepository implements AiSuggestionRepository {
       validatedAt: input.validatedAt ?? null,
       rejectedAt: input.rejectedAt ?? null,
       decisionReason: input.decisionReason ?? null,
+      conflictResolution: input.conflictResolution ?? null,
       appliedValue: input.appliedValue !== undefined ? input.appliedValue : record.appliedValue,
       updatedAt: input.updatedAt,
     };
     this.store.set(input.id, updated);
+    // Même contrat que le repository Prisma réel (audit Codex P1-001, round 3) — `onSuccessTx`
+    // s'exécute seulement APRÈS que la transition ait réussi, jamais avant.
+    if (onSuccessTx) {
+      await onSuccessTx({} as never);
+    }
     return updated;
   }
 }
@@ -85,6 +116,8 @@ function pendingSuggestion(overrides: Partial<AiSuggestionRecord> = {}): AiSugge
     entityType: AiSuggestionEntityType.TenderLot,
     entityId: randomUUID(),
     fieldName: "title",
+    parentTenderId: randomUUID(),
+    parentLotId: null,
     proposedValue: "Lot 1",
     confidence: 0.9,
     sourceDocumentId: null,
@@ -100,6 +133,7 @@ function pendingSuggestion(overrides: Partial<AiSuggestionRecord> = {}): AiSugge
     validatedAt: null,
     rejectedAt: null,
     decisionReason: null,
+    conflictResolution: null,
     appliedValue: null,
     createdAt: new Date("2026-08-05T08:00:00.000Z"),
     updatedAt: new Date("2026-08-05T08:00:00.000Z"),
@@ -109,6 +143,8 @@ function pendingSuggestion(overrides: Partial<AiSuggestionRecord> = {}): AiSugge
 
 describe("AiSuggestion lifecycle use cases", () => {
   let repository: FakeAiSuggestionRepository;
+  let auditLogWriter: FakeAuditLogWriter;
+  let outboxWriter: FakeOutboxWriter;
   const clock = new FakeClock();
   const targetAccessPolicy = new AllowAllTargetAccessPolicy();
   const schemaRegistry = new AiSuggestionFieldSchemaRegistry();
@@ -116,25 +152,29 @@ describe("AiSuggestion lifecycle use cases", () => {
 
   beforeEach(() => {
     repository = new FakeAiSuggestionRepository();
+    auditLogWriter = new FakeAuditLogWriter();
+    outboxWriter = new FakeOutboxWriter();
   });
 
   describe("AcceptAiSuggestionUseCase", () => {
     it("accepts a pending suggestion and applies the proposed value verbatim", async () => {
       const suggestion = pendingSuggestion();
       repository.seed(suggestion);
-      const useCase = new AcceptAiSuggestionUseCase(repository, targetAccessPolicy, clock);
+      const useCase = new AcceptAiSuggestionUseCase(repository, targetAccessPolicy, clock, auditLogWriter, outboxWriter);
 
       const result = await useCase.execute({ id: suggestion.id, organizationId: suggestion.organizationId, actorUserId: randomUUID(), actorRole: "BID_MANAGER" });
 
       expect(result.status).toBe("ACCEPTED");
       expect(result.appliedValue).toBe("Lot 1");
       expect(result.validatedAt).toBeDefined();
+      expect(auditLogWriter.entries[0]?.action).toBe("ai_suggestion.accepted");
+      expect(outboxWriter.writes[0]?.events[0]).toMatchObject({ eventType: "AiSuggestionAccepted" });
     });
 
     it("refuses to accept a suggestion already processed by someone else (race-safe)", async () => {
       const suggestion = pendingSuggestion({ status: "REJECTED" });
       repository.seed(suggestion);
-      const useCase = new AcceptAiSuggestionUseCase(repository, targetAccessPolicy, clock);
+      const useCase = new AcceptAiSuggestionUseCase(repository, targetAccessPolicy, clock, auditLogWriter, outboxWriter);
 
       await expect(useCase.execute({ id: suggestion.id, organizationId: suggestion.organizationId, actorUserId: randomUUID(), actorRole: "BID_MANAGER" })).rejects.toThrow(
         AiSuggestionAlreadyProcessedError,
@@ -144,7 +184,7 @@ describe("AiSuggestion lifecycle use cases", () => {
     it("denies a READ_ONLY role", async () => {
       const suggestion = pendingSuggestion();
       repository.seed(suggestion);
-      const useCase = new AcceptAiSuggestionUseCase(repository, targetAccessPolicy, clock);
+      const useCase = new AcceptAiSuggestionUseCase(repository, targetAccessPolicy, clock, auditLogWriter, outboxWriter);
 
       await expect(useCase.execute({ id: suggestion.id, organizationId: suggestion.organizationId, actorUserId: randomUUID(), actorRole: "READ_ONLY" })).rejects.toThrow(
         AiSuggestionPermissionDeniedError,
@@ -154,9 +194,19 @@ describe("AiSuggestion lifecycle use cases", () => {
     it("returns not-found for a suggestion belonging to another organization (anti-IDOR)", async () => {
       const suggestion = pendingSuggestion();
       repository.seed(suggestion);
-      const useCase = new AcceptAiSuggestionUseCase(repository, targetAccessPolicy, clock);
+      const useCase = new AcceptAiSuggestionUseCase(repository, targetAccessPolicy, clock, auditLogWriter, outboxWriter);
 
       await expect(useCase.execute({ id: suggestion.id, organizationId: randomUUID(), actorUserId: randomUUID(), actorRole: "BID_MANAGER" })).rejects.toThrow(AiSuggestionNotFoundError);
+    });
+
+    it("falls back to the default (allow-all) target access policy when none is injected", async () => {
+      const suggestion = pendingSuggestion();
+      repository.seed(suggestion);
+      const useCase = new AcceptAiSuggestionUseCase(repository, undefined, clock, auditLogWriter, outboxWriter);
+
+      const result = await useCase.execute({ id: suggestion.id, organizationId: suggestion.organizationId, actorUserId: randomUUID(), actorRole: "BID_MANAGER" });
+
+      expect(result.status).toBe("ACCEPTED");
     });
   });
 
@@ -164,7 +214,7 @@ describe("AiSuggestion lifecycle use cases", () => {
     it("modifies a pending suggestion, keeping the original proposedValue but recording a different appliedValue", async () => {
       const suggestion = pendingSuggestion();
       repository.seed(suggestion);
-      const useCase = new ModifyAiSuggestionUseCase(repository, targetAccessPolicy, schemaRegistry, clock);
+      const useCase = new ModifyAiSuggestionUseCase(repository, targetAccessPolicy, schemaRegistry, clock, auditLogWriter, outboxWriter);
 
       const result = await useCase.execute({
         id: suggestion.id,
@@ -179,12 +229,13 @@ describe("AiSuggestion lifecycle use cases", () => {
       expect(result.appliedValue).toBe("Lot 1 — libellé corrigé");
       expect(result.proposedValue).toBe("Lot 1");
       expect(result.decisionReason).toBe("Nom réel du lot dans le règlement de consultation");
+      expect(auditLogWriter.entries[0]?.action).toBe("ai_suggestion.modified");
     });
 
     it("mission Sprint 1 correctif audit Codex P1-004 — refuses an editedValue that fails the centrally-registered schema", async () => {
       const suggestion = pendingSuggestion();
       repository.seed(suggestion);
-      const useCase = new ModifyAiSuggestionUseCase(repository, targetAccessPolicy, schemaRegistry, clock);
+      const useCase = new ModifyAiSuggestionUseCase(repository, targetAccessPolicy, schemaRegistry, clock, auditLogWriter, outboxWriter);
 
       await expect(
         useCase.execute({ id: suggestion.id, organizationId: suggestion.organizationId, actorUserId: randomUUID(), actorRole: "CONTRIBUTOR", editedValue: "" }),
@@ -205,7 +256,7 @@ describe("AiSuggestion lifecycle use cases", () => {
     it("AcceptAiSuggestionUseCase refuses when the target access policy denies access", async () => {
       const suggestion = pendingSuggestion();
       repository.seed(suggestion);
-      const useCase = new AcceptAiSuggestionUseCase(repository, new DenyAllTargetAccessPolicy(), clock);
+      const useCase = new AcceptAiSuggestionUseCase(repository, new DenyAllTargetAccessPolicy(), clock, auditLogWriter, outboxWriter);
 
       await expect(useCase.execute({ id: suggestion.id, organizationId: suggestion.organizationId, actorUserId: randomUUID(), actorRole: "BID_MANAGER" })).rejects.toThrow();
     });
@@ -227,7 +278,7 @@ describe("AiSuggestion lifecycle use cases", () => {
       repository.seed(denied);
 
       class SelectiveTargetAccessPolicy implements AiSuggestionTargetAccessPolicy {
-        async assertCanAccessTarget(input: { entityId: string }): Promise<void> {
+        async assertCanAccessTarget(input: { entityId: string | undefined }): Promise<void> {
           if (input.entityId === denied.entityId) {
             throw new Error("target not accessible to this actor");
           }
@@ -245,7 +296,7 @@ describe("AiSuggestion lifecycle use cases", () => {
     it("rejects a pending suggestion and keeps the row for audit (no deletion)", async () => {
       const suggestion = pendingSuggestion();
       repository.seed(suggestion);
-      const useCase = new RejectAiSuggestionUseCase(repository, targetAccessPolicy, clock);
+      const useCase = new RejectAiSuggestionUseCase(repository, targetAccessPolicy, clock, auditLogWriter, outboxWriter);
 
       const result = await useCase.execute({ id: suggestion.id, organizationId: suggestion.organizationId, actorUserId: randomUUID(), actorRole: "OWNER", reason: "Hors périmètre du lot" });
 
@@ -253,12 +304,13 @@ describe("AiSuggestion lifecycle use cases", () => {
       expect(result.rejectedAt).toBeDefined();
       expect(result.decisionReason).toBe("Hors périmètre du lot");
       expect(await repository.findById({ id: suggestion.id, organizationId: suggestion.organizationId })).not.toBeNull();
+      expect(auditLogWriter.entries[0]?.action).toBe("ai_suggestion.rejected");
     });
 
     it("denies an EXTERNAL_CONSULTANT role", async () => {
       const suggestion = pendingSuggestion();
       repository.seed(suggestion);
-      const useCase = new RejectAiSuggestionUseCase(repository, targetAccessPolicy, clock);
+      const useCase = new RejectAiSuggestionUseCase(repository, targetAccessPolicy, clock, auditLogWriter, outboxWriter);
 
       await expect(
         useCase.execute({ id: suggestion.id, organizationId: suggestion.organizationId, actorUserId: randomUUID(), actorRole: "EXTERNAL_CONSULTANT" }),

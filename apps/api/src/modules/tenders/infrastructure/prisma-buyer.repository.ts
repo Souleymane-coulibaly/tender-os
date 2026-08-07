@@ -61,12 +61,12 @@ export class PrismaBuyerRepository implements BuyerRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(input: { organizationId: string; buyerId: string }): Promise<Buyer | null> {
-    const record = await this.prisma.buyer.findFirst({ where: { id: input.buyerId, organizationId: input.organizationId } });
+    const record = await this.prisma.currentClient().buyer.findFirst({ where: { id: input.buyerId, organizationId: input.organizationId } });
     return record ? toDomain(record) : null;
   }
 
   async list(input: { organizationId: string; search?: string | undefined; includeArchived?: boolean | undefined }): Promise<Buyer[]> {
-    const records = await this.prisma.buyer.findMany({
+    const records = await this.prisma.currentClient().buyer.findMany({
       where: {
         organizationId: input.organizationId,
         ...(input.includeArchived ? {} : { archivedAt: null }),
@@ -79,6 +79,6 @@ export class PrismaBuyerRepository implements BuyerRepository {
 
   async save(buyer: Buyer): Promise<void> {
     const data = toPersistence(buyer);
-    await this.prisma.buyer.upsert({ where: { id: data.id }, create: data, update: data });
+    await this.prisma.currentClient().buyer.upsert({ where: { id: data.id }, create: data, update: data });
   }
 }

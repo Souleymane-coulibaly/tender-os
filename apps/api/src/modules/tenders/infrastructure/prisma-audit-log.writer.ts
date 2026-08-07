@@ -10,7 +10,9 @@ export class PrismaAuditLogWriter implements AuditLogWriter {
   constructor(private readonly prisma: PrismaService) {}
 
   async record(entry: TenderAuditLogEntry): Promise<void> {
-    await this.prisma.auditLog.create({
+    // V2 Sprint 4 (audit Codex P1-001, round 4) — rejoint la transaction ambiante active
+    // (ApplyAiSuggestionUseCase) si présente, voir PrismaService.currentClient().
+    await this.prisma.currentClient().auditLog.create({
       data: {
         id: randomUUID(),
         organizationId: entry.organizationId,

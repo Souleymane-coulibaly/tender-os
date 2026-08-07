@@ -141,7 +141,14 @@ describe("Analysis (business reads) — real HTTP + PostgreSQL (NestJS)", () => 
       },
     });
     await prisma.$transaction((tx) =>
-      businessAnalysisRepository.persistTenderConsolidation(tx, { organizationId, analysisJobId: jobId, analysisVersion, tenderId, output: tenderOutput() }),
+      businessAnalysisRepository.persistTenderConsolidation(tx, {
+        organizationId,
+        analysisJobId: jobId,
+        analysisVersion,
+        tenderId,
+        output: tenderOutput(),
+        documentVersionsByDocumentId: {},
+      }),
     );
     return jobId;
   }
@@ -233,6 +240,7 @@ describe("Analysis (business reads) — real HTTP + PostgreSQL (NestJS)", () => 
   }, 60000);
 
   afterAll(async () => {
+    await prisma.tenderAnalysisSummaryRevision.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.tenderAnalysisSummary.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.tenderQuestionFinding.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.tenderRiskFinding.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -243,6 +251,7 @@ describe("Analysis (business reads) — real HTTP + PostgreSQL (NestJS)", () => 
     await prisma.analysisJob.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.tender.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: [orgAId, orgBId] } } } });
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
@@ -352,5 +361,73 @@ describe("Analysis (business reads) — real HTTP + PostgreSQL (NestJS)", () => 
   it("rejects an unauthenticated request (401)", async () => {
     const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analysis`);
     expect(res.status).toBe(401);
+  });
+
+  it("POST .../analysis/revisions creates a revision without ever mutating the original AI summary", async () => {
+    const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analysis/revisions`, {
+      method: "POST",
+      headers: { ...authHeaders(tokenAdminA, orgAId), "Content-Type": "application/json" },
+      body: JSON.stringify({ opportunitySummary: "Synthèse corrigée par le Bid Manager.", reason: "Le budget acheteur a été précisé depuis." }),
+    });
+    expect(res.status).toBe(201);
+    const revision = (await res.json()) as { revisionNumber: number; opportunitySummary: string; complexityLevel?: string };
+    expect(revision.revisionNumber).toBe(1);
+    expect(revision.opportunitySummary).toBe("Synthèse corrigée par le Bid Manager.");
+    expect(revision.complexityLevel).toBeUndefined();
+
+    const original = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analysis`, { headers: authHeaders(tokenAdminA, orgAId) });
+    const originalBody = (await original.json()) as { opportunitySummary: string };
+    expect(originalBody.opportunitySummary).toBe("Marché de nettoyage, complexité modérée.");
+  });
+
+  it("GET .../analysis/revisions lists revisions most-recent-first, and is empty for an unrevised summary", async () => {
+    const emptyRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderWithoutAnalysisId}/analysis/revisions`, { headers: authHeaders(tokenAdminA, orgAId) });
+    expect(emptyRes.status).toBe(200);
+    expect(await emptyRes.json()).toEqual([]);
+
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analysis/revisions`, {
+      method: "POST",
+      headers: { ...authHeaders(tokenAdminA, orgAId), "Content-Type": "application/json" },
+      body: JSON.stringify({ pointsToClarify: ["Confirmer le format du DPGF"] }),
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analysis/revisions`, { headers: authHeaders(tokenAdminA, orgAId) });
+    expect(res.status).toBe(200);
+    const revisions = (await res.json()) as { revisionNumber: number }[];
+    expect(revisions.length).toBeGreaterThanOrEqual(1);
+    expect(revisions[0]!.revisionNumber).toBe(Math.max(...revisions.map((r) => r.revisionNumber)));
+  });
+
+  it("refuses an empty revision body (400, at least one field must be corrected)", async () => {
+    const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analysis/revisions`, {
+      method: "POST",
+      headers: { ...authHeaders(tokenAdminA, orgAId), "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("refuses a READ_ONLY actor from creating a revision (403), while still allowing them to read it", async () => {
+    const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analysis/revisions`, {
+      method: "POST",
+      headers: { ...authHeaders(tokenReadOnlyA, orgAId), "Content-Type": "application/json" },
+      body: JSON.stringify({ opportunitySummary: "Tentative non autorisée." }),
+    });
+    expect(res.status).toBe(403);
+
+    const readRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analysis/revisions`, { headers: authHeaders(tokenReadOnlyA, orgAId) });
+    expect(readRes.status).toBe(200);
+  });
+
+  it("never lets another organization revise or read a tender's summary revisions (404)", async () => {
+    const postRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analysis/revisions`, {
+      method: "POST",
+      headers: { ...authHeaders(tokenAdminB, orgBId), "Content-Type": "application/json" },
+      body: JSON.stringify({ opportunitySummary: "Tentative cross-org." }),
+    });
+    expect(postRes.status).toBe(404);
+
+    const getRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analysis/revisions`, { headers: authHeaders(tokenAdminB, orgBId) });
+    expect(getRes.status).toBe(404);
   });
 });

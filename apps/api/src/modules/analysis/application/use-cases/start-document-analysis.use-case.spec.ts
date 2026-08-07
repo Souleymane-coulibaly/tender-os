@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DocumentAnalysisInput, GetDocumentAnalysisInputUseCase } from "../../../extraction";
 import { AnalysisPermissionMissingError } from "../../domain/errors";
 import {
+  FakeOutboxWriter,
   FixedClock,
   InMemoryAnalysisJobRepository,
   InMemoryAuditLogWriter,
@@ -21,6 +22,7 @@ function fakeInput(overrides?: Partial<DocumentAnalysisInput>): DocumentAnalysis
     tenderId: TENDER,
     dceId: DCE,
     documentId: DOCUMENT,
+    documentVersionId: "document-version-1",
     documentName: "cctp.pdf",
     documentType: "TECHNICAL",
     extractionId: DOCUMENT,
@@ -53,6 +55,7 @@ describe("StartDocumentAnalysisUseCase", () => {
       jobRepository,
       auditLogWriter,
       dispatcher,
+      new FakeOutboxWriter(),
       clock,
       getDocumentAnalysisInputUseCase as unknown as GetDocumentAnalysisInputUseCase,
     );

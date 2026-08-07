@@ -183,6 +183,35 @@ import { TendersController } from "./interfaces/http/tenders.controller";
   // motif que les réexports déjà pratiqués par Memberships (voir index.ts). TENDER_REPOSITORY
   // est réexporté pour un usage système interne par Extraction (mission Sprint 3 — lecture de
   // `Tender.language` comme indication OCR, jamais via un use case RBAC-gated dans ce contexte).
-  exports: [GetTenderUseCase, TENDER_REPOSITORY],
+  //
+  // V2 Sprint 4 — réexports pour `ai-suggestion-bridge` UNIQUEMENT : les ports/repositories
+  // satellites sont réutilisés en LECTURE SEULE (détection de conflit — la cible porte-t-elle
+  // déjà une valeur ?), jamais pour écrire — toute écriture passe exclusivement par le use case
+  // public correspondant (Create*/Update*), jamais par le repository directement. Même motif que
+  // TENDER_REPOSITORY déjà réexporté pour Extraction ci-dessus.
+  exports: [
+    GetTenderUseCase,
+    TENDER_REPOSITORY,
+    UpdateTenderUseCase,
+    TENDER_LOT_REPOSITORY,
+    GetTenderLotUseCase,
+    CreateTenderLotUseCase,
+    UpdateTenderLotUseCase,
+    AWARD_CRITERION_REPOSITORY,
+    CreateAwardCriterionUseCase,
+    UpdateAwardCriterionUseCase,
+    REQUESTED_DOCUMENT_REPOSITORY,
+    CreateRequestedDocumentUseCase,
+    UpdateRequestedDocumentUseCase,
+    MILESTONE_REPOSITORY,
+    CreateMilestoneUseCase,
+    UpdateMilestoneUseCase,
+    RISK_REPOSITORY,
+    CreateRiskUseCase,
+    UpdateRiskUseCase,
+    BUYER_REPOSITORY,
+    CreateBuyerUseCase,
+    UpdateBuyerUseCase,
+  ],
 })
 export class TendersModule {}

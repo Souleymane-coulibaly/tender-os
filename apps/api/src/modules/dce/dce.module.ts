@@ -12,6 +12,7 @@ import { DCE_REPOSITORY } from "./application/ports/dce.repository";
 import { FILE_SIGNATURE_DETECTOR } from "./application/ports/file-signature-detector";
 import { ZIP_ARCHIVE_INSPECTOR } from "./application/ports/zip-archive-inspector";
 
+import { CorrectDceDocumentCategoryUseCase } from "./application/use-cases/correct-dce-document-category.use-case";
 import { CreateDceUseCase } from "./application/use-cases/create-dce.use-case";
 import { DeleteDceDocumentUseCase } from "./application/use-cases/delete-dce-document.use-case";
 import { DownloadDceDocumentUseCase } from "./application/use-cases/download-dce-document.use-case";
@@ -51,6 +52,7 @@ import { DceController } from "./interfaces/http/dce.controller";
     DownloadDceDocumentUseCase,
     DeleteDceDocumentUseCase,
     ReplaceDceDocumentUseCase,
+    CorrectDceDocumentCategoryUseCase,
 
     { provide: DCE_REPOSITORY, useClass: PrismaDceRepository },
     { provide: DCE_DOCUMENT_REPOSITORY, useClass: PrismaDceDocumentRepository },

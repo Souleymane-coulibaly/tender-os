@@ -45,7 +45,7 @@ export class PrismaTenderRepository implements TenderRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(input: { organizationId: string; tenderId: string }): Promise<Tender | null> {
-    const record = await this.prisma.tender.findFirst({
+    const record = await this.prisma.currentClient().tender.findFirst({
       where: { id: input.tenderId, organizationId: input.organizationId },
     });
 
@@ -68,7 +68,7 @@ export class PrismaTenderRepository implements TenderRepository {
     const sortDirection = input.sortDirection ?? "desc";
     const where = buildWhere(input);
 
-    const records = await this.prisma.tender.findMany({
+    const records = await this.prisma.currentClient().tender.findMany({
       where,
       orderBy: [{ [sortField]: sortDirection }, { id: sortDirection }],
       take: input.limit + 1,
@@ -88,11 +88,11 @@ export class PrismaTenderRepository implements TenderRepository {
     if (input.idsFilter && input.idsFilter.length === 0) {
       return 0;
     }
-    return this.prisma.tender.count({ where: buildWhere(input) });
+    return this.prisma.currentClient().tender.count({ where: buildWhere(input) });
   }
 
   async countByStatus(input: TenderCountByStatusFilter): Promise<Record<string, number>> {
-    const groups = await this.prisma.tender.groupBy({
+    const groups = await this.prisma.currentClient().tender.groupBy({
       by: ["status"],
       where: {
         organizationId: input.organizationId,
@@ -106,15 +106,15 @@ export class PrismaTenderRepository implements TenderRepository {
 
   async save(tender: Tender): Promise<void> {
     const data = this.mapper.toPersistence(tender);
-    const existing = await this.prisma.tender.findUnique({ where: { id: data.id }, select: { id: true } });
+    const existing = await this.prisma.currentClient().tender.findUnique({ where: { id: data.id }, select: { id: true } });
 
     if (!existing) {
-      await this.prisma.tender.create({ data });
+      await this.prisma.currentClient().tender.create({ data });
       return;
     }
 
     const expectedPreviousVersion = data.version - 1;
-    const result = await this.prisma.tender.updateMany({
+    const result = await this.prisma.currentClient().tender.updateMany({
       where: { id: data.id, version: expectedPreviousVersion },
       data,
     });

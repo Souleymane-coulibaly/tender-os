@@ -35,6 +35,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
         dceId: input.dceId,
         documentId: input.documentId,
         extractionVersion: input.extractionVersion,
+        documentVersionId: input.documentVersionId,
         documentType: output.documentType,
         language: output.language,
         metadata: output.metadata as unknown as Prisma.InputJsonValue,
@@ -55,6 +56,10 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
       analysisJobId: input.analysisJobId,
       analysisVersion: input.analysisVersion,
     };
+    // Audit Codex P1-004 (round 3) — snapshot résolu une seule fois par l'appelant, jamais
+    // re-dérivé ici : voir PersistTenderConsolidationInput.documentVersionsByDocumentId.
+    const documentVersionOf = (documentId: string | undefined | null): string | null =>
+      (documentId ? input.documentVersionsByDocumentId[documentId] : undefined) ?? null;
 
     if (output.deadlines.length > 0) {
       await tx.tenderDeadlineFinding.createMany({
@@ -66,6 +71,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
           date: item.date ? new Date(item.date) : null,
           rawText: item.rawText ?? null,
           documentId: item.documentId ?? null,
+          documentVersionId: documentVersionOf(item.documentId),
           chunkSequence: item.chunkSequence ?? null,
           pageStart: item.pageStart ?? null,
           pageEnd: item.pageEnd ?? null,
@@ -91,6 +97,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
           threshold: item.threshold ?? null,
           isEliminatory: item.isEliminatory,
           documentId: item.documentId ?? null,
+          documentVersionId: documentVersionOf(item.documentId),
           chunkSequence: item.chunkSequence ?? null,
           pageStart: item.pageStart ?? null,
           pageEnd: item.pageEnd ?? null,
@@ -113,6 +120,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
           expectedFormat: item.expectedFormat ?? null,
           isMandatory: item.isMandatory,
           documentId: item.documentId ?? null,
+          documentVersionId: documentVersionOf(item.documentId),
           chunkSequence: item.chunkSequence ?? null,
           pageStart: item.pageStart ?? null,
           pageEnd: item.pageEnd ?? null,
@@ -157,6 +165,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
           explanation: item.explanation,
           recommendation: item.recommendation,
           documentId: item.documentId ?? null,
+          documentVersionId: documentVersionOf(item.documentId),
           chunkSequence: item.chunkSequence ?? null,
           pageStart: item.pageStart ?? null,
           pageEnd: item.pageEnd ?? null,
@@ -218,6 +227,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
 
     return records.map((record) => ({
       documentId: record.documentId,
+      documentVersionId: record.documentVersionId ?? undefined,
       analysisVersion: record.analysisVersion,
       documentType: record.documentType,
       language: record.language,
@@ -246,6 +256,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
         date: record.date?.toISOString(),
         rawText: record.rawText ?? undefined,
         documentId: record.documentId ?? undefined,
+        documentVersionId: record.documentVersionId ?? undefined,
         chunkSequence: record.chunkSequence ?? undefined,
         pageStart: record.pageStart ?? undefined,
         pageEnd: record.pageEnd ?? undefined,
@@ -279,6 +290,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
         threshold: record.threshold ?? undefined,
         isEliminatory: record.isEliminatory,
         documentId: record.documentId ?? undefined,
+        documentVersionId: record.documentVersionId ?? undefined,
         chunkSequence: record.chunkSequence ?? undefined,
         pageStart: record.pageStart ?? undefined,
         pageEnd: record.pageEnd ?? undefined,
@@ -309,6 +321,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
         expectedFormat: record.expectedFormat ?? undefined,
         isMandatory: record.isMandatory,
         documentId: record.documentId ?? undefined,
+        documentVersionId: record.documentVersionId ?? undefined,
         chunkSequence: record.chunkSequence ?? undefined,
         pageStart: record.pageStart ?? undefined,
         pageEnd: record.pageEnd ?? undefined,
@@ -369,6 +382,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
         explanation: record.explanation,
         recommendation: record.recommendation,
         documentId: record.documentId ?? undefined,
+        documentVersionId: record.documentVersionId ?? undefined,
         chunkSequence: record.chunkSequence ?? undefined,
         pageStart: record.pageStart ?? undefined,
         pageEnd: record.pageEnd ?? undefined,
@@ -429,6 +443,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
   }
 
   private toSummaryRecord(record: {
+    id: string;
     analysisVersion: number;
     opportunitySummary: string;
     complexityLevel: string;
@@ -443,6 +458,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
     createdAt: Date;
   }): TenderAnalysisSummaryRecord {
     return {
+      id: record.id,
       analysisVersion: record.analysisVersion,
       opportunitySummary: record.opportunitySummary,
       complexityLevel: record.complexityLevel,

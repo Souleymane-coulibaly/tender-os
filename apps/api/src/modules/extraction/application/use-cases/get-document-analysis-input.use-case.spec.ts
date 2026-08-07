@@ -46,6 +46,7 @@ describe("GetDocumentAnalysisInputUseCase", () => {
         sizeBytes: 1000,
         checksum: "abc",
         currentVersionNumber: 1,
+        currentVersionId: "doc-1-version-1",
         category: "TECHNICAL",
         processingStatus: "READY_FOR_ANALYSIS",
         createdByUserId: "user-1",
@@ -129,6 +130,7 @@ describe("GetDocumentAnalysisInputUseCase", () => {
     expect(result.documentId).toBe(DOCUMENT);
     expect(result.documentName).toBe("cctp.pdf");
     expect(result.documentType).toBe("TECHNICAL");
+    expect(result.documentVersionId).toBe("doc-1-version-1");
     expect(result.extractionStatus).toBe(DocumentExtractionStatus.Succeeded);
     expect(result.partial).toBe(false);
     // Ordre déterministe garanti par sequence, jamais l'ordre d'insertion.

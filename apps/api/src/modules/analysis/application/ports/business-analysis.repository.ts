@@ -16,6 +16,9 @@ export type PersistDocumentAnalysisInput = Readonly<{
   dceId: string;
   documentId: string;
   extractionVersion: number;
+  /** V2 Sprint 4 (audit Codex P1-004) — version EXACTE du document analysée (jamais recalculée
+   *  après coup), même motif que `extractionVersion`. */
+  documentVersionId: string;
   output: DocumentAnalysisOutput;
 }>;
 
@@ -25,10 +28,21 @@ export type PersistTenderConsolidationInput = Readonly<{
   analysisVersion: number;
   tenderId: string;
   output: TenderConsolidationOutput;
+  /** V2 Sprint 4 (audit Codex P1-004, round 3) — snapshot `documentId -> documentVersionId` des
+   *  documents réellement consolidés, résolu UNE SEULE FOIS par l'appelant (`documentVersionId`
+   *  déjà porté par chaque `DocumentAnalysisRecord` de `consolidatedAnalyses`) et gravé sur chaque
+   *  Finding créée par cet appel — jamais re-dérivé plus tard, donc immunisé contre un remplacement
+   *  du document survenant après cette consolidation. Absent d'un `documentId` cité par une Finding
+   *  → `documentVersionId` reste `null` sur cette ligne (dégradation silencieuse de la provenance
+   *  uniquement, jamais un blocage de la persistance). */
+  documentVersionsByDocumentId: Readonly<Record<string, string | undefined>>;
 }>;
 
 export type DocumentAnalysisRecord = Readonly<{
   documentId: string;
+  /** V2 Sprint 4 (audit Codex P1-004) — `undefined` uniquement pour une ligne écrite avant ce
+   *  sprint (colonne additive nullable). */
+  documentVersionId?: string | undefined;
   analysisVersion: number;
   documentType: string;
   language: string;
@@ -51,6 +65,9 @@ export type DeadlineFindingRecord = Readonly<{
   date?: string | null | undefined;
   rawText?: string | null | undefined;
   documentId?: string | null | undefined;
+  /** V2 Sprint 4 (audit Codex P1-004, round 3) — version exacte du document, capturée au moment de
+   *  la persistance de la consolidation (jamais recalculée après coup). */
+  documentVersionId?: string | null | undefined;
   chunkSequence?: number | null | undefined;
   pageStart?: number | null | undefined;
   pageEnd?: number | null | undefined;
@@ -72,6 +89,8 @@ export type CriterionFindingRecord = Readonly<{
   threshold?: string | null | undefined;
   isEliminatory: boolean;
   documentId?: string | null | undefined;
+  /** V2 Sprint 4 (audit Codex P1-004, round 3) — voir DeadlineFindingRecord.documentVersionId. */
+  documentVersionId?: string | null | undefined;
   chunkSequence?: number | null | undefined;
   pageStart?: number | null | undefined;
   pageEnd?: number | null | undefined;
@@ -90,6 +109,8 @@ export type RequirementFindingRecord = Readonly<{
   expectedFormat?: string | null | undefined;
   isMandatory: boolean;
   documentId?: string | null | undefined;
+  /** V2 Sprint 4 (audit Codex P1-004, round 3) — voir DeadlineFindingRecord.documentVersionId. */
+  documentVersionId?: string | null | undefined;
   chunkSequence?: number | null | undefined;
   pageStart?: number | null | undefined;
   pageEnd?: number | null | undefined;
@@ -126,6 +147,8 @@ export type RiskFindingRecord = Readonly<{
   explanation: string;
   recommendation: string;
   documentId?: string | null | undefined;
+  /** V2 Sprint 4 (audit Codex P1-004, round 3) — voir DeadlineFindingRecord.documentVersionId. */
+  documentVersionId?: string | null | undefined;
   chunkSequence?: number | null | undefined;
   pageStart?: number | null | undefined;
   pageEnd?: number | null | undefined;
@@ -156,6 +179,7 @@ export type QuestionFindingRecord = Readonly<{
 }>;
 
 export type TenderAnalysisSummaryRecord = Readonly<{
+  id: string;
   analysisVersion: number;
   opportunitySummary: string;
   complexityLevel: string;

@@ -61,14 +61,14 @@ export class PrismaRequestedDocumentRepository implements RequestedDocumentRepos
     tenderId: string;
     documentId: string;
   }): Promise<RequestedDocument | null> {
-    const record = await this.prisma.tenderRequestedDocument.findFirst({
+    const record = await this.prisma.currentClient().tenderRequestedDocument.findFirst({
       where: { id: input.documentId, tenderId: input.tenderId, organizationId: input.organizationId },
     });
     return record ? toDomain(record) : null;
   }
 
   async listByTender(input: { organizationId: string; tenderId: string }): Promise<RequestedDocument[]> {
-    const records = await this.prisma.tenderRequestedDocument.findMany({
+    const records = await this.prisma.currentClient().tenderRequestedDocument.findMany({
       where: { tenderId: input.tenderId, organizationId: input.organizationId },
       orderBy: { displayOrder: "asc" },
     });
@@ -80,7 +80,7 @@ export class PrismaRequestedDocumentRepository implements RequestedDocumentRepos
     tenderIds: readonly string[];
   }): Promise<RequestedDocument[]> {
     if (input.tenderIds.length === 0) return [];
-    const records = await this.prisma.tenderRequestedDocument.findMany({
+    const records = await this.prisma.currentClient().tenderRequestedDocument.findMany({
       where: { organizationId: input.organizationId, tenderId: { in: [...input.tenderIds] } },
     });
     return records.map(toDomain);
@@ -88,11 +88,11 @@ export class PrismaRequestedDocumentRepository implements RequestedDocumentRepos
 
   async save(document: RequestedDocument): Promise<void> {
     const data = toPersistence(document);
-    await this.prisma.tenderRequestedDocument.upsert({ where: { id: data.id }, create: data, update: data });
+    await this.prisma.currentClient().tenderRequestedDocument.upsert({ where: { id: data.id }, create: data, update: data });
   }
 
   async delete(input: { organizationId: string; tenderId: string; documentId: string }): Promise<void> {
-    await this.prisma.tenderRequestedDocument.deleteMany({
+    await this.prisma.currentClient().tenderRequestedDocument.deleteMany({
       where: { id: input.documentId, tenderId: input.tenderId, organizationId: input.organizationId },
     });
   }

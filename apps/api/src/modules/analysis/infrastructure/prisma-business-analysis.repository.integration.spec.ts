@@ -35,6 +35,7 @@ describe("PrismaBusinessAnalysisRepository (PostgreSQL)", () => {
   let tenderId: string;
   let dceId: string;
   let documentId: string;
+  let documentVersionId: string;
   const createdTenderIds: string[] = [];
   const createdDocumentIds: string[] = [];
 
@@ -134,6 +135,7 @@ describe("PrismaBusinessAnalysisRepository (PostgreSQL)", () => {
     });
     document.promoteVersion({ versionId: version.id, versionNumber: 1, occurredAt: new Date() });
     await documentRepository.createWithInitialVersion({ document, version });
+    documentVersionId = version.id;
     return document.id.value;
   }
 
@@ -259,6 +261,7 @@ describe("PrismaBusinessAnalysisRepository (PostgreSQL)", () => {
           dceId,
           documentId,
           extractionVersion: 1,
+          documentVersionId,
           output: documentOutput(),
         }),
       );
@@ -269,6 +272,8 @@ describe("PrismaBusinessAnalysisRepository (PostgreSQL)", () => {
       expect(latest[0]!.analysisVersion).toBe(1);
       expect(latest[0]!.documentType).toBe("CCTP");
       expect(latest[0]!.deadlines).toHaveLength(1);
+      // Audit Codex P1-004 (round 3) — version exacte persistée, jamais recalculée après coup.
+      expect(latest[0]!.documentVersionId).toBe(documentVersionId);
     });
 
     it("resolves the HIGHEST analysisVersion once a second analysis exists for the same document", async () => {
@@ -282,6 +287,7 @@ describe("PrismaBusinessAnalysisRepository (PostgreSQL)", () => {
           dceId,
           documentId,
           extractionVersion: 2,
+          documentVersionId,
           output: documentOutput({ documentType: "CCAP" }),
         }),
       );
@@ -301,19 +307,34 @@ describe("PrismaBusinessAnalysisRepository (PostgreSQL)", () => {
   describe("persistTenderConsolidation / list*/getSummary/getLatestSummary", () => {
     it("persists all 6 finding categories and the summary atomically for one analysisVersion", async () => {
       const jobId = await createTenderAnalysisJob(1);
-      await prisma.$transaction((tx) => repository.persistTenderConsolidation(tx, { organizationId, analysisJobId: jobId, analysisVersion: 1, tenderId, output: tenderOutput() }));
+      await prisma.$transaction((tx) =>
+        repository.persistTenderConsolidation(tx, {
+          organizationId,
+          analysisJobId: jobId,
+          analysisVersion: 1,
+          tenderId,
+          output: tenderOutput(),
+          documentVersionsByDocumentId: { [documentId]: documentVersionId },
+        }),
+      );
 
       const deadlines = await repository.listDeadlines({ organizationId, tenderId, analysisVersion: 1, limit: 100, offset: 0 });
       expect(deadlines.total).toBe(3);
+      // Audit Codex P1-004 (round 3) — version exacte gravée sur la Finding elle-même, jamais
+      // recalculée après coup.
+      expect(deadlines.items[0]!.documentVersionId).toBe(documentVersionId);
       const criteria = await repository.listCriteria({ organizationId, tenderId, analysisVersion: 1, limit: 100, offset: 0 });
       expect(criteria.total).toBe(1);
+      expect(criteria.items[0]!.documentVersionId).toBe(documentVersionId);
       const requirements = await repository.listRequirements({ organizationId, tenderId, analysisVersion: 1, limit: 100, offset: 0 });
       expect(requirements.total).toBe(1);
+      expect(requirements.items[0]!.documentVersionId).toBe(documentVersionId);
       const clauses = await repository.listClauses({ organizationId, tenderId, analysisVersion: 1, limit: 100, offset: 0 });
       expect(clauses.total).toBe(1);
       const risks = await repository.listRisks({ organizationId, tenderId, analysisVersion: 1, limit: 100, offset: 0 });
       expect(risks.total).toBe(1);
       expect(risks.items[0]!.severity).toBe("HIGH");
+      expect(risks.items[0]!.documentVersionId).toBe(documentVersionId);
       const questions = await repository.listQuestions({ organizationId, tenderId, analysisVersion: 1, limit: 100, offset: 0 });
       expect(questions.total).toBe(1);
 
@@ -346,6 +367,7 @@ describe("PrismaBusinessAnalysisRepository (PostgreSQL)", () => {
               goNoGoRationale: "Version 2 : conditions clarifiées.",
             },
           }),
+          documentVersionsByDocumentId: { [documentId]: documentVersionId },
         }),
       );
 

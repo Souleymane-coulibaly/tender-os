@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Req, UseFilters, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Req, UseFilters, UseGuards } from "@nestjs/common";
 import { AuthenticatedGuard, CurrentActor, type AuthenticatedActor } from "../../../identity";
 import { CurrentMembershipContext, OrganizationMembershipGuard, type MembershipContext } from "../../../memberships";
 import type { RequestWithId } from "../../../../shared-kernel/request-id.middleware";
@@ -13,13 +13,24 @@ import { ListTenderCriteriaUseCase } from "../../application/use-cases/list-tend
 import { ListTenderDeadlinesUseCase } from "../../application/use-cases/list-tender-deadlines.use-case";
 import { ListTenderQuestionsUseCase } from "../../application/use-cases/list-tender-questions.use-case";
 import { ListTenderRequirementsUseCase } from "../../application/use-cases/list-tender-requirements.use-case";
+import { ListTenderAnalysisSummaryRevisionsUseCase } from "../../application/use-cases/list-tender-analysis-summary-revisions.use-case";
 import { ListTenderRisksUseCase } from "../../application/use-cases/list-tender-risks.use-case";
+import { MapAnalysisFindingsToAiSuggestionsUseCase } from "../../application/use-cases/map-analysis-findings-to-ai-suggestions.use-case";
+import { ReviseTenderAnalysisSummaryUseCase } from "../../application/use-cases/revise-tender-analysis-summary.use-case";
 import { RetryAnalysisUseCase } from "../../application/use-cases/retry-analysis.use-case";
 import { StartDocumentAnalysisUseCase } from "../../application/use-cases/start-document-analysis.use-case";
 import { StartTenderAnalysisUseCase } from "../../application/use-cases/start-tender-analysis.use-case";
 import { AnalysisErrorFilter } from "./analysis-error.filter";
 import { presentAnalysisJob } from "./presenters";
-import { BusinessAnalysisListQuerySchema, IdParamSchema, type BusinessAnalysisListQuery } from "./schemas";
+import {
+  BusinessAnalysisListQuerySchema,
+  IdParamSchema,
+  MapSuggestionsQuerySchema,
+  ReviseTenderAnalysisSummaryBodySchema,
+  type BusinessAnalysisListQuery,
+  type MapSuggestionsQuery,
+  type ReviseTenderAnalysisSummaryBody,
+} from "./schemas";
 
 /** Socle technique minimal (mission Sprint 4.1 §"API HTTP minimale") — jamais d'UI complète, jamais
  *  de lecture du contenu du corpus analysé ni de la réponse brute du provider. Deux routes de
@@ -45,6 +56,9 @@ export class AnalysisController {
     private readonly listTenderRequirementsUseCase: ListTenderRequirementsUseCase,
     private readonly listTenderRisksUseCase: ListTenderRisksUseCase,
     private readonly listTenderQuestionsUseCase: ListTenderQuestionsUseCase,
+    private readonly mapAnalysisFindingsToAiSuggestionsUseCase: MapAnalysisFindingsToAiSuggestionsUseCase,
+    private readonly reviseTenderAnalysisSummaryUseCase: ReviseTenderAnalysisSummaryUseCase,
+    private readonly listTenderAnalysisSummaryRevisionsUseCase: ListTenderAnalysisSummaryRevisionsUseCase,
   ) {}
 
   @Post("tenders/:tenderId/analyses")
@@ -301,6 +315,64 @@ export class AnalysisController {
       analysisVersion: query.analysisVersion,
       limit: query.limit,
       offset: query.offset,
+    });
+  }
+
+  // V2 Sprint 4 §9-12 — déclenche le mapping Finding → AiSuggestion (jamais automatique, toujours
+  // une action explicite de l'utilisateur) : crée des suggestions PENDING, n'écrit jamais
+  // directement de donnée métier (voir `ai-suggestion-bridge` pour l'application ultérieure).
+  @Post("tenders/:tenderId/analysis/map-suggestions")
+  @HttpCode(HttpStatus.OK)
+  async mapSuggestions(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Query(new ZodValidationPipe(MapSuggestionsQuerySchema)) query: MapSuggestionsQuery,
+    @Req() request: RequestWithId,
+  ) {
+    return this.mapAnalysisFindingsToAiSuggestionsUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      analysisVersion: query.analysisVersion,
+      requestId: request.id,
+    });
+  }
+
+  // V2 Sprint 4 — révision utilisateur de la synthèse IA : l'original reste intact et consultable
+  // via GET .../analysis (ci-dessus), cette révision s'ajoute comme une nouvelle ligne append-only.
+  @Post("tenders/:tenderId/analysis/revisions")
+  @HttpCode(HttpStatus.CREATED)
+  async reviseSummary(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Body(new ZodValidationPipe(ReviseTenderAnalysisSummaryBodySchema)) body: ReviseTenderAnalysisSummaryBody,
+    @Req() request: RequestWithId,
+  ) {
+    return this.reviseTenderAnalysisSummaryUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      ...body,
+      requestId: request.id,
+    });
+  }
+
+  @Get("tenders/:tenderId/analysis/revisions")
+  @HttpCode(HttpStatus.OK)
+  async listSummaryRevisions(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    return this.listTenderAnalysisSummaryRevisionsUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorId: actor.userId,
+      actorRole: membership.role,
     });
   }
 }

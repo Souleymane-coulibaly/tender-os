@@ -45,6 +45,16 @@ export interface DceDocumentRepository {
     processingStatus: string;
     updatedAt: Date;
   }): Promise<void>;
+  /** V2 Sprint 4 — met à jour uniquement `category` (jamais `processingStatus`), symétrique de
+   *  `updateProcessingStatus` ci-dessus : la valeur précédente n'est jamais lue ici (le use case
+   *  appelant la connaît déjà via le lien chargé avant l'appel, et l'écrit dans l'AuditLog). */
+  updateCategory(input: {
+    organizationId: string;
+    dceId: string;
+    documentId: string;
+    category: string;
+    updatedAt: Date;
+  }): Promise<void>;
   /**
    * Mission P1-2 — sérialise, pour un même DCE, tout le cycle "vérifier l'absence de doublon actif
    * puis créer" derrière un verrou consultatif transactionnel Postgres (`pg_advisory_xact_lock`,

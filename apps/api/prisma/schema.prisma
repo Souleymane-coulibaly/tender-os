@@ -412,6 +412,10 @@ model Tender {
   administrativeFormDrafts   AdministrativeFormDraft[]
   buyerProvidedFormTemplates BuyerProvidedFormTemplate[]
   tenderSubmissions          TenderSubmission[]
+  /// V2 Sprint 4 — suggestions IA rattachées à ce Tender (racine tenantée, jamais l'entité cible
+  /// polymorphe elle-même) et révisions utilisateur de sa synthèse IA.
+  aiSuggestions              AiSuggestion[]
+  analysisSummaryRevisions   TenderAnalysisSummaryRevision[]
 
   /// AUDIT-007 : contrainte composite support de la FK composée de TenderLot ci-dessous — garantit
   /// au niveau base de données qu'un TenderLot ne peut jamais référencer un couple
@@ -534,11 +538,18 @@ model TenderLot {
   requestedDocuments TenderRequestedDocument[]
   milestones         TenderMilestone[]
   risks              TenderRisk[]
+  /// V2 Sprint 4 — suggestions IA ciblant spécifiquement ce lot (ex. critère/pièce/jalon proposé
+  /// pour ce lot précis), distinct des suggestions au niveau Tender global (parentLotId absent).
+  aiSuggestions      AiSuggestion[]
 
   /// V2 Sprint 3 (AUDIT-007, même motif que Tender/Document) — support des FK composées
   /// (lotId, organizationId) des satellites ci-dessous vers ce lot : empêche structurellement
   /// qu'un critère/document/jalon/risque d'une autre organisation référence ce lot.
   @@unique([id, organizationId])
+  /// V2 Sprint 4 (audit Codex P1-003) — clé composite à 3 colonnes dédiée à AiSuggestion.parentLot :
+  /// garantit qu'un lot cible appartient bien au Tender déclaré (parentTenderId), jamais seulement
+  /// à la même organisation.
+  @@unique([id, organizationId, tenderId])
   @@unique([tenderId, lotNumber])
   @@index([organizationId, tenderId])
   @@index([organizationId, tenderId, displayOrder])
@@ -1321,6 +1332,15 @@ model DocumentBusinessAnalysis {
   /// — jamais recalculée après coup, capturée telle que lue au moment de l'analyse.
   extractionVersion Int @map("extraction_version")
 
+  /// V2 Sprint 4 (audit Codex P1-004) — identifiant de la DocumentVersion effectivement analysée
+  /// (`DocumentAnalysisInput.documentVersionId`), capturé UNE SEULE FOIS ici, jamais recalculé —
+  /// même motif que `extractionVersion` juste au-dessus. Référence dénormalisée en lecture seule
+  /// (jamais de FK stricte inter-module, comme `AiSuggestion.sourceDocumentId`) : le mapping
+  /// Finding -> AiSuggestion la relit ici pour garantir la version EXACTE analysée, jamais "la
+  /// version courante au moment du mapping" qui peut avoir changé depuis (remplacement du fichier).
+  /// Nullable : une ligne écrite avant ce sprint n'a jamais eu cette information.
+  documentVersionId String? @map("document_version_id") @db.Uuid
+
   /// RC | CCTP | CCAP | AE | BPU | DPGF | ANNEX | UNKNOWN — classification déterminée par le
   /// modèle IA à partir du contenu réel, distincte de `DceDocument.category` (classification
   /// déterministe Sprint 2 par extension/nom de fichier, voir dce-document-classifier.ts) :
@@ -1376,20 +1396,26 @@ model TenderDeadlineFinding {
   date    DateTime?
   rawText String?   @map("raw_text")
 
-  documentId    String? @map("document_id") @db.Uuid
-  chunkSequence Int?    @map("chunk_sequence")
-  pageStart     Int?    @map("page_start")
-  pageEnd       Int?    @map("page_end")
-  sheetName     String? @map("sheet_name") @db.VarChar(120)
-  sectionTitle  String? @map("section_title") @db.VarChar(300)
-  citation      String? @db.VarChar(500)
+  documentId        String? @map("document_id") @db.Uuid
+  /// V2 Sprint 4 (audit Codex P1-004) — version EXACTE du document consolidé, capturée au moment
+  /// précis de `persistTenderConsolidation` (jamais recalculée après coup, jamais "la version
+  /// courante au moment où quelqu'un lit cette ligne") — même motif que `DocumentBusinessAnalysis.
+  /// documentVersionId`. Nullable : absente si `documentId` l'est aussi, ou pour une ligne écrite
+  /// avant ce sprint.
+  documentVersionId String? @map("document_version_id") @db.Uuid
+  chunkSequence     Int?    @map("chunk_sequence")
+  pageStart         Int?    @map("page_start")
+  pageEnd           Int?    @map("page_end")
+  sheetName         String? @map("sheet_name") @db.VarChar(120)
+  sectionTitle      String? @map("section_title") @db.VarChar(300)
+  citation          String? @db.VarChar(500)
   /// Mission §"Si une information est déduite, indiquer explicitement qu'il s'agit d'une
   /// inférence" — jamais une déduction présentée comme une citation directe.
-  isInferred    Boolean @default(false) @map("is_inferred")
+  isInferred        Boolean @default(false) @map("is_inferred")
   /// Score de confiance déclaré par le modèle (mission §"Score de confiance") — jamais utilisé
   /// seul, voir les validations déterministes appliquées par `TenderConsolidationOutputSchema`
   /// avant persistance.
-  confidence    Float   @default(0)
+  confidence        Float   @default(0)
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1420,15 +1446,18 @@ model TenderCriterionFinding {
   threshold     String?
   isEliminatory Boolean @default(false) @map("is_eliminatory")
 
-  documentId    String? @map("document_id") @db.Uuid
-  chunkSequence Int?    @map("chunk_sequence")
-  pageStart     Int?    @map("page_start")
-  pageEnd       Int?    @map("page_end")
-  sheetName     String? @map("sheet_name") @db.VarChar(120)
-  sectionTitle  String? @map("section_title") @db.VarChar(300)
-  citation      String? @db.VarChar(500)
-  isInferred    Boolean @default(false) @map("is_inferred")
-  confidence    Float   @default(0)
+  documentId        String? @map("document_id") @db.Uuid
+  /// V2 Sprint 4 (audit Codex P1-004) — version EXACTE du document consolidé, capturée au moment
+  /// précis de `persistTenderConsolidation` (voir `TenderDeadlineFinding.documentVersionId`).
+  documentVersionId String? @map("document_version_id") @db.Uuid
+  chunkSequence     Int?    @map("chunk_sequence")
+  pageStart         Int?    @map("page_start")
+  pageEnd           Int?    @map("page_end")
+  sheetName         String? @map("sheet_name") @db.VarChar(120)
+  sectionTitle      String? @map("section_title") @db.VarChar(300)
+  citation          String? @db.VarChar(500)
+  isInferred        Boolean @default(false) @map("is_inferred")
+  confidence        Float   @default(0)
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1454,15 +1483,18 @@ model TenderRequirementFinding {
   expectedFormat String? @map("expected_format")
   isMandatory    Boolean @default(true) @map("is_mandatory")
 
-  documentId    String? @map("document_id") @db.Uuid
-  chunkSequence Int?    @map("chunk_sequence")
-  pageStart     Int?    @map("page_start")
-  pageEnd       Int?    @map("page_end")
-  sheetName     String? @map("sheet_name") @db.VarChar(120)
-  sectionTitle  String? @map("section_title") @db.VarChar(300)
-  citation      String? @db.VarChar(500)
-  isInferred    Boolean @default(false) @map("is_inferred")
-  confidence    Float   @default(0)
+  documentId        String? @map("document_id") @db.Uuid
+  /// V2 Sprint 4 (audit Codex P1-004) — version EXACTE du document consolidé, capturée au moment
+  /// précis de `persistTenderConsolidation` (voir `TenderDeadlineFinding.documentVersionId`).
+  documentVersionId String? @map("document_version_id") @db.Uuid
+  chunkSequence     Int?    @map("chunk_sequence")
+  pageStart         Int?    @map("page_start")
+  pageEnd           Int?    @map("page_end")
+  sheetName         String? @map("sheet_name") @db.VarChar(120)
+  sectionTitle      String? @map("section_title") @db.VarChar(300)
+  citation          String? @db.VarChar(500)
+  isInferred        Boolean @default(false) @map("is_inferred")
+  confidence        Float   @default(0)
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1522,15 +1554,18 @@ model TenderRiskFinding {
   explanation    String
   recommendation String
 
-  documentId    String? @map("document_id") @db.Uuid
-  chunkSequence Int?    @map("chunk_sequence")
-  pageStart     Int?    @map("page_start")
-  pageEnd       Int?    @map("page_end")
-  sheetName     String? @map("sheet_name") @db.VarChar(120)
-  sectionTitle  String? @map("section_title") @db.VarChar(300)
-  citation      String? @db.VarChar(500)
-  isInferred    Boolean @default(false) @map("is_inferred")
-  confidence    Float   @default(0)
+  documentId        String? @map("document_id") @db.Uuid
+  /// V2 Sprint 4 (audit Codex P1-004) — version EXACTE du document consolidé, capturée au moment
+  /// précis de `persistTenderConsolidation` (voir `TenderDeadlineFinding.documentVersionId`).
+  documentVersionId String? @map("document_version_id") @db.Uuid
+  chunkSequence     Int?    @map("chunk_sequence")
+  pageStart         Int?    @map("page_start")
+  pageEnd           Int?    @map("page_end")
+  sheetName         String? @map("sheet_name") @db.VarChar(120)
+  sectionTitle      String? @map("section_title") @db.VarChar(300)
+  citation          String? @db.VarChar(500)
+  isInferred        Boolean @default(false) @map("is_inferred")
+  confidence        Float   @default(0)
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1605,8 +1640,47 @@ model TenderAnalysisSummary {
 
   createdAt DateTime @default(now()) @map("created_at")
 
+  /// V2 Sprint 4 — révisions utilisateur éditant cette synthèse SANS jamais la muter elle-même
+  /// (immuable, comme le reste de l'analyse versionnée).
+  revisions TenderAnalysisSummaryRevision[]
+
   @@unique([organizationId, tenderId, analysisVersion])
+  /// V2 Sprint 4 (AUDIT-007) — support de la FK composée depuis TenderAnalysisSummaryRevision.
+  @@unique([id, organizationId])
   @@map("tender_analysis_summaries")
+}
+
+/// V2 Sprint 4 — révision utilisateur d'une synthèse IA (`TenderAnalysisSummary`), qui reste
+/// immuable et versionnée par analysisVersion. Seuls les champs effectivement corrigés par
+/// l'utilisateur sont renseignés ici (jamais une copie complète) ; la lecture retombe sur la
+/// valeur IA d'origine pour tout champ NULL. Une nouvelle correction crée toujours une NOUVELLE
+/// révision, jamais une mutation d'une révision existante — historique complet conservé.
+model TenderAnalysisSummaryRevision {
+  id             String                @id @default(uuid()) @db.Uuid
+  organizationId String                @map("organization_id") @db.Uuid
+  tenderId       String                @map("tender_id") @db.Uuid
+  tender         Tender                @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  baseSummaryId  String                @map("base_summary_id") @db.Uuid
+  baseSummary    TenderAnalysisSummary @relation(fields: [baseSummaryId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  revisionNumber Int                   @map("revision_number")
+
+  opportunitySummary String? @map("opportunity_summary")
+  /// LOW | MEDIUM | HIGH si renseigné — CHECK (migration).
+  complexityLevel    String? @map("complexity_level") @db.VarChar(20)
+  mainCriteria       Json?   @map("main_criteria")
+  mainRisks          Json?   @map("main_risks")
+  mainObligations    Json?   @map("main_obligations")
+  missingElements    Json?   @map("missing_elements")
+  pointsToClarify    Json?   @map("points_to_clarify")
+  conflicts          Json?
+
+  editedByUserId String   @map("edited_by_user_id") @db.Uuid
+  editedAt       DateTime @default(now()) @map("edited_at")
+  reason         String?
+
+  @@unique([organizationId, baseSummaryId, revisionNumber])
+  @@index([organizationId, tenderId])
+  @@map("tender_analysis_summary_revisions")
 }
 
 /// Espace de connaissances organisationnel (mission Sprint 5 §1) — un seul espace principal par
@@ -4497,10 +4571,26 @@ model AiSuggestion {
   organizationId String @map("organization_id") @db.Uuid
 
   /// TENDER_LOT | CHECKLIST_ITEM | SUBCONTRACTOR_PROFILE | DC1 | DC2 | DC4 | ATTRI1 |
-  /// TECHNICAL_MEMO_SECTION | PRICING_LINE | COMPANY_LEGAL_IDENTITY — CHECK (migration).
-  entityType String @map("entity_type") @db.VarChar(40)
-  entityId   String @map("entity_id") @db.Uuid
-  fieldName  String @map("field_name") @db.VarChar(100)
+  /// TECHNICAL_MEMO_SECTION | PRICING_LINE | COMPANY_LEGAL_IDENTITY | TENDER_FIELD |
+  /// TENDER_LOT_FIELD | TENDER_AWARD_CRITERION | TENDER_REQUESTED_DOCUMENT | TENDER_MILESTONE |
+  /// TENDER_RISK | BUYER_FIELD — CHECK (migration), catalogue étendu V2 Sprint 4.
+  entityType String  @map("entity_type") @db.VarChar(40)
+  /// V2 Sprint 4 — nullable : une suggestion de CREATION (ex. proposer un nouveau lot) n'a pas
+  /// encore de cible existante au moment de sa création.
+  entityId   String? @map("entity_id") @db.Uuid
+  fieldName  String  @map("field_name") @db.VarChar(100)
+
+  /// V2 Sprint 4 (audit Codex) — contexte de cible explicite, jamais encodé uniquement dans
+  /// proposedValue : racine Tender toujours connue et vérifiée, lot cible optionnel. Distinct
+  /// de entityId/entityType (qui restent la cible EFFECTIVE, potentiellement absente si création).
+  parentTenderId String     @map("parent_tender_id") @db.Uuid
+  parentTender   Tender     @relation(fields: [parentTenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  /// Absent = suggestion au niveau Tender global ; renseigné = suggestion spécifique à ce lot.
+  /// Correctif audit Codex P1-003 — FK à 3 colonnes (jamais seulement organizationId) : garantit
+  /// structurellement que ce lot appartient bien à parentTenderId, jamais à un autre Tender du
+  /// même tenant (voir TenderLot.@@unique([id, organizationId, tenderId])).
+  parentLotId    String?    @map("parent_lot_id") @db.Uuid
+  parentLot      TenderLot? @relation(fields: [parentLotId, organizationId, parentTenderId], references: [id, organizationId, tenderId], onDelete: Cascade, map: "ai_suggestions_parent_lot_id_org_tender_fkey")
 
   /// Validé par un schéma Zod spécifique à (entityType, fieldName) avant toute persistance — jamais un
   /// JSON libre non validé (mission Sprint 1 §3, AI_PATTERNS.md §41 "Sortie IA non validée par schéma...").
@@ -4520,8 +4610,11 @@ model AiSuggestion {
   aiProvider String? @map("ai_provider") @db.VarChar(30)
   aiModel    String? @map("ai_model") @db.VarChar(60)
 
-  /// PENDING | ACCEPTED | MODIFIED | REJECTED — CHECK (migration). Mutation interdite une fois hors PENDING
-  /// (mission Sprint 1 §3 "empêcher toute modification silencieuse d'une suggestion déjà traitée").
+  /// PENDING | APPLYING | ACCEPTED | MODIFIED | REJECTED — CHECK (migration). APPLYING (V2 Sprint 4,
+  /// audit Codex P1-001) réserve la suggestion pendant l'écriture métier par le bridge, jamais un
+  /// statut terminal : redevient PENDING si l'écriture échoue, sinon transite vers ACCEPTED/MODIFIED.
+  /// Mutation interdite une fois hors PENDING/APPLYING (mission Sprint 1 §3 "empêcher toute
+  /// modification silencieuse d'une suggestion déjà traitée").
   status String @default("PENDING") @db.VarChar(16)
 
   /// Processus/use-case créateur (ex. "analysis.suggest-checklist") — jamais un humain, une AiSuggestion
@@ -4533,6 +4626,11 @@ model AiSuggestion {
   rejectedAt        DateTime? @map("rejected_at")
   decisionReason    String?   @map("decision_reason")
 
+  /// V2 Sprint 4 — décision explicite lorsque la cible portait déjà une valeur au moment de
+  /// l'application (KEEP_CURRENT | REPLACE | MERGE | REJECT — CHECK, migration). NULL tant
+  /// qu'aucun conflit n'a été détecté (cible vide au moment de l'application).
+  conflictResolution String? @map("conflict_resolution") @db.VarChar(20)
+
   /// Valeur réellement retenue (== proposedValue si ACCEPTED, différente si MODIFIED, absente si REJECTED).
   appliedValue Json? @map("applied_value")
 
@@ -4542,7 +4640,23 @@ model AiSuggestion {
   @@unique([id, organizationId])
   @@index([organizationId, entityType, entityId])
   @@index([organizationId, status])
+  @@index([organizationId, parentTenderId])
   @@map("ai_suggestions")
+}
+
+/// V2 Sprint 4 (audit Codex P1-002, round 3) — destination d'archivage automatique, appliquée par
+/// la migration elle-même, de toute ligne `ai_suggestions` préexistante sans `parent_tender_id`
+/// résolvable (aucun backfill déterministe possible). Jamais un modèle applicatif actif : aucun
+/// repository/use case de ce dépôt n'y écrit ni n'y lit — une trace d'audit pure, volontairement
+/// hors du cycle de vie AiSuggestion normal, pour que la migration reste TOUJOURS déployable sans
+/// jamais supprimer silencieusement une donnée.
+model AiSuggestionOrphanedArchive {
+  id          String   @id @db.Uuid
+  archivedAt  DateTime @default(now()) @map("archived_at")
+  reason      String
+  rowSnapshot Json     @map("row_snapshot")
+
+  @@map("ai_suggestions_orphaned_archive")
 }
 
 // ============================================================================

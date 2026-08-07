@@ -55,14 +55,14 @@ export class PrismaRiskRepository implements RiskRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(input: { organizationId: string; tenderId: string; riskId: string }): Promise<Risk | null> {
-    const record = await this.prisma.tenderRisk.findFirst({
+    const record = await this.prisma.currentClient().tenderRisk.findFirst({
       where: { id: input.riskId, tenderId: input.tenderId, organizationId: input.organizationId },
     });
     return record ? toDomain(record) : null;
   }
 
   async listByTender(input: { organizationId: string; tenderId: string }): Promise<Risk[]> {
-    const records = await this.prisma.tenderRisk.findMany({
+    const records = await this.prisma.currentClient().tenderRisk.findMany({
       where: { tenderId: input.tenderId, organizationId: input.organizationId },
       orderBy: { createdAt: "asc" },
     });
@@ -71,7 +71,7 @@ export class PrismaRiskRepository implements RiskRepository {
 
   async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[] }): Promise<Risk[]> {
     if (input.tenderIds.length === 0) return [];
-    const records = await this.prisma.tenderRisk.findMany({
+    const records = await this.prisma.currentClient().tenderRisk.findMany({
       where: { organizationId: input.organizationId, tenderId: { in: [...input.tenderIds] } },
     });
     return records.map(toDomain);
@@ -79,6 +79,6 @@ export class PrismaRiskRepository implements RiskRepository {
 
   async save(risk: Risk): Promise<void> {
     const data = toPersistence(risk);
-    await this.prisma.tenderRisk.upsert({ where: { id: data.id }, create: data, update: data });
+    await this.prisma.currentClient().tenderRisk.upsert({ where: { id: data.id }, create: data, update: data });
   }
 }

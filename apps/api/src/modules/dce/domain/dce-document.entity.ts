@@ -56,6 +56,21 @@ export class DceDocument {
     this.props.updatedAt = occurredAt;
   }
 
+  /**
+   * V2 Sprint 4 — correction utilisateur de la classification (mission "correction de
+   * classification avec historique") : la valeur précédente n'est jamais recalculée ni perdue,
+   * elle reste consultable indéfiniment via l'AuditLog écrit par le use case appelant (append-only,
+   * jamais une seconde table dédiée pour ce seul besoin — mission "ne pas complexifier
+   * inutilement"). Idempotent, même motif que `transitionProcessingStatus`.
+   */
+  correctCategory(next: DceDocumentCategory, occurredAt: Date): void {
+    if (this.props.category === next) {
+      return;
+    }
+    this.props.category = next;
+    this.props.updatedAt = occurredAt;
+  }
+
   get dceId(): string {
     return this.props.dceId;
   }

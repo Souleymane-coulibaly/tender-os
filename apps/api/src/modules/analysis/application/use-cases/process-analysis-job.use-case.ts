@@ -22,6 +22,7 @@ import {
 } from "../ports/analysis-job.repository";
 import { ROUTING_POLICY_RESOLVER, type RoutingPolicyResolver } from "../ports/routing-policy-resolver";
 import { ROUTING_DECISION_WRITER, type RoutingDecisionWriter } from "../ports/routing-decision-writer";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import type { PrismaTx } from "../ports/business-analysis.repository";
 import { ANALYSIS_CONFIG, type AnalysisConfig } from "../../infrastructure/analysis-config";
 import { mapScopeToPromptKey, resolveModelForAnalysis, type ResolvedModelForAnalysis } from "../services/model-routing-resolver";
@@ -68,6 +69,7 @@ export class ProcessAnalysisJobUseCase {
     @Inject(AI_PROVIDER_REGISTRY) private readonly providerRegistry: AIProviderRegistry,
     @Inject(ANALYSIS_CONTENT_RESOLVER) private readonly contentResolver: AnalysisContentResolver,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
     @Inject(ANALYSIS_CONFIG) private readonly config: AnalysisConfig,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
@@ -98,6 +100,8 @@ export class ProcessAnalysisJobUseCase {
     const { job } = reservation;
     const startedAt = reservedAt;
     const trigger = job.attemptCount === 1 ? AnalysisTrigger.Manual : AnalysisTrigger.Retry;
+
+    await this.recordOutboxEvent(command.organizationId, "DceAnalysisStarted", job, reservedAt);
 
     const resolution = await resolveModelForAnalysis({
       scope: job.scope,
@@ -175,6 +179,8 @@ export class ProcessAnalysisJobUseCase {
       );
       return;
     }
+
+    await this.recordOutboxEvent(command.organizationId, outcome.kind === "failed" ? "DceAnalysisFailed" : "DceAnalysisCompleted", job, this.clock.now());
 
     await this.recordAuditLog(command, outcome, {
       routingPolicyVersion: resolution.routingPolicyVersion,
@@ -337,6 +343,40 @@ export class ProcessAnalysisJobUseCase {
       this.logger.error(
         `Analysis job ${command.jobId} reached a final state (${outcome.kind}) but the audit log write failed: ` +
           `${auditError instanceof Error ? auditError.message : String(auditError)}`,
+      );
+    }
+  }
+
+  /** V2 Sprint 4 — événements Outbox du cycle de vie d'un job d'analyse (mission "8 événements
+   *  Outbox", 4 côté `ai-suggestion` déjà en place, 4 ici). Best-effort, même discipline que
+   *  `recordAuditLog` juste en dessous : le résultat métier est déjà acquis (job réservé ou
+   *  finalisé avec succès dans sa propre transaction courte) avant cet appel — sa perte éventuelle
+   *  ne doit jamais faire échouer ni retenter l'analyse elle-même. N'utilise JAMAIS le dispatcher
+   *  in-process existant (mission "ne pas refondre le pipeline") : un simple écrit Outbox de plus,
+   *  consommé par qui voudra s'y abonner plus tard. */
+  private async recordOutboxEvent(
+    organizationId: string,
+    eventType: "DceAnalysisStarted" | "DceAnalysisCompleted" | "DceAnalysisFailed",
+    job: AnalysisJob,
+    occurredAt: Date,
+  ): Promise<void> {
+    try {
+      await this.outboxWriter.write({
+        organizationId,
+        events: [
+          {
+            eventType,
+            aggregateType: "AnalysisJob",
+            aggregateId: job.id,
+            payload: { jobId: job.id, scope: job.scope, tenderId: job.tenderId, documentId: job.documentId, analysisVersion: job.analysisVersion },
+            occurredAt,
+          },
+        ],
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to write Outbox event ${eventType} for analysis job ${job.id} (analysis result already acquired, unaffected): ` +
+          `${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

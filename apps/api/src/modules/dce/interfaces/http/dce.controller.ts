@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
@@ -6,6 +7,7 @@ import {
   HttpStatus,
   Inject,
   Param,
+  Patch,
   Post,
   Put,
   Req,
@@ -25,6 +27,7 @@ import { CurrentMembershipContext, OrganizationMembershipGuard, type MembershipC
 import type { RequestWithId } from "../../../../shared-kernel/request-id.middleware";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
 import { DCE_CONFIG, type DceConfig } from "../../infrastructure/dce-config";
+import { CorrectDceDocumentCategoryUseCase } from "../../application/use-cases/correct-dce-document-category.use-case";
 import { CreateDceUseCase } from "../../application/use-cases/create-dce.use-case";
 import { DeleteDceDocumentUseCase } from "../../application/use-cases/delete-dce-document.use-case";
 import { DownloadDceDocumentUseCase } from "../../application/use-cases/download-dce-document.use-case";
@@ -37,7 +40,7 @@ import { ReplaceDceDocumentUseCase } from "../../application/use-cases/replace-d
 import { StartDceZipImportUseCase } from "../../application/use-cases/start-dce-zip-import.use-case";
 import { DceErrorFilter } from "./dce-error.filter";
 import { presentDce, presentDceDocument, presentDceImportJob, presentImportResult } from "./presenters";
-import { IdParamSchema } from "./schemas";
+import { CorrectDceDocumentCategoryBodySchema, IdParamSchema, type CorrectDceDocumentCategoryBody } from "./schemas";
 
 /** Plafond brut Multer — filet de sécurité en amont des limites métier configurables (voir
  *  MULTER_HARD_CEILING_BYTES dans documents.controller.ts, même motif). */
@@ -65,6 +68,7 @@ export class DceController {
     private readonly downloadDceDocumentUseCase: DownloadDceDocumentUseCase,
     private readonly deleteDceDocumentUseCase: DeleteDceDocumentUseCase,
     private readonly replaceDceDocumentUseCase: ReplaceDceDocumentUseCase,
+    private readonly correctDceDocumentCategoryUseCase: CorrectDceDocumentCategoryUseCase,
     @Inject(DCE_CONFIG) private readonly dceConfig: DceConfig,
   ) {}
 
@@ -267,6 +271,31 @@ export class DceController {
       actorRole: membership.role,
       file: { buffer: file.buffer, originalFilename: file.originalname, mimeType: file.mimetype },
       maxFileSizeBytes: this.dceConfig.maxFileSizeBytes,
+      requestId: request.id,
+    });
+    return presentDceDocument(result);
+  }
+
+  // V2 Sprint 4 — correction utilisateur de la classification, jamais silencieuse : chaque
+  // correction est journalisée dans l'AuditLog avec l'ancienne ET la nouvelle valeur.
+  @Patch("documents/:documentId/category")
+  @HttpCode(HttpStatus.OK)
+  async correctDocumentCategory(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
+    @Body(new ZodValidationPipe(CorrectDceDocumentCategoryBodySchema)) body: CorrectDceDocumentCategoryBody,
+    @Req() request: RequestWithId,
+  ) {
+    const result = await this.correctDceDocumentCategoryUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      documentId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      category: body.category,
+      reason: body.reason,
       requestId: request.id,
     });
     return presentDceDocument(result);
