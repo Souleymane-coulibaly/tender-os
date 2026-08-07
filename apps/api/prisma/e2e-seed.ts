@@ -83,6 +83,15 @@ async function main(): Promise<void> {
       data: { id: clientAccountId, organizationId, name: `Client E2E ${runId}`, nameNormalized: `client e2e ${runId}`, status: "ACTIVE", createdBy: userId },
     });
 
+    // V2 Sprint 5 (audit Codex round 2, P1 confirmé) — décider/promouvoir un GO/NO-GO exige
+    // désormais une VRAIE affectation CLIENT_MANAGER sur le client, même pour un OWNER (voir
+    // `resolveGoNoGoClientAccess`) : sans elle, l'OWNER de ce seed tomberait dans le filet de
+    // secours administratif TRACÉ et exigerait une justification que les specs Playwright
+    // (`opportunity-go-no-go.spec.ts`) ne fournissent pas — elles exercent le "chemin normal".
+    await prisma.clientAssignment.create({
+      data: { id: randomUUID(), organizationId, clientAccountId, userId, role: "CLIENT_MANAGER", createdBy: userId },
+    });
+
     const tenderId = randomUUID();
     await prisma.tender.create({
       data: { id: tenderId, organizationId, clientAccountId, title: `Marché Playwright ${runId}`, status: "DRAFT", tags: [], createdBy: userId },
@@ -105,7 +114,45 @@ async function main(): Promise<void> {
 
     const other = await createOrgWithOwnerAndTender({ runId, label: "other", passwordHasher, userRepository, membershipRepository, prisma });
 
-    console.log(JSON.stringify({ email, password, organizationId, userId, clientAccountId, tenderId, other }));
+    // V2 Sprint 5 (GO/NO-GO IA) — un second Tender de la MÊME organisation, avec une analyse IA du
+    // DCE déjà réussie (`TenderAnalysisSummary` + `AnalysisJob` seedés directement, sans dépendre
+    // d'une clé API IA réelle — absente de cet environnement Playwright, voir `cockpit.spec.ts`).
+    // Donne au scénario E2E Niveau 2 (`opportunity-go-no-go.spec.ts`) un Tender pour lequel générer
+    // un vrai `GoNoGoReport` via l'UI, sans jamais simuler la génération elle-même côté test.
+    const tenderWithAnalysisId = randomUUID();
+    await prisma.tender.create({
+      data: { id: tenderWithAnalysisId, organizationId, clientAccountId, title: `Marché Playwright avec analyse ${runId}`, status: "IN_ANALYSIS", tags: [], createdBy: userId },
+    });
+    const analysisJobId = randomUUID();
+    await prisma.analysisJob.create({
+      data: {
+        id: analysisJobId,
+        organizationId,
+        tenderId: tenderWithAnalysisId,
+        targetId: tenderWithAnalysisId,
+        scope: "TENDER",
+        status: "SUCCEEDED",
+        analysisVersion: 1,
+        promptVersion: 1,
+        triggeredByRole: "OWNER",
+        updatedAt: new Date(),
+      },
+    });
+    await prisma.tenderAnalysisSummary.create({
+      data: {
+        id: randomUUID(),
+        organizationId,
+        tenderId: tenderWithAnalysisId,
+        analysisJobId,
+        analysisVersion: 1,
+        opportunitySummary: `Marché Playwright avec analyse ${runId} — DCE complet, aucun blocage identifié.`,
+        complexityLevel: "MEDIUM",
+        goNoGoRecommendation: "GO",
+        goNoGoRationale: "Dossier complet, synthèse IA de démonstration pour la preuve Playwright.",
+      },
+    });
+
+    console.log(JSON.stringify({ email, password, organizationId, userId, clientAccountId, tenderId, tenderWithAnalysisId, other }));
   } finally {
     await prisma.$disconnect();
   }

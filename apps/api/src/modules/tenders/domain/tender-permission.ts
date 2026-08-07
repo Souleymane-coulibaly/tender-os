@@ -18,6 +18,17 @@ export const TenderPermission = {
   ManageChecklist: "tender:manage_checklist",
   ManageRisks: "tender:manage_risks",
   ManageAlerts: "tender:manage_alerts",
+  /** V2 Sprint 5 (GO/NO-GO IA) — `ManageGoNoGo` (générer/régénérer un GoNoGoReport, purement
+   *  informatif) et `RecordGoNoGoDecision` restent toutes deux accordées à BID_MANAGER via le
+   *  superset ci-dessous : ce palier ORGANISATION reste volontairement large (même motif que le
+   *  reste de cette matrice), la restriction fine "CLIENT_MANAGER uniquement" (audit Codex round 2,
+   *  P1 confirmé) vit ENTIÈREMENT au palier client (voir `opportunity/application/policies/go-no-go-
+   *  client-access.policy.ts#resolveGoNoGoClientAccess`) — sans affectation CLIENT_MANAGER réelle
+   *  sur le client du Tender, BID_MANAGER reste rejeté à CE palier-là, jamais ici. La LECTURE d'un
+   *  rapport/d'une décision reste couverte par `TenderPermission.Read`, déjà accordée au CONTRIBUTOR
+   *  — aucune nouvelle permission de lecture nécessaire. */
+  ManageGoNoGo: "tender:manage_go_no_go",
+  RecordGoNoGoDecision: "tender:record_go_no_go_decision",
 } as const;
 
 export type TenderPermission = (typeof TenderPermission)[keyof typeof TenderPermission];

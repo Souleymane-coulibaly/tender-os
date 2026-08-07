@@ -23,4 +23,9 @@ export { ClientAccountStatus } from "./domain/client-account-status";
 export {
   ClientAccountArchivedError,
   ClientAccountNotFoundError,
+  // V2 Sprint 5 (audit Codex, round 2) — réexporté pour `opportunity` : nécessaire pour distinguer
+  // "aucune affectation" (`ClientAccountNotFoundError`) et "affectation insuffisante"
+  // (`ClientPermissionMissingError`) du chemin de secours "privilège d'administration" tracé
+  // (`resolveGoNoGoClientAccess`), jamais recopié en chaîne magique.
+  ClientPermissionMissingError,
 } from "./domain/errors";

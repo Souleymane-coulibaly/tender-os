@@ -50,9 +50,25 @@ export default async function globalTeardown(): Promise<void> {
       await prisma.documentTenderAssociation.deleteMany({ where: { organizationId } });
       await prisma.documentVersion.deleteMany({ where: { organizationId } });
       await prisma.document.deleteMany({ where: { organizationId } });
+      // V2 Sprint 5 (GO/NO-GO IA) — `Opportunity.clientAccountId`/`.tenderId` sont en ON DELETE
+      // RESTRICT (jamais cascade, "référence sans possession", voir la migration) : ces lignes
+      // doivent être supprimées AVANT `tender`/`clientAccount` ci-dessous, sans quoi leur suppression
+      // échoue silencieusement et interrompt le nettoyage du reste de cette organisation.
+      await prisma.goNoGoDecision.deleteMany({ where: { organizationId } });
+      await prisma.goNoGoReport.deleteMany({ where: { organizationId } });
+      await prisma.opportunityQuickScore.deleteMany({ where: { organizationId } });
+      await prisma.opportunity.deleteMany({ where: { organizationId } });
       await prisma.tender.deleteMany({ where: { organizationId } });
+      // V2 Sprint 5 (audit Codex round 2) — le seed crée désormais une ClientAssignment
+      // (CLIENT_MANAGER) pour que l'OWNER e2e emprunte le chemin normal GO/NO-GO ; à supprimer
+      // avant `clientAccount` (même motif de FK que ci-dessus).
+      await prisma.clientAssignment.deleteMany({ where: { organizationId } });
       await prisma.clientAccount.deleteMany({ where: { organizationId } });
       await prisma.auditLog.deleteMany({ where: { organizationId } });
+      // Gap préexistant révélé par ce sprint (Opportunity/promotion écrivent plusieurs événements
+      // Outbox) — jamais nettoyé jusqu'ici, ce qui bloquait la suppression de l'organisation dès
+      // qu'assez d'événements s'accumulaient (FK `outbox_events_organization_id_fkey`).
+      await prisma.outboxEvent.deleteMany({ where: { organizationId } });
       await prisma.organizationMembership.deleteMany({ where: { organizationId } });
       await prisma.organization.deleteMany({ where: { id: organizationId } });
     }

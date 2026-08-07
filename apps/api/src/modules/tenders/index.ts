@@ -6,6 +6,12 @@ export type { TenderSummary, TenderLotSummary, BuyerSummary, AwardCriterionSumma
 export { GetTenderUseCase } from "./application/use-cases/get-tender.use-case";
 export type { GetTenderQuery, GetTenderResult } from "./application/use-cases/get-tender.use-case";
 
+// V2 Sprint 5 — réexporté UNIQUEMENT pour `opportunity` (`PromoteOpportunityToTenderUseCase`) :
+// la promotion Opportunity -> Tender délègue la création du Tender à ce use case public, jamais
+// une seconde logique de création dupliquée (même motif que `UpdateTenderUseCase` ci-dessous).
+export { CreateTenderUseCase } from "./application/use-cases/create-tender.use-case";
+export type { CreateTenderCommand, CreateTenderResult } from "./application/use-cases/create-tender.use-case";
+
 // Réexporté uniquement pour un usage système interne (mission Sprint 3 — Extraction lit
 // `Tender.language` comme simple indication pour l'OCR, jamais comme vérité absolue) — jamais un
 // contournement de la permission Tenders pour un acteur utilisateur. Même motif que les réexports
@@ -61,4 +67,17 @@ export type { BuyerFields, CreateBuyerCommand } from "./application/use-cases/bu
 export { BUYER_REPOSITORY } from "./application/ports/buyer.repository";
 export type { BuyerRepository } from "./application/ports/buyer.repository";
 
-export { TenderNotFoundError, TenderLotNotFoundError, AwardCriterionNotFoundError, RequestedDocumentNotFoundError, MilestoneNotFoundError, RiskNotFoundError, BuyerNotFoundError } from "./domain/errors";
+export { TenderNotFoundError, TenderLotNotFoundError, AwardCriterionNotFoundError, RequestedDocumentNotFoundError, MilestoneNotFoundError, RiskNotFoundError, BuyerNotFoundError, TenderPermissionMissingError } from "./domain/errors";
+
+// V2 Sprint 5 — réexportés UNIQUEMENT pour `opportunity` (Niveau 2 : génération/régénération de
+// GoNoGoReport, enregistrement de GoNoGoDecision au niveau Tender) — réutilise TEL QUEL le système
+// de permissions Tenders existant, jamais une seconde matrice de rôles.
+export { TenderPermission, roleHasTenderPermission } from "./domain/tender-permission";
+export { assertHasTenderPermission } from "./application/policies/tender-authorization.policy";
+
+// V2 Sprint 5 — `REQUESTED_DOCUMENT_REPOSITORY`/`TENDER_LOT_REPOSITORY` déjà exportés ci-dessus
+// (pour `ai-suggestion-bridge`) sont réutilisés EN LECTURE SEULE par `opportunity` (calcul du
+// GoNoGoReport Niveau 2) — seuls les types de valeur des entités manquaient encore.
+export { RequestedDocumentStatus } from "./domain/requested-document.entity";
+export type { RequestedDocument } from "./domain/requested-document.entity";
+export type { TenderLot } from "./domain/tender-lot.entity";

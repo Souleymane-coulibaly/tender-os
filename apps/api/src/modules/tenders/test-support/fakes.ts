@@ -157,6 +157,19 @@ export class InMemoryTenderRepository implements TenderRepository {
     this.tenders.set(tender.id.value, tender);
   }
 
+  /** V2 Sprint 5 — utilisé par `opportunity`'s `FakeAtomicTransactionRunner` (test unitaire de
+   *  `PromoteOpportunityToTenderUseCase`) pour prouver qu'un Tender créé PUIS annulé par un rollback
+   *  simulé ne reste jamais orphelin — même motif que le snapshot/restore déjà pratiqué par
+   *  `InMemoryOpportunityRepository`. */
+  snapshot(): Map<string, Tender> {
+    return new Map(this.tenders);
+  }
+
+  restore(state: Map<string, Tender>): void {
+    this.tenders.clear();
+    for (const [k, v] of state) this.tenders.set(k, v);
+  }
+
   async findById(input: { organizationId: string; tenderId: string }): Promise<Tender | null> {
     const tender = this.tenders.get(input.tenderId);
     if (!tender || tender.organizationId !== input.organizationId) {

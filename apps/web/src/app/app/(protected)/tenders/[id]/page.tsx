@@ -6,6 +6,8 @@ import { canTriggerAnalysis, type AnalysisCapability, type AnalysisSectionData }
 import { fetchTenderSuggestions } from "../../../ai-suggestion-actions";
 import { canManageAiSuggestions, type AiSuggestion } from "../../../../../lib/ai-suggestion-types";
 import { fetchDceSectionData } from "../../../dce-actions";
+import { fetchGoNoGoReport, fetchTenderGoNoGoDecisions } from "../../../opportunity-actions";
+import { canGenerateGoNoGoReport, canRecordGoNoGoDecision, type GoNoGoDecision, type GoNoGoReport } from "../../../../../lib/opportunity-types";
 import { canDeleteDceDocument, canImportOrReplaceDceDocument, type DceDocumentSummary, type DceSummary } from "../../../../../lib/dce-types";
 import type { TenderCockpit } from "../../../../../lib/cockpit-types";
 import { canUploadOrEditDocument, type DocumentSummary } from "../../../../../lib/documents-types";
@@ -42,6 +44,7 @@ import { CriteriaSection } from "./criteria-section";
 import { DceSection } from "./dce-section";
 import { DocumentsSection } from "./documents-section";
 import { EditTenderForm } from "./edit-tender-form";
+import { GoNoGoSection } from "./go-no-go-section";
 import { LotsSection } from "./lots-section";
 import { MilestonesSection } from "./milestones-section";
 import { RequestedDocumentsSection } from "./requested-documents-section";
@@ -87,6 +90,8 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   let profile: TenderProfile;
   let buyers: Buyer[];
   let accessibleClients: ClientAccountSummary[];
+  let goNoGoReport: GoNoGoReport | null;
+  let goNoGoDecisions: GoNoGoDecision[];
 
   try {
     [
@@ -110,6 +115,8 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       profile,
       buyers,
       accessibleClients,
+      goNoGoReport,
+      goNoGoDecisions,
     ] = await Promise.all([
       appApiFetch<Tender>(`/api/v1/tenders/${id}`),
       appApiFetch<TenderLot[]>(`/api/v1/tenders/${id}/lots`),
@@ -131,6 +138,8 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       appApiFetch<TenderProfile>(`/api/v1/tenders/${id}/profile`),
       appApiFetch<Buyer[]>("/api/v1/buyers"),
       appApiFetch<ClientPortfolioPage<ClientAccountSummary>>("/api/v1/clients?limit=100&status=ACTIVE").then((page) => page.items),
+      fetchGoNoGoReport(id),
+      fetchTenderGoNoGoDecisions(id),
     ]);
   } catch (error) {
     return <ApiErrorState error={error} />;
@@ -268,6 +277,13 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         <AlertsSection tenderId={tender.id} alerts={alerts} />
         <AnalysisSection tenderId={tender.id} initialData={analysisData} canTrigger={canTriggerAnalysis(role)} />
         <AiSuggestionsSection tenderId={tender.id} initialSuggestions={aiSuggestions} canManage={canManageAiSuggestions(role)} />
+        <GoNoGoSection
+          tenderId={tender.id}
+          initialReport={goNoGoReport}
+          initialDecisions={goNoGoDecisions}
+          canGenerate={canGenerateGoNoGoReport(role)}
+          canDecide={canRecordGoNoGoDecision(role)}
+        />
 
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-neutral-700">Historique</h2>

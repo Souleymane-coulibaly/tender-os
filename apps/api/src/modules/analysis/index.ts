@@ -27,6 +27,11 @@ export type { EscalationSignals } from "./domain/evaluate-escalation-conditions"
 // `roleHasAnalysisPermission` en interne.
 export { GetTenderBusinessAnalysisUseCase } from "./application/use-cases/get-tender-business-analysis.use-case";
 export type { GetTenderBusinessAnalysisQuery } from "./application/use-cases/get-tender-business-analysis.use-case";
+// V2 Sprint 5 (GO/NO-GO IA) — réexporté UNIQUEMENT pour `opportunity` (Niveau 2) : fusionne la
+// synthèse IA d'origine avec la dernière révision utilisateur, sert aussi de porte d'entrée
+// ("une analyse DCE a-t-elle déjà réussi pour ce tender ?").
+export { GetEffectiveTenderAnalysisSummaryUseCase } from "./application/use-cases/get-effective-tender-analysis-summary.use-case";
+export type { EffectiveTenderAnalysisSummary } from "./application/use-cases/get-effective-tender-analysis-summary.use-case";
 export { ListTenderCriteriaUseCase } from "./application/use-cases/list-tender-criteria.use-case";
 export { ListTenderRequirementsUseCase } from "./application/use-cases/list-tender-requirements.use-case";
 export { ListTenderRisksUseCase } from "./application/use-cases/list-tender-risks.use-case";

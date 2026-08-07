@@ -21,6 +21,7 @@ import { CancelAnalysisUseCase } from "./application/use-cases/cancel-analysis.u
 import { GetAnalysisCapabilitiesUseCase } from "./application/use-cases/get-analysis-capabilities.use-case";
 import { GetAnalysisUseCase } from "./application/use-cases/get-analysis.use-case";
 import { GetTenderBusinessAnalysisUseCase } from "./application/use-cases/get-tender-business-analysis.use-case";
+import { GetEffectiveTenderAnalysisSummaryUseCase } from "./application/use-cases/get-effective-tender-analysis-summary.use-case";
 import { ListTenderAnalysesUseCase } from "./application/use-cases/list-tender-analyses.use-case";
 import { ListTenderClausesUseCase } from "./application/use-cases/list-tender-clauses.use-case";
 import { ListTenderCriteriaUseCase } from "./application/use-cases/list-tender-criteria.use-case";
@@ -62,6 +63,7 @@ import { AnalysisController } from "./interfaces/http/analysis.controller";
     ProcessAnalysisJobUseCase,
     ListTenderAnalysesUseCase,
     GetTenderBusinessAnalysisUseCase,
+    GetEffectiveTenderAnalysisSummaryUseCase,
     ListTenderDeadlinesUseCase,
     ListTenderCriteriaUseCase,
     ListTenderClausesUseCase,
@@ -97,6 +99,9 @@ import { AnalysisController } from "./interfaces/http/analysis.controller";
     AI_PROVIDER_REGISTRY,
     PROMPT_TEMPLATE,
     GetTenderBusinessAnalysisUseCase,
+    // V2 Sprint 5 (GO/NO-GO IA) — réexporté UNIQUEMENT pour `opportunity` (Niveau 2, lecture
+    // seule), même motif que les 7 use cases ci-dessous déjà exportés pour Generation.
+    GetEffectiveTenderAnalysisSummaryUseCase,
     ListTenderCriteriaUseCase,
     ListTenderRequirementsUseCase,
     ListTenderRisksUseCase,

@@ -2,10 +2,20 @@ import { describe, expect, it } from "vitest";
 import { ClientPermission, clientRoleHasActionPermission, roleHasClientPortfolioPermission } from "./client-permission";
 import { ClientRole } from "./client-role";
 
+// Audit Codex round 2 (P1 confirmé) — seules permissions EXCLUES du bypass organisation-tier
+// silencieux (`PORTFOLIO_PERMISSIONS`) : le chemin normal exige une affectation CLIENT_MANAGER
+// réelle sur le client précis, y compris pour OWNER/ORGANIZATION_ADMIN. Voir
+// `resolveGoNoGoClientAccess` pour le filet de sécurité anti-lockout tracé qui les remplace.
+const PORTFOLIO_TIER_EXCLUDED_PERMISSIONS: readonly ClientPermission[] = [ClientPermission.RecordGoNoGoDecision, ClientPermission.PromoteOpportunity];
+
 describe("roleHasClientPortfolioPermission (organization-tier)", () => {
-  it("grants OWNER and ORGANIZATION_ADMIN every portfolio capability", () => {
+  it("grants OWNER and ORGANIZATION_ADMIN every portfolio capability except the GO/NO-GO decision/promotion bypass", () => {
     for (const role of ["OWNER", "ORGANIZATION_ADMIN"]) {
       for (const permission of Object.values(ClientPermission)) {
+        if (PORTFOLIO_TIER_EXCLUDED_PERMISSIONS.includes(permission)) {
+          expect(roleHasClientPortfolioPermission(role, permission)).toBe(false);
+          continue;
+        }
         expect(roleHasClientPortfolioPermission(role, permission)).toBe(true);
       }
     }

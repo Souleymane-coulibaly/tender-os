@@ -113,6 +113,7 @@ model Organization {
   routingPolicies      RoutingPolicy[]
   routingDecisions     RoutingDecision[]
   promptTemplates      PromptTemplate[]
+  opportunities        Opportunity[]
 
   @@map("organizations")
 }
@@ -416,6 +417,11 @@ model Tender {
   /// polymorphe elle-même) et révisions utilisateur de sa synthèse IA.
   aiSuggestions              AiSuggestion[]
   analysisSummaryRevisions   TenderAnalysisSummaryRevision[]
+  /// V2 Sprint 5 — au plus une Opportunity promue vers ce Tender (voir `Opportunity.tenderId`,
+  /// `@@unique([tenderId, organizationId])` côté Opportunity).
+  opportunity                Opportunity?
+  goNoGoReports              GoNoGoReport[]
+  goNoGoDecisions            GoNoGoDecision[]
 
   /// AUDIT-007 : contrainte composite support de la FK composée de TenderLot ci-dessous — garantit
   /// au niveau base de données qu'un TenderLot ne peut jamais référencer un couple
@@ -479,7 +485,9 @@ model Buyer {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  tenders Tender[]
+  tenders       Tender[]
+  /// V2 Sprint 5 — Opportunities référençant cet acheteur avant même la création d'un Tender.
+  opportunities Opportunity[]
 
   @@unique([id, organizationId])
   @@index([organizationId, name])
@@ -1937,6 +1945,9 @@ model ClientAccount {
   deliverableTemplates   DeliverableTemplate[]
   documentThemes         DocumentTheme[]
   administrativeDossiers AdministrativeDossier[]
+  /// V2 Sprint 5 — Opportunities de préqualification rattachées à ce candidat, avant même la
+  /// création d'un Tender.
+  opportunities          Opportunity[]
 
   // V2 Sprint 2 — satellites additifs "Entreprise candidate" (aucun champ de ClientAccount modifié).
   legalIdentity        CompanyLegalIdentity?
@@ -4657,6 +4668,241 @@ model AiSuggestionOrphanedArchive {
   rowSnapshot Json     @map("row_snapshot")
 
   @@map("ai_suggestions_orphaned_archive")
+}
+
+// ============================================================================
+// V2 Sprint 5 — GO/NO-GO IA : préqualification d'Opportunity (Niveau 1), rapport
+// GO/NO-GO complet post-analyse DCE (Niveau 2), décision humaine partagée entre
+// les deux niveaux, promotion Opportunity -> Tender. Score calculé, recommandation
+// IA et décision humaine restent trois notions strictement séparées — jamais
+// fusionnées, jamais l'une n'écrase l'autre (principe directeur de la mission).
+// ============================================================================
+
+/// Opportunité détectée AVANT la création d'un Tender (mission §4) — racine tenantée du Niveau 1.
+/// `clientAccountId`/`buyerId` nullables : une Opportunity peut exister sans candidat ni acheteur
+/// structuré résolus (§23 "permettre quand même une décision humaine" malgré des données
+/// manquantes) ; le Quick Score dégrade alors sa confiance plutôt que d'inventer une donnée.
+model Opportunity {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  clientAccountId String?        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  buyerId String? @map("buyer_id") @db.Uuid
+  buyer   Buyer?  @relation(fields: [buyerId, organizationId], references: [id, organizationId])
+
+  title       String  @db.VarChar(500)
+  description String?
+
+  /// MANUAL | BOAMP | TED | PRIVATE — catalogue préparé pour de futurs connecteurs (mission §4),
+  /// seul MANUAL est produit ce sprint (aucun connecteur réel).
+  source            String  @default("MANUAL") @map("source") @db.VarChar(20)
+  externalReference String? @map("external_reference") @db.VarChar(255)
+  buyerName         String? @map("buyer_name") @db.VarChar(300)
+
+  /// Texte libre — aucun rapprochement CPV structuré possible ce sprint (même limitation que
+  /// `CompanyReference.sector`, mission §5 confirmée non implémentée).
+  sector         String? @db.VarChar(120)
+  cpvCode        String? @map("cpv_code") @db.VarChar(20)
+  location       String? @db.VarChar(300)
+  geographicZone String? @map("geographic_zone") @db.VarChar(300)
+
+  publicationDate    DateTime? @map("publication_date")
+  submissionDeadline DateTime? @map("submission_deadline")
+
+  estimatedAmount Decimal? @map("estimated_amount") @db.Decimal(19, 4)
+  currency        String?  @default("EUR") @db.Char(3)
+
+  procedureType String? @map("procedure_type") @db.VarChar(80)
+
+  /// DRAFT | TO_QUALIFY | QUALIFIED | GO | GO_CONDITIONAL | NO_GO | PROMOTED | DISMISSED | ARCHIVED
+  /// — protégée par une contrainte CHECK (migration), transitions contrôlées côté domaine
+  /// (`ALLOWED_OPPORTUNITY_TRANSITIONS`).
+  status String @db.VarChar(20)
+
+  /// Renseigné uniquement après une promotion réussie (`PromoteOpportunityToTenderUseCase`) —
+  /// jamais l'inverse : un Tender créé manuellement n'a jamais besoin d'Opportunity.
+  tenderId String? @map("tender_id") @db.Uuid
+  tender   Tender? @relation(fields: [tenderId, organizationId], references: [id, organizationId])
+
+  createdBy  String    @map("created_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  archivedAt DateTime? @map("archived_at")
+
+  /// Concurrence optimiste (même motif que `Tender.version`).
+  version Int @default(1)
+
+  quickScores OpportunityQuickScore[]
+  decisions   GoNoGoDecision[]
+
+  @@unique([id, organizationId])
+  /// Une Opportunity au plus par Tender (Postgres traite plusieurs NULL comme non-conflictuels —
+  /// "unique une fois renseigné" sans index partiel).
+  @@unique([tenderId, organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, clientAccountId])
+  @@index([organizationId, submissionDeadline])
+  @@index([organizationId, createdAt])
+  @@map("opportunities")
+}
+
+/// Score rapide de préqualification (Niveau 1, mission §6-9) — jamais écrasé : une nouvelle version
+/// à chaque recalcul (même motif que `TenderAnalysisSummary`/`GoNoGoReport`). Déterministe et
+/// explicable : `categoryScores` porte poids ET justification par catégorie, jamais une moyenne
+/// opaque.
+model OpportunityQuickScore {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  opportunityId String      @map("opportunity_id") @db.Uuid
+  opportunity   Opportunity @relation(fields: [opportunityId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Séquentiel par Opportunity (mission §21 "conserver les anciens Quick Scores").
+  scoreVersion Int @map("score_version")
+
+  globalScore Float @map("global_score")
+  /// 0..1 continu (même convention que `AiSuggestion.confidence`) — jamais un enum, réduit
+  /// explicitement quand des données sont manquantes (mission §23).
+  confidence  Float
+
+  /// 1 (très faible) à 5 (très élevée) — protégée par une contrainte CHECK (migration).
+  complexity Int
+
+  /// Une entrée par catégorie (administratif/technique/financier/planning/ressources/références/
+  /// certifications/conformité générale) : `{ score, weight, justification }`. Poids nommés et
+  /// documentés dans `domain/scoring/category-weights.ts`, jamais un nombre codé en dur ici.
+  categoryScores Json @map("category_scores")
+
+  strengths   Json @default("[]")
+  weaknesses  Json @default("[]")
+  blockers    Json @default("[]")
+  missingData Json @default("[]") @map("missing_data")
+
+  /// Version de l'algorithme de calcul (distincte de `scoreVersion`, qui compte les recalculs).
+  calculationVersion String @map("calculation_version") @db.VarChar(20)
+  /// Instantané des données effectivement utilisées — jamais recalculé rétroactivement si le
+  /// profil entreprise change ensuite (mission §21).
+  dataSnapshot       Json   @map("data_snapshot")
+
+  requestedByUserId String?  @map("requested_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  decisions GoNoGoDecision[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, opportunityId, scoreVersion])
+  @@index([organizationId, opportunityId, createdAt])
+  @@map("opportunity_quick_scores")
+}
+
+/// Rapport GO/NO-GO complet (Niveau 2, mission §12-16) — exige une analyse DCE déjà terminée
+/// (`analysisVersion` figé au moment du calcul, jamais re-résolu). Append-only : une nouvelle
+/// version à chaque régénération (même motif que `TenderAnalysisSummary`).
+model GoNoGoReport {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Séquentiel par Tender.
+  reportVersion   Int @map("report_version")
+  /// `TenderAnalysisSummary.analysisVersion` utilisée pour ce calcul — instantané, jamais
+  /// re-résolue même si une nouvelle analyse DCE survient ensuite.
+  analysisVersion Int @map("analysis_version")
+
+  globalScore Float @map("global_score")
+  confidence  Float
+  /// 1..5 — CHECK (migration).
+  complexity  Int
+
+  /// LOW | MEDIUM | HIGH | VERY_HIGH — CHECK (migration). Libellés FR portés uniquement par le
+  /// frontend (même convention que `AiSuggestionEntityType`).
+  documentaryLoad String @map("documentary_load") @db.VarChar(20)
+
+  /// `{ admin, technicalMemo, pricing, documents, validation }`, chacun `{ low, medium, high }` —
+  /// jamais présenté comme une garantie (mission §10).
+  estimatedPrepTime Json @map("estimated_prep_time")
+
+  /// 7 catégories (administratif/technique/financier/planning/ressources/références/
+  /// certifications — pas de "conformité générale" distincte à ce niveau, remplacée par les
+  /// exigences réelles issues des Findings DCE). `{ score, weight, justification }` par catégorie,
+  /// poids documentés dans `domain/scoring/category-weights.ts`.
+  categoryScores Json @map("category_scores")
+
+  /// Chaque entrée : `{ category, description, weight, source, justification }`.
+  positiveCauses      Json @default("[]") @map("positive_causes")
+  negativeCauses      Json @default("[]") @map("negative_causes")
+  risks               Json @default("[]")
+  /// Distinct des faiblesses (`negativeCauses`) — jamais un blocage automatique de la décision
+  /// humaine (mission §16 "ne jamais bloquer automatiquement la décision humaine").
+  blockers            Json @default("[]")
+  missingInfo         Json @default("[]") @map("missing_info")
+  /// Signal factuel uniquement (ex. clause SUBCONTRACTING/CONSORTIUM détectée) — jamais un
+  /// rattachement automatique de sous-traitant (mission §24).
+  subcontractingFlags Json @default("[]") @map("subcontracting_flags")
+
+  /// GO | GO_CONDITIONAL | NO_GO — CHECK (migration). Recommandation IA, TOUJOURS distincte de
+  /// `GoNoGoDecision.decision` (mission §17 "cette valeur reste une recommandation").
+  recommendation          String @db.VarChar(20)
+  recommendationRationale String @map("recommendation_rationale")
+
+  calculationVersion String   @map("calculation_version") @db.VarChar(20)
+  requestedByUserId  String?  @map("requested_by_user_id") @db.Uuid
+  generatedAt        DateTime @default(now()) @map("generated_at")
+
+  decisions GoNoGoDecision[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, tenderId, reportVersion])
+  @@index([organizationId, tenderId, generatedAt])
+  @@map("go_no_go_reports")
+}
+
+/// Décision humaine (mission §18) — partagée entre les deux niveaux via `level`. Append-only :
+/// jamais écrasée, une nouvelle décision est toujours une nouvelle ligne (`insertSeq` départage
+/// un ordre non ambigu même en cas de collision d'horloge sur `decidedAt`).
+model GoNoGoDecision {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// OPPORTUNITY | TENDER — CHECK (migration), cohérent avec l'exclusivité opportunityId/tenderId
+  /// ci-dessous (CHECK composite, migration).
+  level String @db.VarChar(20)
+
+  opportunityId String?      @map("opportunity_id") @db.Uuid
+  opportunity   Opportunity? @relation(fields: [opportunityId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  tenderId String? @map("tender_id") @db.Uuid
+  tender   Tender? @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  linkedQuickScoreId String?                @map("linked_quick_score_id") @db.Uuid
+  linkedQuickScore   OpportunityQuickScore? @relation(fields: [linkedQuickScoreId, organizationId], references: [id, organizationId])
+
+  linkedReportId String?       @map("linked_report_id") @db.Uuid
+  linkedReport   GoNoGoReport? @relation(fields: [linkedReportId, organizationId], references: [id, organizationId])
+
+  /// GO | GO_CONDITIONAL | NO_GO — CHECK (migration).
+  decision      String  @db.VarChar(20)
+  /// Obligatoire si NO_GO — CHECK (migration).
+  justification String?
+  /// Obligatoire si GO_CONDITIONAL — CHECK (migration).
+  conditions    String?
+  comment       String?
+
+  actorId   String   @map("actor_id") @db.Uuid
+  decidedAt DateTime @default(now()) @map("decided_at")
+
+  /// Pur départage d'ordre interne — jamais exposé à l'API/au domaine, garantit une lecture
+  /// "dernière décision" non ambiguë (utilisé par `PromoteOpportunityToTenderUseCase`).
+  insertSeq BigInt @default(autoincrement()) @map("insert_seq")
+
+  @@index([organizationId, level, opportunityId, insertSeq])
+  @@index([organizationId, level, tenderId, insertSeq])
+  @@map("go_no_go_decisions")
 }
 
 // ============================================================================

@@ -18,6 +18,7 @@ import { GenerationModule } from "./modules/generation";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { KnowledgeBaseModule } from "./modules/knowledge-base/knowledge-base.module";
 import { MembershipsModule } from "./modules/memberships/memberships.module";
+import { OpportunityModule } from "./modules/opportunity";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { OutboxModule } from "./modules/outbox";
 import { PlatformAdministrationModule } from "./modules/platform-administration/platform-administration.module";
@@ -66,6 +67,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     SubmissionModule,
     CompanyProfileModule,
     SubcontractorsModule,
+    OpportunityModule,
   ],
 })
 export class AppModule {}

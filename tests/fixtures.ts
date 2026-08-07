@@ -5,8 +5,11 @@ import type { Page } from "@playwright/test";
 export type E2eOtherOrgFixture = { email: string; password: string; organizationId: string; userId: string; clientAccountId: string; tenderId: string };
 
 /** `other` (V2 Sprint 1 §5) — seconde organisation isolée, réservée aux scénarios anti-IDOR
- *  (`multi-tenant-isolation.spec.ts`). Champ additif : n'affecte aucun test préexistant. */
-export type E2eFixture = E2eOtherOrgFixture & { other: E2eOtherOrgFixture };
+ *  (`multi-tenant-isolation.spec.ts`). `tenderWithAnalysisId` (V2 Sprint 5) — second Tender de la
+ *  même organisation principale, avec une analyse IA du DCE déjà réussie (seedée directement, sans
+ *  clé API IA réelle), réservé au scénario Niveau 2 GO/NO-GO. Champs additifs : n'affectent aucun
+ *  test préexistant. */
+export type E2eFixture = E2eOtherOrgFixture & { tenderWithAnalysisId: string; other: E2eOtherOrgFixture };
 
 /** Correctif audit Codex P2-003 — relit les identifiants réellement créés en base par
  *  `tests/global-setup.ts` (jamais une valeur en dur). */

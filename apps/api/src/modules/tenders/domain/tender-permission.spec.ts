@@ -9,6 +9,16 @@ describe("roleHasTenderPermission", () => {
     }
   });
 
+  /** Audit Codex round 2 (P1 confirmé) — ce palier ORGANISATION reste volontairement large pour
+   *  `RecordGoNoGoDecision` (même motif que le reste de cette matrice) : la restriction fine
+   *  "CLIENT_MANAGER uniquement" vit ENTIÈREMENT au palier client (`resolveGoNoGoClientAccess`),
+   *  jamais ici. Un BID_MANAGER SANS affectation CLIENT_MANAGER réelle sur le client du Tender est
+   *  rejeté à CE palier client-tier, pas au palier organisation testé ici — voir
+   *  `record-tender-go-no-go-decision.use-case.spec.ts` pour la preuve runtime de ce rejet. */
+  it("does not gate RecordGoNoGoDecision any tighter than the rest of the Bid Manager superset (fine-grained restriction lives client-tier)", () => {
+    expect(roleHasTenderPermission("BID_MANAGER", TenderPermission.RecordGoNoGoDecision)).toBe(true);
+  });
+
   /** Correction réaudit Codex Sprint 4.1 (P1-01-R) — OWNER était absent de
    *  ROLE_TENDER_PERMISSIONS, ce qui bloquait indirectement StartTenderAnalysisUseCase/
    *  StartDocumentAnalysisUseCase (via GetTenderUseCase, qui exige TenderPermission.Read) pour un

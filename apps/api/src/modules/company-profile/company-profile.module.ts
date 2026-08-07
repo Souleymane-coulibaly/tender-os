@@ -54,13 +54,19 @@ import { CompanyProfileController } from "./interfaces/http/company-profile.cont
 /**
  * Module `company-profile` (mission V2 Sprint 2) — importe `ClientPortfolioModule`/`DocumentsModule`
  * dans UN SEUL sens (même motif que `administrative-dossier`) : `client-portfolio`/`documents`
- * n'importent jamais ce module en retour. N'exporte rien pour l'instant : aucun autre module ne
- * consomme encore ce bounded context ce sprint (§3 : aucune fonctionnalité IA/GO-NO-GO/mémoire
- * technique n'est développée qui aurait besoin de le consommer).
+ * n'importent jamais ce module en retour.
+ *
+ * V2 Sprint 5 (GO/NO-GO IA) — enrichissement anticipé par ce module dès sa création (voir
+ * l'ancien commentaire ci-dessus, désormais caduc) : `GetCompanyProfileUseCase` est exporté en
+ * LECTURE SEULE pour `opportunity` (scoring Niveau 1/Niveau 2) — même motif que les réexports
+ * `UpdateTenderUseCase`/`CreateTenderLotUseCase` pratiqués par `tenders` pour `ai-suggestion-bridge`.
+ * Aucun autre use case de ce module n'est exporté : `opportunity` ne lit jamais, n'écrit jamais
+ * directement dans le profil entreprise.
  */
 @Module({
   imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, DocumentsModule, OutboxModule],
   controllers: [CompanyProfileController],
+  exports: [GetCompanyProfileUseCase],
   providers: [
     CompanyProfileAccessService,
 

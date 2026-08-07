@@ -7,6 +7,7 @@ import { logoutAction } from "../actions";
 const NAV_ITEMS = [
   { href: "/app/clients", label: "Clients" },
   { href: "/app/subcontractor-profiles", label: "Sous-traitants" },
+  { href: "/app/opportunities", label: "Opportunités" },
   { href: "/app/tenders", label: "Appels d'offres" },
   { href: "/app/documents", label: "Documents" },
   { href: "/app/knowledge", label: "Base de connaissances" },

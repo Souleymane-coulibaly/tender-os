@@ -89,6 +89,18 @@ export const ClientPermission = {
    *  CLIENT_MANAGER et au palier organisation. */
   ReadCompanyBanking: "CLIENT_READ_COMPANY_BANKING",
   ManageCompanyBanking: "CLIENT_MANAGE_COMPANY_BANKING",
+  /** V2 Sprint 5 (GO/NO-GO IA) — même motif additif que `ReadSubmission`/`ManageSubmission` :
+   *  consulter une Opportunity (Niveau 1) ou un rapport/décision GO/NO-GO (Niveau 2) vs. créer/
+   *  éditer une Opportunity/calculer un score vs. enregistrer une décision GO/NO-GO/promouvoir —
+   *  ces deux dernières restent au palier "règle stricte" (mission §19 confirmé : aucune
+   *  dérogation, décision réservée), même palier que `ValidateDeliverable`/`ChangeTenderCandidate`,
+   *  jamais délégué au CONTRIBUTOR.
+   */
+  ReadOpportunity: "CLIENT_READ_OPPORTUNITY",
+  ManageOpportunity: "CLIENT_MANAGE_OPPORTUNITY",
+  ReadGoNoGo: "CLIENT_READ_GO_NO_GO",
+  RecordGoNoGoDecision: "CLIENT_RECORD_GO_NO_GO_DECISION",
+  PromoteOpportunity: "CLIENT_PROMOTE_OPPORTUNITY",
   /** Répertoire organisationnel de sous-traitants (mission §6) — PAS scopé par ClientAccount
    *  (réutilisable par plusieurs entreprises candidates de la même organisation), donc absent de
    *  `ROLE_CLIENT_ACTION_PERMISSIONS` ci-dessous ; vérifié uniquement au palier organisation via
@@ -152,6 +164,16 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ManageCompanyProfile,
   ClientPermission.ReadCompanyBanking,
   ClientPermission.ManageCompanyBanking,
+  ClientPermission.ReadOpportunity,
+  ClientPermission.ManageOpportunity,
+  ClientPermission.ReadGoNoGo,
+  // V2 Sprint 5 (audit Codex, round 2 — P1 confirmé) — `RecordGoNoGoDecision`/`PromoteOpportunity`
+  // sont volontairement ABSENTES de ce bypass organisation-tier silencieux : le chemin normal exige
+  // une affectation CLIENT_MANAGER réelle sur le client précis, y compris pour OWNER/
+  // ORGANIZATION_ADMIN. Un filet de sécurité anti-lockout reste accordé à CES DEUX RÔLES SEULEMENT
+  // (jamais BID_MANAGER/CONTRIBUTOR), mais via un chemin séparé et TRACÉ
+  // (`opportunity/application/policies/go-no-go-client-access.policy.ts#resolveGoNoGoClientAccess`),
+  // jamais ce bypass silencieux générique.
 ];
 
 export const ROLE_CLIENT_PORTFOLIO_PERMISSIONS: Record<string, readonly ClientPermission[]> = {
@@ -219,6 +241,13 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ManageCompanyProfile,
     ClientPermission.ReadCompanyBanking,
     ClientPermission.ManageCompanyBanking,
+    /** V2 Sprint 5 — le CLIENT_MANAGER a tous les droits GO/NO-GO, y compris enregistrer une
+     *  décision et promouvoir une Opportunity ("règle stricte", mission §19). */
+    ClientPermission.ReadOpportunity,
+    ClientPermission.ManageOpportunity,
+    ClientPermission.ReadGoNoGo,
+    ClientPermission.RecordGoNoGoDecision,
+    ClientPermission.PromoteOpportunity,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -259,6 +288,12 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
      *  données bancaires (réservées au CLIENT_MANAGER ci-dessus). */
     ClientPermission.ReadCompanyProfile,
     ClientPermission.ManageCompanyProfile,
+    /** V2 Sprint 5 — le CONTRIBUTOR peut consulter/préparer (créer une Opportunity, calculer un
+     *  score, consulter un rapport) mais jamais enregistrer une décision ni promouvoir ("règle
+     *  stricte" réservée au CLIENT_MANAGER ci-dessus, mission §19). */
+    ClientPermission.ReadOpportunity,
+    ClientPermission.ManageOpportunity,
+    ClientPermission.ReadGoNoGo,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -274,6 +309,10 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadDeliverable,
     ClientPermission.ReadAdministrativeDossier,
     ClientPermission.ReadSubmission,
+    /** V2 Sprint 5 — le VIEWER consulte l'Opportunity et les rapports/décisions GO/NO-GO, jamais
+     *  ni ne les crée ni ne les gère. */
+    ClientPermission.ReadOpportunity,
+    ClientPermission.ReadGoNoGo,
   ],
 };
 

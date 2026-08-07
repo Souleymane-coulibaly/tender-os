@@ -24,7 +24,11 @@ test.describe("Isolation multi-tenant (anti-IDOR)", () => {
 
     await page.goto(`/app/tenders/${fixture.tenderId}`);
 
-    await expect(page.getByRole("alert")).toContainText("Introuvable ou accès refusé");
+    // `getByRole("alert")` non scopé matche aussi le `AppRouterAnnouncer` interne de Next.js
+    // (`#__next-route-announcer__`, présent sur toute page une fois l'hydratation terminée,
+    // vide mais avec le même rôle ARIA) — jamais fiable en violation de mode strict. `ApiErrorState`
+    // rend son alerte dans un `<div>`, jamais un élément `#__next-route-announcer__`.
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("Introuvable ou accès refusé");
     await expect(page.getByRole("heading", { name: "Cockpit" })).not.toBeVisible();
   });
 

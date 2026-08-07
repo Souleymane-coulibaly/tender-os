@@ -191,6 +191,9 @@ import { TendersController } from "./interfaces/http/tenders.controller";
   // TENDER_REPOSITORY déjà réexporté pour Extraction ci-dessus.
   exports: [
     GetTenderUseCase,
+    // V2 Sprint 5 — réexporté pour `opportunity` (`PromoteOpportunityToTenderUseCase` délègue la
+    // création du Tender à ce use case public, jamais une seconde logique de création dupliquée).
+    CreateTenderUseCase,
     TENDER_REPOSITORY,
     UpdateTenderUseCase,
     TENDER_LOT_REPOSITORY,
