@@ -22,6 +22,10 @@ const STATUS_BY_CODE: Record<string, number> = {
   TENDER_LOT_NOT_FOUND: HttpStatus.NOT_FOUND,
   CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,
   CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
+  // Correctif audit Codex P2 — un ChecklistItemAdapter (CHECKLIST_ITEM) peut porter
+  // subjectSubcontractorProfileId ; mêmes codes/conventions que côté TendersErrorFilter.
+  CHECKLIST_SUBCONTRACTOR_SUBJECT_NOT_FOUND: HttpStatus.NOT_FOUND,
+  INVALID_CHECKLIST_SUBJECT: HttpStatus.UNPROCESSABLE_ENTITY,
 };
 
 @Catch(DomainError)

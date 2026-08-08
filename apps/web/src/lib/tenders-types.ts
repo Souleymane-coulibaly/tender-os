@@ -253,6 +253,32 @@ export type TenderLot = {
 
 export type ChecklistItemStatus = "TODO" | "IN_PROGRESS" | "COMPLETED" | "NOT_APPLICABLE";
 
+// V2 Sprint 6 — catalogues gouvernés, doivent rester synchronisés avec
+// `tenders/domain/checklist-item.entity.ts` (API).
+export type ChecklistItemType =
+  | "ADMINISTRATIVE_DOCUMENT"
+  | "TECHNICAL_DOCUMENT"
+  | "FINANCIAL_DOCUMENT"
+  | "CERTIFICATION"
+  | "INSURANCE"
+  | "DECLARATION"
+  | "FORM"
+  | "SIGNATURE"
+  | "VISIT"
+  | "REFERENCE"
+  | "TECHNICAL_REQUIREMENT"
+  | "FINANCIAL_REQUIREMENT"
+  | "DEADLINE"
+  | "DELIVERABLE"
+  | "OTHER";
+export type ChecklistRequirementLevel = "MANDATORY" | "CONDITIONAL" | "INFORMATIONAL";
+export type ChecklistItemCriticality = "BLOCKING" | "HIGH" | "MEDIUM" | "LOW";
+export type ChecklistComplianceStatus = "TO_REVIEW" | "NON_COMPLIANT" | "READY" | "VALIDATED" | "NOT_APPLICABLE";
+export type ChecklistDocumentStatus = "MISSING" | "AVAILABLE" | "EXPIRED";
+export type ChecklistItemOrigin = "MANUAL" | "AI_SUGGESTION" | "SYSTEM";
+export type ChecklistSubjectType = "CANDIDATE" | "GROUP_MEMBER" | "SUBCONTRACTOR" | "ANY_MEMBER" | "TENDER" | "LOT";
+export type ChecklistDocumentMatchStatus = "NOT_SEARCHED" | "EXACT_MATCH" | "PROBABLE_MATCH" | "MULTIPLE_CANDIDATES" | "NO_MATCH" | "MANUALLY_ATTACHED";
+
 export type ChecklistItem = {
   id: string;
   tenderId: string;
@@ -266,6 +292,52 @@ export type ChecklistItem = {
   completedAt?: string;
   completedBy?: string;
   displayOrder: number;
+  type: ChecklistItemType;
+  requirementLevel: ChecklistRequirementLevel;
+  conditionText?: string;
+  criticality: ChecklistItemCriticality;
+  complianceStatus: ChecklistComplianceStatus;
+  documentStatus: ChecklistDocumentStatus;
+  origin: ChecklistItemOrigin;
+  subjectType: ChecklistSubjectType;
+  subjectSubcontractorProfileId?: string;
+  lotId?: string;
+  matchedDocumentId?: string;
+  matchedDocumentVersionId?: string;
+  documentMatchStatus: ChecklistDocumentMatchStatus;
+  documentMatchScore?: number;
+  documentMatchReasons?: string[];
+  documentExpiresAt?: string;
+  documentValidityCheckedAt?: string;
+};
+
+export type ChecklistProgressCounts = {
+  totalApplicable: number;
+  ready: number;
+  validated: number;
+  missing: number;
+  blockingMissing: number;
+  expired: number;
+  toReview: number;
+};
+
+export type ChecklistProgress = {
+  global: ChecklistProgressCounts;
+  byLot: Record<string, ChecklistProgressCounts>;
+};
+
+export type ChecklistDocumentMatchCandidate = {
+  documentId: string;
+  documentVersionId?: string;
+  label: string;
+  expiresAt?: string;
+  score: number;
+  reasons: string[];
+};
+
+export type ChecklistDocumentMatchResult = {
+  status: ChecklistDocumentMatchStatus;
+  candidates: ChecklistDocumentMatchCandidate[];
 };
 
 export type AwardCriterion = {

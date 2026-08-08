@@ -10,6 +10,7 @@ import {
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryChecklistItemRepository,
+  InMemoryTenderLotRepository,
   InMemoryTenderRepository,
 } from "../../test-support/fakes";
 import { ChangeChecklistItemStatusUseCase, UpdateChecklistItemUseCase } from "./update-checklist-item.use-case";
@@ -27,8 +28,10 @@ describe("UpdateChecklistItemUseCase / ChangeChecklistItemStatusUseCase", () => 
     clientPortfolio = await createClientPortfolioTestFixture("org-1");
     updateUseCase = new UpdateChecklistItemUseCase(
       checklistRepository,
+      new InMemoryAuditLogWriter(),
       new FixedClock(),
       tenderRepository,
+      new InMemoryTenderLotRepository(),
       clientPortfolio.assertClientAccessUseCase,
     );
     changeStatusUseCase = new ChangeChecklistItemStatusUseCase(

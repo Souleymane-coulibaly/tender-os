@@ -165,6 +165,30 @@ export type RestoreTenderLotBody = z.infer<typeof RestoreTenderLotBodySchema>;
 export const ReorderTenderLotsBodySchema = z.object({ lotIds: z.array(z.string().uuid()).min(1) }).strict();
 export type ReorderTenderLotsBody = z.infer<typeof ReorderTenderLotsBodySchema>;
 
+// V2 Sprint 6 §5-8/§13-15 — catalogues gouvernés, doivent rester synchronisés avec
+// `tenders/domain/checklist-item.entity.ts`.
+export const CHECKLIST_ITEM_TYPES = [
+  "ADMINISTRATIVE_DOCUMENT",
+  "TECHNICAL_DOCUMENT",
+  "FINANCIAL_DOCUMENT",
+  "CERTIFICATION",
+  "INSURANCE",
+  "DECLARATION",
+  "FORM",
+  "SIGNATURE",
+  "VISIT",
+  "REFERENCE",
+  "TECHNICAL_REQUIREMENT",
+  "FINANCIAL_REQUIREMENT",
+  "DEADLINE",
+  "DELIVERABLE",
+  "OTHER",
+] as const;
+export const CHECKLIST_REQUIREMENT_LEVELS = ["MANDATORY", "CONDITIONAL", "INFORMATIONAL"] as const;
+export const CHECKLIST_ITEM_CRITICALITIES = ["BLOCKING", "HIGH", "MEDIUM", "LOW"] as const;
+export const CHECKLIST_COMPLIANCE_STATUSES = ["TO_REVIEW", "NON_COMPLIANT", "READY", "VALIDATED", "NOT_APPLICABLE"] as const;
+export const CHECKLIST_SUBJECT_TYPES = ["CANDIDATE", "GROUP_MEMBER", "SUBCONTRACTOR", "ANY_MEMBER", "TENDER", "LOT"] as const;
+
 export const CreateChecklistItemBodySchema = z
   .object({
     title: z.string().trim().min(1).max(300),
@@ -173,6 +197,13 @@ export const CreateChecklistItemBodySchema = z
     assignedTo: z.string().uuid().optional(),
     dueDate: z.string().datetime().optional(),
     displayOrder: z.number().int().min(0).optional(),
+    type: z.enum(CHECKLIST_ITEM_TYPES).optional(),
+    requirementLevel: z.enum(CHECKLIST_REQUIREMENT_LEVELS).optional(),
+    conditionText: z.string().trim().min(1).optional(),
+    criticality: z.enum(CHECKLIST_ITEM_CRITICALITIES).optional(),
+    subjectType: z.enum(CHECKLIST_SUBJECT_TYPES).optional(),
+    subjectSubcontractorProfileId: z.string().uuid().optional(),
+    lotId: z.string().uuid().optional(),
   })
   .strict();
 export type CreateChecklistItemBody = z.infer<typeof CreateChecklistItemBodySchema>;
@@ -184,6 +215,20 @@ export const ChangeChecklistItemStatusBodySchema = z
   .object({ status: z.enum(["TODO", "IN_PROGRESS", "COMPLETED", "NOT_APPLICABLE"]) })
   .strict();
 export type ChangeChecklistItemStatusBody = z.infer<typeof ChangeChecklistItemStatusBodySchema>;
+
+export const ListChecklistItemsQuerySchema = z
+  .object({
+    lotId: z.string().uuid().optional(),
+    complianceStatus: z.enum(CHECKLIST_COMPLIANCE_STATUSES).optional(),
+    criticality: z.enum(CHECKLIST_ITEM_CRITICALITIES).optional(),
+    requirementLevel: z.enum(CHECKLIST_REQUIREMENT_LEVELS).optional(),
+    subjectType: z.enum(CHECKLIST_SUBJECT_TYPES).optional(),
+    blockingOnly: z.coerce.boolean().optional(),
+    missingOnly: z.coerce.boolean().optional(),
+    expiredOnly: z.coerce.boolean().optional(),
+  })
+  .strict();
+export type ListChecklistItemsQuery = z.infer<typeof ListChecklistItemsQuerySchema>;
 
 export const AWARD_CRITERION_TYPES = ["PRICE", "TECHNICAL_VALUE", "DELAY", "ENVIRONMENTAL", "SOCIAL", "OTHER"] as const;
 

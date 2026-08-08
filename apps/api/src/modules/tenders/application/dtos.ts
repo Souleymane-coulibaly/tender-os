@@ -229,6 +229,23 @@ export type ChecklistItemSummary = {
   completedAt?: string | undefined;
   completedBy?: string | undefined;
   displayOrder: number;
+  type: string;
+  requirementLevel: string;
+  conditionText?: string | undefined;
+  criticality: string;
+  complianceStatus: string;
+  documentStatus: string;
+  origin: string;
+  subjectType: string;
+  subjectSubcontractorProfileId?: string | undefined;
+  lotId?: string | undefined;
+  matchedDocumentId?: string | undefined;
+  matchedDocumentVersionId?: string | undefined;
+  documentMatchStatus: string;
+  documentMatchScore?: number | undefined;
+  documentMatchReasons?: readonly string[] | undefined;
+  documentExpiresAt?: string | undefined;
+  documentValidityCheckedAt?: string | undefined;
 };
 
 export function toChecklistItemSummary(item: ChecklistItem): ChecklistItemSummary {
@@ -245,6 +262,23 @@ export function toChecklistItemSummary(item: ChecklistItem): ChecklistItemSummar
     completedAt: item.completedAt?.toISOString(),
     completedBy: item.completedBy,
     displayOrder: item.displayOrder,
+    type: item.type,
+    requirementLevel: item.requirementLevel,
+    conditionText: item.conditionText,
+    criticality: item.criticality,
+    complianceStatus: item.complianceStatus,
+    documentStatus: item.documentStatus,
+    origin: item.origin,
+    subjectType: item.subjectType,
+    subjectSubcontractorProfileId: item.subjectSubcontractorProfileId,
+    lotId: item.lotId,
+    matchedDocumentId: item.matchedDocumentId,
+    matchedDocumentVersionId: item.matchedDocumentVersionId,
+    documentMatchStatus: item.documentMatchStatus,
+    documentMatchScore: item.documentMatchScore,
+    documentMatchReasons: item.documentMatchReasons,
+    documentExpiresAt: item.documentExpiresAt?.toISOString(),
+    documentValidityCheckedAt: item.documentValidityCheckedAt?.toISOString(),
   };
 }
 

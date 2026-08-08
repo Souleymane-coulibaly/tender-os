@@ -8,6 +8,7 @@ import { ALERT_REPOSITORY } from "./application/ports/alert.repository";
 import { AWARD_CRITERION_REPOSITORY } from "./application/ports/award-criterion.repository";
 import { BUYER_REPOSITORY } from "./application/ports/buyer.repository";
 import { CHECKLIST_ITEM_REPOSITORY } from "./application/ports/checklist-item.repository";
+import { CHECKLIST_ITEM_SOURCE_REPOSITORY } from "./application/ports/checklist-item-source.repository";
 import { MILESTONE_REPOSITORY } from "./application/ports/milestone.repository";
 import { REQUESTED_DOCUMENT_REPOSITORY } from "./application/ports/requested-document.repository";
 import { RISK_REPOSITORY } from "./application/ports/risk.repository";
@@ -52,6 +53,11 @@ import {
   UpdateChecklistItemUseCase,
 } from "./application/use-cases/update-checklist-item.use-case";
 import { ListChecklistItemsUseCase } from "./application/use-cases/list-checklist-items.use-case";
+import { GetChecklistProgressUseCase } from "./application/use-cases/get-checklist-progress.use-case";
+import {
+  MarkChecklistItemNotApplicableUseCase,
+  ValidateChecklistItemUseCase,
+} from "./application/use-cases/validate-checklist-item.use-case";
 
 import { CreateAwardCriterionUseCase } from "./application/use-cases/create-award-criterion.use-case";
 import {
@@ -89,6 +95,7 @@ import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
 import { PrismaAwardCriterionRepository } from "./infrastructure/prisma-award-criterion.repository";
 import { PrismaBuyerRepository } from "./infrastructure/prisma-buyer.repository";
 import { PrismaChecklistItemRepository } from "./infrastructure/prisma-checklist-item.repository";
+import { PrismaChecklistItemSourceRepository } from "./infrastructure/prisma-checklist-item-source.repository";
 import { PrismaIlikeTenderSearchProvider } from "./infrastructure/prisma-ilike-tender-search.provider";
 import { PrismaMilestoneRepository } from "./infrastructure/prisma-milestone.repository";
 import { PrismaRequestedDocumentRepository } from "./infrastructure/prisma-requested-document.repository";
@@ -138,6 +145,9 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     UpdateChecklistItemUseCase,
     ChangeChecklistItemStatusUseCase,
     ListChecklistItemsUseCase,
+    GetChecklistProgressUseCase,
+    ValidateChecklistItemUseCase,
+    MarkChecklistItemNotApplicableUseCase,
 
     CreateAwardCriterionUseCase,
     UpdateAwardCriterionUseCase,
@@ -170,6 +180,7 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     { provide: TENDER_SEARCH_PROVIDER, useClass: PrismaIlikeTenderSearchProvider },
     { provide: TENDER_LOT_REPOSITORY, useClass: PrismaTenderLotRepository },
     { provide: CHECKLIST_ITEM_REPOSITORY, useClass: PrismaChecklistItemRepository },
+    { provide: CHECKLIST_ITEM_SOURCE_REPOSITORY, useClass: PrismaChecklistItemSourceRepository },
     { provide: AWARD_CRITERION_REPOSITORY, useClass: PrismaAwardCriterionRepository },
     { provide: REQUESTED_DOCUMENT_REPOSITORY, useClass: PrismaRequestedDocumentRepository },
     { provide: MILESTONE_REPOSITORY, useClass: PrismaMilestoneRepository },
@@ -215,6 +226,14 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     BUYER_REPOSITORY,
     CreateBuyerUseCase,
     UpdateBuyerUseCase,
+
+    // V2 Sprint 6 — réexportés pour `ai-suggestion-bridge` (nouvel adaptateur CHECKLIST_ITEM) ET
+    // pour le nouveau module `checklist-intelligence` (rapprochement documentaire + réconciliation
+    // nouvelle analyse — ne peuvent pas vivre DANS `tenders`, voir `index.ts`).
+    CHECKLIST_ITEM_REPOSITORY,
+    CreateChecklistItemUseCase,
+    UpdateChecklistItemUseCase,
+    AUDIT_LOG_WRITER,
   ],
 })
 export class TendersModule {}

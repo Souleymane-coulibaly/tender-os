@@ -16,6 +16,12 @@ export type { AddDocumentVersionCommand } from "./application/use-cases/add-docu
 export { GetDocumentUseCase } from "./application/use-cases/get-document.use-case";
 export type { GetDocumentQuery } from "./application/use-cases/get-document.use-case";
 
+// Réexportée pour Sprint 6 (module `checklist-intelligence`) — valider qu'un `documentVersionId`
+// fourni par le client appartient bien au `documentId` déclaré ET à l'organisation active avant de
+// l'attacher à un ChecklistItem (correctif audit Codex P1 : le champ est dénormalisé, sans FK —
+// voir `schema.prisma`, la vérification applicative est donc le seul garde-fou).
+export { DocumentVersionNotFoundError } from "./domain/errors";
+
 export { DownloadDocumentVersionUseCase } from "./application/use-cases/download-document-version.use-case";
 export type {
   DownloadDocumentVersionQuery,

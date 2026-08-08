@@ -23,6 +23,11 @@ import {
   UpdateChecklistItemUseCase,
 } from "../../application/use-cases/update-checklist-item.use-case";
 import { ListChecklistItemsUseCase } from "../../application/use-cases/list-checklist-items.use-case";
+import { GetChecklistProgressUseCase } from "../../application/use-cases/get-checklist-progress.use-case";
+import {
+  MarkChecklistItemNotApplicableUseCase,
+  ValidateChecklistItemUseCase,
+} from "../../application/use-cases/validate-checklist-item.use-case";
 
 import { CreateAwardCriterionUseCase } from "../../application/use-cases/create-award-criterion.use-case";
 import {
@@ -87,6 +92,7 @@ import {
   CreateRiskBodySchema,
   CreateTenderBodySchema,
   IdParamSchema,
+  ListChecklistItemsQuerySchema,
   ListTendersQuerySchema,
   RestoreTenderBodySchema,
   TenderBoardQuerySchema,
@@ -109,6 +115,7 @@ import {
   type CreateRequestedDocumentBody,
   type CreateRiskBody,
   type CreateTenderBody,
+  type ListChecklistItemsQuery,
   type ListTendersQuery,
   type RestoreTenderBody,
   type TenderBoardQuery,
@@ -143,6 +150,9 @@ export class TendersController {
     private readonly updateChecklistItemUseCase: UpdateChecklistItemUseCase,
     private readonly changeChecklistItemStatusUseCase: ChangeChecklistItemStatusUseCase,
     private readonly listChecklistItemsUseCase: ListChecklistItemsUseCase,
+    private readonly getChecklistProgressUseCase: GetChecklistProgressUseCase,
+    private readonly validateChecklistItemUseCase: ValidateChecklistItemUseCase,
+    private readonly markChecklistItemNotApplicableUseCase: MarkChecklistItemNotApplicableUseCase,
 
     private readonly createAwardCriterionUseCase: CreateAwardCriterionUseCase,
     private readonly updateAwardCriterionUseCase: UpdateAwardCriterionUseCase,
@@ -426,13 +436,24 @@ export class TendersController {
   async listChecklist(
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Query(new ZodValidationPipe(ListChecklistItemsQuerySchema)) query: ListChecklistItemsQuery,
   ) {
     const items = await this.listChecklistItemsUseCase.execute({
       organizationId: membership.organizationId,
       tenderId,
       actorRole: membership.role,
+      ...query,
     });
     return items.map(presentChecklistItem);
+  }
+
+  @Get(":tenderId/checklist/progress")
+  @HttpCode(HttpStatus.OK)
+  async getChecklistProgress(
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    return this.getChecklistProgressUseCase.execute({ organizationId: membership.organizationId, tenderId, actorRole: membership.role });
   }
 
   @Patch(":tenderId/checklist/:itemId")
@@ -474,6 +495,32 @@ export class TendersController {
       status: body.status,
       requestId: request.id,
     });
+    return presentChecklistItem(result);
+  }
+
+  @Post(":tenderId/checklist/:itemId/validate")
+  @HttpCode(HttpStatus.OK)
+  async validateChecklistItem(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Param("itemId", new ZodValidationPipe(IdParamSchema)) itemId: string,
+    @Req() request: RequestWithId,
+  ) {
+    const result = await this.validateChecklistItemUseCase.execute({ organizationId: membership.organizationId, tenderId, itemId, actorId: actor.userId, actorRole: membership.role, requestId: request.id });
+    return presentChecklistItem(result);
+  }
+
+  @Post(":tenderId/checklist/:itemId/mark-not-applicable")
+  @HttpCode(HttpStatus.OK)
+  async markChecklistItemNotApplicable(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Param("itemId", new ZodValidationPipe(IdParamSchema)) itemId: string,
+    @Req() request: RequestWithId,
+  ) {
+    const result = await this.markChecklistItemNotApplicableUseCase.execute({ organizationId: membership.organizationId, tenderId, itemId, actorId: actor.userId, actorRole: membership.role, requestId: request.id });
     return presentChecklistItem(result);
   }
 

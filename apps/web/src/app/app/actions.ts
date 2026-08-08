@@ -25,6 +25,8 @@ import {
   type PageResponse,
   type MyMembership,
   type Tender,
+  type ChecklistDocumentMatchResult,
+  type ChecklistProgress,
 } from "../../lib/tenders-types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
@@ -622,10 +624,20 @@ export async function createChecklistItemAction(
     return { error: "Le titre est obligatoire." };
   }
 
+  const type = formData.get("type");
+  const requirementLevel = formData.get("requirementLevel");
+  const criticality = formData.get("criticality");
+
   try {
     await appApiFetch(`/api/v1/tenders/${tenderId}/checklist`, {
       method: "POST",
-      body: JSON.stringify({ title, required: formData.get("required") === "on" }),
+      body: JSON.stringify({
+        title,
+        required: formData.get("required") === "on",
+        ...(typeof type === "string" && type ? { type } : {}),
+        ...(typeof requirementLevel === "string" && requirementLevel ? { requirementLevel } : {}),
+        ...(typeof criticality === "string" && criticality ? { criticality } : {}),
+      }),
     });
   } catch (error) {
     return { error: errorMessage(error) };
@@ -651,6 +663,91 @@ export async function changeChecklistItemStatusAction(
 
   revalidatePath(`/app/tenders/${tenderId}`);
   return {};
+}
+
+/** V2 Sprint 6 §20-21 — seule action (avec `markChecklistItemNotApplicableAction`) qui compte pour
+ *  le score de readiness : une décision humaine explicite, jamais un simple document rapproché. */
+export async function validateChecklistItemAction(tenderId: string, itemId: string): Promise<{ error?: string }> {
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/checklist/${itemId}/validate`, { method: "POST" });
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+  revalidatePath(`/app/tenders/${tenderId}`);
+  return {};
+}
+
+export async function markChecklistItemNotApplicableAction(tenderId: string, itemId: string): Promise<{ error?: string }> {
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/checklist/${itemId}/mark-not-applicable`, { method: "POST" });
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+  revalidatePath(`/app/tenders/${tenderId}`);
+  return {};
+}
+
+/** V2 Sprint 6 §16-17 — jamais une association automatique : cette action ne fait que RECHERCHER
+ *  des candidats, `attachChecklistItemDocumentAction` reste le seul point d'écriture, toujours
+ *  déclenché par un choix utilisateur explicite même sur un score EXACT_MATCH. */
+export async function findChecklistItemDocumentMatchesAction(
+  tenderId: string,
+  itemId: string,
+): Promise<{ result?: ChecklistDocumentMatchResult; error?: string }> {
+  try {
+    const result = await appApiFetch<ChecklistDocumentMatchResult>(`/api/v1/tenders/${tenderId}/checklist/${itemId}/document-matches`, { method: "POST" });
+    return { result };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+}
+
+export async function attachChecklistItemDocumentAction(
+  tenderId: string,
+  itemId: string,
+  input: { documentId: string; documentVersionId?: string | undefined; matchStatus: string; score?: number | undefined; reasons?: string[] | undefined; expiresAt?: string | undefined },
+): Promise<{ error?: string }> {
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/checklist/${itemId}/attach-document`, { method: "POST", body: JSON.stringify(input) });
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+  revalidatePath(`/app/tenders/${tenderId}`);
+  return {};
+}
+
+export async function detachChecklistItemDocumentAction(tenderId: string, itemId: string): Promise<{ error?: string }> {
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/checklist/${itemId}/document`, { method: "DELETE" });
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+  revalidatePath(`/app/tenders/${tenderId}`);
+  return {};
+}
+
+export async function fetchChecklistProgress(tenderId: string): Promise<ChecklistProgress | null> {
+  try {
+    return await appApiFetch<ChecklistProgress>(`/api/v1/tenders/${tenderId}/checklist/progress`);
+  } catch {
+    return null;
+  }
+}
+
+export async function reconcileChecklistWithNewAnalysisAction(
+  tenderId: string,
+): Promise<{ result?: { analysisVersion?: number; newRequirementSuggestionsCreated: number; possibleChangeSuggestionsCreated: number; possibleRemovals: { itemId: string; title: string; reason: string }[] }; error?: string }> {
+  try {
+    const result = await appApiFetch<{
+      analysisVersion?: number;
+      newRequirementSuggestionsCreated: number;
+      possibleChangeSuggestionsCreated: number;
+      possibleRemovals: { itemId: string; title: string; reason: string }[];
+    }>(`/api/v1/tenders/${tenderId}/checklist/reconcile`, { method: "POST" });
+    return { result };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
 }
 
 // ---- Award criteria ----

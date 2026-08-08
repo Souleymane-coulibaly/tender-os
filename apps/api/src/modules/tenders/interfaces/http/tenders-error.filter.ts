@@ -35,6 +35,11 @@ const STATUS_BY_CODE: Record<string, number> = {
   // convention que TENDER_LOT_NOT_FOUND ci-dessus.
   TENDER_LOT_MISMATCH: HttpStatus.NOT_FOUND,
 
+  // Correctif audit Codex P2 (sujet sous-traitant) — même convention anti-énumération que
+  // TENDER_LOT_MISMATCH : inexistant, autre organisation, ou archivé, jamais distingué côté HTTP.
+  CHECKLIST_SUBCONTRACTOR_SUBJECT_NOT_FOUND: HttpStatus.NOT_FOUND,
+  INVALID_CHECKLIST_SUBJECT: HttpStatus.UNPROCESSABLE_ENTITY,
+
   // Erreurs cross-module réelles (mission Sprint 5.1) — Tenders délègue à Client Portfolio
   // (CreateTenderUseCase, GetTenderUseCase) et laisse ses erreurs remonter telles quelles, même
   // motif que le réexport de GetTenderUseCase par Documents/Analysis/DCE/Extraction.

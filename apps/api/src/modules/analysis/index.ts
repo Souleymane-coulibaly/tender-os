@@ -41,6 +41,12 @@ export { ListTenderQuestionsUseCase } from "./application/use-cases/list-tender-
 export type { ListTenderFindingsQuery, FindingsPageResult } from "./application/use-cases/list-tender-findings.shared";
 export { TenderBusinessAnalysisNotFoundError } from "./domain/errors";
 
+// V2 Sprint 6 — réexportés UNIQUEMENT pour le nouveau module `checklist-intelligence`
+// (réconciliation checklist ↔ nouvelle analyse, §22) : réutilise EXACTEMENT le même mapping
+// gouverné Finding -> proposition CHECKLIST_ITEM que `MapAnalysisFindingsToAiSuggestionsUseCase`,
+// jamais une seconde implémentation divergente du mapping.
+export { mapCriterionFinding, mapDeadlineFinding, mapRequirementFinding, type MappedSuggestion } from "./application/services/finding-to-suggestion-mapper";
+
 // Erreurs de bas niveau du provider IA, réexportées pour Generation (Sprint 6) — puisque Generation
 // réutilise TEL QUEL `AIProviderRegistry`/`AIProvider` d'Analysis (décision A5, jamais un second
 // adaptateur OpenAI), ce sont CES classes qui sont réellement levées par `.complete()`, jamais des

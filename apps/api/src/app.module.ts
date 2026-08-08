@@ -5,6 +5,7 @@ import { AiBenchmarkModule, RoutingPolicyBridgeModule } from "./modules/ai-bench
 import { AiSuggestionModule } from "./modules/ai-suggestion";
 import { AiSuggestionBridgeModule } from "./modules/ai-suggestion-bridge";
 import { AnalysisModule } from "./modules/analysis/analysis.module";
+import { ChecklistIntelligenceModule } from "./modules/checklist-intelligence/checklist-intelligence.module";
 import { ClientPortfolioModule } from "./modules/client-portfolio/client-portfolio.module";
 import { CockpitModule } from "./modules/cockpit";
 import { CompanyProfileModule } from "./modules/company-profile";
@@ -24,7 +25,7 @@ import { OutboxModule } from "./modules/outbox";
 import { PlatformAdministrationModule } from "./modules/platform-administration/platform-administration.module";
 import { PricingModule } from "./modules/pricing/pricing.module";
 import { SignatureModule } from "./modules/signature";
-import { SubcontractorsModule } from "./modules/subcontractors";
+import { SubcontractorsModule, SubcontractorSubjectValidationBridgeModule } from "./modules/subcontractors";
 import { SubmissionModule } from "./modules/submission";
 import { SubmissionPackageModule } from "./modules/submission-package";
 import { TendersModule } from "./modules/tenders/tenders.module";
@@ -67,7 +68,9 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     SubmissionModule,
     CompanyProfileModule,
     SubcontractorsModule,
+    SubcontractorSubjectValidationBridgeModule,
     OpportunityModule,
+    ChecklistIntelligenceModule,
   ],
 })
 export class AppModule {}

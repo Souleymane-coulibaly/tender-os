@@ -44,6 +44,7 @@ export const AI_SUGGESTION_ENTITY_TYPE_LABELS: Record<string, string> = {
   TENDER_MILESTONE: "Nouveau jalon",
   TENDER_RISK: "Nouveau risque",
   BUYER_FIELD: "Acheteur",
+  CHECKLIST_ITEM: "Nouvel élément de checklist",
 };
 
 const CREATE_FIELD_SENTINEL = "__create__";

@@ -85,14 +85,22 @@ export class MapAnalysisFindingsToAiSuggestionsUseCase {
       this.businessAnalysisRepository.listRisks({ organizationId: command.organizationId, tenderId: command.tenderId, analysisVersion, limit: FINDINGS_PAGE_SIZE, offset: 0 }),
     ]);
 
-    const mappedDeadlines = deadlines.items.map(mapDeadlineFinding).filter((value): value is MappedSuggestion => value !== null);
-    const mappedCriteria = criteria.items.map(mapCriterionFinding).filter((value): value is MappedSuggestion => value !== null);
-    const mappedRequirements = requirements.items.map(mapRequirementFinding);
-    const mappedRisks = risks.items.map(mapRiskFinding);
+    // V2 Sprint 6 — chaque mapper renvoie désormais 0 à N suggestions (un Criterion éliminatoire ou
+    // un Deadline VISIT peuvent produire deux suggestions de entityType différents, §9). Chaque
+    // finding n'est évalué qu'UNE SEULE fois (`perDeadline`/`perCriterion`/`perRisk`, tableaux de
+    // tableaux) : `mapped` en fait le flatten, `skippedCount` compte les findings dont le tableau
+    // est resté vide — jamais recalculé sur `total - mapped.length`, qui deviendrait faux (voire
+    // négatif) dès qu'un finding produit 2 suggestions.
+    const perDeadline = deadlines.items.map(mapDeadlineFinding);
+    const perCriterion = criteria.items.map(mapCriterionFinding);
+    const mappedRequirements = requirements.items.flatMap(mapRequirementFinding);
+    const perRisk = risks.items.map(mapRiskFinding);
 
-    const mapped = [...mappedDeadlines, ...mappedCriteria, ...mappedRequirements, ...mappedRisks];
-    const totalFindings = deadlines.items.length + criteria.items.length + requirements.items.length + risks.items.length;
-    const skippedCount = totalFindings - mapped.length;
+    const mapped: MappedSuggestion[] = [...perDeadline.flat(), ...perCriterion.flat(), ...mappedRequirements, ...perRisk.flat()];
+    const skippedCount =
+      perDeadline.filter((suggestions) => suggestions.length === 0).length +
+      perCriterion.filter((suggestions) => suggestions.length === 0).length +
+      perRisk.filter((suggestions) => suggestions.length === 0).length;
 
     for (const suggestion of mapped) {
       await this.createAiSuggestionUseCase.execute({

@@ -21,6 +21,7 @@ import {
   type AwardCriterion,
   type Buyer,
   type ChecklistItem,
+  type ChecklistProgress,
   type Milestone,
   type Readiness,
   type RequestedDocument,
@@ -73,6 +74,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   let tender: Tender;
   let lots: TenderLot[];
   let checklistItems: ChecklistItem[];
+  let checklistProgress: ChecklistProgress | null;
   let criteria: AwardCriterion[];
   let requestedDocuments: RequestedDocument[];
   let milestones: Milestone[];
@@ -98,6 +100,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       tender,
       lots,
       checklistItems,
+      checklistProgress,
       criteria,
       requestedDocuments,
       milestones,
@@ -121,6 +124,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       appApiFetch<Tender>(`/api/v1/tenders/${id}`),
       appApiFetch<TenderLot[]>(`/api/v1/tenders/${id}/lots`),
       appApiFetch<ChecklistItem[]>(`/api/v1/tenders/${id}/checklist`),
+      appApiFetch<ChecklistProgress>(`/api/v1/tenders/${id}/checklist/progress`).catch(() => null),
       appApiFetch<AwardCriterion[]>(`/api/v1/tenders/${id}/criteria`),
       appApiFetch<RequestedDocument[]>(`/api/v1/tenders/${id}/requested-documents`),
       appApiFetch<Milestone[]>(`/api/v1/tenders/${id}/milestones`),
@@ -259,7 +263,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <LotsSection tenderId={tender.id} lots={lots} canManage={canManageTenderLots(role)} />
-        <ChecklistSection tenderId={tender.id} items={checklistItems} />
+        <ChecklistSection tenderId={tender.id} items={checklistItems} lots={lots} progress={checklistProgress} />
         <CriteriaSection tenderId={tender.id} criteria={criteria} />
         <RequestedDocumentsSection tenderId={tender.id} documents={requestedDocuments} />
         <DocumentsSection tenderId={tender.id} documents={documents} canManage={canUploadOrEditDocument(role)} />

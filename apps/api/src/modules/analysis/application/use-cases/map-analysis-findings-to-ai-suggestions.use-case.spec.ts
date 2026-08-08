@@ -108,6 +108,45 @@ describe("MapAnalysisFindingsToAiSuggestionsUseCase", () => {
     }
   });
 
+  /** V2 Sprint 6 §9-10 — redirection : la suggestion issue du RequirementFinding cible désormais
+   *  CHECKLIST_ITEM, jamais TENDER_REQUESTED_DOCUMENT. */
+  it("maps the RequirementFinding to a CHECKLIST_ITEM suggestion, never TENDER_REQUESTED_DOCUMENT", async () => {
+    const useCase = buildUseCase();
+    await useCase.execute({ organizationId: ORG, tenderId: TENDER, actorId: "u", actorRole: "BID_MANAGER" });
+
+    const entityTypes = createAiSuggestionUseCase.execute.mock.calls.map((call: unknown[]) => (call[0] as { entityType: string }).entityType);
+    expect(entityTypes).toContain("CHECKLIST_ITEM");
+    expect(entityTypes).not.toContain("TENDER_REQUESTED_DOCUMENT");
+  });
+
+  /** V2 Sprint 6 §9 — un Criterion éliminatoire ET un Deadline VISIT produisent chacun DEUX
+   *  suggestions (leur suggestion Sprint 4 existante + une CHECKLIST_ITEM additive). Le
+   *  RequirementFinding par défaut (toujours présent dans `minimalConsolidationOutput`) produit
+   *  lui aussi une CHECKLIST_ITEM (redirection §9-10) : 3 suggestions CHECKLIST_ITEM au total.
+   *  `createdCount` doit refléter les 6 suggestions réellement créées, `skippedCount` doit rester
+   *  0 (chaque finding a bien produit au moins une suggestion). */
+  it("counts additive multi-suggestion findings correctly: an eliminatory criterion and a VISIT deadline each yield 2 suggestions", async () => {
+    await businessAnalysisRepository.persistTenderConsolidation({} as never, {
+      organizationId: ORG,
+      analysisJobId: job.id,
+      analysisVersion: 3,
+      tenderId: TENDER,
+      output: minimalConsolidationOutput({
+        deadlines: [{ kind: "VISIT", label: "Visite obligatoire", date: "2026-09-01T12:00:00.000Z", isInferred: false, confidence: 0.9 }],
+        criteria: [{ name: "Valeur technique", weight: 60, isEliminatory: true, threshold: "10/20", isInferred: false, confidence: 0.9 }],
+      }),
+      documentVersionsByDocumentId: {},
+    });
+
+    const useCase = buildUseCase();
+    const result = await useCase.execute({ organizationId: ORG, tenderId: TENDER, actorId: "u", actorRole: "BID_MANAGER", analysisVersion: 3 });
+
+    expect(result).toMatchObject({ analysisVersion: 3, createdCount: 6, skippedCount: 0 });
+    expect(createAiSuggestionUseCase.execute).toHaveBeenCalledTimes(6);
+    const checklistItemCalls = createAiSuggestionUseCase.execute.mock.calls.filter((call: unknown[]) => (call[0] as { entityType: string }).entityType === "CHECKLIST_ITEM");
+    expect(checklistItemCalls).toHaveLength(3);
+  });
+
   it("is idempotent: a second call for the same analysis job creates nothing new", async () => {
     listAiSuggestionsUseCase.execute = vi.fn(async () => [{ sourceAnalysisAttemptId: job.id }]);
     const useCase = buildUseCase();

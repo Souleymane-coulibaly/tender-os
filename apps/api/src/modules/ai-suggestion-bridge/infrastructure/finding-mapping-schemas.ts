@@ -19,6 +19,30 @@ const MILESTONE_TYPES = ["SUBMISSION_DEADLINE", "QUESTION_DEADLINE", "MANDATORY_
 const RISK_SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
 const RISK_CATEGORIES = ["ADMINISTRATIVE", "LEGAL", "TECHNICAL", "FINANCIAL", "PLANNING", "RESOURCE", "SECURITY", "OTHER"] as const;
 
+// V2 Sprint 6 §5-8 — doit rester synchronisé avec `tenders/domain/checklist-item.entity.ts`
+// (ChecklistItemType/ChecklistRequirementLevel/ChecklistItemCriticality/ChecklistSubjectType),
+// même motif que MILESTONE_TYPES ci-dessus.
+const CHECKLIST_ITEM_TYPES = [
+  "ADMINISTRATIVE_DOCUMENT",
+  "TECHNICAL_DOCUMENT",
+  "FINANCIAL_DOCUMENT",
+  "CERTIFICATION",
+  "INSURANCE",
+  "DECLARATION",
+  "FORM",
+  "SIGNATURE",
+  "VISIT",
+  "REFERENCE",
+  "TECHNICAL_REQUIREMENT",
+  "FINANCIAL_REQUIREMENT",
+  "DEADLINE",
+  "DELIVERABLE",
+  "OTHER",
+] as const;
+const CHECKLIST_REQUIREMENT_LEVELS = ["MANDATORY", "CONDITIONAL", "INFORMATIONAL"] as const;
+const CHECKLIST_ITEM_CRITICALITIES = ["BLOCKING", "HIGH", "MEDIUM", "LOW"] as const;
+const CHECKLIST_SUBJECT_TYPES = ["CANDIDATE", "GROUP_MEMBER", "SUBCONTRACTOR", "ANY_MEMBER", "TENDER", "LOT"] as const;
+
 const CreateMilestoneProposalSchema = z
   .object({
     title: z.string().min(1).max(300),
@@ -61,6 +85,32 @@ const CreateRiskProposalSchema = z
   })
   .strict();
 
+/** V2 Sprint 6 §9-10 — proposition de création CHECKLIST_ITEM (Requirement redirigé, Criterion
+ *  éliminatoire, Deadline VISIT — voir `finding-to-suggestion-mapper.ts`). `requirementLevel`
+ *  volontairement optionnel malgré une valeur toujours fournie côté mapper : reste utilisable par
+ *  une future source de suggestion qui laisserait le domaine appliquer son défaut MANDATORY. */
+const CreateChecklistItemProposalSchema = z
+  .object({
+    title: z.string().min(1).max(300),
+    type: z.enum(CHECKLIST_ITEM_TYPES).optional(),
+    requirementLevel: z.enum(CHECKLIST_REQUIREMENT_LEVELS).optional(),
+    conditionText: z.string().max(2000).optional(),
+    criticality: z.enum(CHECKLIST_ITEM_CRITICALITIES).optional(),
+    description: z.string().max(2000).optional(),
+    lotId: uuid.optional(),
+    subjectType: z.enum(CHECKLIST_SUBJECT_TYPES).optional(),
+    dueDate: isoDateTimeString.optional(),
+    // V2 Sprint 6 §22 — hint UI PUREMENT INFORMATIF posé par `ReconcileChecklistWithNewAnalysisUseCase`
+    // ("cette proposition de création vient d'une réconciliation, pas de la génération initiale"),
+    // jamais une colonne persistée sur ChecklistItem lui-même.
+    changeKind: z.enum(["NEW_REQUIREMENT"]).optional(),
+  })
+  .strict();
+// V2 Sprint 6 §22 — schéma d'UPDATE (jamais de création) pour la réconciliation d'un item déjà
+// existant : même motif que TENDER_FIELD_DATE_FIELDS ci-dessus, un scalaire brut (jamais un objet
+// enveloppe), la présence d'un `entityId` renseigné suffit déjà à distinguer ce cas d'une création.
+const UpdateChecklistItemTitleSchema = z.string().min(1).max(300);
+
 /**
  * V2 Sprint 4 §9-12 — schémas de validation pour le SEUL producteur existant de suggestions
  * (`analysis`, mapping Finding → AiSuggestion, voir `MapAnalysisFindingsToAiSuggestionsUseCase`).
@@ -76,4 +126,6 @@ export function registerFindingMappingSchemas(registry: AiSuggestionFieldSchemaR
   registry.register(AiSuggestionEntityType.TenderAwardCriterion, CREATE_FIELD_SENTINEL, CreateAwardCriterionProposalSchema);
   registry.register(AiSuggestionEntityType.TenderRequestedDocument, CREATE_FIELD_SENTINEL, CreateRequestedDocumentProposalSchema);
   registry.register(AiSuggestionEntityType.TenderRisk, CREATE_FIELD_SENTINEL, CreateRiskProposalSchema);
+  registry.register(AiSuggestionEntityType.ChecklistItem, CREATE_FIELD_SENTINEL, CreateChecklistItemProposalSchema);
+  registry.register(AiSuggestionEntityType.ChecklistItem, "title", UpdateChecklistItemTitleSchema);
 }

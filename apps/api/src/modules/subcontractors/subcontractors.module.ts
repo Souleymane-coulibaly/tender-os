@@ -88,5 +88,8 @@ import { SubcontractorController } from "./interfaces/http/subcontractor.control
     { provide: SUBCONTRACTOR_PROFILE_DOCUMENT_REPOSITORY, useClass: PrismaSubcontractorProfileDocumentRepository },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
   ],
+  // V2 Sprint 6 — réexportés UNIQUEMENT pour le nouveau module `checklist-intelligence`
+  // (rapprochement documentaire, lecture seule, voir index.ts).
+  exports: [GetSubcontractorProfileUseCase, ListSubcontractorCertificationsUseCase, ListSubcontractorInsurancesUseCase],
 })
 export class SubcontractorsModule {}

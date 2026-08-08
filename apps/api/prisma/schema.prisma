@@ -549,6 +549,8 @@ model TenderLot {
   /// V2 Sprint 4 — suggestions IA ciblant spécifiquement ce lot (ex. critère/pièce/jalon proposé
   /// pour ce lot précis), distinct des suggestions au niveau Tender global (parentLotId absent).
   aiSuggestions      AiSuggestion[]
+  /// V2 Sprint 6 — items de checklist spécifiques à ce lot (lotId absent = exigence Tender globale).
+  checklistItems     TenderChecklistItem[]
 
   /// V2 Sprint 3 (AUDIT-007, même motif que Tender/Document) — support des FK composées
   /// (lotId, organizationId) des satellites ci-dessous vers ce lot : empêche structurellement
@@ -574,7 +576,10 @@ model TenderChecklistItem {
   description String?
   required    Boolean @default(false)
 
-  /// TODO | IN_PROGRESS | COMPLETED | NOT_APPLICABLE
+  /// TODO | IN_PROGRESS | COMPLETED | NOT_APPLICABLE — statut historique (V1), consommé par
+  /// `readiness-calculator.ts` (35% du score de readiness). V2 Sprint 6 : dérivé automatiquement
+  /// de `complianceStatus` par le domaine (`deriveLegacyStatus`), jamais assigné directement par un
+  /// appelant — voir le commentaire de `complianceStatus` ci-dessous.
   status String @db.VarChar(30)
 
   assignedTo String?   @map("assigned_to") @db.Uuid
@@ -586,11 +591,111 @@ model TenderChecklistItem {
 
   displayOrder Int @default(0) @map("display_order")
 
+  /// V2 Sprint 6 §5 — catalogue gouverné du type d'élément de checklist. ADMINISTRATIVE_DOCUMENT |
+  /// TECHNICAL_DOCUMENT | FINANCIAL_DOCUMENT | CERTIFICATION | INSURANCE | DECLARATION | FORM |
+  /// SIGNATURE | VISIT | REFERENCE | TECHNICAL_REQUIREMENT | FINANCIAL_REQUIREMENT | DEADLINE |
+  /// DELIVERABLE | OTHER — CHECK (migration).
+  type String @default("OTHER") @db.VarChar(30)
+
+  /// V2 Sprint 6 §6 — MANDATORY | CONDITIONAL | INFORMATIONAL — CHECK (migration). `conditionText`
+  /// n'a de sens que si CONDITIONAL ; jamais validé en base (règle métier, pas une contrainte SQL).
+  requirementLevel String  @default("MANDATORY") @map("requirement_level") @db.VarChar(15)
+  conditionText    String? @map("condition_text")
+
+  /// V2 Sprint 6 §7 — BLOCKING | HIGH | MEDIUM | LOW — CHECK (migration). Toujours corrigible par
+  /// l'utilisateur, même si proposée par l'IA (mission : jamais une invalidation juridique
+  /// automatique).
+  criticality String @default("MEDIUM") @db.VarChar(10)
+
+  /// V2 Sprint 6 §8 — statut métier PRIMAIRE, distinct du statut documentaire ci-dessous (un
+  /// document disponible n'est pas forcément conforme). TO_REVIEW | NON_COMPLIANT | READY |
+  /// VALIDATED | NOT_APPLICABLE — CHECK (migration). Seul un passage explicite à VALIDATED ou
+  /// NOT_APPLICABLE dérive `status = COMPLETED`/`NOT_APPLICABLE` pour le calcul de readiness —
+  /// jamais un simple document rapproché (`READY`) non validé par un humain.
+  complianceStatus String @default("TO_REVIEW") @map("compliance_status") @db.VarChar(15)
+
+  /// V2 Sprint 6 §8/§18 — MISSING | AVAILABLE | EXPIRED — CHECK (migration). Ne reflète que la
+  /// disponibilité/validité du document rapproché, jamais la conformité métier (`complianceStatus`
+  /// ci-dessus). Une expiration inconnue reste `AVAILABLE`, jamais inventée en `EXPIRED`.
+  documentStatus String @default("MISSING") @map("document_status") @db.VarChar(10)
+
+  /// V2 Sprint 6 §21 — MANUAL | AI_SUGGESTION | SYSTEM — CHECK (migration). Distingue une création
+  /// manuelle d'une création issue d'une AiSuggestion acceptée/modifiée.
+  origin String @default("MANUAL") @db.VarChar(15)
+
+  /// V2 Sprint 6 §13-15 — sujet concerné par l'exigence, jamais une entreprise inventée. CANDIDATE |
+  /// GROUP_MEMBER | SUBCONTRACTOR | ANY_MEMBER | TENDER | LOT — CHECK (migration).
+  /// `subjectSubcontractorProfileId` : pointeur dénormalisé (jamais de FK stricte, même motif que
+  /// les `documentId` de company-profile/subcontractors) vers un sous-traitant du répertoire
+  /// EXPLICITEMENT rattaché après validation humaine — jamais auto-rempli.
+  subjectType                   String  @default("CANDIDATE") @map("subject_type") @db.VarChar(15)
+  subjectSubcontractorProfileId String? @map("subject_subcontractor_profile_id") @db.Uuid
+
+  /// V2 Sprint 6 §12 — même motif que `TenderRequestedDocument.lotId` (FK composée AUDIT-007).
+  /// `null` = exigence Tender globale.
+  lotId String?    @map("lot_id") @db.Uuid
+  lot   TenderLot? @relation(fields: [lotId, organizationId], references: [id, organizationId])
+
+  /// V2 Sprint 6 §16-18 — rapprochement documentaire. FK réelle vers `Document` (même motif que
+  /// `TenderRequestedDocument.documentId`, module `tenders` déjà consommateur direct de `documents`)
+  /// ; `matchedDocumentVersionId` reste dénormalisé (aucun modèle de ce dépôt ne FK jamais
+  /// `DocumentVersion` — toujours une version précise, jamais "latest" implicite).
+  /// `documentMatchStatus` : NOT_SEARCHED | EXACT_MATCH | PROBABLE_MATCH | MULTIPLE_CANDIDATES |
+  /// NO_MATCH | MANUALLY_ATTACHED — CHECK (migration). `documentExpiresAt` copié depuis le
+  /// satellite ayant produit le match (CompanyCertification/CompanyInsurance/équivalent
+  /// sous-traitant), jamais inventé.
+  matchedDocumentId         String?   @map("matched_document_id") @db.Uuid
+  matchedDocument           Document? @relation(fields: [matchedDocumentId], references: [id])
+  matchedDocumentVersionId  String?   @map("matched_document_version_id") @db.Uuid
+  documentMatchStatus       String    @default("NOT_SEARCHED") @map("document_match_status") @db.VarChar(20)
+  documentMatchScore        Float?    @map("document_match_score")
+  documentMatchReasons      Json?     @map("document_match_reasons")
+  documentExpiresAt         DateTime? @map("document_expires_at")
+  documentValidityCheckedAt DateTime? @map("document_validity_checked_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  /// V2 Sprint 6 §11 — provenances multiples (RC p.12 + CCAP p.7 pour la même exigence) : jamais
+  /// une source supprimée, seulement ajoutée.
+  sources TenderChecklistItemSource[]
+
   @@index([organizationId, tenderId, displayOrder])
+  @@index([organizationId, tenderId, lotId])
+  @@index([organizationId, tenderId, complianceStatus])
   @@map("tender_checklist_items")
+}
+
+/// V2 Sprint 6 §11 — provenance(s) d'un ChecklistItem, jamais fusionnées/supprimées. Une création
+/// (manuelle ou IA) écrit toujours exactement une ligne ; la déduplication en ajoute d'autres sur
+/// un item existant plutôt que de créer un second ChecklistItem.
+model TenderChecklistItemSource {
+  id              String              @id @default(uuid()) @db.Uuid
+  organizationId  String              @map("organization_id") @db.Uuid
+  checklistItemId String              @map("checklist_item_id") @db.Uuid
+  checklistItem   TenderChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+
+  /// REQUIREMENT | CRITERION | DEADLINE — CHECK (migration). `null` pour une provenance MANUAL.
+  findingType String? @map("finding_type") @db.VarChar(15)
+  findingId   String? @map("finding_id") @db.Uuid
+
+  /// Dénormalisé — voir `AiSuggestion.entityId` pour la traçabilité inverse complète
+  /// (GET /ai-suggestions?entityType=CHECKLIST_ITEM&entityId=...), jamais une seconde source de
+  /// vérité pour ce lien.
+  sourceSuggestionId String? @map("source_suggestion_id") @db.Uuid
+
+  documentId        String? @map("document_id") @db.Uuid
+  documentVersionId String? @map("document_version_id") @db.Uuid
+  analysisVersion   Int?    @map("analysis_version")
+  pageStart         Int?    @map("page_start")
+  citation          String?
+  sectionTitle      String? @map("section_title")
+  confidence        Float?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, checklistItemId])
+  @@map("tender_checklist_item_sources")
 }
 
 model TenderAwardCriterion {
@@ -838,6 +943,8 @@ model Document {
   tenderAssociations          DocumentTenderAssociation[]
   clientAccountAssociations   DocumentClientAccountAssociation[]
   requestedDocumentReferences TenderRequestedDocument[]
+  /// V2 Sprint 6 — Documents rapprochés/attachés à un ChecklistItem via le matching documentaire.
+  matchedByChecklistItems     TenderChecklistItem[]
   dceDocuments                DceDocument[]
   documentExtraction          DocumentExtraction?
   analysisJobs                AnalysisJob[]

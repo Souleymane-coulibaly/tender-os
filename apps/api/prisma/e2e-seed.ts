@@ -9,6 +9,8 @@ import { OrganizationMembership } from "../src/modules/memberships/domain/organi
 import { OrganizationRole } from "../src/modules/memberships/domain/organization-role";
 import { PrismaMembershipRepository } from "../src/modules/memberships/infrastructure/prisma-membership.repository";
 import { PrismaService } from "../src/shared-kernel/prisma.service";
+import { PrismaBusinessAnalysisRepository } from "../src/modules/analysis/infrastructure/prisma-business-analysis.repository";
+import type { TenderConsolidationOutput } from "../src/modules/analysis/application/schemas/business/tender-consolidation-output.schema";
 
 /**
  * Correctif audit Codex P2-003 — seed dédié aux preuves Playwright : crée une organisation, un
@@ -138,19 +140,61 @@ async function main(): Promise<void> {
         updatedAt: new Date(),
       },
     });
-    await prisma.tenderAnalysisSummary.create({
-      data: {
-        id: randomUUID(),
-        organizationId,
-        tenderId: tenderWithAnalysisId,
-        analysisJobId,
-        analysisVersion: 1,
+    // V2 Sprint 6 (Checklist intelligente DCE) — findings réels (Requirement/Criterion/Deadline)
+    // rattachés à `tenderWithAnalysisId`, persistés via le même chemin que la vraie consolidation
+    // IA (`PrismaBusinessAnalysisRepository.persistTenderConsolidation`, motif déjà prouvé par
+    // `checklist-intelligence-http.integration.spec.ts`). Donne au scénario E2E
+    // (`checklist-intelligence.spec.ts`) une matière réelle pour générer des `AiSuggestion`
+    // (`CHECKLIST_ITEM`) via l'UI — jamais une checklist simulée côté test. Un Requirement
+    // (redirection Sprint 6 → CHECKLIST_ITEM), un Criterion éliminatoire (§9 : suggestion
+    // additionnelle uniquement si `isEliminatory`), une Deadline de type VISIT (§9 : suggestion
+    // additionnelle uniquement pour ce type) — chacun couvre une branche gouvernée distincte du
+    // mapping, jamais "un finding = un item".
+    const businessAnalysisRepository = new PrismaBusinessAnalysisRepository(prisma);
+    const consolidationOutput: TenderConsolidationOutput = {
+      metadata: {},
+      deadlines: [
+        {
+          kind: "VISIT",
+          label: "Visite obligatoire du site avant remise des offres",
+          date: "2027-01-15T09:00:00.000Z",
+          rawText: "Avant la date limite de remise des plis",
+          isInferred: false,
+          confidence: 0.8,
+        },
+      ],
+      criteria: [
+        { name: "Conformité administrative du dossier", weight: 10, isEliminatory: true, isInferred: false, confidence: 0.8 },
+      ],
+      requirements: [
+        { category: "ADMINISTRATIVE", label: "Attestation d'assurance responsabilité civile professionnelle", isMandatory: true, isInferred: false, confidence: 0.8 },
+      ],
+      clauses: [],
+      risks: [],
+      questions: [],
+      summary: {
         opportunitySummary: `Marché Playwright avec analyse ${runId} — DCE complet, aucun blocage identifié.`,
         complexityLevel: "MEDIUM",
+        mainCriteria: [],
+        mainRisks: [],
+        mainObligations: [],
+        missingElements: [],
+        pointsToClarify: [],
+        conflicts: [],
         goNoGoRecommendation: "GO",
         goNoGoRationale: "Dossier complet, synthèse IA de démonstration pour la preuve Playwright.",
       },
-    });
+    } as TenderConsolidationOutput;
+    await prisma.$transaction((tx) =>
+      businessAnalysisRepository.persistTenderConsolidation(tx, {
+        organizationId,
+        analysisJobId,
+        analysisVersion: 1,
+        tenderId: tenderWithAnalysisId,
+        output: consolidationOutput,
+        documentVersionsByDocumentId: {},
+      }),
+    );
 
     console.log(JSON.stringify({ email, password, organizationId, userId, clientAccountId, tenderId, tenderWithAnalysisId, other }));
   } finally {

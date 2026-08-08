@@ -11,6 +11,7 @@ import {
 } from "./application/ports/entity-target-adapter";
 import { ATOMIC_TRANSACTION_RUNNER } from "./application/ports/atomic-transaction-runner";
 import { BuyerFieldAdapter } from "./infrastructure/adapters/buyer-field.adapter";
+import { ChecklistItemAdapter } from "./infrastructure/adapters/checklist-item.adapter";
 import { PrismaAtomicTransactionRunner } from "./infrastructure/prisma-atomic-transaction-runner";
 import { TenderAwardCriterionAdapter } from "./infrastructure/adapters/tender-award-criterion.adapter";
 import { TenderFieldAdapter } from "./infrastructure/adapters/tender-field.adapter";
@@ -52,6 +53,7 @@ import { AiSuggestionBridgeController } from "./interfaces/http/ai-suggestion-br
     TenderMilestoneAdapter,
     TenderRiskAdapter,
     BuyerFieldAdapter,
+    ChecklistItemAdapter,
     {
       provide: AI_SUGGESTION_ENTITY_TARGET_ADAPTER_REGISTRY,
       useFactory: (
@@ -62,6 +64,7 @@ import { AiSuggestionBridgeController } from "./interfaces/http/ai-suggestion-br
         milestone: TenderMilestoneAdapter,
         risk: TenderRiskAdapter,
         buyerField: BuyerFieldAdapter,
+        checklistItem: ChecklistItemAdapter,
       ): AiSuggestionEntityTargetAdapterRegistry =>
         new Map<AiSuggestionEntityType, AiSuggestionEntityTargetAdapter>([
           [AiSuggestionEntityType.TenderField, tenderField],
@@ -71,8 +74,9 @@ import { AiSuggestionBridgeController } from "./interfaces/http/ai-suggestion-br
           [AiSuggestionEntityType.TenderMilestone, milestone],
           [AiSuggestionEntityType.TenderRisk, risk],
           [AiSuggestionEntityType.BuyerField, buyerField],
+          [AiSuggestionEntityType.ChecklistItem, checklistItem],
         ]),
-      inject: [TenderFieldAdapter, TenderLotFieldAdapter, TenderAwardCriterionAdapter, TenderRequestedDocumentAdapter, TenderMilestoneAdapter, TenderRiskAdapter, BuyerFieldAdapter],
+      inject: [TenderFieldAdapter, TenderLotFieldAdapter, TenderAwardCriterionAdapter, TenderRequestedDocumentAdapter, TenderMilestoneAdapter, TenderRiskAdapter, BuyerFieldAdapter, ChecklistItemAdapter],
     },
     { provide: AI_SUGGESTION_TARGET_ACCESS_POLICY, useClass: TendersAiSuggestionTargetAccessPolicy },
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },

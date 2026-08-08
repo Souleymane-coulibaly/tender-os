@@ -81,3 +81,32 @@ export { assertHasTenderPermission } from "./application/policies/tender-authori
 export { RequestedDocumentStatus } from "./domain/requested-document.entity";
 export type { RequestedDocument } from "./domain/requested-document.entity";
 export type { TenderLot } from "./domain/tender-lot.entity";
+
+// V2 Sprint 6 — réexportés pour `ai-suggestion-bridge` (nouvel adaptateur CHECKLIST_ITEM, même
+// motif que Milestone/Risk/RequestedDocument ci-dessus) ET pour le nouveau module cross-cutting
+// `checklist-intelligence` (rapprochement documentaire + réconciliation nouvelle analyse, qui ne
+// peuvent pas vivre DANS `tenders` : `documents`/`analysis` importent déjà `TendersModule`, un
+// import inverse créerait un cycle).
+export { CreateChecklistItemUseCase } from "./application/use-cases/create-checklist-item.use-case";
+export type { CreateChecklistItemCommand } from "./application/use-cases/create-checklist-item.use-case";
+export { UpdateChecklistItemUseCase } from "./application/use-cases/update-checklist-item.use-case";
+export type { UpdateChecklistItemCommand } from "./application/use-cases/update-checklist-item.use-case";
+export { loadChecklistItem } from "./application/use-cases/update-checklist-item.use-case";
+export { ValidateChecklistItemUseCase, MarkChecklistItemNotApplicableUseCase } from "./application/use-cases/validate-checklist-item.use-case";
+export { GetChecklistProgressUseCase } from "./application/use-cases/get-checklist-progress.use-case";
+export { CHECKLIST_ITEM_REPOSITORY } from "./application/ports/checklist-item.repository";
+export type { ChecklistItemRepository } from "./application/ports/checklist-item.repository";
+export { findChecklistDedupMatch } from "./application/services/checklist-dedup";
+export { assertTenderMutationAllowed, assertLotBelongsToTender } from "./application/policies/tender-mutation-client-access.helper";
+export { ChecklistItem, ChecklistItemType, ChecklistRequirementLevel, ChecklistItemCriticality, ChecklistComplianceStatus, ChecklistDocumentStatus, ChecklistItemOrigin, ChecklistSubjectType, ChecklistDocumentMatchStatus } from "./domain/checklist-item.entity";
+export type { ChecklistDocumentMatch } from "./domain/checklist-item.entity";
+export { ChecklistItemNotFoundError, ChecklistSubcontractorSubjectNotFoundError, InvalidChecklistSubjectError } from "./domain/errors";
+export type { ChecklistItemSummary } from "./application/dtos";
+export { toChecklistItemSummary } from "./application/dtos";
+// V2 Sprint 6 (correctif audit Codex P2) — port réexporté UNIQUEMENT pour le pont @Global()
+// `SubcontractorSubjectValidationBridgeModule` (module `subcontractors`), qui fournit
+// l'implémentation réelle sans jamais créer de cycle Nest (voir subcontractor-subject-validator.ts).
+export { SUBCONTRACTOR_SUBJECT_VALIDATOR } from "./application/ports/subcontractor-subject-validator";
+export type { SubcontractorSubjectValidator } from "./application/ports/subcontractor-subject-validator";
+export { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
+export type { AuditLogWriter, TenderAuditLogEntry } from "./application/ports/audit-log-writer";

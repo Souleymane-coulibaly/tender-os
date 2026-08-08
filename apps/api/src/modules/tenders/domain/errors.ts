@@ -214,3 +214,24 @@ export class TenderLotMismatchError extends DomainError {
     super("Ce lot n'appartient pas à cet appel d'offres.");
   }
 }
+
+/** V2 Sprint 6 — correctif audit Codex P2 : `subjectSubcontractorProfileId` inexistant, appartenant
+ *  à une autre organisation, ou pointant vers un profil archivé (retrait définitif). Un seul code,
+ *  même convention anti-énumération que `TenderLotMismatchError`/`DocumentNotFoundError` — jamais
+ *  distinguer "inexistant" de "autre organisation" côté réponse HTTP. */
+export class ChecklistSubcontractorSubjectNotFoundError extends DomainError {
+  readonly code = "CHECKLIST_SUBCONTRACTOR_SUBJECT_NOT_FOUND";
+  constructor() {
+    super("Ce profil sous-traitant est introuvable, ou n'est plus utilisable (archivé).");
+  }
+}
+
+/** V2 Sprint 6 — correctif audit Codex P2 (cohérence du contexte) : `subjectSubcontractorProfileId`
+ *  n'a de sens que si `subjectType` vaut SUBCONTRACTOR — jamais un pointeur sous-traitant conservé
+ *  sur un sujet CANDIDATE/GROUP_MEMBER/ANY_MEMBER/TENDER/LOT. */
+export class InvalidChecklistSubjectError extends DomainError {
+  readonly code = "INVALID_CHECKLIST_SUBJECT";
+  constructor() {
+    super("subjectSubcontractorProfileId ne peut être renseigné que lorsque subjectType vaut SUBCONTRACTOR.");
+  }
+}

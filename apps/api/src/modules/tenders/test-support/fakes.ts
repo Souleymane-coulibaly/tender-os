@@ -20,6 +20,11 @@ import type { AlertRepository } from "../application/ports/alert.repository";
 import type { AuditLogWriter, TenderAuditLogEntry } from "../application/ports/audit-log-writer";
 import type { AwardCriterionRepository } from "../application/ports/award-criterion.repository";
 import type { ChecklistItemRepository } from "../application/ports/checklist-item.repository";
+import type {
+  ChecklistItemSourceRecord,
+  ChecklistItemSourceRepository,
+  CreateChecklistItemSourceInput,
+} from "../application/ports/checklist-item-source.repository";
 import type { MilestoneRepository } from "../application/ports/milestone.repository";
 import type { RequestedDocumentRepository } from "../application/ports/requested-document.repository";
 import type { RiskRepository } from "../application/ports/risk.repository";
@@ -393,6 +398,24 @@ export class InMemoryChecklistItemRepository implements ChecklistItemRepository 
     } else {
       this.items[index] = item;
     }
+  }
+
+  // Fake mono-processus : aucune concurrence réelle à sérialiser (voir `PrismaChecklistItemRepository`
+  // pour le vrai verrou `pg_advisory_xact_lock` utilisé en production).
+  async lockTenderForDedup(): Promise<void> {}
+}
+
+export class InMemoryChecklistItemSourceRepository implements ChecklistItemSourceRepository {
+  readonly sources: ChecklistItemSourceRecord[] = [];
+
+  async create(input: CreateChecklistItemSourceInput): Promise<ChecklistItemSourceRecord> {
+    const record: ChecklistItemSourceRecord = { ...input };
+    this.sources.push(record);
+    return record;
+  }
+
+  async listByChecklistItem(input: { organizationId: string; checklistItemId: string }): Promise<ChecklistItemSourceRecord[]> {
+    return this.sources.filter((source) => source.organizationId === input.organizationId && source.checklistItemId === input.checklistItemId);
   }
 }
 

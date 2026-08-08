@@ -2,32 +2,66 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ChecklistSection } from "./checklist-section";
-import type { ChecklistItem } from "../../../../../lib/tenders-types";
+import type { ChecklistItem, ChecklistProgress, TenderLot } from "../../../../../lib/tenders-types";
 
 const changeChecklistItemStatusAction = vi.fn(async (_tenderId: string, _itemId: string, _status: string) => ({}));
+const validateChecklistItemAction = vi.fn(async (_tenderId: string, _itemId: string) => ({}));
+const markChecklistItemNotApplicableAction = vi.fn(async (_tenderId: string, _itemId: string) => ({}));
+const findChecklistItemDocumentMatchesAction = vi.fn(async (_tenderId: string, _itemId: string) => ({ result: { status: "NO_MATCH", candidates: [] } }));
+const attachChecklistItemDocumentAction = vi.fn(async (_tenderId: string, _itemId: string, _input: unknown) => ({}));
+const detachChecklistItemDocumentAction = vi.fn(async (_tenderId: string, _itemId: string) => ({}));
+const reconcileChecklistWithNewAnalysisAction = vi.fn(async (_tenderId: string) => ({ result: { newRequirementSuggestionsCreated: 0, possibleChangeSuggestionsCreated: 0, possibleRemovals: [] } }));
 
 vi.mock("../../../actions", () => ({
   createChecklistItemAction: {
     bind: () => vi.fn(async (_prevState: unknown, _formData: FormData) => ({})),
   },
-  changeChecklistItemStatusAction: (tenderId: string, itemId: string, status: string) =>
-    changeChecklistItemStatusAction(tenderId, itemId, status),
+  changeChecklistItemStatusAction: (tenderId: string, itemId: string, status: string) => changeChecklistItemStatusAction(tenderId, itemId, status),
+  validateChecklistItemAction: (tenderId: string, itemId: string) => validateChecklistItemAction(tenderId, itemId),
+  markChecklistItemNotApplicableAction: (tenderId: string, itemId: string) => markChecklistItemNotApplicableAction(tenderId, itemId),
+  findChecklistItemDocumentMatchesAction: (tenderId: string, itemId: string) => findChecklistItemDocumentMatchesAction(tenderId, itemId),
+  attachChecklistItemDocumentAction: (tenderId: string, itemId: string, input: unknown) => attachChecklistItemDocumentAction(tenderId, itemId, input),
+  detachChecklistItemDocumentAction: (tenderId: string, itemId: string) => detachChecklistItemDocumentAction(tenderId, itemId),
+  reconcileChecklistWithNewAnalysisAction: (tenderId: string) => reconcileChecklistWithNewAnalysisAction(tenderId),
 }));
 
-const ITEMS: ChecklistItem[] = [
-  { id: "item-1", tenderId: "tender-1", title: "Fournir attestation", required: true, status: "TODO", displayOrder: 1 },
-];
+function baseItem(overrides: Partial<ChecklistItem> = {}): ChecklistItem {
+  return {
+    id: "item-1",
+    tenderId: "tender-1",
+    title: "Fournir attestation",
+    required: true,
+    status: "TODO",
+    displayOrder: 1,
+    type: "ADMINISTRATIVE_DOCUMENT",
+    requirementLevel: "MANDATORY",
+    criticality: "MEDIUM",
+    complianceStatus: "TO_REVIEW",
+    documentStatus: "MISSING",
+    origin: "MANUAL",
+    subjectType: "CANDIDATE",
+    documentMatchStatus: "NOT_SEARCHED",
+    ...overrides,
+  };
+}
+
+const ITEMS: ChecklistItem[] = [baseItem()];
+const LOTS: TenderLot[] = [];
+const PROGRESS: ChecklistProgress = {
+  global: { totalApplicable: 1, ready: 0, validated: 0, missing: 1, blockingMissing: 0, expired: 0, toReview: 1 },
+  byLot: {},
+};
 
 describe("ChecklistSection", () => {
   it("shows an empty state when there are no checklist items", () => {
-    render(<ChecklistSection tenderId="tender-1" items={[]} />);
+    render(<ChecklistSection tenderId="tender-1" items={[]} lots={LOTS} progress={null} />);
 
     expect(screen.getByText("Aucun element de checklist.")).toBeInTheDocument();
   });
 
   it("lists existing items and lets the status be changed", async () => {
     const user = userEvent.setup();
-    render(<ChecklistSection tenderId="tender-1" items={ITEMS} />);
+    render(<ChecklistSection tenderId="tender-1" items={ITEMS} lots={LOTS} progress={PROGRESS} />);
 
     expect(screen.getByText("Fournir attestation")).toBeInTheDocument();
 
@@ -37,9 +71,41 @@ describe("ChecklistSection", () => {
   });
 
   it("has an inline form to add a new checklist item", () => {
-    render(<ChecklistSection tenderId="tender-1" items={[]} />);
+    render(<ChecklistSection tenderId="tender-1" items={[]} lots={LOTS} progress={null} />);
 
     expect(screen.getByPlaceholderText("Nouvel element...")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ajouter" })).toBeInTheDocument();
+  });
+
+  it("shows the progress summary when provided", () => {
+    render(<ChecklistSection tenderId="tender-1" items={ITEMS} lots={LOTS} progress={PROGRESS} />);
+
+    // 0 validé sur 1 applicable dans la fixture PROGRESS ci-dessus.
+    expect(screen.getByText("0% prête")).toBeInTheDocument();
+  });
+
+  it("lets the user validate an item, calling the dedicated action (never the generic status action)", async () => {
+    const user = userEvent.setup();
+    render(<ChecklistSection tenderId="tender-1" items={ITEMS} lots={LOTS} progress={PROGRESS} />);
+
+    await user.click(screen.getByRole("button", { name: "Valider" }));
+
+    expect(validateChecklistItemAction).toHaveBeenCalledWith("tender-1", "item-1");
+  });
+
+  it("lets the user mark an item not applicable", async () => {
+    const user = userEvent.setup();
+    render(<ChecklistSection tenderId="tender-1" items={ITEMS} lots={LOTS} progress={PROGRESS} />);
+
+    await user.click(screen.getByRole("button", { name: "Non applicable" }));
+
+    expect(markChecklistItemNotApplicableAction).toHaveBeenCalledWith("tender-1", "item-1");
+  });
+
+  it("never shows an 'attach' affordance for a match without an explicit search first (no silent association)", () => {
+    render(<ChecklistSection tenderId="tender-1" items={ITEMS} lots={LOTS} progress={PROGRESS} />);
+
+    expect(screen.queryByRole("button", { name: "Associer" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rechercher un document" })).toBeInTheDocument();
   });
 });
