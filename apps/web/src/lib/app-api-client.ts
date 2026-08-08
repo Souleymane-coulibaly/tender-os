@@ -86,11 +86,25 @@ export async function getCurrentMembershipRole(): Promise<string | undefined> {
   const organizationId = await getAppOrganizationId();
   if (!organizationId) return undefined;
 
-  const page = await appApiFetch<{ items: { role: string; organization: { id: string } }[] }>(
+  const page = await appApiFetch<{ items: { role: string; userId: string; organization: { id: string } }[] }>(
     "/api/v1/organization-memberships/me?limit=100",
   );
 
   return page.items.find((item) => item.organization.id === organizationId)?.role;
+}
+
+/** Identifiant de l'utilisateur courant (mission Sprint 7 — savoir "est-ce ma tâche/mon
+ *  commentaire" côté UI, jamais comme autorité : chaque mutation reste revalidée côté API). Même
+ *  source que `getCurrentMembershipRole`, jamais un second appel/décodage de jeton. */
+export async function getCurrentUserId(): Promise<string | undefined> {
+  const organizationId = await getAppOrganizationId();
+  if (!organizationId) return undefined;
+
+  const page = await appApiFetch<{ items: { userId: string; organization: { id: string } }[] }>(
+    "/api/v1/organization-memberships/me?limit=100",
+  );
+
+  return page.items.find((item) => item.organization.id === organizationId)?.userId;
 }
 
 export async function appApiFetchWithToken<T>(token: string, path: string, init?: RequestInit): Promise<T> {

@@ -30,6 +30,7 @@ import { SubmissionModule } from "./modules/submission";
 import { SubmissionPackageModule } from "./modules/submission-package";
 import { TendersModule } from "./modules/tenders/tenders.module";
 import { ValidationModule } from "./modules/validation";
+import { WorkspaceModule } from "./modules/workspace/workspace.module";
 import { DatabaseModule } from "./shared-kernel/database.module";
 import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
 
@@ -71,6 +72,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     SubcontractorSubjectValidationBridgeModule,
     OpportunityModule,
     ChecklistIntelligenceModule,
+    WorkspaceModule,
   ],
 })
 export class AppModule {}

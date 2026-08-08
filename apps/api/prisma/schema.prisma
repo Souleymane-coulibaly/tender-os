@@ -55,6 +55,8 @@ model User {
   memberships           OrganizationMembership[]
   platformAdministrator PlatformAdministrator?
   clientAssignments     ClientAssignment[]
+  /// V2 Sprint 7 — affectations à des Tenders en tant que participant du Workspace collaboratif.
+  tenderParticipations  TenderParticipant[]
 
   @@map("users")
 }
@@ -375,6 +377,11 @@ model Tender {
   milestones                 TenderMilestone[]
   risks                      TenderRisk[]
   alerts                     TenderAlert[]
+  participants               TenderParticipant[]
+  tasks                      Task[]
+  comments                   Comment[]
+  approvalRequests           ApprovalRequest[]
+  activities                 TenderActivity[]
   statusHistory              TenderStatusHistoryEntry[]
   documentAssociations       DocumentTenderAssociation[]
   dces                       Dce[]
@@ -551,6 +558,8 @@ model TenderLot {
   aiSuggestions      AiSuggestion[]
   /// V2 Sprint 6 — items de checklist spécifiques à ce lot (lotId absent = exigence Tender globale).
   checklistItems     TenderChecklistItem[]
+  /// V2 Sprint 7 — tâches spécifiques à ce lot (lotId absent = tâche Tender globale).
+  tasks              Task[]
 
   /// V2 Sprint 3 (AUDIT-007, même motif que Tender/Document) — support des FK composées
   /// (lotId, organizationId) des satellites ci-dessous vers ce lot : empêche structurellement
@@ -659,6 +668,9 @@ model TenderChecklistItem {
   /// V2 Sprint 6 §11 — provenances multiples (RC p.12 + CCAP p.7 pour la même exigence) : jamais
   /// une source supprimée, seulement ajoutée.
   sources TenderChecklistItemSource[]
+  /// V2 Sprint 7 §13-14 — tâches nées de ce ChecklistItem (mission : toujours indépendantes une
+  /// fois créées, `Task DONE` ≠ `ChecklistItem VALIDATED`).
+  tasks   Task[]
 
   @@index([organizationId, tenderId, displayOrder])
   @@index([organizationId, tenderId, lotId])
@@ -696,6 +708,232 @@ model TenderChecklistItemSource {
 
   @@index([organizationId, checklistItemId])
   @@map("tender_checklist_item_sources")
+}
+
+/// V2 Sprint 7 (Workspace collaboratif) §7 — utilisateur explicitement affecté à ce Tender. Source
+/// UNIQUE de vérité pour "qui peut être assigné/mentionné/reviewer sur ce Tender" (jamais une
+/// re-dérivation complète organisation+client à chaque assignation ailleurs) : ajouter un
+/// participant est le SEUL endroit où l'appartenance organisation active ET l'accès à l'entreprise
+/// candidate du Tender sont vérifiés (voir `AddTenderParticipantUseCase`). Retrait toujours "soft"
+/// (`removedAt`, jamais de suppression physique — mission §49/§50), l'historique (tâches,
+/// commentaires, activité) reste intact et attribuable après retrait. Unicité RÉELLE du participant
+/// ACTIF assurée par un index partiel `WHERE removed_at IS NULL` (ajouté à la main dans la
+/// migration — non exprimable dans le DSL Prisma), pour permettre un retrait PUIS un ré-ajout sans
+/// violer une contrainte unique classique.
+model TenderParticipant {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id])
+
+  /// TENDER_MANAGER | ADMINISTRATIVE_RESPONSIBLE | TECHNICAL_WRITER | FINANCIAL_RESPONSIBLE |
+  /// REVIEWER | SIGNATORY | VIEWER — CHECK (migration). Décrit la FONCTION du participant dans
+  /// l'équipe, jamais une autorité de validation (celle-ci reste entièrement dérivée de
+  /// `ClientPermission.ValidateWorkspace`, mission §41 — voir `workspace-authorization.policy.ts`).
+  /// Distinct du "responsable du dossier" (`Tender.internalOwnerId`, déjà existant depuis Sprint 3,
+  /// réutilisé tel quel pour mission §9 — jamais recréé ici).
+  role String @db.VarChar(30)
+
+  addedBy   String    @map("added_by") @db.Uuid
+  addedAt   DateTime  @default(now()) @map("added_at")
+  removedBy String?   @map("removed_by") @db.Uuid
+  removedAt DateTime? @map("removed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, tenderId])
+  @@index([organizationId, userId])
+  @@map("tender_participants")
+}
+
+/// V2 Sprint 7 §10-17 — travail interne collaboratif, distinct d'un `TenderChecklistItem` (constat
+/// de conformité DCE) et d'un `TenderMilestone` (échéance métier datée) — jamais fusionnés (mission
+/// §13/§15). `assigneeId` reste un pointeur dénormalisé (même motif que
+/// `TenderMilestone.responsibleUserId`/`TenderChecklistItem.assignedTo`, jamais de FK stricte) —
+/// validé applicativement contre un `TenderParticipant` ACTIF, jamais contre un simple UUID
+/// syntaxique (mission §17).
+model Task {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  /// Même motif FK composée (AUDIT-007) que tout le reste du dépôt depuis Sprint 3 — `null` =
+  /// tâche Tender globale.
+  lotId String?    @map("lot_id") @db.Uuid
+  lot   TenderLot? @relation(fields: [lotId, organizationId], references: [id, organizationId])
+
+  /// Mission §13-14 — une tâche PEUT naître d'un ChecklistItem ("cette pièce est manquante" →
+  /// "Karim doit la récupérer avant vendredi") mais reste TOUJOURS indépendante ensuite : `Task
+  /// DONE` ≠ `ChecklistItem VALIDATED` (mission §13, règle absolue).
+  checklistItemId String?              @map("checklist_item_id") @db.Uuid
+  checklistItem   TenderChecklistItem? @relation(fields: [checklistItemId], references: [id])
+
+  documentId String?   @map("document_id") @db.Uuid
+  document   Document? @relation(fields: [documentId], references: [id])
+
+  title       String  @db.VarChar(300)
+  description String?
+
+  /// TODO | IN_PROGRESS | BLOCKED | IN_REVIEW | DONE | CANCELLED — CHECK (migration). Transitions
+  /// contrôlées côté application (`task.entity.ts`) ; toute transition change de statut est tracée
+  /// via `AuditLog.metadata` (previousStatus/newStatus, même motif que
+  /// `tender.checklist_criticality_changed` du Sprint 6 — pas de table d'historique dédiée).
+  status String @default("TODO") @db.VarChar(20)
+
+  /// LOW | MEDIUM | HIGH | URGENT — CHECK (migration). Distincte de `ChecklistItem.criticality`
+  /// (mission §12) : une pièce BLOCKING peut suggérer une priorité HIGH/URGENT à la création
+  /// depuis la checklist, jamais recopiée automatiquement — l'utilisateur confirme toujours
+  /// (mission §14).
+  priority String @default("MEDIUM") @db.VarChar(10)
+
+  dueDate DateTime? @map("due_date")
+
+  assigneeId String? @map("assignee_id") @db.Uuid
+
+  createdBy   String    @map("created_by") @db.Uuid
+  completedBy String?   @map("completed_by") @db.Uuid
+  completedAt DateTime? @map("completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, tenderId])
+  @@index([organizationId, assigneeId])
+  @@index([organizationId, status])
+  @@index([organizationId, dueDate])
+  @@index([organizationId, lotId])
+  @@map("tasks")
+}
+
+/// V2 Sprint 7 §19-21 — modèle générique GOUVERNÉ (mission §19 : "préférer un modèle générique
+/// plutôt que trois systèmes de commentaires... éviter un polymorphisme non sécurisé"), même motif
+/// déjà éprouvé dans ce dépôt par `AiSuggestion.entityType`/`entityId` : `entityId` reste un
+/// pointeur dénormalisé SANS FK stricte (le type de la cible varie), résolu et vérifié
+/// applicativement par `entityType` avant toute écriture — jamais un `findUnique({id})` nu (mission
+/// §20). `tenderId` est TOUJOURS renseigné, y compris pour un commentaire sur une Task/un
+/// ChecklistItem (le Tender parent est toujours connu à l'écriture) : permet une vérification
+/// d'accès en un seul niveau (`assertTenderParticipantAccess`) sans jamais résoudre l'entité cible
+/// au préalable pour découvrir son Tender.
+model Comment {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  /// TENDER | TASK | CHECKLIST_ITEM — CHECK (migration). Jamais DOCUMENT ce sprint (mission §19 le
+  /// rend optionnel "si l'architecture existante le permet" — elle ne le permet pas proprement ce
+  /// sprint, réduction de périmètre assumée).
+  entityType String @map("entity_type") @db.VarChar(20)
+  entityId   String @map("entity_id") @db.Uuid
+
+  authorId String @map("author_id") @db.Uuid
+  body     String
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  /// Horodatage de dernière édition — l'auteur peut modifier son propre commentaire (mission §21),
+  /// jamais une réécriture silencieuse de l'historique.
+  editedAt  DateTime? @map("edited_at")
+  /// Suppression douce (mission §21 "préférer soft delete à suppression physique") — jamais
+  /// réutilisé pour une édition normale.
+  deletedAt DateTime? @map("deleted_at")
+
+  mentions Mention[]
+
+  @@index([organizationId, entityType, entityId])
+  @@index([organizationId, tenderId, createdAt])
+  @@map("comments")
+}
+
+/// V2 Sprint 7 §22-23 — référence un utilisateur RÉEL (mission §22 : "ne pas stocker uniquement
+/// '@Jean' comme texte"), toujours validé contre un `TenderParticipant` actif du MÊME Tender que le
+/// commentaire avant toute écriture (mission §23 — jamais un utilisateur sans accès mentionné,
+/// même en autocomplete frontend).
+model Mention {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  commentId String  @map("comment_id") @db.Uuid
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  mentionedUserId String @map("mentioned_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, mentionedUserId])
+  @@index([commentId])
+  @@map("mentions")
+}
+
+/// V2 Sprint 7 §26-30 — validation collaborative INTERNE ("cette personne a validé cette étape de
+/// travail"), jamais une signature juridique/un engagement contractuel/une validation officielle de
+/// l'offre (mission §28, règle absolue — ne jamais confondre avec la future signature
+/// électronique). Scope volontairement restreint à `entityType: TASK | CHECKLIST_ITEM` : le
+/// document/les livrables/l'export possèdent déjà leurs propres mécanismes de validation
+/// (`FinalApproval`, `DeliverableReview`), jamais dupliqués ici.
+model ApprovalRequest {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  /// TASK | CHECKLIST_ITEM — CHECK (migration). Même motif dénormalisé que `Comment.entityId`.
+  entityType String @map("entity_type") @db.VarChar(20)
+  entityId   String @map("entity_id") @db.Uuid
+
+  requestedBy String @map("requested_by") @db.Uuid
+  /// Doit être un `TenderParticipant` actif ET disposer de `ClientPermission.ValidateWorkspace`
+  /// (mission §29) — jamais un simple CONTRIBUTOR. Auto-validation (`requestedBy === reviewerId`)
+  /// interdite par défaut (mission §30).
+  reviewerId  String @map("reviewer_id") @db.Uuid
+
+  /// PENDING | APPROVED | CHANGES_REQUESTED | CANCELLED — CHECK (migration). Vocabulaire
+  /// CHANGES_REQUESTED (jamais REJECTED, mission §27).
+  status String @default("PENDING") @db.VarChar(20)
+
+  comment String?
+
+  requestedAt DateTime  @default(now()) @map("requested_at")
+  reviewedAt  DateTime? @map("reviewed_at")
+
+  @@index([organizationId, tenderId, status])
+  @@index([organizationId, reviewerId])
+  @@map("approval_requests")
+}
+
+/// V2 Sprint 7 §31-33/§51 — projection de lecture destinée à l'utilisateur, JAMAIS l'AuditLog
+/// technique exposé directement (mission §32 : "AuditLog : sécurité/traçabilité. Activity Feed :
+/// compréhension utilisateur"). Peuplée par un helper partagé, dans la MÊME transaction applicative
+/// que l'écriture principale + AuditLog + Outbox de chaque use case collaboratif (jamais un second
+/// système de vérité indépendant, jamais dérivée d'un scan JSON de l'AuditLog — celui-ci n'a pas de
+/// colonne `tenderId` dédiée, seulement `resourceType`/`resourceId` qui pour un commentaire/une
+/// tâche est l'id de CET enfant, pas du Tender). `summary` est une synthèse courte en français,
+/// jamais de contenu sensible (mission §33 — jamais un corps de commentaire complet, jamais un
+/// payload IA, jamais un token/secret).
+model TenderActivity {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  actorId String @map("actor_id") @db.Uuid
+
+  /// Catalogue gouverné d'événements collaboratifs — CHECK (migration), voir
+  /// `domain/tender-activity-type.ts`.
+  type String @db.VarChar(40)
+
+  summary String @db.VarChar(500)
+
+  metadata Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, tenderId, createdAt])
+  @@map("tender_activities")
 }
 
 model TenderAwardCriterion {
@@ -945,6 +1183,8 @@ model Document {
   requestedDocumentReferences TenderRequestedDocument[]
   /// V2 Sprint 6 — Documents rapprochés/attachés à un ChecklistItem via le matching documentaire.
   matchedByChecklistItems     TenderChecklistItem[]
+  /// V2 Sprint 7 — Documents référencés (optionnellement) par une Task.
+  tasks                       Task[]
   dceDocuments                DceDocument[]
   documentExtraction          DocumentExtraction?
   analysisJobs                AnalysisJob[]

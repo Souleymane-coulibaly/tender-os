@@ -101,6 +101,14 @@ export const ClientPermission = {
   ReadGoNoGo: "CLIENT_READ_GO_NO_GO",
   RecordGoNoGoDecision: "CLIENT_RECORD_GO_NO_GO_DECISION",
   PromoteOpportunity: "CLIENT_PROMOTE_OPPORTUNITY",
+  /** V2 Sprint 7 (Workspace collaboratif) — même motif additif que `ReadDeliverable`/
+   *  `ManageDeliverable`/`ValidateDeliverable` : consulter l'espace de travail (participants,
+   *  tâches, commentaires, activité) vs. créer/gérer (participants, tâches, commentaires) vs.
+   *  valider une demande d'approbation ("règle stricte", mission §29 — jamais délégué au
+   *  CONTRIBUTOR, même palier que `ValidateDeliverable`/`ApproveExport`). */
+  ReadWorkspace: "CLIENT_READ_WORKSPACE",
+  ManageWorkspace: "CLIENT_MANAGE_WORKSPACE",
+  ValidateWorkspace: "CLIENT_VALIDATE_WORKSPACE",
   /** Répertoire organisationnel de sous-traitants (mission §6) — PAS scopé par ClientAccount
    *  (réutilisable par plusieurs entreprises candidates de la même organisation), donc absent de
    *  `ROLE_CLIENT_ACTION_PERMISSIONS` ci-dessous ; vérifié uniquement au palier organisation via
@@ -167,6 +175,9 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ReadOpportunity,
   ClientPermission.ManageOpportunity,
   ClientPermission.ReadGoNoGo,
+  ClientPermission.ReadWorkspace,
+  ClientPermission.ManageWorkspace,
+  ClientPermission.ValidateWorkspace,
   // V2 Sprint 5 (audit Codex, round 2 — P1 confirmé) — `RecordGoNoGoDecision`/`PromoteOpportunity`
   // sont volontairement ABSENTES de ce bypass organisation-tier silencieux : le chemin normal exige
   // une affectation CLIENT_MANAGER réelle sur le client précis, y compris pour OWNER/
@@ -248,6 +259,11 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadGoNoGo,
     ClientPermission.RecordGoNoGoDecision,
     ClientPermission.PromoteOpportunity,
+    /** V2 Sprint 7 — le CLIENT_MANAGER a tous les droits Workspace, y compris valider une demande
+     *  d'approbation ("règle stricte", mission §29). */
+    ClientPermission.ReadWorkspace,
+    ClientPermission.ManageWorkspace,
+    ClientPermission.ValidateWorkspace,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -294,6 +310,11 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadOpportunity,
     ClientPermission.ManageOpportunity,
     ClientPermission.ReadGoNoGo,
+    /** V2 Sprint 7 — le CONTRIBUTOR peut consulter/gérer (participants, tâches, commentaires)
+     *  mais jamais valider une demande d'approbation ("règle stricte" réservée au CLIENT_MANAGER
+     *  ci-dessus, mission §29/§41). */
+    ClientPermission.ReadWorkspace,
+    ClientPermission.ManageWorkspace,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -313,6 +334,9 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
      *  ni ne les crée ni ne les gère. */
     ClientPermission.ReadOpportunity,
     ClientPermission.ReadGoNoGo,
+    /** V2 Sprint 7 — le VIEWER consulte le Workspace (participants, tâches, activité), jamais ne
+     *  le modifie ni ne valide. */
+    ClientPermission.ReadWorkspace,
   ],
 };
 

@@ -169,6 +169,9 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       </div>
 
       <nav className="flex flex-wrap gap-2 border-b border-neutral-200 pb-3 text-sm">
+        <Link href={`/app/tenders/${tender.id}/workspace`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
+          Workspace
+        </Link>
         <Link href={`/app/tenders/${tender.id}/generations`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
           Générations
         </Link>

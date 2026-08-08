@@ -11,6 +11,11 @@ const findChecklistItemDocumentMatchesAction = vi.fn(async (_tenderId: string, _
 const attachChecklistItemDocumentAction = vi.fn(async (_tenderId: string, _itemId: string, _input: unknown) => ({}));
 const detachChecklistItemDocumentAction = vi.fn(async (_tenderId: string, _itemId: string) => ({}));
 const reconcileChecklistWithNewAnalysisAction = vi.fn(async (_tenderId: string) => ({ result: { newRequirementSuggestionsCreated: 0, possibleChangeSuggestionsCreated: 0, possibleRemovals: [] } }));
+const createTaskFromChecklistItemAction = vi.fn(async (_tenderId: string, _input: unknown) => ({}));
+
+vi.mock("../../../workspace-actions", () => ({
+  createTaskFromChecklistItemAction: (tenderId: string, input: unknown) => createTaskFromChecklistItemAction(tenderId, input),
+}));
 
 vi.mock("../../../actions", () => ({
   createChecklistItemAction: {
@@ -107,5 +112,28 @@ describe("ChecklistSection", () => {
 
     expect(screen.queryByRole("button", { name: "Associer" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rechercher un document" })).toBeInTheDocument();
+  });
+
+  it("creates a task from a checklist item, prefilling title/priority but never auto-assigning a responsible (mission §14)", async () => {
+    const user = userEvent.setup();
+    render(<ChecklistSection tenderId="tender-1" items={[baseItem({ criticality: "BLOCKING" })]} lots={LOTS} progress={PROGRESS} />);
+
+    await user.click(screen.getByRole("button", { name: "Créer une tâche" }));
+
+    // Titre préempli depuis l'item, priorité suggérée depuis la criticité (BLOCKING -> URGENT),
+    // mais toujours modifiable et jamais soumis automatiquement.
+    expect(screen.getByDisplayValue("Fournir attestation")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("URGENT")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Créer" }));
+
+    expect(createTaskFromChecklistItemAction).toHaveBeenCalledWith(
+      "tender-1",
+      expect.objectContaining({ title: "Fournir attestation", priority: "URGENT", checklistItemId: "item-1" }),
+    );
+    const [, payload] = createTaskFromChecklistItemAction.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload).not.toHaveProperty("assigneeId");
+
+    expect(await screen.findByText("Tâche créée — voir l'onglet Workspace.")).toBeInTheDocument();
   });
 });

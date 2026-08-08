@@ -114,6 +114,41 @@ async function main(): Promise<void> {
       data: { id: randomUUID(), organizationId, deliverableTemplateVersionId: templateVersionId, code: "INTRO", title: "Introduction", order: 0, headingLevel: 1, requirement: "MANDATORY" },
     });
 
+    // V2 Sprint 7 (Workspace collaboratif) — second membre RÉEL de la MÊME organisation, avec un
+    // accès client réel (`ClientAssignment` CONTRIBUTOR, jamais le filet de secours administratif),
+    // nécessaire aux preuves E2E de collaboration : ajout comme participant, tâche assignée,
+    // connexion séparée, commentaire, mention — un second acteur réel, jamais un seul utilisateur
+    // qui s'auto-valide (mission §30).
+    const collaboratorEmail = `e2e-collaborator-${runId}@playwright.test`;
+    const collaboratorPassword = "PlaywrightE2E#12345";
+    const collaboratorUser = User.register({
+      id: UserId.from(randomUUID()),
+      email: EmailAddress.create(collaboratorEmail),
+      displayName: "Playwright E2E Collaborateur",
+      passwordHash: await passwordHasher.hash(collaboratorPassword),
+      occurredAt: new Date(),
+    });
+    await userRepository.save(collaboratorUser);
+    const collaboratorUserId = collaboratorUser.id.value;
+    await membershipRepository.save(
+      OrganizationMembership.create({ id: MembershipId.from(randomUUID()), organizationId, userId: collaboratorUserId, role: OrganizationRole.Contributor, occurredAt: new Date() }),
+    );
+    await prisma.clientAssignment.create({
+      data: { id: randomUUID(), organizationId, clientAccountId, userId: collaboratorUserId, role: "CONTRIBUTOR", createdBy: userId },
+    });
+
+    // V2 Sprint 7 — second CLIENT de la MÊME organisation, sur lequel le collaborateur n'a AUCUNE
+    // affectation (mission §5/§63 : l'isolation same-org cross-client, jamais couverte par la seule
+    // isolation inter-organisation). Réservé au scénario E2E de sécurité Workspace.
+    const otherClientAccountId = randomUUID();
+    await prisma.clientAccount.create({
+      data: { id: otherClientAccountId, organizationId, name: `Client E2E B ${runId}`, nameNormalized: `client e2e b ${runId}`, status: "ACTIVE", createdBy: userId },
+    });
+    const tenderInOtherClientId = randomUUID();
+    await prisma.tender.create({
+      data: { id: tenderInOtherClientId, organizationId, clientAccountId: otherClientAccountId, title: `Marché Playwright Client B ${runId}`, status: "DRAFT", tags: [], createdBy: userId },
+    });
+
     const other = await createOrgWithOwnerAndTender({ runId, label: "other", passwordHasher, userRepository, membershipRepository, prisma });
 
     // V2 Sprint 5 (GO/NO-GO IA) — un second Tender de la MÊME organisation, avec une analyse IA du
@@ -196,7 +231,22 @@ async function main(): Promise<void> {
       }),
     );
 
-    console.log(JSON.stringify({ email, password, organizationId, userId, clientAccountId, tenderId, tenderWithAnalysisId, other }));
+    console.log(
+      JSON.stringify({
+        email,
+        password,
+        organizationId,
+        userId,
+        clientAccountId,
+        tenderId,
+        tenderWithAnalysisId,
+        collaboratorEmail,
+        collaboratorPassword,
+        collaboratorUserId,
+        tenderInOtherClientId,
+        other,
+      }),
+    );
   } finally {
     await prisma.$disconnect();
   }

@@ -12,6 +12,7 @@ import {
   validateChecklistItemAction,
   type FormActionState,
 } from "../../../actions";
+import { createTaskFromChecklistItemAction } from "../../../workspace-actions";
 import type {
   ChecklistComplianceStatus,
   ChecklistDocumentMatchResult,
@@ -134,12 +135,19 @@ function complianceBadgeClass(status: ChecklistComplianceStatus): string {
   }
 }
 
+/** V2 Sprint 6 §7 -> V2 Sprint 7 §12 — une criticité BLOCKING peut SUGGÉRER une priorité URGENT à
+ *  la création depuis la checklist, jamais recopiée automatiquement : l'utilisateur confirme
+ *  toujours (mission §14), voir le <select> priority ci-dessous, jamais désactivé. */
+const CRITICALITY_TO_SUGGESTED_PRIORITY: Record<string, string> = { BLOCKING: "URGENT", HIGH: "HIGH", MEDIUM: "MEDIUM", LOW: "LOW" };
+
 function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: ChecklistItem; lots: TenderLot[] }) {
   const [status, setStatus] = useState(item.status);
   const [error, setError] = useState<string | undefined>();
   const [isPending, setIsPending] = useState(false);
   const [matches, setMatches] = useState<ChecklistDocumentMatchResult | undefined>();
   const [isSearchingMatches, setIsSearchingMatches] = useState(false);
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [taskCreated, setTaskCreated] = useState(false);
 
   const lot = item.lotId ? lots.find((candidate) => candidate.id === item.lotId) : undefined;
 
@@ -244,7 +252,54 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
             Dissocier le document
           </button>
         )}
+        {!taskCreated ? (
+          <button type="button" onClick={() => setShowTaskForm((v) => !v)} className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100">
+            Créer une tâche
+          </button>
+        ) : (
+          <span className="text-xs text-neutral-500">Tâche créée — voir l&apos;onglet Workspace.</span>
+        )}
       </div>
+
+      {showTaskForm ? (
+        <form
+          className="flex flex-wrap items-end gap-2 rounded border border-neutral-200 bg-neutral-50 p-2"
+          action={async (formData: FormData) => {
+            setIsPending(true);
+            setError(undefined);
+            const dueDate = (formData.get("dueDate") as string) || "";
+            const result = await createTaskFromChecklistItemAction(tenderId, {
+              title: String(formData.get("title")),
+              priority: formData.get("priority") as string,
+              checklistItemId: item.id,
+              ...(item.lotId ? { lotId: item.lotId } : {}),
+              ...(dueDate ? { dueDate } : {}),
+            });
+            setIsPending(false);
+            if (result.error) {
+              setError(result.error);
+            } else {
+              setTaskCreated(true);
+              setShowTaskForm(false);
+            }
+          }}
+        >
+          {/* Préremplissage indicatif (titre + criticité -> priorité suggérée), jamais
+              d'affectation automatique (mission §14 : le responsable/l'échéance/la priorité
+              restent à confirmer explicitement par l'utilisateur). */}
+          <input name="title" defaultValue={item.title} required className="min-w-56 rounded border border-neutral-300 px-2 py-1 text-xs" />
+          <select name="priority" defaultValue={CRITICALITY_TO_SUGGESTED_PRIORITY[item.criticality] ?? "MEDIUM"} className="rounded border border-neutral-300 px-2 py-1 text-xs">
+            <option value="LOW">LOW</option>
+            <option value="MEDIUM">MEDIUM</option>
+            <option value="HIGH">HIGH</option>
+            <option value="URGENT">URGENT</option>
+          </select>
+          <input name="dueDate" type="date" className="rounded border border-neutral-300 px-2 py-1 text-xs" />
+          <button type="submit" disabled={isPending} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50">
+            Créer
+          </button>
+        </form>
+      ) : null}
 
       {matches ? (
         <div className="rounded border border-neutral-200 bg-neutral-50 p-2 text-xs">

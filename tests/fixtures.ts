@@ -9,7 +9,18 @@ export type E2eOtherOrgFixture = { email: string; password: string; organization
  *  même organisation principale, avec une analyse IA du DCE déjà réussie (seedée directement, sans
  *  clé API IA réelle), réservé au scénario Niveau 2 GO/NO-GO. Champs additifs : n'affectent aucun
  *  test préexistant. */
-export type E2eFixture = E2eOtherOrgFixture & { tenderWithAnalysisId: string; other: E2eOtherOrgFixture };
+export type E2eFixture = E2eOtherOrgFixture & {
+  tenderWithAnalysisId: string;
+  other: E2eOtherOrgFixture;
+  /** V2 Sprint 7 — second membre réel de la MÊME organisation, avec un accès client réel
+   *  (CONTRIBUTOR), utilisé par les preuves E2E de collaboration Workspace. */
+  collaboratorEmail: string;
+  collaboratorPassword: string;
+  collaboratorUserId: string;
+  /** V2 Sprint 7 — Tender d'un second CLIENT de la MÊME organisation, sur lequel `collaborator` n'a
+   *  AUCUNE affectation — preuve E2E de l'isolation same-org cross-client (mission §63). */
+  tenderInOtherClientId: string;
+};
 
 /** Correctif audit Codex P2-003 — relit les identifiants réellement créés en base par
  *  `tests/global-setup.ts` (jamais une valeur en dur). */

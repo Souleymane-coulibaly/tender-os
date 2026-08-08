@@ -29,6 +29,16 @@ export const TenderPermission = {
    *  — aucune nouvelle permission de lecture nécessaire. */
   ManageGoNoGo: "tender:manage_go_no_go",
   RecordGoNoGoDecision: "tender:record_go_no_go_decision",
+  /** V2 Sprint 7 (Workspace collaboratif) — `ManageWorkspace` (participants/tâches/commentaires,
+   *  même palier que `ManageChecklist`, CONTRIBUTOR inclus) vs. `ValidateWorkspace` (approbations,
+   *  "règle stricte" — mission §29/§41, jamais délégué au CONTRIBUTOR). La restriction fine
+   *  "CLIENT_MANAGER uniquement" pour la validation vit ENTIÈREMENT au palier client
+   *  (`ClientPermission.ValidateWorkspace`), même motif dual-tier déjà établi par
+   *  `ManageGoNoGo`/`RecordGoNoGoDecision` ci-dessus : ce palier ORGANISATION reste volontairement
+   *  large.
+   */
+  ManageWorkspace: "tender:manage_workspace",
+  ValidateWorkspace: "tender:validate_workspace",
 } as const;
 
 export type TenderPermission = (typeof TenderPermission)[keyof typeof TenderPermission];
@@ -49,7 +59,7 @@ export const ROLE_TENDER_PERMISSIONS: Record<string, readonly TenderPermission[]
   OWNER: Object.values(TenderPermission),
   ORGANIZATION_ADMIN: Object.values(TenderPermission),
   BID_MANAGER: Object.values(TenderPermission),
-  CONTRIBUTOR: [TenderPermission.Read, TenderPermission.List, TenderPermission.ManageChecklist],
+  CONTRIBUTOR: [TenderPermission.Read, TenderPermission.List, TenderPermission.ManageChecklist, TenderPermission.ManageWorkspace],
   REVIEWER: [TenderPermission.Read, TenderPermission.List],
   EXECUTIVE: [TenderPermission.Read, TenderPermission.List],
   EXTERNAL_CONSULTANT: [TenderPermission.Read, TenderPermission.List],
