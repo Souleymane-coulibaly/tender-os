@@ -10,7 +10,15 @@ import { OrganizationRole } from "../../../memberships/domain/organization-role"
 import { PrismaMembershipRepository } from "../../../memberships/infrastructure/prisma-membership.repository";
 import { buildMinimalPdf } from "../../../extraction/test-support/pdf-fixture-builder";
 
-type EntrySummary = { id: string; status: string; activeVersionNumber: number; tags: { id: string; label: string; displayLabel: string }[] };
+type EntrySummary = {
+  id: string;
+  status: string;
+  activeVersionNumber: number;
+  tags: { id: string; label: string; displayLabel: string }[];
+  validatedByUserId?: string;
+  validatedAt?: string;
+  createdByUserId?: string;
+};
 
 /**
  * Preuve réelle contre HTTP + PostgreSQL (mission Sprint 5) — contrairement aux tests HTTP
@@ -31,6 +39,11 @@ describe("Knowledge Base — real HTTP + PostgreSQL (NestJS)", () => {
   let tokenContributorA: string;
   let tokenReadOnlyA: string;
   let tokenAdminB: string;
+  let tokenKarim: string;
+  let ownerAUserId: string;
+  let karimUserId: string;
+  let clientA1Id: string;
+  let clientA2Id: string;
 
   async function registerAndLogin(email: string): Promise<{ userId: string; token: string }> {
     const password = "SmokeTest#12345";
@@ -90,19 +103,33 @@ describe("Knowledge Base — real HTTP + PostgreSQL (NestJS)", () => {
     const contributorA = await registerAndLogin(`kb-contributor-a-${randomUUID()}@smoke.test`);
     const readOnlyA = await registerAndLogin(`kb-readonly-a-${randomUUID()}@smoke.test`);
     const adminB = await registerAndLogin(`kb-admin-b-${randomUUID()}@smoke.test`);
-    userIds.push(ownerA.userId, contributorA.userId, readOnlyA.userId, adminB.userId);
+    const karim = await registerAndLogin(`kb-karim-${randomUUID()}@smoke.test`);
+    userIds.push(ownerA.userId, contributorA.userId, readOnlyA.userId, adminB.userId, karim.userId);
     tokenOwnerA = ownerA.token;
     tokenContributorA = contributorA.token;
     tokenReadOnlyA = readOnlyA.token;
     tokenAdminB = adminB.token;
+    tokenKarim = karim.token;
+    ownerAUserId = ownerA.userId;
+    karimUserId = karim.userId;
 
     await addMembership({ organizationId: orgAId, userId: ownerA.userId, role: OrganizationRole.Owner });
     await addMembership({ organizationId: orgAId, userId: contributorA.userId, role: OrganizationRole.Contributor });
     await addMembership({ organizationId: orgAId, userId: readOnlyA.userId, role: OrganizationRole.ReadOnly });
     await addMembership({ organizationId: orgBId, userId: adminB.userId, role: OrganizationRole.OrganizationAdmin });
+    // Mission §5/§63/§64 — Karim est membre de l'organisation A (BID_MANAGER, palier large), mais
+    // n'a une affectation client RÉELLE que sur Client A1, jamais A2 : la vraie restriction vit au
+    // palier client (voir les tests same-org cross-client ci-dessous).
+    await addMembership({ organizationId: orgAId, userId: karim.userId, role: OrganizationRole.BidManager });
+    clientA1Id = randomUUID();
+    clientA2Id = randomUUID();
+    await prisma.clientAccount.create({ data: { id: clientA1Id, organizationId: orgAId, name: `KB Client A1 ${clientA1Id}`, nameNormalized: `kb client a1 ${clientA1Id}`, status: "ACTIVE", createdBy: ownerA.userId } });
+    await prisma.clientAccount.create({ data: { id: clientA2Id, organizationId: orgAId, name: `KB Client A2 ${clientA2Id}`, nameNormalized: `kb client a2 ${clientA2Id}`, status: "ACTIVE", createdBy: ownerA.userId } });
+    await prisma.clientAssignment.create({ data: { id: randomUUID(), organizationId: orgAId, clientAccountId: clientA1Id, userId: karim.userId, role: "CONTRIBUTOR", createdBy: ownerA.userId } });
   }, 60000);
 
   afterAll(async () => {
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.knowledgeEntryTag.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.knowledgeTag.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.knowledgeChunk.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -114,6 +141,8 @@ describe("Knowledge Base — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.document.updateMany({ where: { organizationId: { in: [orgAId, orgBId] } }, data: { currentVersionId: null } });
     await prisma.document.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.clientAssignment.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: [orgAId, orgBId] } } } });
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
@@ -304,6 +333,91 @@ describe("Knowledge Base — real HTTP + PostgreSQL (NestJS)", () => {
     expect(getRes.status).toBe(404);
   });
 
+  it("validate: turns the READY active version into trusted knowledge, never inherits across a new version, and never re-validates silently (mission §15/§16)", async () => {
+    const createRes = await fetch(`${baseUrl}/api/v1/knowledge/entries`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(tokenOwnerA, orgAId) },
+      body: JSON.stringify({ title: "À valider", category: "OTHER" }),
+    });
+    const entry = (await createRes.json()) as EntrySummary;
+    expect(entry.validatedAt).toBeUndefined();
+
+    // Un CONTRIBUTOR n'a pas la permission Validate (palier Admin uniquement, mission §Décision 4).
+    const forbiddenRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/validate`, { method: "POST", headers: authHeaders(tokenContributorA, orgAId) });
+    expect(forbiddenRes.status).toBe(403);
+
+    const validateRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/validate`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(validateRes.status).toBe(200);
+    const validated = (await validateRes.json()) as EntrySummary;
+    expect(validated.validatedByUserId).toBe(ownerAUserId);
+    expect(validated.validatedAt).toBeDefined();
+
+    // Jamais une revalidation silencieuse de la même version (mission §16, généralisé).
+    const revalidateRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/validate`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(revalidateRes.status).toBe(409);
+
+    // La vérité historique de la version 1 reste validée sur SA PROPRE ligne...
+    const version1Res = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/versions/1`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(((await version1Res.json()) as { validatedAt?: string }).validatedAt).toBeDefined();
+
+    // ...mais une mutation substantielle crée une nouvelle version active JAMAIS validée par défaut.
+    const updateRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...authHeaders(tokenOwnerA, orgAId) },
+      body: JSON.stringify({ title: "À valider (modifié)" }),
+    });
+    const updated = (await updateRes.json()) as EntrySummary;
+    expect(updated.activeVersionNumber).toBe(2);
+    expect(updated.validatedAt).toBeUndefined();
+
+    const version2Res = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/versions/2`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(((await version2Res.json()) as { validatedAt?: string }).validatedAt).toBeUndefined();
+  });
+
+  it("validate: refuses a DRAFT entry that has nothing stable to validate yet (409)", async () => {
+    const form = new FormData();
+    form.append("title", "Import en cours");
+    form.append("category", "OTHER");
+    form.append("file", new Blob([buildMinimalPdf(["draft-marker"])], { type: "application/pdf" }), "draft.pdf");
+
+    const createRes = await fetch(`${baseUrl}/api/v1/knowledge/documents`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: form });
+    const created = (await createRes.json()) as EntrySummary;
+    expect(["DRAFT", "PROCESSING"]).toContain(created.status);
+
+    const validateRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${created.id}/validate`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(validateRes.status).toBe(409);
+  });
+
+  /** Correctif audit Codex P2 — preuve réelle (Postgres, pas un fake) que `validatedOnly` filtre
+   *  CÔTÉ SQL, AVANT pagination : `total` reflète le compte filtré, jamais celui de la page brute
+   *  non filtrée. */
+  it("search validatedOnly=true filters at the SQL level, including a reliable total (never the unfiltered page count)", async () => {
+    const marker = `validatedonly-marker-${randomUUID()}`;
+    const validatedRes = await fetch(`${baseUrl}/api/v1/knowledge/entries`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(tokenOwnerA, orgAId) },
+      body: JSON.stringify({ title: `Entrée validée ${marker}`, category: "OTHER" }),
+    });
+    const validatedEntry = (await validatedRes.json()) as EntrySummary;
+    await fetch(`${baseUrl}/api/v1/knowledge/entries/${validatedEntry.id}/validate`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+
+    await fetch(`${baseUrl}/api/v1/knowledge/entries`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(tokenOwnerA, orgAId) },
+      body: JSON.stringify({ title: `Entrée non validée ${marker}`, category: "OTHER" }),
+    });
+
+    const unfilteredRes = await fetch(`${baseUrl}/api/v1/knowledge/search?query=${encodeURIComponent(marker)}`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const unfiltered = (await unfilteredRes.json()) as { items: { knowledgeEntryId: string }[]; total: number };
+    expect(unfiltered.total).toBe(2);
+
+    const filteredRes = await fetch(`${baseUrl}/api/v1/knowledge/search?query=${encodeURIComponent(marker)}&validatedOnly=true`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const filtered = (await filteredRes.json()) as { items: { knowledgeEntryId: string }[]; total: number };
+    expect(filtered.total).toBe(1);
+    expect(filtered.items).toHaveLength(1);
+    expect(filtered.items[0]!.knowledgeEntryId).toBe(validatedEntry.id);
+  });
+
   it("a CONTRIBUTOR cannot permanently delete (Admin-tier only)", async () => {
     const createRes = await fetch(`${baseUrl}/api/v1/knowledge/entries`, {
       method: "POST",
@@ -353,6 +467,104 @@ describe("Knowledge Base — real HTTP + PostgreSQL (NestJS)", () => {
 
     const archiveRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/archive`, { method: "POST", headers: authHeaders(tokenAdminB, orgBId) });
     expect(archiveRes.status).toBe(404);
+  });
+
+  // Correctif audit — same-org cross-client (mission §5/§22/§63/§64/§70, "TEST BLOQUANT") : Karim
+  // est membre de l'organisation A (BID_MANAGER) et a une affectation client RÉELLE sur A1, mais
+  // AUCUNE sur A2. Avant ce correctif, seules list/search filtraient correctement par client —
+  // chaque route PAR IDENTIFIANT (get/update/archive/restore/delete/versions/tags) chargeait
+  // l'entrée par `(id, organizationId)` SEUL, sans jamais vérifier l'accès client réel.
+  it("same-org cross-client: Karim (real access on Client A1, none on Client A2) is refused on EVERY by-id route of a Client A2 entry — never a leak (mission §64/§70)", async () => {
+    const createRes = await fetch(`${baseUrl}/api/v1/knowledge/entries`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(tokenOwnerA, orgAId) },
+      body: JSON.stringify({ title: "Contenu-secret-Client-A2", category: "OTHER", clientAccountId: clientA2Id }),
+    });
+    expect(createRes.status).toBe(201);
+    const entry = (await createRes.json()) as EntrySummary;
+
+    const getRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}`, { headers: authHeaders(tokenKarim, orgAId) });
+    expect(getRes.status).toBe(404);
+
+    const updateRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...authHeaders(tokenKarim, orgAId) },
+      body: JSON.stringify({ title: "Tentative de modification" }),
+    });
+    expect(updateRes.status).toBe(404);
+
+    const listVersionsRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/versions`, { headers: authHeaders(tokenKarim, orgAId) });
+    expect(listVersionsRes.status).toBe(404);
+
+    const getVersionRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/versions/1`, { headers: authHeaders(tokenKarim, orgAId) });
+    expect(getVersionRes.status).toBe(404);
+
+    const restoreVersionRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/versions/1/restore`, { method: "POST", headers: authHeaders(tokenKarim, orgAId) });
+    expect(restoreVersionRes.status).toBe(404);
+
+    const listDocsRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/documents`, { headers: authHeaders(tokenKarim, orgAId) });
+    expect(listDocsRes.status).toBe(404);
+
+    const addTagRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/tags`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(tokenKarim, orgAId) },
+      body: JSON.stringify({ label: "tentative-tag" }),
+    });
+    expect(addTagRes.status).toBe(404);
+
+    const removeTagRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/tags/${randomUUID()}`, { method: "DELETE", headers: authHeaders(tokenKarim, orgAId) });
+    expect(removeTagRes.status).toBe(404);
+
+    const archiveRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/archive`, { method: "POST", headers: authHeaders(tokenKarim, orgAId) });
+    expect(archiveRes.status).toBe(404);
+
+    const validateRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/validate`, { method: "POST", headers: authHeaders(tokenKarim, orgAId) });
+    expect(validateRes.status).toBe(404);
+
+    const deleteRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}`, { method: "DELETE", headers: authHeaders(tokenKarim, orgAId) });
+    expect(deleteRes.status).toBe(404);
+
+    // Preuve que l'entrée existe toujours réellement (jamais supprimée par la tentative ci-dessus) —
+    // vérifiée depuis la session d'OwnerA, qui a un accès réel (org-tier bypass) au client A2.
+    const stillThereRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(stillThereRes.status).toBe(200);
+
+    // Preuve inverse : ce n'est pas un bug d'authentification générale — Karim PEUT bien agir sur
+    // une entrée de SON PROPRE client (A1) au sein de la MÊME organisation.
+    const ownEntryRes = await fetch(`${baseUrl}/api/v1/knowledge/entries`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(tokenKarim, orgAId) },
+      body: JSON.stringify({ title: "Contenu Client A1 (autorisé)", category: "OTHER", clientAccountId: clientA1Id }),
+    });
+    expect(ownEntryRes.status).toBe(201);
+    const ownEntry = (await ownEntryRes.json()) as EntrySummary;
+    const ownGetRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${ownEntry.id}`, { headers: authHeaders(tokenKarim, orgAId) });
+    expect(ownGetRes.status).toBe(200);
+    expect(((await ownGetRes.json()) as EntrySummary).createdByUserId).toBe(karimUserId);
+  });
+
+  // Correctif audit — reproduit la faille pour la route document-scopée (get/reprocess), avec un
+  // document réel (l'entrée manuelle ci-dessus n'en a aucun).
+  it("same-org cross-client: Karim cannot read or reprocess a document attached to a Client A2 entry", async () => {
+    const form = new FormData();
+    form.append("title", "Document-secret-Client-A2");
+    form.append("category", "ADMINISTRATIVE");
+    form.append("clientAccountId", clientA2Id);
+    form.append("file", new Blob([buildMinimalPdf(["secret-content-marker"])], { type: "application/pdf" }), "secret.pdf");
+
+    const createRes = await fetch(`${baseUrl}/api/v1/knowledge/documents`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: form });
+    expect(createRes.status).toBe(201);
+    const entry = (await waitForEntryStatus((await createRes.json() as EntrySummary).id, tokenOwnerA, orgAId, ["READY", "FAILED", "PARTIALLY_READY"])) as EntrySummary;
+
+    const docsAsOwner = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/documents`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const [document] = (await docsAsOwner.json()) as { id: string }[];
+    expect(document).toBeDefined();
+
+    const getDocRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/documents/${document!.id}`, { headers: authHeaders(tokenKarim, orgAId) });
+    expect(getDocRes.status).toBe(404);
+
+    const reprocessRes = await fetch(`${baseUrl}/api/v1/knowledge/entries/${entry.id}/documents/${document!.id}/reprocess`, { method: "POST", headers: authHeaders(tokenKarim, orgAId) });
+    expect(reprocessRes.status).toBe(404);
   });
 
   it("rejects an unauthenticated request (401)", async () => {

@@ -1,8 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { KnowledgeEntryNotArchivedError, KnowledgeEntryNotFoundError } from "../../domain/errors";
 import { KnowledgeEntryStatus } from "../../domain/knowledge-entry-status";
 import { KnowledgePermission } from "../../domain/knowledge-permission";
 import { assertHasKnowledgePermission } from "../policies/knowledge-authorization.policy";
+import { assertKnowledgeEntryClientAccess } from "../policies/knowledge-entry-client-access.policy";
 import { KNOWLEDGE_ENTRY_REPOSITORY, type KnowledgeEntryRepository } from "../ports/knowledge-entry.repository";
 
 export type DeleteKnowledgeEntryCommand = Readonly<{
@@ -30,7 +32,10 @@ export type DeleteKnowledgeEntryCommand = Readonly<{
  */
 @Injectable()
 export class DeleteKnowledgeEntryUseCase {
-  constructor(@Inject(KNOWLEDGE_ENTRY_REPOSITORY) private readonly knowledgeEntryRepository: KnowledgeEntryRepository) {}
+  constructor(
+    @Inject(KNOWLEDGE_ENTRY_REPOSITORY) private readonly knowledgeEntryRepository: KnowledgeEntryRepository,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
+  ) {}
 
   async execute(command: DeleteKnowledgeEntryCommand): Promise<void> {
     assertHasKnowledgePermission(command.actorRole, KnowledgePermission.Delete);
@@ -39,6 +44,7 @@ export class DeleteKnowledgeEntryUseCase {
     if (!entry) {
       throw new KnowledgeEntryNotFoundError();
     }
+    await assertKnowledgeEntryClientAccess(this.assertClientAccessUseCase, { organizationId: command.organizationId, entry, actorId: command.actorId, actorRole: command.actorRole, permission: ClientPermission.ManageKnowledge });
     if (entry.status !== KnowledgeEntryStatus.Archived) {
       throw new KnowledgeEntryNotArchivedError();
     }
@@ -55,6 +61,10 @@ export class DeleteKnowledgeEntryUseCase {
         resourceId: command.knowledgeEntryId,
         requestId: command.requestId,
       },
+      // Mission §Décision 5 — aucun événement Outbox défini pour la suppression définitive (hors
+      // de la liste mandatée : Created/VersionCreated/Validated/Archived/PromotedFromTender) ;
+      // jamais construire un mécanisme non demandé (mission §80).
+      outboxEvents: [],
     });
   }
 }

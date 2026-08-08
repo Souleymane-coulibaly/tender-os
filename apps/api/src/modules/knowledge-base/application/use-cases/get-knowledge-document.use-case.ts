@@ -1,13 +1,15 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { KnowledgeDocumentNotFoundError, KnowledgeEntryNotFoundError } from "../../domain/errors";
 import { KnowledgePermission } from "../../domain/knowledge-permission";
 import { assertHasKnowledgePermission } from "../policies/knowledge-authorization.policy";
+import { assertKnowledgeEntryClientAccess } from "../policies/knowledge-entry-client-access.policy";
 import { KNOWLEDGE_CHUNK_REPOSITORY, type KnowledgeChunkRepository } from "../ports/knowledge-chunk.repository";
 import { KNOWLEDGE_DOCUMENT_REPOSITORY, type KnowledgeDocumentRepository } from "../ports/knowledge-document.repository";
 import { KNOWLEDGE_ENTRY_REPOSITORY, type KnowledgeEntryRepository } from "../ports/knowledge-entry.repository";
 import { toKnowledgeChunkSummary, toKnowledgeDocumentSummary, type KnowledgeChunkSummary, type KnowledgeDocumentSummary } from "../dtos";
 
-export type GetKnowledgeDocumentQuery = Readonly<{ organizationId: string; knowledgeEntryId: string; knowledgeDocumentId: string; actorRole: string }>;
+export type GetKnowledgeDocumentQuery = Readonly<{ organizationId: string; knowledgeEntryId: string; knowledgeDocumentId: string; actorId: string; actorRole: string }>;
 
 export type KnowledgeDocumentDetail = KnowledgeDocumentSummary & { chunks: KnowledgeChunkSummary[] };
 
@@ -19,6 +21,7 @@ export class GetKnowledgeDocumentUseCase {
     @Inject(KNOWLEDGE_ENTRY_REPOSITORY) private readonly knowledgeEntryRepository: KnowledgeEntryRepository,
     @Inject(KNOWLEDGE_DOCUMENT_REPOSITORY) private readonly knowledgeDocumentRepository: KnowledgeDocumentRepository,
     @Inject(KNOWLEDGE_CHUNK_REPOSITORY) private readonly knowledgeChunkRepository: KnowledgeChunkRepository,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(query: GetKnowledgeDocumentQuery): Promise<KnowledgeDocumentDetail> {
@@ -28,6 +31,7 @@ export class GetKnowledgeDocumentUseCase {
     if (!entry) {
       throw new KnowledgeEntryNotFoundError();
     }
+    await assertKnowledgeEntryClientAccess(this.assertClientAccessUseCase, { organizationId: query.organizationId, entry, actorId: query.actorId, actorRole: query.actorRole, permission: ClientPermission.ReadKnowledge });
 
     const document = await this.knowledgeDocumentRepository.findById(query);
     if (!document || document.knowledgeEntryId !== query.knowledgeEntryId) {

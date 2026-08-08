@@ -17,6 +17,9 @@ describe("roleHasKnowledgePermission", () => {
     expect(roleHasKnowledgePermission("CONTRIBUTOR", KnowledgePermission.ManageTags)).toBe(true);
     expect(roleHasKnowledgePermission("CONTRIBUTOR", KnowledgePermission.Archive)).toBe(true);
     expect(roleHasKnowledgePermission("CONTRIBUTOR", KnowledgePermission.Delete)).toBe(false);
+    // V2 Sprint 8 §16/§21 — la validation est un palier "règle stricte" distinct, jamais accordé
+    // au CONTRIBUTOR (même motif que Delete ci-dessus).
+    expect(roleHasKnowledgePermission("CONTRIBUTOR", KnowledgePermission.Validate)).toBe(false);
   });
 
   it("limits Viewer-tier roles (REVIEWER, EXECUTIVE, EXTERNAL_CONSULTANT, READ_ONLY) to read/search — never a write action", () => {

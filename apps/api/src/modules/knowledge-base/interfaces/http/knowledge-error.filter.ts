@@ -30,6 +30,18 @@ const STATUS_BY_CODE: Record<string, number> = {
   DUPLICATE_KNOWLEDGE_TAG: HttpStatus.CONFLICT,
   KNOWLEDGE_TAG_NOT_FOUND: HttpStatus.NOT_FOUND,
   KNOWLEDGE_PROVENANCE_VALIDATION_FAILED: HttpStatus.UNPROCESSABLE_ENTITY,
+  KNOWLEDGE_ENTRY_NOT_READY_FOR_VALIDATION: HttpStatus.CONFLICT,
+  KNOWLEDGE_ENTRY_ALREADY_VALIDATED: HttpStatus.CONFLICT,
+  KNOWLEDGE_ENTRY_PROMOTION_REQUIRES_VALIDATED_CHECKLIST_ITEM: HttpStatus.CONFLICT,
+
+  // Mission V2 Sprint 8 §19 — PromoteChecklistItemToKnowledgeUseCase délègue à Tenders
+  // (ChecklistItemRepository, TenderRepository via `assertTenderMutationAllowed` — correctif audit
+  // Codex P1-01) pour charger l'item/le Tender source, anti-IDOR scopé (organizationId, tenderId,
+  // itemId) : laisse leurs erreurs remonter telles quelles, même motif que Documents/Extraction
+  // ci-dessus.
+  CHECKLIST_ITEM_NOT_FOUND: HttpStatus.NOT_FOUND,
+  TENDER_NOT_FOUND: HttpStatus.NOT_FOUND,
+  TENDER_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
 
   // Mission Sprint 5.1 — CreateKnowledgeEntryUseCase/AddKnowledgeDocumentUseCase délèguent
   // désormais aussi à Client Portfolio (clientAccountId optionnel).

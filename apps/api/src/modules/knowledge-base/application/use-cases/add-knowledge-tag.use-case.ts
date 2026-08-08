@@ -1,11 +1,13 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
+import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { KnowledgeEntryArchivedError, KnowledgeEntryNotFoundError } from "../../domain/errors";
 import { KnowledgeEntryStatus } from "../../domain/knowledge-entry-status";
 import { KnowledgePermission } from "../../domain/knowledge-permission";
 import { normalizeTagLabel } from "../../domain/tag-normalizer";
 import { assertHasKnowledgePermission } from "../policies/knowledge-authorization.policy";
+import { assertKnowledgeEntryClientAccess } from "../policies/knowledge-entry-client-access.policy";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { KNOWLEDGE_ENTRY_REPOSITORY, type KnowledgeEntryRepository } from "../ports/knowledge-entry.repository";
 import { KNOWLEDGE_TAG_REPOSITORY, type KnowledgeTagRepository } from "../ports/knowledge-tag.repository";
@@ -30,6 +32,7 @@ export class AddKnowledgeTagUseCase {
     @Inject(KNOWLEDGE_TAG_REPOSITORY) private readonly knowledgeTagRepository: KnowledgeTagRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: AddKnowledgeTagCommand): Promise<KnowledgeTagSummary> {
@@ -39,6 +42,7 @@ export class AddKnowledgeTagUseCase {
     if (!entry) {
       throw new KnowledgeEntryNotFoundError();
     }
+    await assertKnowledgeEntryClientAccess(this.assertClientAccessUseCase, { organizationId: command.organizationId, entry, actorId: command.actorId, actorRole: command.actorRole, permission: ClientPermission.ManageKnowledge });
     if (entry.status === KnowledgeEntryStatus.Archived) {
       throw new KnowledgeEntryArchivedError();
     }

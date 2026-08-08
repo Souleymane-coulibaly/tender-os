@@ -14,6 +14,9 @@ export type KnowledgeSearchCriteria = Readonly<{
    *  entrée client dans le résultat de recherche d'un autre client. */
   clientAccountId?: string | "GLOBAL" | undefined;
   restrictToClientAccountIdsOrGlobal?: readonly string[] | undefined;
+  /** V2 Sprint 8 §Décision 8/§31 — filtré CÔTÉ PROVIDER (SQL), avant pagination : `total` reste
+   *  fiable même avec ce filtre actif, contrairement à un filtrage en mémoire après coup. */
+  validatedOnly?: boolean | undefined;
   limit: number;
   offset: number;
 }>;

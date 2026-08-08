@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { AssertClientAccessUseCase } from "../../../client-portfolio";
 import { KnowledgeEntryNotArchivedError } from "../../domain/errors";
 import { KnowledgeCategory } from "../../domain/knowledge-category";
 import { KnowledgeEntry } from "../../domain/knowledge-entry.aggregate";
@@ -19,6 +20,9 @@ const ORG = randomUUID();
 const SPACE = randomUUID();
 const ACTOR = randomUUID();
 const NOW = new Date("2026-07-30T10:00:00Z");
+// Toutes les entrées seedées ici sont GLOBALES (clientAccountId absent) : `assertKnowledgeEntryClientAccess`
+// retourne immédiatement sans jamais appeler cette dépendance (voir la policy).
+const UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE = {} as AssertClientAccessUseCase;
 
 describe("Archive / Restore / Delete lifecycle", () => {
   let entryRepository: InMemoryKnowledgeEntryRepository;
@@ -32,9 +36,9 @@ describe("Archive / Restore / Delete lifecycle", () => {
     entryRepository = new InMemoryKnowledgeEntryRepository(undefined, undefined, auditLogWriter);
     const tagRepository = new InMemoryKnowledgeTagRepository();
     const documentRepository = new InMemoryKnowledgeDocumentRepository();
-    archiveUseCase = new ArchiveKnowledgeEntryUseCase(entryRepository, tagRepository, documentRepository, auditLogWriter, new FixedClock());
-    restoreUseCase = new RestoreKnowledgeEntryUseCase(entryRepository, tagRepository, documentRepository, auditLogWriter, new FixedClock());
-    deleteUseCase = new DeleteKnowledgeEntryUseCase(entryRepository);
+    archiveUseCase = new ArchiveKnowledgeEntryUseCase(entryRepository, tagRepository, documentRepository, new FixedClock(), UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE);
+    restoreUseCase = new RestoreKnowledgeEntryUseCase(entryRepository, tagRepository, documentRepository, new FixedClock(), UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE);
+    deleteUseCase = new DeleteKnowledgeEntryUseCase(entryRepository, UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE);
   });
 
   async function seedEntry(): Promise<string> {

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import type { ClientAccountSummary } from "../../../../../lib/client-portfolio-types";
 import {
+  canValidateKnowledgeEntry,
   KNOWLEDGE_CATEGORY_LABELS,
   KNOWLEDGE_STATUS_LABELS,
   knowledgeStatusBadgeClass,
@@ -52,6 +53,7 @@ export default async function KnowledgeEntryDetailPage({ params }: { params: Pro
   const canEdit = role !== undefined && role !== "READ_ONLY" && role !== "REVIEWER" && role !== "EXECUTIVE" && role !== "EXTERNAL_CONSULTANT";
   const canManageLifecycle = canEdit;
   const canDelete = role !== undefined && ["OWNER", "ORGANIZATION_ADMIN", "BID_MANAGER"].includes(role);
+  const canValidate = canValidateKnowledgeEntry(role);
 
   return (
     <div className="flex flex-col gap-6">
@@ -82,11 +84,26 @@ export default async function KnowledgeEntryDetailPage({ params }: { params: Pro
           <span className={`rounded px-2 py-1 text-xs font-medium ${knowledgeStatusBadgeClass(entry.status)}`}>
             {KNOWLEDGE_STATUS_LABELS[entry.status]}
           </span>
-          {canManageLifecycle ? <KnowledgeLifecycleActions entry={entry} canDelete={canDelete} /> : null}
+          {entry.validatedAt ? (
+            <span className="rounded bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800">
+              Validée le {new Date(entry.validatedAt).toLocaleDateString("fr-FR")}
+            </span>
+          ) : null}
+          {canManageLifecycle ? <KnowledgeLifecycleActions entry={entry} canDelete={canDelete} canValidate={canValidate} /> : null}
         </div>
       </div>
 
       {entry.description ? <p className="text-sm text-neutral-700">{entry.description}</p> : null}
+
+      {entry.sourceTenderId ? (
+        <p className="text-xs text-neutral-500">
+          Promue depuis{" "}
+          <Link href={`/app/tenders/${entry.sourceTenderId}`} className="hover:underline">
+            un appel d&apos;offres
+          </Link>
+          {entry.promotedAt ? ` le ${new Date(entry.promotedAt).toLocaleDateString("fr-FR")}` : ""}.
+        </p>
+      ) : null}
 
       <KnowledgeTagsManager entryId={entry.id} tags={entry.tags} canManage={canEdit} />
 

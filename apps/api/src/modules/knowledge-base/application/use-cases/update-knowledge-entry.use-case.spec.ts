@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { UuidGenerator } from "../../../../shared-kernel/id-generator";
+import type { AssertClientAccessUseCase } from "../../../client-portfolio";
 import { KnowledgeCategory } from "../../domain/knowledge-category";
 import { KnowledgeEntry } from "../../domain/knowledge-entry.aggregate";
 import { KnowledgeEntryArchivedError, KnowledgeEntryNotFoundError } from "../../domain/errors";
@@ -8,7 +9,6 @@ import { KnowledgeSourceType } from "../../domain/knowledge-source-type";
 import { UpdateKnowledgeEntryUseCase } from "./update-knowledge-entry.use-case";
 import {
   FixedClock,
-  InMemoryAuditLogWriter,
   InMemoryKnowledgeDocumentRepository,
   InMemoryKnowledgeEntryRepository,
   InMemoryKnowledgeEntryVersionRepository,
@@ -19,6 +19,7 @@ const ORG = randomUUID();
 const SPACE = randomUUID();
 const ACTOR = randomUUID();
 const NOW = new Date("2026-07-30T10:00:00Z");
+const UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE = {} as AssertClientAccessUseCase;
 
 describe("UpdateKnowledgeEntryUseCase", () => {
   let entryRepository: InMemoryKnowledgeEntryRepository;
@@ -26,16 +27,18 @@ describe("UpdateKnowledgeEntryUseCase", () => {
   let useCase: UpdateKnowledgeEntryUseCase;
 
   beforeEach(() => {
-    entryRepository = new InMemoryKnowledgeEntryRepository();
     versionRepository = new InMemoryKnowledgeEntryVersionRepository();
+    // Le repository d'entrée doit partager la MÊME instance de `versionRepository` que celle
+    // observée par les tests ci-dessous : `updateWithNewVersion` (correctif audit Codex P1-02)
+    // écrit désormais la version via `entryRepository`, jamais un second repository déconnecté.
+    entryRepository = new InMemoryKnowledgeEntryRepository(versionRepository);
     useCase = new UpdateKnowledgeEntryUseCase(
       entryRepository,
-      versionRepository,
       new InMemoryKnowledgeTagRepository(),
       new InMemoryKnowledgeDocumentRepository(),
-      new InMemoryAuditLogWriter(),
       new FixedClock(),
       new UuidGenerator(),
+      UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE,
     );
   });
 

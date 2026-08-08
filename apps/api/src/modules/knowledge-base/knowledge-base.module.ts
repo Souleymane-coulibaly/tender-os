@@ -4,6 +4,8 @@ import { DocumentsModule } from "../documents";
 import { ExtractionModule } from "../extraction";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
+import { OutboxModule } from "../outbox";
+import { TendersModule } from "../tenders";
 
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
 import { KNOWLEDGE_CHUNK_REPOSITORY } from "./application/ports/knowledge-chunk.repository";
@@ -30,12 +32,14 @@ import { ListKnowledgeEntriesUseCase } from "./application/use-cases/list-knowle
 import { ListKnowledgeTagsUseCase } from "./application/use-cases/list-knowledge-tags.use-case";
 import { ListKnowledgeVersionsUseCase } from "./application/use-cases/list-knowledge-versions.use-case";
 import { ProcessKnowledgeDocumentUseCase } from "./application/use-cases/process-knowledge-document.use-case";
+import { PromoteChecklistItemToKnowledgeUseCase } from "./application/use-cases/promote-checklist-item-to-knowledge.use-case";
 import { RemoveKnowledgeTagUseCase } from "./application/use-cases/remove-knowledge-tag.use-case";
 import { ReprocessKnowledgeDocumentUseCase } from "./application/use-cases/reprocess-knowledge-document.use-case";
 import { RestoreKnowledgeEntryUseCase } from "./application/use-cases/restore-knowledge-entry.use-case";
 import { RestoreKnowledgeVersionUseCase } from "./application/use-cases/restore-knowledge-version.use-case";
 import { SearchKnowledgeBaseUseCase } from "./application/use-cases/search-knowledge-base.use-case";
 import { UpdateKnowledgeEntryUseCase } from "./application/use-cases/update-knowledge-entry.use-case";
+import { ValidateKnowledgeEntryUseCase } from "./application/use-cases/validate-knowledge-entry.use-case";
 
 import { InProcessKnowledgeDispatcher } from "./infrastructure/in-process-knowledge.dispatcher";
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
@@ -47,17 +51,20 @@ import { PrismaKnowledgeEntryVersionRepository } from "./infrastructure/prisma-k
 import { PrismaKnowledgeSpaceRepository } from "./infrastructure/prisma-knowledge-space.repository";
 import { PrismaKnowledgeTagRepository } from "./infrastructure/prisma-knowledge-tag.repository";
 
+import { ChecklistPromotionController } from "./interfaces/http/checklist-promotion.controller";
 import { KnowledgeController } from "./interfaces/http/knowledge.controller";
 
 @Module({
-  imports: [IdentityModule, MembershipsModule, DocumentsModule, ExtractionModule, ClientPortfolioModule],
-  controllers: [KnowledgeController],
+  imports: [IdentityModule, MembershipsModule, DocumentsModule, ExtractionModule, ClientPortfolioModule, OutboxModule, TendersModule],
+  controllers: [KnowledgeController, ChecklistPromotionController],
   providers: [
     GetOrCreateDefaultKnowledgeSpaceUseCase,
     CreateKnowledgeEntryUseCase,
+    PromoteChecklistItemToKnowledgeUseCase,
     GetKnowledgeEntryUseCase,
     ListKnowledgeEntriesUseCase,
     UpdateKnowledgeEntryUseCase,
+    ValidateKnowledgeEntryUseCase,
     ArchiveKnowledgeEntryUseCase,
     RestoreKnowledgeEntryUseCase,
     DeleteKnowledgeEntryUseCase,

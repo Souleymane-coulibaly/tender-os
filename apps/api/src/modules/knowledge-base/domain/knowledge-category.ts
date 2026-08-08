@@ -20,6 +20,9 @@ export const KnowledgeCategory = {
   TechnicalMemory: "TECHNICAL_MEMORY",
   ResponseTemplate: "RESPONSE_TEMPLATE",
   CommercialDocument: "COMMERCIAL_DOCUMENT",
+  /** V2 Sprint 8 — logos, organigrammes, photos, schémas, certifications visuelles (mission §40) ;
+   *  seule valeur du catalogue de référence de la mission absente jusqu'ici. */
+  Image: "IMAGE",
   Other: "OTHER",
 } as const;
 

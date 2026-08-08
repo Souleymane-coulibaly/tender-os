@@ -26,6 +26,7 @@ import { RestoreKnowledgeEntryUseCase } from "../../application/use-cases/restor
 import { RestoreKnowledgeVersionUseCase } from "../../application/use-cases/restore-knowledge-version.use-case";
 import { SearchKnowledgeBaseUseCase } from "../../application/use-cases/search-knowledge-base.use-case";
 import { UpdateKnowledgeEntryUseCase } from "../../application/use-cases/update-knowledge-entry.use-case";
+import { ValidateKnowledgeEntryUseCase } from "../../application/use-cases/validate-knowledge-entry.use-case";
 import { KnowledgeErrorFilter } from "./knowledge-error.filter";
 import {
   presentKnowledgeDocument,
@@ -96,6 +97,7 @@ export class KnowledgeController {
     private readonly listKnowledgeEntriesUseCase: ListKnowledgeEntriesUseCase,
     private readonly updateKnowledgeEntryUseCase: UpdateKnowledgeEntryUseCase,
     private readonly archiveKnowledgeEntryUseCase: ArchiveKnowledgeEntryUseCase,
+    private readonly validateKnowledgeEntryUseCase: ValidateKnowledgeEntryUseCase,
     private readonly restoreKnowledgeEntryUseCase: RestoreKnowledgeEntryUseCase,
     private readonly deleteKnowledgeEntryUseCase: DeleteKnowledgeEntryUseCase,
     private readonly addKnowledgeDocumentUseCase: AddKnowledgeDocumentUseCase,
@@ -165,8 +167,8 @@ export class KnowledgeController {
 
   @Get("entries/:entryId")
   @HttpCode(HttpStatus.OK)
-  async getEntry(@CurrentMembershipContext() membership: MembershipContext, @Param("entryId", new ZodValidationPipe(IdParamSchema)) entryId: string) {
-    const result = await this.getKnowledgeEntryUseCase.execute({ organizationId: membership.organizationId, knowledgeEntryId: entryId, actorRole: membership.role });
+  async getEntry(@CurrentActor() actor: AuthenticatedActor, @CurrentMembershipContext() membership: MembershipContext, @Param("entryId", new ZodValidationPipe(IdParamSchema)) entryId: string) {
+    const result = await this.getKnowledgeEntryUseCase.execute({ organizationId: membership.organizationId, knowledgeEntryId: entryId, actorId: actor.userId, actorRole: membership.role });
     return presentKnowledgeEntry(result);
   }
 
@@ -210,6 +212,18 @@ export class KnowledgeController {
     @Req() request: RequestWithId,
   ) {
     const result = await this.archiveKnowledgeEntryUseCase.execute({ organizationId: membership.organizationId, knowledgeEntryId: entryId, actorId: actor.userId, actorRole: membership.role, requestId: request.id });
+    return presentKnowledgeEntry(result);
+  }
+
+  @Post("entries/:entryId/validate")
+  @HttpCode(HttpStatus.OK)
+  async validateEntry(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("entryId", new ZodValidationPipe(IdParamSchema)) entryId: string,
+    @Req() request: RequestWithId,
+  ) {
+    const result = await this.validateKnowledgeEntryUseCase.execute({ organizationId: membership.organizationId, knowledgeEntryId: entryId, actorId: actor.userId, actorRole: membership.role, requestId: request.id });
     return presentKnowledgeEntry(result);
   }
 
@@ -284,19 +298,20 @@ export class KnowledgeController {
 
   @Get("entries/:entryId/documents")
   @HttpCode(HttpStatus.OK)
-  async listDocuments(@CurrentMembershipContext() membership: MembershipContext, @Param("entryId", new ZodValidationPipe(IdParamSchema)) entryId: string) {
-    const results = await this.listKnowledgeDocumentsUseCase.execute({ organizationId: membership.organizationId, knowledgeEntryId: entryId, actorRole: membership.role });
+  async listDocuments(@CurrentActor() actor: AuthenticatedActor, @CurrentMembershipContext() membership: MembershipContext, @Param("entryId", new ZodValidationPipe(IdParamSchema)) entryId: string) {
+    const results = await this.listKnowledgeDocumentsUseCase.execute({ organizationId: membership.organizationId, knowledgeEntryId: entryId, actorId: actor.userId, actorRole: membership.role });
     return results.map(presentKnowledgeDocument);
   }
 
   @Get("entries/:entryId/documents/:documentId")
   @HttpCode(HttpStatus.OK)
   async getDocument(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("entryId", new ZodValidationPipe(IdParamSchema)) entryId: string,
     @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
   ) {
-    const result = await this.getKnowledgeDocumentUseCase.execute({ organizationId: membership.organizationId, knowledgeEntryId: entryId, knowledgeDocumentId: documentId, actorRole: membership.role });
+    const result = await this.getKnowledgeDocumentUseCase.execute({ organizationId: membership.organizationId, knowledgeEntryId: entryId, knowledgeDocumentId: documentId, actorId: actor.userId, actorRole: membership.role });
     return presentKnowledgeDocumentDetail(result);
   }
 
@@ -342,19 +357,20 @@ export class KnowledgeController {
 
   @Get("entries/:entryId/versions")
   @HttpCode(HttpStatus.OK)
-  async listVersions(@CurrentMembershipContext() membership: MembershipContext, @Param("entryId", new ZodValidationPipe(IdParamSchema)) entryId: string) {
-    const results = await this.listKnowledgeVersionsUseCase.execute({ organizationId: membership.organizationId, knowledgeEntryId: entryId, actorRole: membership.role });
+  async listVersions(@CurrentActor() actor: AuthenticatedActor, @CurrentMembershipContext() membership: MembershipContext, @Param("entryId", new ZodValidationPipe(IdParamSchema)) entryId: string) {
+    const results = await this.listKnowledgeVersionsUseCase.execute({ organizationId: membership.organizationId, knowledgeEntryId: entryId, actorId: actor.userId, actorRole: membership.role });
     return results.map(presentKnowledgeEntryVersion);
   }
 
   @Get("entries/:entryId/versions/:versionNumber")
   @HttpCode(HttpStatus.OK)
   async getVersion(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("entryId", new ZodValidationPipe(IdParamSchema)) entryId: string,
     @Param("versionNumber", new ZodValidationPipe(VersionNumberParamSchema)) versionNumber: number,
   ) {
-    const result = await this.getKnowledgeVersionUseCase.execute({ organizationId: membership.organizationId, knowledgeEntryId: entryId, versionNumber, actorRole: membership.role });
+    const result = await this.getKnowledgeVersionUseCase.execute({ organizationId: membership.organizationId, knowledgeEntryId: entryId, versionNumber, actorId: actor.userId, actorRole: membership.role });
     return presentKnowledgeEntryVersion(result);
   }
 

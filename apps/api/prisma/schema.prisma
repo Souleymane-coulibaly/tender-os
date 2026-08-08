@@ -2095,6 +2095,27 @@ model KnowledgeEntry {
   /// substantielles, jamais par un ajout/retrait de tag.
   activeVersionNumber Int @default(1) @map("active_version_number")
 
+  /// V2 Sprint 8 — validation humaine (mission §15/§16), ORTHOGONALE au `status` pipeline
+  /// ci-dessus : dénormalise "la version ACTIVE est-elle validée" pour un filtrage bon marché
+  /// (recherche/liste, préparation RAG Sprint 9). Toute mutation substantielle (nouvelle version)
+  /// RÉINITIALISE ces deux champs à NULL — jamais un héritage automatique de confiance, même pour
+  /// un contenu IA (mission §16 "jamais automatiquement validée"). La vérité historique par
+  /// version vit sur `KnowledgeEntryVersion` ci-dessous (mission §71/72 : une ancienne version
+  /// validée le reste, même après qu'une nouvelle version soit créée).
+  validatedByUserId String?   @map("validated_by_user_id") @db.Uuid
+  validatedAt       DateTime? @map("validated_at")
+
+  /// V2 Sprint 8 — provenance (mission §18), renseignée uniquement par `PromoteChecklistItemToKnowledgeUseCase`
+  /// (jamais imposable par le client — reconstruite côté serveur). `sourceType` ci-dessus continue
+  /// de gouverner LE MÉCANISME (upload vs saisie manuelle) ; ces champs répondent à "d'où vient
+  /// cette entrée" sans dupliquer une taxonomie parallèle.
+  sourceTenderId          String?   @map("source_tender_id") @db.Uuid
+  sourceChecklistItemId   String?   @map("source_checklist_item_id") @db.Uuid
+  sourceDocumentId        String?   @map("source_document_id") @db.Uuid
+  sourceDocumentVersionId String?   @map("source_document_version_id") @db.Uuid
+  promotedByUserId        String?   @map("promoted_by_user_id") @db.Uuid
+  promotedAt              DateTime? @map("promoted_at")
+
   createdByUserId String  @map("created_by_user_id") @db.Uuid
   updatedByUserId String? @map("updated_by_user_id") @db.Uuid
 
@@ -2115,6 +2136,8 @@ model KnowledgeEntry {
   /// Filtre "client" (mission Sprint 5.1) — entrées d'un client donné ; `clientAccountId IS NULL`
   /// (via l'index partiel équivalent côté requêtes) sert au filtre "connaissances globales".
   @@index([organizationId, clientAccountId])
+  /// V2 Sprint 8 — filtre "validées uniquement" (préparation RAG Sprint 9, mission §31).
+  @@index([organizationId, validatedAt])
   @@map("knowledge_entries")
 }
 
@@ -2138,6 +2161,14 @@ model KnowledgeEntryVersion {
 
   createdByUserId String   @map("created_by_user_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at")
+
+  /// V2 Sprint 8 — vérité historique de validation POUR CETTE VERSION PRÉCISE (mission §71/72) :
+  /// jamais mutée après coup sauf par `ValidateKnowledgeEntryUseCase` ciblant la version ACTIVE au
+  /// moment de l'appel (voir `KnowledgeEntry.validatedAt`, dénormalisation de ce champ pour la
+  /// version active). Une ancienne version validée le reste pour toujours, même quand une version
+  /// plus récente est créée puis validée à son tour.
+  validatedByUserId String?   @map("validated_by_user_id") @db.Uuid
+  validatedAt       DateTime? @map("validated_at")
 
   @@unique([organizationId, knowledgeEntryId, versionNumber])
   @@map("knowledge_entry_versions")

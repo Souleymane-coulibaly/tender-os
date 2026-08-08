@@ -1,10 +1,11 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
+import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { KnowledgeEntryNotFoundError } from "../../domain/errors";
 import { KnowledgePermission } from "../../domain/knowledge-permission";
 import { assertHasKnowledgePermission } from "../policies/knowledge-authorization.policy";
-import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
+import { assertKnowledgeEntryClientAccess } from "../policies/knowledge-entry-client-access.policy";
 import { KNOWLEDGE_DOCUMENT_REPOSITORY, type KnowledgeDocumentRepository } from "../ports/knowledge-document.repository";
 import { KNOWLEDGE_ENTRY_REPOSITORY, type KnowledgeEntryRepository } from "../ports/knowledge-entry.repository";
 import { KNOWLEDGE_TAG_REPOSITORY, type KnowledgeTagRepository } from "../ports/knowledge-tag.repository";
@@ -24,8 +25,8 @@ export class RestoreKnowledgeEntryUseCase {
     @Inject(KNOWLEDGE_ENTRY_REPOSITORY) private readonly knowledgeEntryRepository: KnowledgeEntryRepository,
     @Inject(KNOWLEDGE_TAG_REPOSITORY) private readonly knowledgeTagRepository: KnowledgeTagRepository,
     @Inject(KNOWLEDGE_DOCUMENT_REPOSITORY) private readonly knowledgeDocumentRepository: KnowledgeDocumentRepository,
-    @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: RestoreKnowledgeEntryCommand): Promise<KnowledgeEntrySummary> {
@@ -35,18 +36,24 @@ export class RestoreKnowledgeEntryUseCase {
     if (!entry) {
       throw new KnowledgeEntryNotFoundError();
     }
+    await assertKnowledgeEntryClientAccess(this.assertClientAccessUseCase, { organizationId: command.organizationId, entry, actorId: command.actorId, actorRole: command.actorRole, permission: ClientPermission.ManageKnowledge });
 
     entry.restore(this.clock.now());
-    await this.knowledgeEntryRepository.save(entry);
 
-    await this.auditLogWriter.record({
-      organizationId: command.organizationId,
-      actorType: "USER",
-      actorId: command.actorId,
-      action: "knowledge_entry.restored",
-      resourceType: "knowledge_entry",
-      resourceId: entry.id,
-      requestId: command.requestId,
+    // Correctif audit Codex P1-02 (même motif qu'Archive) — l'entrée restaurée et son entrée
+    // d'audit sont écrites DANS LA MÊME transaction.
+    await this.knowledgeEntryRepository.saveWithAudit({
+      entry,
+      auditEntry: {
+        organizationId: command.organizationId,
+        actorType: "USER",
+        actorId: command.actorId,
+        action: "knowledge_entry.restored",
+        resourceType: "knowledge_entry",
+        resourceId: entry.id,
+        requestId: command.requestId,
+      },
+      outboxEvents: [],
     });
 
     const [tags, documents] = await Promise.all([

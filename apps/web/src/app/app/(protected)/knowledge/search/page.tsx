@@ -10,7 +10,7 @@ import { ApiErrorState } from "../../api-error-state";
 
 export const metadata: Metadata = { title: "Rechercher — Base de connaissances — TenderOS" };
 
-type SearchParams = { query?: string; category?: string };
+type SearchParams = { query?: string; category?: string; validatedOnly?: string };
 
 const MATCH_LOCATION_LABELS: Record<string, string> = {
   TITLE: "Titre",
@@ -44,6 +44,7 @@ export default async function KnowledgeSearchPage({ searchParams }: { searchPara
   if (query) {
     const searchQuery = new URLSearchParams({ query, limit: "20" });
     if (params.category) searchQuery.set("category", params.category);
+    if (params.validatedOnly === "true") searchQuery.set("validatedOnly", "true");
     try {
       results = await appApiFetch<{ items: KnowledgeSearchResult[]; total: number }>(
         `/api/v1/knowledge/search?${searchQuery.toString()}`,
@@ -85,6 +86,10 @@ export default async function KnowledgeSearchPage({ searchParams }: { searchPara
             ))}
           </select>
         </div>
+        <label className="flex items-center gap-2 pb-1.5 text-xs text-neutral-600">
+          <input type="checkbox" name="validatedOnly" value="true" defaultChecked={params.validatedOnly === "true"} />
+          Validées uniquement
+        </label>
         <button type="submit" className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
           Rechercher
         </button>

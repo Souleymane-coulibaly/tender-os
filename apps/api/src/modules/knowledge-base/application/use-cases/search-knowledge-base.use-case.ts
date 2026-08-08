@@ -20,6 +20,12 @@ export type SearchKnowledgeBaseQuery = Readonly<{
   createdAfter?: string | undefined;
   createdBefore?: string | undefined;
   clientAccountId?: string | "GLOBAL" | undefined;
+  /** V2 Sprint 8 §Décision 8/§31 — préparation RAG sans nouvelle infrastructure de recherche
+   *  (mission §29/§80) : transmis TEL QUEL au `KnowledgeSearchProvider`, filtré côté SQL (colonne
+   *  `validatedAt` déjà indexée, `@@index([organizationId, validatedAt])`) — jamais un filtrage en
+   *  mémoire après coup, `total` reste fiable (correctif audit Codex P2).
+   */
+  validatedOnly?: boolean | undefined;
   limit: number;
   offset: number;
 }>;
@@ -61,6 +67,7 @@ export class SearchKnowledgeBaseUseCase {
       createdBefore: query.createdBefore ? new Date(query.createdBefore) : undefined,
       clientAccountId: query.clientAccountId,
       restrictToClientAccountIdsOrGlobal: accessible.allClients ? undefined : accessible.clientAccountIds,
+      validatedOnly: query.validatedOnly,
       limit: query.limit,
       offset: query.offset,
     });

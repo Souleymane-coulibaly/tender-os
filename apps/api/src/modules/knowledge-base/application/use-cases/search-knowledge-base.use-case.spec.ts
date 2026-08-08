@@ -81,6 +81,18 @@ describe("SearchKnowledgeBaseUseCase", () => {
     expect(result.items).toHaveLength(0);
   });
 
+  it("forwards validatedOnly to the search provider — never a second in-memory filter here (correctif audit Codex P2, total/pagination doivent rester fiables)", async () => {
+    const entryRepository = new InMemoryKnowledgeEntryRepository();
+    const searchProvider = new FakeKnowledgeSearchProvider([]);
+    const useCase = new SearchKnowledgeBaseUseCase(searchProvider, entryRepository, new InMemoryKnowledgeTagRepository(), buildListAccessibleClientsUseCase());
+
+    await useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "CONTRIBUTOR", query: "modèle", validatedOnly: true, limit: 20, offset: 0 });
+    expect(searchProvider.lastCriteria?.validatedOnly).toBe(true);
+
+    await useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "CONTRIBUTOR", query: "modèle", limit: 20, offset: 0 });
+    expect(searchProvider.lastCriteria?.validatedOnly).toBeUndefined();
+  });
+
   it("rejects a role without Search permission", async () => {
     const entryRepository = new InMemoryKnowledgeEntryRepository();
     const useCase = new SearchKnowledgeBaseUseCase(new FakeKnowledgeSearchProvider([]), entryRepository, new InMemoryKnowledgeTagRepository(), buildListAccessibleClientsUseCase());

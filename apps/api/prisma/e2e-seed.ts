@@ -139,7 +139,9 @@ async function main(): Promise<void> {
 
     // V2 Sprint 7 — second CLIENT de la MÊME organisation, sur lequel le collaborateur n'a AUCUNE
     // affectation (mission §5/§63 : l'isolation same-org cross-client, jamais couverte par la seule
-    // isolation inter-organisation). Réservé au scénario E2E de sécurité Workspace.
+    // isolation inter-organisation). Réservé au scénario E2E de sécurité Workspace — et, depuis le
+    // V2 Sprint 8, réutilisé tel quel (même `clientAccountId`, désormais exposé) pour la preuve
+    // Knowledge Base équivalente (mission §64/§70).
     const otherClientAccountId = randomUUID();
     await prisma.clientAccount.create({
       data: { id: otherClientAccountId, organizationId, name: `Client E2E B ${runId}`, nameNormalized: `client e2e b ${runId}`, status: "ACTIVE", createdBy: userId },
@@ -244,6 +246,7 @@ async function main(): Promise<void> {
         collaboratorPassword,
         collaboratorUserId,
         tenderInOtherClientId,
+        otherClientAccountId,
         other,
       }),
     );

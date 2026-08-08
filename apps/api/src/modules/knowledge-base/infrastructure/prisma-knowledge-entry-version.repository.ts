@@ -13,6 +13,8 @@ function toDomain(record: {
   snapshot: unknown;
   createdByUserId: string;
   createdAt: Date;
+  validatedByUserId: string | null;
+  validatedAt: Date | null;
 }): KnowledgeEntryVersion {
   return KnowledgeEntryVersion.rehydrate({
     id: record.id,
@@ -23,6 +25,8 @@ function toDomain(record: {
     snapshot: record.snapshot as KnowledgeEntryVersion["snapshot"],
     createdByUserId: record.createdByUserId,
     createdAt: record.createdAt,
+    validatedByUserId: record.validatedByUserId ?? undefined,
+    validatedAt: record.validatedAt ?? undefined,
   });
 }
 
@@ -39,6 +43,8 @@ export function toKnowledgeEntryVersionPersistence(version: KnowledgeEntryVersio
     snapshot: version.snapshot as unknown as Prisma.InputJsonValue,
     createdByUserId: version.createdByUserId,
     createdAt: version.createdAt,
+    validatedByUserId: version.validatedByUserId ?? null,
+    validatedAt: version.validatedAt ?? null,
   };
 }
 
@@ -63,5 +69,12 @@ export class PrismaKnowledgeEntryVersionRepository implements KnowledgeEntryVers
       where: { organizationId: input.organizationId, knowledgeEntryId: input.knowledgeEntryId, versionNumber: input.versionNumber },
     });
     return record ? toDomain(record) : null;
+  }
+
+  async saveValidation(version: KnowledgeEntryVersion): Promise<void> {
+    await this.prisma.knowledgeEntryVersion.update({
+      where: { id: version.id },
+      data: { validatedByUserId: version.validatedByUserId ?? null, validatedAt: version.validatedAt ?? null },
+    });
   }
 }

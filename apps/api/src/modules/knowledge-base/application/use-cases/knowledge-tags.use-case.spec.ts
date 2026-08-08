@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { AssertClientAccessUseCase } from "../../../client-portfolio";
 import { KnowledgeCategory } from "../../domain/knowledge-category";
 import { KnowledgeEntry } from "../../domain/knowledge-entry.aggregate";
 import { KnowledgeSourceType } from "../../domain/knowledge-source-type";
@@ -11,6 +12,7 @@ const ORG = randomUUID();
 const SPACE = randomUUID();
 const ACTOR = randomUUID();
 const NOW = new Date("2026-07-30T10:00:00Z");
+const UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE = {} as AssertClientAccessUseCase;
 
 describe("AddKnowledgeTagUseCase / RemoveKnowledgeTagUseCase", () => {
   let entryRepository: InMemoryKnowledgeEntryRepository;
@@ -21,8 +23,8 @@ describe("AddKnowledgeTagUseCase / RemoveKnowledgeTagUseCase", () => {
   beforeEach(() => {
     entryRepository = new InMemoryKnowledgeEntryRepository();
     tagRepository = new InMemoryKnowledgeTagRepository();
-    addUseCase = new AddKnowledgeTagUseCase(entryRepository, tagRepository, new InMemoryAuditLogWriter(), new FixedClock());
-    removeUseCase = new RemoveKnowledgeTagUseCase(entryRepository, tagRepository, new InMemoryAuditLogWriter());
+    addUseCase = new AddKnowledgeTagUseCase(entryRepository, tagRepository, new InMemoryAuditLogWriter(), new FixedClock(), UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE);
+    removeUseCase = new RemoveKnowledgeTagUseCase(entryRepository, tagRepository, new InMemoryAuditLogWriter(), UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE);
   });
 
   async function seedEntry(): Promise<string> {

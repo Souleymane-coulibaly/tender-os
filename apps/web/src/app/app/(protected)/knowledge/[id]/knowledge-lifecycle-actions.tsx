@@ -5,10 +5,19 @@ import {
   archiveKnowledgeEntryAction,
   deleteKnowledgeEntryAction,
   restoreKnowledgeEntryAction,
+  validateKnowledgeEntryAction,
 } from "../../../knowledge-actions";
-import type { KnowledgeEntrySummary } from "../../../../../lib/knowledge-types";
+import { isKnowledgeEntryValidatable, type KnowledgeEntrySummary } from "../../../../../lib/knowledge-types";
 
-export function KnowledgeLifecycleActions({ entry, canDelete }: { entry: KnowledgeEntrySummary; canDelete: boolean }) {
+export function KnowledgeLifecycleActions({
+  entry,
+  canDelete,
+  canValidate = false,
+}: {
+  entry: KnowledgeEntrySummary;
+  canDelete: boolean;
+  canValidate?: boolean;
+}) {
   const [error, setError] = useState<string | undefined>();
   const [isPending, setIsPending] = useState(false);
   const [confirmingArchive, setConfirmingArchive] = useState(false);
@@ -22,6 +31,13 @@ export function KnowledgeLifecycleActions({ entry, canDelete }: { entry: Knowled
     const result = await archiveKnowledgeEntryAction(entry.id);
     setIsPending(false);
     setConfirmingArchive(false);
+    setError(result.error);
+  }
+
+  async function handleValidate() {
+    setIsPending(true);
+    const result = await validateKnowledgeEntryAction(entry.id);
+    setIsPending(false);
     setError(result.error);
   }
 
@@ -42,6 +58,16 @@ export function KnowledgeLifecycleActions({ entry, canDelete }: { entry: Knowled
   return (
     <div className="flex flex-col items-end gap-2">
       <div className="flex items-center gap-2">
+        {canValidate && isKnowledgeEntryValidatable(entry) ? (
+          <button
+            type="button"
+            onClick={handleValidate}
+            disabled={isPending}
+            className="rounded border border-green-300 px-3 py-1.5 text-sm font-medium text-green-800 hover:bg-green-50 disabled:opacity-50"
+          >
+            Valider
+          </button>
+        ) : null}
         {!isArchived ? (
           !confirmingArchive ? (
             <button

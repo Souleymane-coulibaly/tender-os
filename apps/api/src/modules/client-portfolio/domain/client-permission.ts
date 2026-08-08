@@ -30,6 +30,10 @@ export const ClientPermission = {
    *  `CLIENT_READ_KNOWLEDGE` documenté dans la liste d'exemples de la mission, nécessaire pour
    *  distinguer lecture et écriture (mission §"CLIENT_MANAGER : consulter ET MODIFIER"). */
   ManageKnowledge: "CLIENT_MANAGE_KNOWLEDGE",
+  /** V2 Sprint 8 — même motif additif que `ValidateGeneration`/`ValidateWorkspace` : la validation
+   *  (décision de confiance réutilisable, mission §15/§16) est un palier "règle stricte" distinct
+   *  de la simple création/modification, réservé au CLIENT_MANAGER ci-dessous. */
+  ValidateKnowledge: "CLIENT_VALIDATE_KNOWLEDGE",
   /** Sprint 6 (Generation) — lire/lancer-éditer-régénérer/valider une génération IA pour ce client,
    *  même motif additif que `ManageKnowledge` : distingue lecture, écriture, et validation plutôt
    *  que de réutiliser une permission existante sémantiquement différente. */
@@ -148,6 +152,7 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ReadAnalysis,
   ClientPermission.ReadKnowledge,
   ClientPermission.ManageKnowledge,
+  ClientPermission.ValidateKnowledge,
   ClientPermission.ReadGeneration,
   ClientPermission.ManageGeneration,
   ClientPermission.ValidateGeneration,
@@ -219,6 +224,9 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadAnalysis,
     ClientPermission.ReadKnowledge,
     ClientPermission.ManageKnowledge,
+    /** V2 Sprint 8 — le CLIENT_MANAGER a tous les droits Knowledge Base, y compris valider une
+     *  entrée ("règle stricte", même motif que `ValidateWorkspace`/`ValidateGeneration`). */
+    ClientPermission.ValidateKnowledge,
     ClientPermission.ReadGeneration,
     ClientPermission.ManageGeneration,
     ClientPermission.ValidateGeneration,

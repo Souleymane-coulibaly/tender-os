@@ -677,6 +677,27 @@ export async function validateChecklistItemAction(tenderId: string, itemId: stri
   return {};
 }
 
+/** V2 Sprint 8 §19 — promotion gouvernée, jamais silencieuse : l'utilisateur choisit
+ *  explicitement le titre/la catégorie/les tags avant que la nouvelle entrée n'existe. */
+export async function promoteChecklistItemToKnowledgeAction(
+  tenderId: string,
+  itemId: string,
+  input: { title: string; category: string; tags?: string[] },
+): Promise<{ error?: string; knowledgeEntryId?: string }> {
+  let entry: { id: string };
+  try {
+    entry = await appApiFetch<{ id: string }>(`/api/v1/tenders/${tenderId}/checklist/${itemId}/promote-to-knowledge`, {
+      method: "POST",
+      body: JSON.stringify({ title: input.title, category: input.category, tags: input.tags }),
+    });
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+  revalidatePath(`/app/tenders/${tenderId}`);
+  revalidatePath("/app/knowledge");
+  return { knowledgeEntryId: entry.id };
+}
+
 export async function markChecklistItemNotApplicableAction(tenderId: string, itemId: string): Promise<{ error?: string }> {
   try {
     await appApiFetch(`/api/v1/tenders/${tenderId}/checklist/${itemId}/mark-not-applicable`, { method: "POST" });

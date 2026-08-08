@@ -51,6 +51,18 @@ export type KnowledgeEntrySummary = {
   tags: KnowledgeTagSummary[];
   documentCount: number;
   activeVersionNumber: number;
+  /** V2 Sprint 8 §15/§16 — validation de la version ACTIVE (dénormalisée), `undefined` tant
+   *  qu'aucun humain n'a validé explicitement — jamais une confiance héritée ou implicite. */
+  validatedByUserId?: string | undefined;
+  validatedAt?: string | undefined;
+  /** V2 Sprint 8 §17/§18 — provenance immuable, renseignée uniquement à la création (jamais
+   *  modifiable ensuite) : `undefined` pour toute entrée qui n'est pas née d'une promotion. */
+  sourceTenderId?: string | undefined;
+  sourceChecklistItemId?: string | undefined;
+  sourceDocumentId?: string | undefined;
+  sourceDocumentVersionId?: string | undefined;
+  promotedByUserId?: string | undefined;
+  promotedAt?: string | undefined;
   createdByUserId: string;
   updatedByUserId?: string | undefined;
   archivedAt?: string | undefined;
@@ -74,6 +86,14 @@ export function toKnowledgeEntrySummary(entry: KnowledgeEntry, tags: readonly Kn
     tags: tags.map(toKnowledgeTagSummary),
     documentCount,
     activeVersionNumber: entry.activeVersionNumber,
+    validatedByUserId: entry.validatedByUserId,
+    validatedAt: entry.validatedAt?.toISOString(),
+    sourceTenderId: entry.sourceTenderId,
+    sourceChecklistItemId: entry.sourceChecklistItemId,
+    sourceDocumentId: entry.sourceDocumentId,
+    sourceDocumentVersionId: entry.sourceDocumentVersionId,
+    promotedByUserId: entry.promotedByUserId,
+    promotedAt: entry.promotedAt?.toISOString(),
     createdByUserId: entry.createdByUserId,
     updatedByUserId: entry.updatedByUserId,
     archivedAt: entry.archivedAt?.toISOString(),
@@ -154,6 +174,10 @@ export type KnowledgeEntryVersionSummary = {
   snapshot: Record<string, unknown>;
   createdByUserId: string;
   createdAt: string;
+  /** V2 Sprint 8 §71/72 — vérité historique de validation PROPRE à cette version (jamais celle de
+   *  la version active de l'entrée) : reste vraie même après qu'une version plus récente existe. */
+  validatedByUserId?: string | undefined;
+  validatedAt?: string | undefined;
 };
 
 export function toKnowledgeEntryVersionSummary(version: KnowledgeEntryVersion): KnowledgeEntryVersionSummary {
@@ -165,6 +189,8 @@ export function toKnowledgeEntryVersionSummary(version: KnowledgeEntryVersion): 
     snapshot: version.snapshot,
     createdByUserId: version.createdByUserId,
     createdAt: version.createdAt.toISOString(),
+    validatedByUserId: version.validatedByUserId,
+    validatedAt: version.validatedAt?.toISOString(),
   };
 }
 

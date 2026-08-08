@@ -53,6 +53,9 @@ export function KnowledgeVersionsSection({
                     {new Date(version.createdAt).toLocaleString("fr-FR")}
                     {version.reason ? ` — ${version.reason}` : ""}
                   </p>
+                  {version.validatedAt ? (
+                    <p className="text-xs text-emerald-700">Validée le {new Date(version.validatedAt).toLocaleDateString("fr-FR")}</p>
+                  ) : null}
                 </div>
                 {canRestore && version.versionNumber !== activeVersionNumber ? (
                   <button

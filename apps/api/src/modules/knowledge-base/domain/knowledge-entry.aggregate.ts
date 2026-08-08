@@ -1,7 +1,13 @@
 import type { KnowledgeCategory } from "./knowledge-category";
 import { ALLOWED_KNOWLEDGE_ENTRY_TRANSITIONS, KnowledgeEntryStatus } from "./knowledge-entry-status";
 import { KnowledgeSourceType } from "./knowledge-source-type";
-import { InvalidKnowledgeEntryStatusTransitionError, KnowledgeEntryArchivedError, KnowledgeEntryNotArchivedError } from "./errors";
+import {
+  InvalidKnowledgeEntryStatusTransitionError,
+  KnowledgeEntryAlreadyValidatedError,
+  KnowledgeEntryArchivedError,
+  KnowledgeEntryNotArchivedError,
+  KnowledgeEntryNotReadyForValidationError,
+} from "./errors";
 
 export type KnowledgeEntryProps = {
   id: string;
@@ -30,6 +36,20 @@ export type KnowledgeEntryProps = {
    *  lourde") : les tags sont gérés hors de cet agrégat, sans jamais appeler les méthodes
    *  ci-dessous. */
   activeVersionNumber: number;
+  /** V2 Sprint 8 §15/§16 — dénormalisation "la version ACTIVE est-elle validée" (voir le
+   *  commentaire du champ Prisma pour la justification complète). `undefined` par défaut, y
+   *  compris pour une entrée `AI_GENERATED`/importée — jamais une confiance héritée. */
+  validatedByUserId?: string | undefined;
+  validatedAt?: Date | undefined;
+  /** V2 Sprint 8 §18 — provenance, renseignée UNIQUEMENT à la création par
+   *  `PromoteChecklistItemToKnowledgeUseCase` (jamais imposable par le client, jamais modifiable
+   *  ensuite — même motif d'immutabilité que `clientAccountId` ci-dessus). */
+  sourceTenderId?: string | undefined;
+  sourceChecklistItemId?: string | undefined;
+  sourceDocumentId?: string | undefined;
+  sourceDocumentVersionId?: string | undefined;
+  promotedByUserId?: string | undefined;
+  promotedAt?: Date | undefined;
   createdByUserId: string;
   updatedByUserId?: string | undefined;
   archivedAt?: Date | undefined;
@@ -66,6 +86,12 @@ export class KnowledgeEntry {
     sourceType: KnowledgeSourceType;
     language?: string | undefined;
     metadata: Record<string, unknown>;
+    sourceTenderId?: string | undefined;
+    sourceChecklistItemId?: string | undefined;
+    sourceDocumentId?: string | undefined;
+    sourceDocumentVersionId?: string | undefined;
+    promotedByUserId?: string | undefined;
+    promotedAt?: Date | undefined;
     createdByUserId: string;
     occurredAt: Date;
   }): KnowledgeEntry {
@@ -84,6 +110,14 @@ export class KnowledgeEntry {
       language: input.language,
       metadata: input.metadata,
       activeVersionNumber: 1,
+      validatedByUserId: undefined,
+      validatedAt: undefined,
+      sourceTenderId: input.sourceTenderId,
+      sourceChecklistItemId: input.sourceChecklistItemId,
+      sourceDocumentId: input.sourceDocumentId,
+      sourceDocumentVersionId: input.sourceDocumentVersionId,
+      promotedByUserId: input.promotedByUserId,
+      promotedAt: input.promotedAt,
       createdByUserId: input.createdByUserId,
       updatedByUserId: undefined,
       archivedAt: undefined,
@@ -124,6 +158,12 @@ export class KnowledgeEntry {
     if (update.metadata !== undefined) this.props.metadata = update.metadata;
 
     this.props.activeVersionNumber += 1;
+    // Mission §16/§71 — une nouvelle version active n'hérite JAMAIS de la confiance de la
+    // précédente : la validation historique de l'ancienne version reste vraie sur SA propre ligne
+    // `KnowledgeEntryVersion`, mais cette dénormalisation (validation de la version ACTIVE)
+    // redémarre à zéro tant qu'un humain ne la revalide pas explicitement.
+    this.props.validatedByUserId = undefined;
+    this.props.validatedAt = undefined;
     this.props.updatedByUserId = updatedByUserId;
     this.props.updatedAt = occurredAt;
   }
@@ -143,6 +183,10 @@ export class KnowledgeEntry {
     this.assertNotArchived();
     this.transitionTo(KnowledgeEntryStatus.Processing, occurredAt);
     this.props.activeVersionNumber += 1;
+    // Même motif que `updateMetadata` — un nouveau document constitue une nouvelle version active,
+    // jamais validée par défaut (mission §16/§71).
+    this.props.validatedByUserId = undefined;
+    this.props.validatedAt = undefined;
   }
 
   completeDocumentProcessing(
@@ -151,6 +195,21 @@ export class KnowledgeEntry {
   ): void {
     this.transitionTo(input.outcome, occurredAt);
     if (input.language !== undefined) this.props.language = input.language;
+  }
+
+  /** V2 Sprint 8 §15/§16 — décision humaine explicite, jamais implicite : seule la version ACTIVE
+   *  d'une entrée READY/PARTIALLY_READY peut être marquée validée (une entrée DRAFT/PROCESSING/
+   *  FAILED n'a rien de stable à valider, une entrée ARCHIVED doit d'abord être restaurée). Refuse
+   *  une revalidation silencieuse de la même version déjà validée (mission §16, généralisé). */
+  validate(validatedByUserId: string, occurredAt: Date): void {
+    if (this.props.status !== KnowledgeEntryStatus.Ready && this.props.status !== KnowledgeEntryStatus.PartiallyReady) {
+      throw new KnowledgeEntryNotReadyForValidationError({ status: this.props.status });
+    }
+    if (this.props.validatedAt !== undefined) {
+      throw new KnowledgeEntryAlreadyValidatedError();
+    }
+    this.props.validatedByUserId = validatedByUserId;
+    this.props.validatedAt = occurredAt;
   }
 
   archive(occurredAt: Date): void {
@@ -203,6 +262,30 @@ export class KnowledgeEntry {
   }
   get activeVersionNumber(): number {
     return this.props.activeVersionNumber;
+  }
+  get validatedByUserId(): string | undefined {
+    return this.props.validatedByUserId;
+  }
+  get validatedAt(): Date | undefined {
+    return this.props.validatedAt;
+  }
+  get sourceTenderId(): string | undefined {
+    return this.props.sourceTenderId;
+  }
+  get sourceChecklistItemId(): string | undefined {
+    return this.props.sourceChecklistItemId;
+  }
+  get sourceDocumentId(): string | undefined {
+    return this.props.sourceDocumentId;
+  }
+  get sourceDocumentVersionId(): string | undefined {
+    return this.props.sourceDocumentVersionId;
+  }
+  get promotedByUserId(): string | undefined {
+    return this.props.promotedByUserId;
+  }
+  get promotedAt(): Date | undefined {
+    return this.props.promotedAt;
   }
   get createdByUserId(): string {
     return this.props.createdByUserId;

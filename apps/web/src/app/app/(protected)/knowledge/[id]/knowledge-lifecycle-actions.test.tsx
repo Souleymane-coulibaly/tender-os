@@ -7,15 +7,19 @@ import type { KnowledgeEntrySummary } from "../../../../../lib/knowledge-types";
 const archiveKnowledgeEntryAction = vi.fn(async (_entryId: string) => ({}));
 const restoreKnowledgeEntryAction = vi.fn(async (_entryId: string) => ({}));
 const deleteKnowledgeEntryAction = vi.fn(async (_entryId: string) => ({}));
+const validateKnowledgeEntryAction = vi.fn(async (_entryId: string) => ({}));
 
 vi.mock("../../../knowledge-actions", () => ({
   archiveKnowledgeEntryAction: (entryId: string) => archiveKnowledgeEntryAction(entryId),
   restoreKnowledgeEntryAction: (entryId: string) => restoreKnowledgeEntryAction(entryId),
   deleteKnowledgeEntryAction: (entryId: string) => deleteKnowledgeEntryAction(entryId),
+  validateKnowledgeEntryAction: (entryId: string) => validateKnowledgeEntryAction(entryId),
 }));
 
 const readyEntry = { id: "entry-1", status: "READY" } as KnowledgeEntrySummary;
 const archivedEntry = { id: "entry-1", status: "ARCHIVED" } as KnowledgeEntrySummary;
+const validatedEntry = { id: "entry-1", status: "READY", validatedAt: "2026-08-08T10:00:00Z" } as KnowledgeEntrySummary;
+const draftEntry = { id: "entry-1", status: "DRAFT" } as KnowledgeEntrySummary;
 
 describe("KnowledgeLifecycleActions", () => {
   beforeEach(() => {
@@ -65,5 +69,27 @@ describe("KnowledgeLifecycleActions", () => {
   it("never permanently deletes a non-archived entry (no delete button while READY)", () => {
     render(<KnowledgeLifecycleActions entry={readyEntry} canDelete={true} />);
     expect(screen.queryByRole("button", { name: "Supprimer définitivement" })).not.toBeInTheDocument();
+  });
+
+  it("shows Valider for a READY, not-yet-validated entry when the actor has validate permission, and calls the action on click", async () => {
+    const user = userEvent.setup();
+    render(<KnowledgeLifecycleActions entry={readyEntry} canDelete={false} canValidate={true} />);
+    await user.click(screen.getByRole("button", { name: "Valider" }));
+    expect(validateKnowledgeEntryAction).toHaveBeenCalledWith("entry-1");
+  });
+
+  it("never shows Valider when the actor lacks validate permission", () => {
+    render(<KnowledgeLifecycleActions entry={readyEntry} canDelete={false} canValidate={false} />);
+    expect(screen.queryByRole("button", { name: "Valider" })).not.toBeInTheDocument();
+  });
+
+  it("never shows Valider for an already-validated entry", () => {
+    render(<KnowledgeLifecycleActions entry={validatedEntry} canDelete={false} canValidate={true} />);
+    expect(screen.queryByRole("button", { name: "Valider" })).not.toBeInTheDocument();
+  });
+
+  it("never shows Valider for a DRAFT entry (nothing stable to validate yet)", () => {
+    render(<KnowledgeLifecycleActions entry={draftEntry} canDelete={false} canValidate={true} />);
+    expect(screen.queryByRole("button", { name: "Valider" })).not.toBeInTheDocument();
   });
 });

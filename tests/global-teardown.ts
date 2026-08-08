@@ -59,6 +59,16 @@ export default async function globalTeardown(): Promise<void> {
       await prisma.opportunityQuickScore.deleteMany({ where: { organizationId } });
       await prisma.opportunity.deleteMany({ where: { organizationId } });
       await prisma.tender.deleteMany({ where: { organizationId } });
+      // V2 Sprint 8 (Bibliothèque intelligente) — `KnowledgeEntry.clientAccountId` est aussi une
+      // FK vers `clientAccount` : à supprimer AVANT `clientAccount` ci-dessous, même motif que
+      // `Opportunity` ci-dessus.
+      await prisma.knowledgeEntryTag.deleteMany({ where: { organizationId } });
+      await prisma.knowledgeChunk.deleteMany({ where: { organizationId } });
+      await prisma.knowledgeDocument.deleteMany({ where: { organizationId } });
+      await prisma.knowledgeEntryVersion.deleteMany({ where: { organizationId } });
+      await prisma.knowledgeEntry.deleteMany({ where: { organizationId } });
+      await prisma.knowledgeTag.deleteMany({ where: { organizationId } });
+      await prisma.knowledgeSpace.deleteMany({ where: { organizationId } });
       // V2 Sprint 5 (audit Codex round 2) — le seed crée désormais une ClientAssignment
       // (CLIENT_MANAGER) pour que l'OWNER e2e emprunte le chemin normal GO/NO-GO ; à supprimer
       // avant `clientAccount` (même motif de FK que ci-dessus).

@@ -18,6 +18,11 @@ export type KnowledgeEntryVersionProps = {
   snapshot: KnowledgeEntryVersionSnapshot;
   createdByUserId: string;
   createdAt: Date;
+  /** V2 Sprint 8 §71/72 — vérité historique de validation POUR CETTE VERSION (voir le commentaire
+   *  du champ Prisma). Seul champ de cette classe qui existe hors du `snapshot` immuable — voir
+   *  `withValidation` : jamais une mutation en place, toujours une nouvelle instance. */
+  validatedByUserId?: string | undefined;
+  validatedAt?: Date | undefined;
 };
 
 /**
@@ -49,11 +54,21 @@ export class KnowledgeEntryVersion {
       snapshot: input.snapshot,
       createdByUserId: input.createdByUserId,
       createdAt: input.occurredAt,
+      validatedByUserId: undefined,
+      validatedAt: undefined,
     });
   }
 
   static rehydrate(props: KnowledgeEntryVersionProps): KnowledgeEntryVersion {
     return new KnowledgeEntryVersion(props);
+  }
+
+  /** V2 Sprint 8 — jamais une mutation en place (voir le commentaire de classe) : retourne une
+   *  NOUVELLE instance portant le stamp de validation, que l'appelant persiste comme une mise à
+   *  jour ciblée des deux colonnes de validation (pas une nouvelle ligne — le `snapshot`/
+   *  `versionNumber` restent identiques). */
+  withValidation(validatedByUserId: string, occurredAt: Date): KnowledgeEntryVersion {
+    return new KnowledgeEntryVersion({ ...this.props, validatedByUserId, validatedAt: occurredAt });
   }
 
   get id(): string {
@@ -79,5 +94,11 @@ export class KnowledgeEntryVersion {
   }
   get createdAt(): Date {
     return this.props.createdAt;
+  }
+  get validatedByUserId(): string | undefined {
+    return this.props.validatedByUserId;
+  }
+  get validatedAt(): Date | undefined {
+    return this.props.validatedAt;
   }
 }

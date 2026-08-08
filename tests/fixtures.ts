@@ -20,6 +20,10 @@ export type E2eFixture = E2eOtherOrgFixture & {
   /** V2 Sprint 7 — Tender d'un second CLIENT de la MÊME organisation, sur lequel `collaborator` n'a
    *  AUCUNE affectation — preuve E2E de l'isolation same-org cross-client (mission §63). */
   tenderInOtherClientId: string;
+  /** V2 Sprint 8 — `clientAccountId` de ce même second client (même motif que `tenderInOtherClientId`
+   *  ci-dessus), nécessaire à la preuve Knowledge Base : les entrées y sont scopées directement par
+   *  `clientAccountId`, jamais par un `tenderId`. */
+  otherClientAccountId: string;
 };
 
 /** Correctif audit Codex P2-003 — relit les identifiants réellement créés en base par

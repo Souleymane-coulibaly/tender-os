@@ -122,6 +122,15 @@ export class CreateKnowledgeEntryUseCase {
         requestId: command.requestId,
         metadata: { category, sourceType: KnowledgeSourceType.Manual, clientAccountId: command.clientAccountId },
       },
+      outboxEvents: [
+        {
+          eventType: "KnowledgeEntryCreated",
+          aggregateType: "KnowledgeEntry",
+          aggregateId: entry.id,
+          payload: { category, sourceType: KnowledgeSourceType.Manual, clientAccountId: command.clientAccountId ?? null },
+          occurredAt,
+        },
+      ],
     });
 
     return toKnowledgeEntrySummary(entry, tags, 0);

@@ -15,6 +15,7 @@ export type KnowledgeCategory =
   | "TECHNICAL_MEMORY"
   | "RESPONSE_TEMPLATE"
   | "COMMERCIAL_DOCUMENT"
+  | "IMAGE"
   | "OTHER";
 
 export type KnowledgeEntryStatus = "DRAFT" | "PROCESSING" | "READY" | "PARTIALLY_READY" | "FAILED" | "ARCHIVED";
@@ -40,6 +41,17 @@ export type KnowledgeEntrySummary = {
   tags: KnowledgeTagSummary[];
   documentCount: number;
   activeVersionNumber: number;
+  /** V2 Sprint 8 §15/§16 — validation de la version ACTIVE (dénormalisée), absente tant qu'aucun
+   *  humain n'a validé explicitement — jamais une confiance héritée ou implicite. */
+  validatedByUserId?: string;
+  validatedAt?: string;
+  /** V2 Sprint 8 §17/§18 — provenance immuable (promotion depuis un ChecklistItem de Tender). */
+  sourceTenderId?: string;
+  sourceChecklistItemId?: string;
+  sourceDocumentId?: string;
+  sourceDocumentVersionId?: string;
+  promotedByUserId?: string;
+  promotedAt?: string;
   createdByUserId: string;
   updatedByUserId?: string;
   archivedAt?: string;
@@ -87,6 +99,9 @@ export type KnowledgeEntryVersionSummary = {
   snapshot: Record<string, unknown>;
   createdByUserId: string;
   createdAt: string;
+  /** V2 Sprint 8 §71/72 — vérité historique de validation PROPRE à cette version. */
+  validatedByUserId?: string;
+  validatedAt?: string;
 };
 
 export type KnowledgeSearchResult = {
@@ -121,6 +136,7 @@ export const KNOWLEDGE_CATEGORY_LABELS: Record<KnowledgeCategory, string> = {
   TECHNICAL_MEMORY: "Mémoire technique",
   RESPONSE_TEMPLATE: "Modèle de réponse",
   COMMERCIAL_DOCUMENT: "Document commercial",
+  IMAGE: "Image",
   OTHER: "Autre",
 };
 
@@ -170,6 +186,18 @@ export function canManageKnowledgeLifecycle(role: string | undefined): boolean {
 
 export function canDeleteKnowledgeEntry(role: string | undefined): boolean {
   return role !== undefined && ADMIN_TIER.includes(role);
+}
+
+/** Mission V2 Sprint 8 §15/§16/§21 — palier Admin uniquement (même motif que
+ *  `canDeleteKnowledgeEntry`), jamais accordée au CONTRIBUTOR. */
+export function canValidateKnowledgeEntry(role: string | undefined): boolean {
+  return role !== undefined && ADMIN_TIER.includes(role);
+}
+
+/** Mission §15/§16 — seule la version ACTIVE d'une entrée READY/PARTIALLY_READY, pas encore
+ *  validée, peut être validée (même garde que le domaine backend, dupliquée ici pour l'affichage). */
+export function isKnowledgeEntryValidatable(entry: Pick<KnowledgeEntrySummary, "status" | "validatedAt">): boolean {
+  return (entry.status === "READY" || entry.status === "PARTIALLY_READY") && !entry.validatedAt;
 }
 
 export function formatProvenanceLocation(result: {

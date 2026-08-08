@@ -18,6 +18,7 @@ import type {
   ReserveKnowledgeDocumentOutcome,
 } from "../application/ports/knowledge-document.repository";
 import type { KnowledgeChunkRepository } from "../application/ports/knowledge-chunk.repository";
+import type { OutboxEventInput } from "../../outbox";
 import type { KnowledgeEntryVersionRepository } from "../application/ports/knowledge-entry-version.repository";
 import type { KnowledgeEntryRepository, ListKnowledgeEntriesFilter, ListKnowledgeEntriesResult } from "../application/ports/knowledge-entry.repository";
 import type { KnowledgeSearchCriteria, KnowledgeSearchMatch, KnowledgeSearchProvider, KnowledgeSearchResultPage } from "../application/ports/knowledge-search-provider";
@@ -40,6 +41,13 @@ export class InMemoryAuditLogWriter implements AuditLogWriter {
   readonly entries: KnowledgeAuditLogEntry[] = [];
   async record(entry: KnowledgeAuditLogEntry): Promise<void> {
     this.entries.push(entry);
+  }
+}
+
+export class FakeOutboxWriter {
+  readonly events: OutboxEventInput[] = [];
+  async write(input: { organizationId: string; events: readonly OutboxEventInput[] }): Promise<void> {
+    this.events.push(...input.events);
   }
 }
 
@@ -88,6 +96,10 @@ export class InMemoryKnowledgeEntryRepository implements KnowledgeEntryRepositor
    *  correction audit Codex P1-02, Sprint 4.1/4.2). */
   failNextCreateWithVersionAndTags = false;
 
+  /** V2 Sprint 8 — enregistre tous les événements Outbox écrits par ce fake, pour les tests qui
+   *  veulent vérifier qu'un événement précis a bien été émis (même motif que `InMemoryAuditLogWriter.entries`). */
+  readonly outboxEvents: OutboxEventInput[] = [];
+
   async findById(input: { organizationId: string; knowledgeEntryId: string }): Promise<KnowledgeEntry | null> {
     const entry = this.byId.get(input.knowledgeEntryId);
     return entry && entry.organizationId === input.organizationId ? entry : null;
@@ -101,12 +113,43 @@ export class InMemoryKnowledgeEntryRepository implements KnowledgeEntryRepositor
     this.byId.set(entry.id, entry);
   }
 
+  async saveWithAudit(input: { entry: KnowledgeEntry; auditEntry: KnowledgeAuditLogEntry; outboxEvents: readonly OutboxEventInput[] }): Promise<void> {
+    this.byId.set(input.entry.id, input.entry);
+    await this.auditLogWriter.record(input.auditEntry);
+    this.outboxEvents.push(...input.outboxEvents);
+  }
+
+  async updateWithNewVersion(input: {
+    entry: KnowledgeEntry;
+    version: KnowledgeEntryVersion;
+    auditEntry: KnowledgeAuditLogEntry;
+    outboxEvents: readonly OutboxEventInput[];
+  }): Promise<void> {
+    this.byId.set(input.entry.id, input.entry);
+    await this.versionRepository.create(input.version);
+    await this.auditLogWriter.record(input.auditEntry);
+    this.outboxEvents.push(...input.outboxEvents);
+  }
+
+  async saveValidationWithVersion(input: {
+    entry: KnowledgeEntry;
+    version: KnowledgeEntryVersion;
+    auditEntry: KnowledgeAuditLogEntry;
+    outboxEvents: readonly OutboxEventInput[];
+  }): Promise<void> {
+    this.byId.set(input.entry.id, input.entry);
+    await this.versionRepository.saveValidation(input.version);
+    await this.auditLogWriter.record(input.auditEntry);
+    this.outboxEvents.push(...input.outboxEvents);
+  }
+
   async createWithVersionAndTags(input: {
     entry: KnowledgeEntry;
     version: KnowledgeEntryVersion;
     tagLabels: readonly { label: string; displayLabel: string }[];
     occurredAt: Date;
     auditEntry: KnowledgeAuditLogEntry;
+    outboxEvents: readonly OutboxEventInput[];
   }): Promise<{ tags: readonly KnowledgeTag[] }> {
     if (this.failNextCreateWithVersionAndTags) {
       this.failNextCreateWithVersionAndTags = false;
@@ -130,6 +173,7 @@ export class InMemoryKnowledgeEntryRepository implements KnowledgeEntryRepositor
     // Correction "Corrections Sprint 5" — l'audit fait partie de la même "transaction" simulée :
     // jamais écrit si le point d'échec ci-dessus a déjà levé.
     await this.auditLogWriter.record(input.auditEntry);
+    this.outboxEvents.push(...input.outboxEvents);
     return { tags };
   }
 
@@ -140,13 +184,14 @@ export class InMemoryKnowledgeEntryRepository implements KnowledgeEntryRepositor
    *  anti-concurrence final échoue. */
   failNextDelete = false;
 
-  async delete(input: { organizationId: string; knowledgeEntryId: string; auditEntry: KnowledgeAuditLogEntry }): Promise<void> {
+  async delete(input: { organizationId: string; knowledgeEntryId: string; auditEntry: KnowledgeAuditLogEntry; outboxEvents: readonly OutboxEventInput[] }): Promise<void> {
     if (this.failNextDelete) {
       this.failNextDelete = false;
       throw new Error("Simulated KnowledgeEntry deletion failure (test-only)");
     }
     this.byId.delete(input.knowledgeEntryId);
     await this.auditLogWriter.record(input.auditEntry);
+    this.outboxEvents.push(...input.outboxEvents);
   }
 
   async countByOrganization(input: { organizationId: string; includeArchived: boolean }): Promise<number> {
@@ -197,6 +242,11 @@ export class InMemoryKnowledgeEntryVersionRepository implements KnowledgeEntryVe
         (version) => version.organizationId === input.organizationId && version.knowledgeEntryId === input.knowledgeEntryId && version.versionNumber === input.versionNumber,
       ) ?? null
     );
+  }
+
+  async saveValidation(version: KnowledgeEntryVersion): Promise<void> {
+    const index = this.versions.findIndex((v) => v.id === version.id);
+    if (index !== -1) this.versions[index] = version;
   }
 }
 
@@ -427,7 +477,14 @@ export class InMemoryKnowledgeTagRepository implements KnowledgeTagRepository {
 export class FakeKnowledgeSearchProvider implements KnowledgeSearchProvider {
   constructor(private readonly matches: KnowledgeSearchMatch[] = []) {}
 
-  async search(_criteria: KnowledgeSearchCriteria): Promise<KnowledgeSearchResultPage> {
+  /** V2 Sprint 8 — capture les derniers critères reçus, pour les tests qui vérifient que
+   *  `SearchKnowledgeBaseUseCase` transmet bien un filtre (ex. `validatedOnly`) au provider, jamais
+   *  ne le retient/le retraite lui-même (correctif audit Codex P2 — le filtrage réel reste la
+   *  responsabilité du provider, ce fake ne fait qu'observer ce qu'il a reçu). */
+  lastCriteria?: KnowledgeSearchCriteria;
+
+  async search(criteria: KnowledgeSearchCriteria): Promise<KnowledgeSearchResultPage> {
+    this.lastCriteria = criteria;
     return { matches: this.matches, total: this.matches.length };
   }
 }

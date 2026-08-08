@@ -16,6 +16,18 @@ export const CreateKnowledgeEntryBodySchema = z
   .strict();
 export type CreateKnowledgeEntryBody = z.infer<typeof CreateKnowledgeEntryBodySchema>;
 
+export const PromoteChecklistItemToKnowledgeBodySchema = z
+  .object({
+    title: z.string().min(1).max(500),
+    description: z.string().max(5000).optional(),
+    category: z.string().min(1),
+    metadata: z.unknown().optional(),
+    tags: z.array(z.string().min(1).max(60)).max(30).optional(),
+    clientAccountId: z.string().uuid().optional(),
+  })
+  .strict();
+export type PromoteChecklistItemToKnowledgeBody = z.infer<typeof PromoteChecklistItemToKnowledgeBodySchema>;
+
 export const UpdateKnowledgeEntryBodySchema = z
   .object({
     title: z.string().min(1).max(500).optional(),
@@ -55,6 +67,7 @@ export const SearchKnowledgeBaseQuerySchema = z
     createdAfter: z.string().datetime().optional(),
     createdBefore: z.string().datetime().optional(),
     clientAccountId: z.union([z.string().uuid(), z.literal("GLOBAL")]).optional(),
+    validatedOnly: z.coerce.boolean().optional(),
     limit: z.coerce.number().int().min(1).max(100).optional().default(20),
     offset: z.coerce.number().int().min(0).optional().default(0),
   })

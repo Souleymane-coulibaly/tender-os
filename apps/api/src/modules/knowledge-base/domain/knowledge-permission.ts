@@ -14,6 +14,9 @@ export const KnowledgePermission = {
   Archive: "knowledge:archive",
   Restore: "knowledge:restore",
   Delete: "knowledge:delete",
+  /** V2 Sprint 8 §15/§16/§21 — décision de confiance, palier Admin uniquement (même motif que
+   *  `TenderPermission.ValidateWorkspace`, Sprint 7) : jamais accordée au CONTRIBUTOR. */
+  Validate: "knowledge:validate",
 } as const;
 
 export type KnowledgePermission = (typeof KnowledgePermission)[keyof typeof KnowledgePermission];

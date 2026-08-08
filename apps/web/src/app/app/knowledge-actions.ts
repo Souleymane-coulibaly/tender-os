@@ -214,6 +214,20 @@ export async function restoreKnowledgeEntryAction(entryId: string): Promise<{ er
   return {};
 }
 
+/** V2 Sprint 8 §15/§16 — décision humaine explicite, jamais implicite : seule porte d'entrée qui
+ *  marque la version active comme réutilisable en confiance. */
+export async function validateKnowledgeEntryAction(entryId: string): Promise<{ error?: string }> {
+  try {
+    await appApiFetch(`/api/v1/knowledge/entries/${entryId}/validate`, { method: "POST" });
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+
+  revalidatePath(`/app/knowledge/${entryId}`);
+  revalidatePath("/app/knowledge");
+  return {};
+}
+
 export async function deleteKnowledgeEntryAction(entryId: string): Promise<{ error?: string }> {
   try {
     await appApiFetch(`/api/v1/knowledge/entries/${entryId}`, { method: "DELETE" });

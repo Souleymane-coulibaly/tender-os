@@ -3,6 +3,7 @@ import type { KnowledgeEntryVersion } from "../../domain/knowledge-entry-version
 import type { KnowledgeTag } from "../../domain/knowledge-tag.entity";
 import type { KnowledgeCategory } from "../../domain/knowledge-category";
 import type { KnowledgeEntryStatus } from "../../domain/knowledge-entry-status";
+import type { OutboxEventInput } from "../../../outbox";
 import type { KnowledgeAuditLogEntry } from "./audit-log-writer";
 
 export type ListKnowledgeEntriesFilter = Readonly<{
@@ -58,6 +59,10 @@ export interface KnowledgeEntryRepository {
     tagLabels: readonly { label: string; displayLabel: string }[];
     occurredAt: Date;
     auditEntry: KnowledgeAuditLogEntry;
+    /** V2 Sprint 8 §Décision 5 — écrit DANS LA MÊME transaction que l'entrée/version/tags/audit,
+     *  même motif d'atomicité (jamais une entrée créée sans son événement `KnowledgeEntryCreated`
+     *  correspondant, ni l'inverse). */
+    outboxEvents: readonly OutboxEventInput[];
   }): Promise<{ tags: readonly KnowledgeTag[] }>;
   /**
    * Suppression définitive, cascade maîtrisée (mission §11) — voir `DeleteKnowledgeEntryUseCase`
@@ -65,7 +70,37 @@ export interface KnowledgeEntryRepository {
    * écrite DANS LA MÊME transaction que la suppression (correction "Corrections Sprint 5" —
    * jamais une suppression sans trace d'audit correspondante).
    */
-  delete(input: { organizationId: string; knowledgeEntryId: string; auditEntry: KnowledgeAuditLogEntry }): Promise<void>;
+  delete(input: { organizationId: string; knowledgeEntryId: string; auditEntry: KnowledgeAuditLogEntry; outboxEvents: readonly OutboxEventInput[] }): Promise<void>;
+  /**
+   * Correctif audit Codex P1-02 — mutation de l'entrée SEULE (archive/restore) DANS LA MÊME
+   * transaction que son entrée d'audit et ses événements Outbox : jamais un statut persisté sans
+   * sa trace d'audit/Outbox correspondante (même motif que `createWithVersionAndTags`/`delete`).
+   */
+  saveWithAudit(input: { entry: KnowledgeEntry; auditEntry: KnowledgeAuditLogEntry; outboxEvents: readonly OutboxEventInput[] }): Promise<void>;
+  /**
+   * Correctif audit Codex P1-02 — mutation de métadonnées (`UpdateKnowledgeEntryUseCase`) : l'entrée
+   * (nouveau `activeVersionNumber`) ET la nouvelle version qu'il représente sont écrites ENSEMBLE,
+   * jamais l'une sans l'autre (jamais un `activeVersionNumber` incrémenté sans la ligne de version
+   * correspondante), avec l'audit/Outbox dans la même transaction.
+   */
+  updateWithNewVersion(input: {
+    entry: KnowledgeEntry;
+    version: KnowledgeEntryVersion;
+    auditEntry: KnowledgeAuditLogEntry;
+    outboxEvents: readonly OutboxEventInput[];
+  }): Promise<void>;
+  /**
+   * Correctif audit Codex P1-02 — validation (`ValidateKnowledgeEntryUseCase`) : le stamp de
+   * validation dénormalisé sur l'entrée ET celui, historique, sur SA version active sont écrits
+   * ENSEMBLE, jamais l'un sans l'autre (jamais une entrée "validée" dont la version active ne l'est
+   * pas, ni l'inverse), avec l'audit/Outbox dans la même transaction.
+   */
+  saveValidationWithVersion(input: {
+    entry: KnowledgeEntry;
+    version: KnowledgeEntryVersion;
+    auditEntry: KnowledgeAuditLogEntry;
+    outboxEvents: readonly OutboxEventInput[];
+  }): Promise<void>;
   list(filter: ListKnowledgeEntriesFilter): Promise<ListKnowledgeEntriesResult>;
   /** Mission §"nombre d'entrées" (écran principal) — comptage global tenant-aware, jamais un
    *  chargement complet de la liste juste pour compter (mission §"Performance"). */

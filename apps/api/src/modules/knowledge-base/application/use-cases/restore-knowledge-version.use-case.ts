@@ -2,12 +2,13 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { KnowledgeEntryNotFoundError, KnowledgeEntryVersionNotFoundError } from "../../domain/errors";
 import { parseKnowledgeCategory } from "../../domain/knowledge-category";
 import { KnowledgeEntryVersion } from "../../domain/knowledge-entry-version.entity";
 import { KnowledgePermission } from "../../domain/knowledge-permission";
 import { assertHasKnowledgePermission } from "../policies/knowledge-authorization.policy";
-import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
+import { assertKnowledgeEntryClientAccess } from "../policies/knowledge-entry-client-access.policy";
 import { KNOWLEDGE_ENTRY_REPOSITORY, type KnowledgeEntryRepository } from "../ports/knowledge-entry.repository";
 import { KNOWLEDGE_ENTRY_VERSION_REPOSITORY, type KnowledgeEntryVersionRepository } from "../ports/knowledge-entry-version.repository";
 import { toKnowledgeEntrySummary, type KnowledgeEntrySummary } from "../dtos";
@@ -32,9 +33,9 @@ export class RestoreKnowledgeVersionUseCase {
   constructor(
     @Inject(KNOWLEDGE_ENTRY_REPOSITORY) private readonly knowledgeEntryRepository: KnowledgeEntryRepository,
     @Inject(KNOWLEDGE_ENTRY_VERSION_REPOSITORY) private readonly knowledgeEntryVersionRepository: KnowledgeEntryVersionRepository,
-    @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: RestoreKnowledgeVersionCommand): Promise<KnowledgeEntrySummary> {
@@ -44,6 +45,7 @@ export class RestoreKnowledgeVersionUseCase {
     if (!entry) {
       throw new KnowledgeEntryNotFoundError();
     }
+    await assertKnowledgeEntryClientAccess(this.assertClientAccessUseCase, { organizationId: command.organizationId, entry, actorId: command.actorId, actorRole: command.actorRole, permission: ClientPermission.ManageKnowledge });
 
     const target = await this.knowledgeEntryVersionRepository.findByVersionNumber(command);
     if (!target) {
@@ -62,30 +64,43 @@ export class RestoreKnowledgeVersionUseCase {
       command.actorId,
       occurredAt,
     );
-    await this.knowledgeEntryRepository.save(entry);
-
-    await this.knowledgeEntryVersionRepository.create(
-      KnowledgeEntryVersion.create({
-        id: this.idGenerator.generate(),
-        organizationId: command.organizationId,
-        knowledgeEntryId: entry.id,
-        versionNumber: entry.activeVersionNumber,
-        reason: `Restauration de la version ${target.versionNumber}`,
-        snapshot: target.snapshot,
-        createdByUserId: command.actorId,
-        occurredAt,
-      }),
-    );
-
-    await this.auditLogWriter.record({
+    const version = KnowledgeEntryVersion.create({
+      id: this.idGenerator.generate(),
       organizationId: command.organizationId,
-      actorType: "USER",
-      actorId: command.actorId,
-      action: "knowledge_entry.version_restored",
-      resourceType: "knowledge_entry",
-      resourceId: entry.id,
-      requestId: command.requestId,
-      metadata: { restoredFromVersion: target.versionNumber, newVersion: entry.activeVersionNumber },
+      knowledgeEntryId: entry.id,
+      versionNumber: entry.activeVersionNumber,
+      reason: `Restauration de la version ${target.versionNumber}`,
+      snapshot: target.snapshot,
+      createdByUserId: command.actorId,
+      occurredAt,
+    });
+
+    // Correctif audit Codex P1 (résiduel — même motif que Update/Validate/Archive/Restore
+    // d'entrée) : l'entrée (nouveau `activeVersionNumber`) ET la nouvelle version qu'elle
+    // représente, avec l'audit et l'Outbox, sont écrits DANS LA MÊME transaction — jamais un
+    // `activeVersionNumber` incrémenté sans sa ligne de version correspondante.
+    await this.knowledgeEntryRepository.updateWithNewVersion({
+      entry,
+      version,
+      auditEntry: {
+        organizationId: command.organizationId,
+        actorType: "USER",
+        actorId: command.actorId,
+        action: "knowledge_entry.version_restored",
+        resourceType: "knowledge_entry",
+        resourceId: entry.id,
+        requestId: command.requestId,
+        metadata: { restoredFromVersion: target.versionNumber, newVersion: entry.activeVersionNumber },
+      },
+      outboxEvents: [
+        {
+          eventType: "KnowledgeVersionCreated",
+          aggregateType: "KnowledgeEntry",
+          aggregateId: entry.id,
+          payload: { versionNumber: entry.activeVersionNumber, reason: `Restauration de la version ${target.versionNumber}` },
+          occurredAt,
+        },
+      ],
     });
 
     return toKnowledgeEntrySummary(entry, [], 0);

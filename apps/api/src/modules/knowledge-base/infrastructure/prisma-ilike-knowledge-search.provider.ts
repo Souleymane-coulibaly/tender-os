@@ -55,6 +55,7 @@ function buildEntryWhere(criteria: KnowledgeSearchCriteria): Prisma.KnowledgeEnt
   if (criteria.restrictToClientAccountIdsOrGlobal) {
     andConditions.push({ OR: [{ clientAccountId: null }, { clientAccountId: { in: [...criteria.restrictToClientAccountIdsOrGlobal] } }] });
   }
+  if (criteria.validatedOnly) andConditions.push({ validatedAt: { not: null } });
 
   return { organizationId: criteria.organizationId, ...(andConditions.length > 0 ? { AND: andConditions } : {}) };
 }
@@ -92,6 +93,7 @@ function buildEntrySqlConditions(criteria: KnowledgeSearchCriteria): Prisma.Sql 
       );
     }
   }
+  if (criteria.validatedOnly) conditions.push(Prisma.sql`"validated_at" IS NOT NULL`);
   return Prisma.join(conditions, " AND ");
 }
 

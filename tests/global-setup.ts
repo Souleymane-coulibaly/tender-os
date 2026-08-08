@@ -24,6 +24,7 @@ export default function globalSetup(): void {
     collaboratorPassword: string;
     collaboratorUserId: string;
     tenderInOtherClientId: string;
+    otherClientAccountId: string;
   };
   writeFileSync(path.resolve(__dirname, ".e2e-fixture.json"), JSON.stringify(fixture, null, 2));
 }

@@ -25,6 +25,7 @@ const METADATA_SCHEMA_BY_CATEGORY: Record<KnowledgeCategory, z.ZodTypeAny> = {
   [KnowledgeCategory.TechnicalMemory]: GenericMetadataSchema,
   [KnowledgeCategory.ResponseTemplate]: GenericMetadataSchema,
   [KnowledgeCategory.CommercialDocument]: GenericMetadataSchema,
+  [KnowledgeCategory.Image]: GenericMetadataSchema,
   [KnowledgeCategory.Other]: GenericMetadataSchema,
 };
 

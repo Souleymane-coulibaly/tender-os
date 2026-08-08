@@ -8,11 +8,13 @@ import {
   detachChecklistItemDocumentAction,
   findChecklistItemDocumentMatchesAction,
   markChecklistItemNotApplicableAction,
+  promoteChecklistItemToKnowledgeAction,
   reconcileChecklistWithNewAnalysisAction,
   validateChecklistItemAction,
   type FormActionState,
 } from "../../../actions";
 import { createTaskFromChecklistItemAction } from "../../../workspace-actions";
+import { KNOWLEDGE_CATEGORY_LABELS } from "../../../../../lib/knowledge-types";
 import type {
   ChecklistComplianceStatus,
   ChecklistDocumentMatchResult,
@@ -148,6 +150,8 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
   const [isSearchingMatches, setIsSearchingMatches] = useState(false);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [taskCreated, setTaskCreated] = useState(false);
+  const [showPromoteForm, setShowPromoteForm] = useState(false);
+  const [promotedEntryId, setPromotedEntryId] = useState<string | undefined>();
 
   const lot = item.lotId ? lots.find((candidate) => candidate.id === item.lotId) : undefined;
 
@@ -259,6 +263,21 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
         ) : (
           <span className="text-xs text-neutral-500">Tâche créée — voir l&apos;onglet Workspace.</span>
         )}
+        {item.complianceStatus === "VALIDATED" ? (
+          !promotedEntryId ? (
+            <button
+              type="button"
+              onClick={() => setShowPromoteForm((v) => !v)}
+              className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100"
+            >
+              Ajouter à la bibliothèque
+            </button>
+          ) : (
+            <a href={`/app/knowledge/${promotedEntryId}`} className="text-xs text-neutral-500 hover:underline">
+              Ajoutée à la bibliothèque — voir l&apos;entrée
+            </a>
+          )
+        ) : null}
       </div>
 
       {showTaskForm ? (
@@ -297,6 +316,48 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
           <input name="dueDate" type="date" className="rounded border border-neutral-300 px-2 py-1 text-xs" />
           <button type="submit" disabled={isPending} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50">
             Créer
+          </button>
+        </form>
+      ) : null}
+
+      {showPromoteForm ? (
+        <form
+          className="flex flex-wrap items-end gap-2 rounded border border-neutral-200 bg-neutral-50 p-2"
+          action={async (formData: FormData) => {
+            setIsPending(true);
+            setError(undefined);
+            const tagsRaw = String(formData.get("tags") ?? "");
+            const tags = tagsRaw
+              .split(",")
+              .map((tag) => tag.trim())
+              .filter((tag) => tag.length > 0);
+            const result = await promoteChecklistItemToKnowledgeAction(tenderId, item.id, {
+              title: String(formData.get("title")),
+              category: String(formData.get("category")),
+              ...(tags.length > 0 ? { tags } : {}),
+            });
+            setIsPending(false);
+            if (result.error) {
+              setError(result.error);
+            } else {
+              setPromotedEntryId(result.knowledgeEntryId);
+              setShowPromoteForm(false);
+            }
+          }}
+        >
+          {/* Mission §19/§53 — jamais un titre/une catégorie hérités silencieusement : préremplissage
+              indicatif uniquement (titre de l'item), l'utilisateur confirme ou modifie avant l'envoi. */}
+          <input name="title" defaultValue={item.title} required className="min-w-56 rounded border border-neutral-300 px-2 py-1 text-xs" />
+          <select name="category" defaultValue="ADMINISTRATIVE" className="rounded border border-neutral-300 px-2 py-1 text-xs">
+            {Object.entries(KNOWLEDGE_CATEGORY_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <input name="tags" type="text" placeholder="Tags (séparés par virgule)" className="rounded border border-neutral-300 px-2 py-1 text-xs" />
+          <button type="submit" disabled={isPending} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50">
+            Enregistrer
           </button>
         </form>
       ) : null}

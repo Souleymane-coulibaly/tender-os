@@ -8,6 +8,8 @@ import { DocumentOrigin } from "../../documents/domain/document-origin";
 import { DocumentVersion } from "../../documents/domain/document-version.entity";
 import { Document } from "../../documents/domain/document.aggregate";
 import { PrismaDocumentRepository } from "../../documents/infrastructure/prisma-document.repository";
+import { PrismaOutboxEventRepository } from "../../outbox/infrastructure/prisma-outbox-event.repository";
+import { PrismaOutboxWriter } from "../../outbox/infrastructure/prisma-outbox-writer";
 import { KnowledgeCategory } from "../domain/knowledge-category";
 import { KnowledgeDocument } from "../domain/knowledge-document.entity";
 import { KnowledgeEntry } from "../domain/knowledge-entry.aggregate";
@@ -24,8 +26,9 @@ import { PrismaKnowledgeTagRepository } from "./prisma-knowledge-tag.repository"
 
 describe("Knowledge Base Prisma repositories (PostgreSQL)", () => {
   const prisma = new PrismaService();
+  const outboxWriter = new PrismaOutboxWriter(new PrismaOutboxEventRepository(prisma));
   const spaceRepository = new PrismaKnowledgeSpaceRepository(prisma);
-  const entryRepository = new PrismaKnowledgeEntryRepository(prisma);
+  const entryRepository = new PrismaKnowledgeEntryRepository(prisma, outboxWriter);
   const versionRepository = new PrismaKnowledgeEntryVersionRepository(prisma);
   const documentRepository = new PrismaKnowledgeDocumentRepository(prisma);
   const chunkRepository = new PrismaKnowledgeChunkRepository(prisma);
@@ -62,6 +65,7 @@ describe("Knowledge Base Prisma repositories (PostgreSQL)", () => {
   });
 
   afterAll(async () => {
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [organizationId, otherOrganizationId] } } });
     await prisma.knowledgeEntryTag.deleteMany({ where: { organizationId: { in: [organizationId, otherOrganizationId] } } });
     await prisma.knowledgeTag.deleteMany({ where: { organizationId: { in: [organizationId, otherOrganizationId] } } });
     await prisma.knowledgeChunk.deleteMany({ where: { organizationId: { in: [organizationId, otherOrganizationId] } } });
@@ -177,6 +181,124 @@ describe("Knowledge Base Prisma repositories (PostgreSQL)", () => {
       await expect(prisma.$executeRawUnsafe(`UPDATE "knowledge_entries" SET category = 'NOT_A_REAL_CATEGORY' WHERE id = $1`, entryId)).rejects.toThrow();
     });
 
+    /** V2 Sprint 8 §Décision 5 — preuve réelle (Postgres, pas un fake) que l'événement Outbox est
+     *  écrit DANS LA MÊME transaction que l'entrée/version/tags/audit de `createWithVersionAndTags`. */
+    it("createWithVersionAndTags writes the KnowledgeEntryCreated outbox event atomically with the entry", async () => {
+      const entry = KnowledgeEntry.create({
+        id: randomUUID(),
+        organizationId,
+        knowledgeSpaceId: spaceId,
+        title: "Entrée avec événement Outbox",
+        category: KnowledgeCategory.Other,
+        sourceType: KnowledgeSourceType.Manual,
+        metadata: {},
+        createdByUserId: actorId,
+        occurredAt: new Date(),
+      });
+      const version = KnowledgeEntryVersion.create({
+        id: randomUUID(),
+        organizationId,
+        knowledgeEntryId: entry.id,
+        versionNumber: 1,
+        snapshot: { title: entry.title, category: entry.category, metadata: {} },
+        createdByUserId: actorId,
+        occurredAt: new Date(),
+      });
+
+      await entryRepository.createWithVersionAndTags({
+        entry,
+        version,
+        tagLabels: [],
+        occurredAt: new Date(),
+        auditEntry: { organizationId, actorType: "USER", actorId, action: "knowledge_entry.created", resourceType: "knowledge_entry", resourceId: entry.id },
+        outboxEvents: [{ eventType: "KnowledgeEntryCreated", aggregateType: "KnowledgeEntry", aggregateId: entry.id, payload: { category: entry.category }, occurredAt: new Date() }],
+      });
+
+      const events = await prisma.outboxEvent.findMany({ where: { organizationId, aggregateId: entry.id, eventType: "KnowledgeEntryCreated" } });
+      expect(events).toHaveLength(1);
+    });
+
+    /** Correctif audit Codex P1-02 — preuve réelle (Postgres, pas un fake) que `updateWithNewVersion`
+     *  est une transaction unique : si la nouvelle version viole une VRAIE contrainte (numéro de
+     *  version déjà pris, `@@unique([organizationId, knowledgeEntryId, versionNumber])`), la
+     *  transaction ENTIÈRE est annulée — l'entrée (titre, `activeVersionNumber`) reste inchangée,
+     *  jamais un `activeVersionNumber` incrémenté sans sa ligne de version correspondante. */
+    it("updateWithNewVersion rolls back the entry itself when the new version violates a real DB constraint", async () => {
+      const entryId = await createEntry({ title: "Titre original" });
+      const entry = (await entryRepository.findById({ organizationId, knowledgeEntryId: entryId }))!;
+      await versionRepository.create(
+        KnowledgeEntryVersion.create({ id: randomUUID(), organizationId, knowledgeEntryId: entryId, versionNumber: 1, snapshot: { title: entry.title, category: entry.category, metadata: {} }, createdByUserId: actorId, occurredAt: new Date() }),
+      );
+
+      entry.updateMetadata({ title: "Titre qui ne doit jamais survivre" }, actorId, new Date());
+      expect(entry.activeVersionNumber).toBe(2);
+      const collidingVersion = KnowledgeEntryVersion.create({
+        id: randomUUID(),
+        organizationId,
+        knowledgeEntryId: entryId,
+        versionNumber: 1, // Numéro DÉJÀ pris par la version créée ci-dessus — violation réelle.
+        snapshot: { title: entry.title, category: entry.category, metadata: {} },
+        createdByUserId: actorId,
+        occurredAt: new Date(),
+      });
+
+      await expect(
+        entryRepository.updateWithNewVersion({
+          entry,
+          version: collidingVersion,
+          auditEntry: { organizationId, actorType: "USER", actorId, action: "knowledge_entry.updated", resourceType: "knowledge_entry", resourceId: entryId },
+          outboxEvents: [],
+        }),
+      ).rejects.toThrow();
+
+      const reloaded = await entryRepository.findById({ organizationId, knowledgeEntryId: entryId });
+      expect(reloaded!.title).toBe("Titre original");
+      expect(reloaded!.activeVersionNumber).toBe(1);
+      const auditRows = await prisma.auditLog.findMany({ where: { organizationId, resourceId: entryId, action: "knowledge_entry.updated" } });
+      expect(auditRows).toHaveLength(0);
+    });
+
+    /** Correctif audit Codex P1-02 — même preuve pour `saveValidationWithVersion` : si l'écriture
+     *  de la version échoue, l'entrée ne doit JAMAIS rester "validée" (dénormalisation) sans que sa
+     *  version active le soit réellement — jamais l'un sans l'autre. */
+    it("saveValidationWithVersion rolls back the entry's denormalized validation when the version write fails", async () => {
+      const entryId = await createEntry();
+      const entry = (await entryRepository.findById({ organizationId, knowledgeEntryId: entryId }))!;
+      const version = KnowledgeEntryVersion.create({ id: randomUUID(), organizationId, knowledgeEntryId: entryId, versionNumber: 1, snapshot: { title: entry.title, category: entry.category, metadata: {} }, createdByUserId: actorId, occurredAt: new Date() });
+      await versionRepository.create(version);
+
+      entry.validate(actorId, new Date());
+      // Version inexistante (jamais persistée) : `tx.knowledgeEntryVersion.update` échoue
+      // réellement (P2025, "Record to update not found"), APRÈS que l'entrée a déjà été modifiée
+      // dans cette même transaction.
+      const nonExistentVersion = version.withValidation(actorId, new Date());
+      const forgedVersion = KnowledgeEntryVersion.rehydrate({
+        id: randomUUID(),
+        organizationId,
+        knowledgeEntryId: entryId,
+        versionNumber: 1,
+        snapshot: version.snapshot,
+        createdByUserId: actorId,
+        createdAt: new Date(),
+        validatedByUserId: nonExistentVersion.validatedByUserId,
+        validatedAt: nonExistentVersion.validatedAt,
+      });
+
+      await expect(
+        entryRepository.saveValidationWithVersion({
+          entry,
+          version: forgedVersion,
+          auditEntry: { organizationId, actorType: "USER", actorId, action: "knowledge_entry.validated", resourceType: "knowledge_entry", resourceId: entryId },
+          outboxEvents: [],
+        }),
+      ).rejects.toThrow();
+
+      const reloaded = await entryRepository.findById({ organizationId, knowledgeEntryId: entryId });
+      expect(reloaded!.validatedAt).toBeUndefined();
+      const stillUnvalidatedVersion = await versionRepository.findByVersionNumber({ organizationId, knowledgeEntryId: entryId, versionNumber: 1 });
+      expect(stillUnvalidatedVersion!.validatedAt).toBeUndefined();
+    });
+
     /** Correction audit Codex "Anomalie 2" — preuve réelle (Postgres, pas un fake) que
      *  `createWithVersionAndTags` est une transaction unique : un libellé de tag qui dépasse la
      *  limite VARCHAR(60) de la colonne provoque une VRAIE violation de contrainte tardive, APRÈS
@@ -213,12 +335,15 @@ describe("Knowledge Base Prisma repositories (PostgreSQL)", () => {
           tagLabels: [{ label: oversizedLabel, displayLabel: oversizedLabel }],
           occurredAt: new Date(),
           auditEntry: { organizationId, actorType: "USER", actorId, action: "knowledge_entry.created", resourceType: "knowledge_entry", resourceId: entry.id },
+          outboxEvents: [{ eventType: "KnowledgeEntryCreated", aggregateType: "KnowledgeEntry", aggregateId: entry.id, payload: {}, occurredAt: new Date() }],
         }),
       ).rejects.toThrow();
 
       expect(await entryRepository.findById({ organizationId, knowledgeEntryId: entry.id })).toBeNull();
       expect(await versionRepository.findByVersionNumber({ organizationId, knowledgeEntryId: entry.id, versionNumber: 1 })).toBeNull();
       expect(await tagRepository.findByLabel({ organizationId, label: oversizedLabel })).toBeNull();
+      // Même transaction annulée : jamais un événement Outbox résiduel pour une entrée qui n'existe pas.
+      expect(await prisma.outboxEvent.findMany({ where: { organizationId, aggregateId: entry.id } })).toHaveLength(0);
     });
 
     it("delete() removes the entry AND all its dependent rows (version, document, tag link), but never the shared tag itself", async () => {
@@ -239,6 +364,7 @@ describe("Knowledge Base Prisma repositories (PostgreSQL)", () => {
         organizationId,
         knowledgeEntryId: entryId,
         auditEntry: { organizationId, actorType: "USER", actorId, action: "knowledge_entry.deleted", resourceType: "knowledge_entry", resourceId: entryId },
+        outboxEvents: [],
       });
 
       expect(await entryRepository.findById({ organizationId, knowledgeEntryId: entryId })).toBeNull();
@@ -281,6 +407,7 @@ describe("Knowledge Base Prisma repositories (PostgreSQL)", () => {
           organizationId,
           knowledgeEntryId: entryId,
           auditEntry: { organizationId, actorType: "USER", actorId, action: "knowledge_entry.deleted", resourceType: "knowledge_entry", resourceId: entryId },
+          outboxEvents: [],
         }),
       ).rejects.toThrow();
 

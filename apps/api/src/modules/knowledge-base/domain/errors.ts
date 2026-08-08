@@ -112,6 +112,37 @@ export class KnowledgeTagNotFoundError extends DomainError {
   }
 }
 
+/** V2 Sprint 8 §15/§16 — seule la version ACTIVE d'une entrée READY/PARTIALLY_READY peut être
+ *  validée (mission "seuls les contenus VALIDATED... réutilisables") — jamais une entrée DRAFT/
+ *  PROCESSING/FAILED/ARCHIVED, jamais une ancienne version (il faut la restaurer d'abord, ce qui la
+ *  rend active). */
+export class KnowledgeEntryNotReadyForValidationError extends DomainError {
+  readonly code = "KNOWLEDGE_ENTRY_NOT_READY_FOR_VALIDATION";
+  constructor(input: { status: string }) {
+    super(`Knowledge entry in status "${input.status}" cannot be validated.`);
+  }
+}
+
+/** V2 Sprint 8 — la version active est déjà validée ; re-valider ne serait qu'une horodate écrasée
+ *  silencieusement, jamais autorisé (mission §16, généralisé : chaque décision de confiance doit
+ *  être une action explicite et traçable, jamais implicite). */
+export class KnowledgeEntryAlreadyValidatedError extends DomainError {
+  readonly code = "KNOWLEDGE_ENTRY_ALREADY_VALIDATED";
+  constructor() {
+    super("The active version of this knowledge entry is already validated.");
+  }
+}
+
+/** V2 Sprint 8 §19 — la promotion depuis un ChecklistItem exige une décision humaine déjà actée
+ *  (`ChecklistComplianceStatus.VALIDATED`) : jamais une capitalisation depuis un contenu encore
+ *  TO_REVIEW/NON_COMPLIANT/READY (non confirmé par un humain). */
+export class KnowledgeEntryPromotionRequiresValidatedChecklistItemError extends DomainError {
+  readonly code = "KNOWLEDGE_ENTRY_PROMOTION_REQUIRES_VALIDATED_CHECKLIST_ITEM";
+  constructor(input: { status: string }) {
+    super(`Checklist item in compliance status "${input.status}" cannot be promoted to a knowledge entry (must be VALIDATED).`);
+  }
+}
+
 /** Mission §"Provenance" — un passage retourné par la recherche ou consulté sur une entrée doit
  *  toujours provenir d'un chunk réellement persisté pour ce document/cette organisation : jamais
  *  une citation reconstruite ou un chunk d'un autre document/organisation. Garde défensive contre

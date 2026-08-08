@@ -12,6 +12,7 @@ const attachChecklistItemDocumentAction = vi.fn(async (_tenderId: string, _itemI
 const detachChecklistItemDocumentAction = vi.fn(async (_tenderId: string, _itemId: string) => ({}));
 const reconcileChecklistWithNewAnalysisAction = vi.fn(async (_tenderId: string) => ({ result: { newRequirementSuggestionsCreated: 0, possibleChangeSuggestionsCreated: 0, possibleRemovals: [] } }));
 const createTaskFromChecklistItemAction = vi.fn(async (_tenderId: string, _input: unknown) => ({}));
+const promoteChecklistItemToKnowledgeAction = vi.fn(async (_tenderId: string, _itemId: string, _input: unknown) => ({ knowledgeEntryId: "entry-1" }));
 
 vi.mock("../../../workspace-actions", () => ({
   createTaskFromChecklistItemAction: (tenderId: string, input: unknown) => createTaskFromChecklistItemAction(tenderId, input),
@@ -28,6 +29,7 @@ vi.mock("../../../actions", () => ({
   attachChecklistItemDocumentAction: (tenderId: string, itemId: string, input: unknown) => attachChecklistItemDocumentAction(tenderId, itemId, input),
   detachChecklistItemDocumentAction: (tenderId: string, itemId: string) => detachChecklistItemDocumentAction(tenderId, itemId),
   reconcileChecklistWithNewAnalysisAction: (tenderId: string) => reconcileChecklistWithNewAnalysisAction(tenderId),
+  promoteChecklistItemToKnowledgeAction: (tenderId: string, itemId: string, input: unknown) => promoteChecklistItemToKnowledgeAction(tenderId, itemId, input),
 }));
 
 function baseItem(overrides: Partial<ChecklistItem> = {}): ChecklistItem {
@@ -135,5 +137,27 @@ describe("ChecklistSection", () => {
     expect(payload).not.toHaveProperty("assigneeId");
 
     expect(await screen.findByText("Tâche créée — voir l'onglet Workspace.")).toBeInTheDocument();
+  });
+
+  it("never offers 'Ajouter à la bibliothèque' for an item that is not yet VALIDATED", () => {
+    render(<ChecklistSection tenderId="tender-1" items={[baseItem({ complianceStatus: "TO_REVIEW" })]} lots={LOTS} progress={PROGRESS} />);
+    expect(screen.queryByRole("button", { name: "Ajouter à la bibliothèque" })).not.toBeInTheDocument();
+  });
+
+  it("promotes a VALIDATED checklist item to the Knowledge Base, prefilling the title but requiring an explicit category choice", async () => {
+    const user = userEvent.setup();
+    render(<ChecklistSection tenderId="tender-1" items={[baseItem({ complianceStatus: "VALIDATED" })]} lots={LOTS} progress={PROGRESS} />);
+
+    await user.click(screen.getByRole("button", { name: "Ajouter à la bibliothèque" }));
+    expect(screen.getByDisplayValue("Fournir attestation")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    expect(promoteChecklistItemToKnowledgeAction).toHaveBeenCalledWith(
+      "tender-1",
+      "item-1",
+      expect.objectContaining({ title: "Fournir attestation", category: "ADMINISTRATIVE" }),
+    );
+    expect(await screen.findByText("Ajoutée à la bibliothèque — voir l'entrée")).toBeInTheDocument();
   });
 });

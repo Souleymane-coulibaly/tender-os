@@ -2,10 +2,12 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { KnowledgeDocumentNotFoundError, KnowledgeEntryNotFoundError } from "../../domain/errors";
 import { KnowledgeEntryVersion } from "../../domain/knowledge-entry-version.entity";
 import { KnowledgePermission } from "../../domain/knowledge-permission";
 import { assertHasKnowledgePermission } from "../policies/knowledge-authorization.policy";
+import { assertKnowledgeEntryClientAccess } from "../policies/knowledge-entry-client-access.policy";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { KNOWLEDGE_DISPATCHER, type KnowledgeDispatcher } from "../ports/knowledge-dispatcher";
 import { KNOWLEDGE_DOCUMENT_REPOSITORY, type KnowledgeDocumentRepository } from "../ports/knowledge-document.repository";
@@ -34,6 +36,7 @@ export class ReprocessKnowledgeDocumentUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(command: ReprocessKnowledgeDocumentCommand): Promise<KnowledgeDocumentSummary> {
@@ -43,6 +46,7 @@ export class ReprocessKnowledgeDocumentUseCase {
     if (!entry) {
       throw new KnowledgeEntryNotFoundError();
     }
+    await assertKnowledgeEntryClientAccess(this.assertClientAccessUseCase, { organizationId: command.organizationId, entry, actorId: command.actorId, actorRole: command.actorRole, permission: ClientPermission.ManageKnowledge });
 
     const document = await this.knowledgeDocumentRepository.findById(command);
     if (!document || document.knowledgeEntryId !== command.knowledgeEntryId) {

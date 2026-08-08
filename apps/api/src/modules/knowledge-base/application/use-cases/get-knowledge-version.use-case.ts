@@ -1,18 +1,21 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { KnowledgeEntryNotFoundError, KnowledgeEntryVersionNotFoundError } from "../../domain/errors";
 import { KnowledgePermission } from "../../domain/knowledge-permission";
 import { assertHasKnowledgePermission } from "../policies/knowledge-authorization.policy";
+import { assertKnowledgeEntryClientAccess } from "../policies/knowledge-entry-client-access.policy";
 import { KNOWLEDGE_ENTRY_REPOSITORY, type KnowledgeEntryRepository } from "../ports/knowledge-entry.repository";
 import { KNOWLEDGE_ENTRY_VERSION_REPOSITORY, type KnowledgeEntryVersionRepository } from "../ports/knowledge-entry-version.repository";
 import { toKnowledgeEntryVersionSummary, type KnowledgeEntryVersionSummary } from "../dtos";
 
-export type GetKnowledgeVersionQuery = Readonly<{ organizationId: string; knowledgeEntryId: string; versionNumber: number; actorRole: string }>;
+export type GetKnowledgeVersionQuery = Readonly<{ organizationId: string; knowledgeEntryId: string; versionNumber: number; actorId: string; actorRole: string }>;
 
 @Injectable()
 export class GetKnowledgeVersionUseCase {
   constructor(
     @Inject(KNOWLEDGE_ENTRY_REPOSITORY) private readonly knowledgeEntryRepository: KnowledgeEntryRepository,
     @Inject(KNOWLEDGE_ENTRY_VERSION_REPOSITORY) private readonly knowledgeEntryVersionRepository: KnowledgeEntryVersionRepository,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
 
   async execute(query: GetKnowledgeVersionQuery): Promise<KnowledgeEntryVersionSummary> {
@@ -22,6 +25,7 @@ export class GetKnowledgeVersionUseCase {
     if (!entry) {
       throw new KnowledgeEntryNotFoundError();
     }
+    await assertKnowledgeEntryClientAccess(this.assertClientAccessUseCase, { organizationId: query.organizationId, entry, actorId: query.actorId, actorRole: query.actorRole, permission: ClientPermission.ReadKnowledge });
 
     const version = await this.knowledgeEntryVersionRepository.findByVersionNumber(query);
     if (!version) {

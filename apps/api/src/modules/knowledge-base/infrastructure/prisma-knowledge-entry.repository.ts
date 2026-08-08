@@ -1,6 +1,7 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
+import { OUTBOX_WRITER, type OutboxEventInput, type OutboxWriter } from "../../outbox";
 import type { KnowledgeAuditLogEntry } from "../application/ports/audit-log-writer";
 import type { KnowledgeEntryRepository, ListKnowledgeEntriesFilter, ListKnowledgeEntriesResult } from "../application/ports/knowledge-entry.repository";
 import { KnowledgeEntryNotArchivedError } from "../domain/errors";
@@ -20,7 +21,10 @@ const SHORT_TX_OPTIONS = { timeout: 10_000, maxWait: 10_000 } as const;
 
 @Injectable()
 export class PrismaKnowledgeEntryRepository implements KnowledgeEntryRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
+  ) {}
 
   async findById(input: { organizationId: string; knowledgeEntryId: string }): Promise<KnowledgeEntry | null> {
     const record = await this.prisma.knowledgeEntry.findFirst({ where: { id: input.knowledgeEntryId, organizationId: input.organizationId } });
@@ -37,6 +41,68 @@ export class PrismaKnowledgeEntryRepository implements KnowledgeEntryRepository 
   }
 
   /**
+   * Correctif audit Codex P1-02 — mutation de l'entrée SEULE (archive/restore) DANS LA MÊME
+   * transaction que son audit et son Outbox : jamais l'un sans l'autre.
+   */
+  async saveWithAudit(input: { entry: KnowledgeEntry; auditEntry: KnowledgeAuditLogEntry; outboxEvents: readonly OutboxEventInput[] }): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const data = toPersistence(input.entry);
+      await tx.knowledgeEntry.update({ where: { id: data.id }, data });
+      await writeKnowledgeAuditLogTx(tx, input.auditEntry);
+      if (input.outboxEvents.length > 0) {
+        await this.outboxWriter.write({ organizationId: input.entry.organizationId, events: [...input.outboxEvents] }, tx);
+      }
+    }, SHORT_TX_OPTIONS);
+  }
+
+  /**
+   * Correctif audit Codex P1-02 — `UpdateKnowledgeEntryUseCase` : l'entrée (nouveau
+   * `activeVersionNumber`) ET la nouvelle version DANS LA MÊME transaction que l'audit/Outbox —
+   * jamais un `activeVersionNumber` incrémenté sans sa ligne de version correspondante.
+   */
+  async updateWithNewVersion(input: {
+    entry: KnowledgeEntry;
+    version: KnowledgeEntryVersion;
+    auditEntry: KnowledgeAuditLogEntry;
+    outboxEvents: readonly OutboxEventInput[];
+  }): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const data = toPersistence(input.entry);
+      await tx.knowledgeEntry.update({ where: { id: data.id }, data });
+      await tx.knowledgeEntryVersion.create({ data: toKnowledgeEntryVersionPersistence(input.version) });
+      await writeKnowledgeAuditLogTx(tx, input.auditEntry);
+      if (input.outboxEvents.length > 0) {
+        await this.outboxWriter.write({ organizationId: input.entry.organizationId, events: [...input.outboxEvents] }, tx);
+      }
+    }, SHORT_TX_OPTIONS);
+  }
+
+  /**
+   * Correctif audit Codex P1-02 — `ValidateKnowledgeEntryUseCase` : le stamp de validation
+   * dénormalisé sur l'entrée ET celui, historique, sur sa version active DANS LA MÊME transaction
+   * que l'audit/Outbox — jamais une entrée "validée" dont la version active ne l'est pas réellement.
+   */
+  async saveValidationWithVersion(input: {
+    entry: KnowledgeEntry;
+    version: KnowledgeEntryVersion;
+    auditEntry: KnowledgeAuditLogEntry;
+    outboxEvents: readonly OutboxEventInput[];
+  }): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const data = toPersistence(input.entry);
+      await tx.knowledgeEntry.update({ where: { id: data.id }, data });
+      await tx.knowledgeEntryVersion.update({
+        where: { id: input.version.id },
+        data: { validatedByUserId: input.version.validatedByUserId ?? null, validatedAt: input.version.validatedAt ?? null },
+      });
+      await writeKnowledgeAuditLogTx(tx, input.auditEntry);
+      if (input.outboxEvents.length > 0) {
+        await this.outboxWriter.write({ organizationId: input.entry.organizationId, events: [...input.outboxEvents] }, tx);
+      }
+    }, SHORT_TX_OPTIONS);
+  }
+
+  /**
    * Correction audit Codex "Anomalie 2" — l'entrée, sa version 1 et ses tags (résolution +
    * association) sont écrits DANS LA MÊME transaction Prisma : si la résolution/association d'un
    * tag échoue en cours de route, la transaction entière est annulée par Postgres — aucune entrée,
@@ -48,6 +114,7 @@ export class PrismaKnowledgeEntryRepository implements KnowledgeEntryRepository 
     tagLabels: readonly { label: string; displayLabel: string }[];
     occurredAt: Date;
     auditEntry: KnowledgeAuditLogEntry;
+    outboxEvents: readonly OutboxEventInput[];
   }): Promise<{ tags: readonly KnowledgeTag[] }> {
     return this.prisma.$transaction(async (tx) => {
       await tx.knowledgeEntry.create({ data: toPersistence(input.entry) });
@@ -68,6 +135,11 @@ export class PrismaKnowledgeEntryRepository implements KnowledgeEntryRepository 
       // Correction "Corrections Sprint 5" — l'audit est écrit ICI, DANS LA MÊME transaction :
       // jamais une entrée créée sans sa trace d'audit, jamais une trace d'audit sans l'entrée.
       await writeKnowledgeAuditLogTx(tx, input.auditEntry);
+      // V2 Sprint 8 §Décision 5 — même motif, pour l'Outbox : jamais une entrée créée sans son
+      // événement `KnowledgeEntryCreated` correspondant.
+      if (input.outboxEvents.length > 0) {
+        await this.outboxWriter.write({ organizationId: input.entry.organizationId, events: [...input.outboxEvents] }, tx);
+      }
 
       return { tags };
     }, SHORT_TX_OPTIONS);
@@ -85,7 +157,7 @@ export class PrismaKnowledgeEntryRepository implements KnowledgeEntryRepository 
    * précède (chunks/documents/tags/versions déjà supprimés dans CETTE transaction) ne doit
    * survivre : toute la transaction est annulée par Postgres.
    */
-  async delete(input: { organizationId: string; knowledgeEntryId: string; auditEntry: KnowledgeAuditLogEntry }): Promise<void> {
+  async delete(input: { organizationId: string; knowledgeEntryId: string; auditEntry: KnowledgeAuditLogEntry; outboxEvents: readonly OutboxEventInput[] }): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       await tx.knowledgeChunk.deleteMany({ where: { organizationId: input.organizationId, knowledgeEntryId: input.knowledgeEntryId } });
       await tx.knowledgeDocument.deleteMany({ where: { organizationId: input.organizationId, knowledgeEntryId: input.knowledgeEntryId } });
@@ -104,6 +176,9 @@ export class PrismaKnowledgeEntryRepository implements KnowledgeEntryRepository 
       // jamais une trace d'audit "supprimé" pour une entrée qui, finalement, ne l'a pas été (ex.
       // garde-fou anti-concurrence déclenché).
       await writeKnowledgeAuditLogTx(tx, input.auditEntry);
+      if (input.outboxEvents.length > 0) {
+        await this.outboxWriter.write({ organizationId: input.organizationId, events: [...input.outboxEvents] }, tx);
+      }
     }, SHORT_TX_OPTIONS);
   }
 

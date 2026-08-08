@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { InvalidKnowledgeEntryStatusTransitionError, KnowledgeEntryArchivedError, KnowledgeEntryNotArchivedError } from "./errors";
+import {
+  InvalidKnowledgeEntryStatusTransitionError,
+  KnowledgeEntryAlreadyValidatedError,
+  KnowledgeEntryArchivedError,
+  KnowledgeEntryNotArchivedError,
+  KnowledgeEntryNotReadyForValidationError,
+} from "./errors";
 import { KnowledgeCategory } from "./knowledge-category";
 import { KnowledgeEntry } from "./knowledge-entry.aggregate";
 import { KnowledgeEntryStatus } from "./knowledge-entry-status";
@@ -124,6 +130,57 @@ describe("KnowledgeEntry", () => {
     it("refuses to restore a non-archived entry", () => {
       const entry = createManualEntry();
       expect(() => entry.restore(LATER)).toThrow(KnowledgeEntryNotArchivedError);
+    });
+  });
+
+  describe("validate", () => {
+    it("stamps the active version as validated when READY", () => {
+      const entry = createManualEntry();
+      entry.validate(ACTOR, LATER);
+      expect(entry.validatedByUserId).toBe(ACTOR);
+      expect(entry.validatedAt).toEqual(LATER);
+    });
+
+    it("refuses to validate a DRAFT entry (nothing stable to validate yet)", () => {
+      const entry = createImportedEntry();
+      expect(() => entry.validate(ACTOR, LATER)).toThrow(KnowledgeEntryNotReadyForValidationError);
+    });
+
+    it("refuses to validate an ARCHIVED entry", () => {
+      const entry = createManualEntry();
+      entry.archive(LATER);
+      expect(() => entry.validate(ACTOR, LATER)).toThrow(KnowledgeEntryNotReadyForValidationError);
+    });
+
+    it("refuses to re-validate an already-validated active version", () => {
+      const entry = createManualEntry();
+      entry.validate(ACTOR, NOW);
+      expect(() => entry.validate(ACTOR, LATER)).toThrow(KnowledgeEntryAlreadyValidatedError);
+    });
+
+    it("mission §16/§71 — a new substantial version (updateMetadata) resets validation, never inherits trust", () => {
+      const entry = createManualEntry();
+      entry.validate(ACTOR, NOW);
+      entry.updateMetadata({ title: "Version révisée" }, ACTOR, LATER);
+      expect(entry.validatedByUserId).toBeUndefined();
+      expect(entry.validatedAt).toBeUndefined();
+      expect(entry.activeVersionNumber).toBe(2);
+    });
+
+    it("mission §16/§71 — a new document (startDocumentProcessing) also resets validation", () => {
+      const entry = createManualEntry();
+      entry.validate(ACTOR, NOW);
+      entry.startDocumentProcessing(LATER);
+      expect(entry.validatedByUserId).toBeUndefined();
+      expect(entry.validatedAt).toBeUndefined();
+    });
+
+    it("an entry that finishes processing (any sourceType, including future AI-fed origins) never starts pre-validated (mission §16/§73)", () => {
+      const entry = createImportedEntry();
+      entry.beginInitialProcessing(NOW);
+      entry.completeDocumentProcessing({ outcome: KnowledgeEntryStatus.Ready }, LATER);
+      expect(entry.validatedByUserId).toBeUndefined();
+      expect(entry.validatedAt).toBeUndefined();
     });
   });
 });

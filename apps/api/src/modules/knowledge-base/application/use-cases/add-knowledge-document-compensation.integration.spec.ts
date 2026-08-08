@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AssertClientAccessUseCase, GetClientAccountUseCase } from "../../../client-portfolio";
+import type { OutboxWriter } from "../../../outbox";
 import { PrismaService } from "../../../../shared-kernel/prisma.service";
 import { UuidGenerator } from "../../../../shared-kernel/id-generator";
 import { CreateDocumentWithFirstVersionUseCase, InternalDocumentCleanupService } from "../../../documents";
@@ -34,6 +35,9 @@ import { GetOrCreateDefaultKnowledgeSpaceUseCase } from "./get-or-create-default
 // derrière leurs gardes `if`, jamais déclenchées ici.
 const UNUSED_GET_CLIENT_ACCOUNT_USE_CASE = {} as GetClientAccountUseCase;
 const UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE = {} as AssertClientAccessUseCase;
+// Ce test n'exerce jamais `createWithVersionAndTags`/`delete` (seuls appelants de l'Outbox sur ce
+// repository) — un no-op suffit, jamais destiné à être observé.
+const NOOP_OUTBOX_WRITER: OutboxWriter = { write: async () => {} };
 
 describe("AddKnowledgeDocumentUseCase — compensation after a real Document/DocumentVersion upload", () => {
   const prisma = new PrismaService();
@@ -47,7 +51,7 @@ describe("AddKnowledgeDocumentUseCase — compensation after a real Document/Doc
   const documentsAuditLogWriter = new DocumentsAuditLogWriter(prisma);
 
   const knowledgeSpaceRepository = new PrismaKnowledgeSpaceRepository(prisma);
-  const knowledgeEntryRepository = new PrismaKnowledgeEntryRepository(prisma);
+  const knowledgeEntryRepository = new PrismaKnowledgeEntryRepository(prisma, NOOP_OUTBOX_WRITER);
   const knowledgeDocumentRepository = new PrismaKnowledgeDocumentRepository(prisma);
   const knowledgeTagRepository = new PrismaKnowledgeTagRepository(prisma);
   const getOrCreateDefaultKnowledgeSpaceUseCase = new GetOrCreateDefaultKnowledgeSpaceUseCase(knowledgeSpaceRepository, clock, idGenerator);
