@@ -119,6 +119,7 @@ export const UpdateDc1DeclarationBodySchema = z
     signatoryCapacity: z.string().max(200).optional(),
     signingPowerId: z.string().uuid().optional(),
     administrativeDocumentId: z.string().uuid().optional(),
+    exclusionAttestation: z.boolean().optional(),
   })
   .strict();
 export type UpdateDc1DeclarationBody = z.infer<typeof UpdateDc1DeclarationBodySchema>;
@@ -163,6 +164,8 @@ export const CreateSubcontractorDeclarationBodySchema = z
     paymentTerms: z.string().optional(),
     directPaymentApplicable: z.boolean().optional(),
     requiredDocuments: z.array(z.enum(DOCUMENT_TYPE_VALUES)).optional(),
+    subcontractorProfileId: z.string().uuid().optional(),
+    durationMonths: z.number().int().min(0).optional(),
   })
   .strict();
 export type CreateSubcontractorDeclarationBody = z.infer<typeof CreateSubcontractorDeclarationBodySchema>;

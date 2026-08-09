@@ -4498,6 +4498,13 @@ model Dc1Declaration {
   signingPowerId           String? @map("signing_power_id") @db.Uuid
   administrativeDocumentId String? @map("administrative_document_id") @db.Uuid
 
+  /// V2 Sprint 11 — rubrique F1 du DC1 réel (vérifiée structurellement dans le fichier fourni) :
+  /// attestation sur l'honneur d'absence de cas d'exclusion. Distincte du texte libre
+  /// `declarations` — un booléen explicite, jamais déduit d'un texte libre (mission "jamais
+  /// inventer un mapping"). `null` tant que non renseignée (jamais un défaut `false` implicite —
+  /// resterait MISSING en readiness, pas un "non" silencieux).
+  exclusionAttestation Boolean? @map("exclusion_attestation")
+
   createdBy String   @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -4601,18 +4608,28 @@ model SubcontractorDeclaration {
   subcontractorLegalIdentifier String? @map("subcontractor_legal_identifier") @db.VarChar(80)
   servicesDescription          String  @map("services_description")
 
-  /// V2 Sprint 2 — relation FUTURE nullable vers le répertoire réutilisable (mission §6), non
-  /// exploitée ce sprint (aucun DC4 ni logique de sélection modifiés) : jamais de FK stricte
-  /// inter-module, référence dénormalisée en lecture seule comme les autres colonnes *Id de ce
-  /// modèle (`administrativeDocumentId`).
+  /// V2 Sprint 2 — référence dénormalisée en LECTURE SEULE vers le répertoire réutilisable
+  /// (mission §6), jamais de FK stricte inter-module, même motif que les autres colonnes *Id de
+  /// ce modèle (`administrativeDocumentId`). V2 Sprint 11 : désormais réellement exploitée en
+  /// lecture par le mapping DC4 (identité/IBAN/BIC/capacités du sous-traitant) — la validité
+  /// réelle passe par le use case public du module `subcontractors`, jamais par la DB.
   subcontractorProfileId String? @map("subcontractor_profile_id") @db.Uuid
 
   amountValue       Decimal @map("amount_value") @db.Decimal(14, 2)
   amountCurrency    String  @map("amount_currency") @db.VarChar(3)
   percentageOfTotal Float?  @map("percentage_of_total")
 
+  /// V2 Sprint 11 — rubrique G du DC4 réel : taux de TVA distinct du montant (le formulaire
+  /// affiche montant HT, taux, ET montant TTC séparément) — jamais dérivé/deviné, `null` tant que
+  /// non renseigné.
+  vatRate Float? @map("vat_rate")
+
   paymentTerms             String?  @map("payment_terms")
   directPaymentApplicable  Boolean? @map("direct_payment_applicable")
+  /// V2 Sprint 11 — rubrique H du DC4 réel : "le sous-traitant demande-t-il une avance ?".
+  advanceRequested         Boolean? @map("advance_requested")
+  /// V2 Sprint 11 — rubrique I du DC4 réel : durée du contrat de sous-traitance en nombre de mois.
+  durationMonths           Int?     @map("duration_months")
   requiredDocuments        Json     @default("[]") @map("required_documents")
   administrativeDocumentId String?  @map("administrative_document_id") @db.Uuid
 
@@ -6035,6 +6052,18 @@ model DocumentTemplateVersion {
   /// peut aboutir avec des champs manquants listés (mission "génération partielle selon la règle
   /// du template").
   allowPartialGeneration Boolean @default(false) @map("allow_partial_generation")
+
+  /// V2 Sprint 11 — traçabilité GÉNÉRIQUE (jamais de logique métier DC1/DC2/DC4 ici) vers le
+  /// fichier OFFICIEL D'ORIGINE, strictement inchangé, lorsque `sourceDocument` est une copie
+  /// dérivée technique (placeholders insérés) préparée à partir d'un modèle tiers fourni (mission
+  /// "OfficialSourceDocument -> DerivedTenderOSTemplate -> DocumentTemplateVersion"). Dénormalisé
+  /// en LECTURE SEULE vers Documents (même motif que `sourceDocumentId`) — absent quand le
+  /// template n'a pas de source officielle externe (template composé directement dans TenderOS).
+  officialSourceDocumentId        String? @map("official_source_document_id") @db.Uuid
+  officialSourceDocumentVersionId String? @map("official_source_document_version_id") @db.Uuid
+  /// SHA-256 du fichier officiel d'origine (jamais celui de la copie dérivée) — preuve que le
+  /// fichier officiel réellement utilisé comme référence n'a pas changé depuis la préparation.
+  officialSourceChecksum          String? @map("official_source_checksum") @db.VarChar(64)
 
   createdBy   String    @map("created_by") @db.Uuid
   createdAt   DateTime  @default(now()) @map("created_at")

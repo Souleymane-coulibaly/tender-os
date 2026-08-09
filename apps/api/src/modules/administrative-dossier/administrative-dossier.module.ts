@@ -1,10 +1,14 @@
 import { Module } from "@nestjs/common";
 import { ClientPortfolioModule } from "../client-portfolio";
+import { CompanyProfileModule } from "../company-profile";
+import { DocumentGenerationModule } from "../document-generation";
 import { DocumentsModule } from "../documents";
 import { ExportModule } from "../export";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
+import { OutboxModule } from "../outbox";
 import { PricingModule } from "../pricing";
+import { SubcontractorsModule } from "../subcontractors";
 import { TendersModule } from "../tenders";
 
 import { ADMINISTRATIVE_DOCUMENT_REPOSITORY } from "./application/ports/administrative-document.repository";
@@ -65,11 +69,19 @@ import { GetDumeXmlDraftUseCase } from "./application/use-cases/get-dume-xml-dra
 import { ListValidatedAdministrativeDocumentsForPackageUseCase } from "./application/use-cases/list-validated-administrative-documents-for-package.use-case";
 import { CreateSigningPowerUseCase, ListSigningPowersUseCase, UpdateSigningPowerUseCase, VerifySigningPowerUseCase } from "./application/use-cases/signing-power.use-cases";
 import { CreateSubcontractorDeclarationUseCase, ListSubcontractorDeclarationsUseCase, UpdateSubcontractorDeclarationUseCase } from "./application/use-cases/subcontractor-declaration.use-cases";
+import {
+  GenerateDc1FormFillUseCase,
+  GenerateDc4FormFillUseCase,
+  GetDc1FormFillReadinessUseCase,
+  GetDc4FormFillReadinessUseCase,
+} from "./application/use-cases/official-form-fill.use-cases";
 
 import { AdministrativeDossierAccessService } from "./application/services/administrative-dossier-access.service";
 import { AdministrativeDossierRecalculationService } from "./application/services/administrative-dossier-recalculation.service";
 import { AdministrativeFormDataAssembler } from "./application/services/administrative-form-data-assembler.service";
 import { AdministrativeGeneratedDocumentService } from "./application/services/administrative-generated-document.service";
+import { Dc1OfficialFormResolver } from "./application/services/official-form-mappers/dc1-official-form-resolver.service";
+import { Dc4OfficialFormResolver } from "./application/services/official-form-mappers/dc4-official-form-resolver.service";
 
 import { PrismaAdministrativeDocumentRepository } from "./infrastructure/prisma-administrative-document.repository";
 import { PrismaAdministrativeDocumentRevisionRepository } from "./infrastructure/prisma-administrative-document-revision.repository";
@@ -88,6 +100,7 @@ import { PrismaSigningPowerRepository } from "./infrastructure/prisma-signing-po
 import { PrismaSubcontractorDeclarationRepository } from "./infrastructure/prisma-subcontractor-declaration.repository";
 
 import { AdministrativeDossierController } from "./interfaces/http/administrative-dossier.controller";
+import { AdministrativeDossierFormFillController } from "./interfaces/http/administrative-dossier-form-fill.controller";
 import { AdministrativeDossierStructuredController } from "./interfaces/http/administrative-dossier-structured.controller";
 
 /**
@@ -105,8 +118,8 @@ import { AdministrativeDossierStructuredController } from "./interfaces/http/adm
  * DIRECTEMENT `PdfRendererPort`/`PDF_RENDERER`, jamais un second moteur PDF.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, DocumentsModule, PricingModule, ExportModule],
-  controllers: [AdministrativeDossierController, AdministrativeDossierStructuredController],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, DocumentsModule, PricingModule, ExportModule, CompanyProfileModule, SubcontractorsModule, DocumentGenerationModule, OutboxModule],
+  controllers: [AdministrativeDossierController, AdministrativeDossierStructuredController, AdministrativeDossierFormFillController],
   providers: [
     EnsureAdministrativeDossierUseCase,
     GetAdministrativeDossierUseCase,
@@ -174,6 +187,13 @@ import { AdministrativeDossierStructuredController } from "./interfaces/http/adm
     AdministrativeDossierRecalculationService,
     AdministrativeFormDataAssembler,
     AdministrativeGeneratedDocumentService,
+
+    Dc1OfficialFormResolver,
+    Dc4OfficialFormResolver,
+    GetDc1FormFillReadinessUseCase,
+    GenerateDc1FormFillUseCase,
+    GetDc4FormFillReadinessUseCase,
+    GenerateDc4FormFillUseCase,
 
     { provide: ADMINISTRATIVE_DOSSIER_REPOSITORY, useClass: PrismaAdministrativeDossierRepository },
     { provide: ADMINISTRATIVE_REQUIREMENT_REPOSITORY, useClass: PrismaAdministrativeRequirementRepository },

@@ -15,6 +15,13 @@ export type SubcontractorDeclarationProps = {
   directPaymentApplicable?: boolean | undefined;
   requiredDocuments: readonly AdministrativeDocumentType[];
   administrativeDocumentId?: string | undefined;
+  /** V2 Sprint 2/11 — pointeur dénormalisé en LECTURE SEULE vers le répertoire réutilisable
+   *  `SubcontractorProfile` (module `subcontractors`), jamais une FK stricte inter-module (même
+   *  motif que `administrativeDocumentId`) — la validité réelle se vérifie via le use case public
+   *  du module `subcontractors`, jamais directement en base. */
+  subcontractorProfileId?: string | undefined;
+  /** V2 Sprint 11 — rubrique I du DC4 réel : durée du contrat de sous-traitance en mois. */
+  durationMonths?: number | undefined;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -42,6 +49,8 @@ export class SubcontractorDeclaration {
     paymentTerms?: string | undefined;
     directPaymentApplicable?: boolean | undefined;
     requiredDocuments?: readonly AdministrativeDocumentType[] | undefined;
+    subcontractorProfileId?: string | undefined;
+    durationMonths?: number | undefined;
     createdBy: string;
     occurredAt: Date;
   }): SubcontractorDeclaration {
@@ -50,6 +59,9 @@ export class SubcontractorDeclaration {
     }
     if (input.percentageOfTotal !== undefined && (input.percentageOfTotal < 0 || input.percentageOfTotal > 100)) {
       throw new InvalidSubcontractorAmountError("percentageOfTotal must be between 0 and 100");
+    }
+    if (input.durationMonths !== undefined && input.durationMonths < 0) {
+      throw new InvalidSubcontractorAmountError("durationMonths must not be negative");
     }
     return new SubcontractorDeclaration({
       id: input.id,
@@ -64,6 +76,8 @@ export class SubcontractorDeclaration {
       paymentTerms: input.paymentTerms,
       directPaymentApplicable: input.directPaymentApplicable,
       requiredDocuments: input.requiredDocuments ?? [],
+      subcontractorProfileId: input.subcontractorProfileId,
+      durationMonths: input.durationMonths,
       createdBy: input.createdBy,
       createdAt: input.occurredAt,
       updatedAt: input.occurredAt,
@@ -82,6 +96,7 @@ export class SubcontractorDeclaration {
     percentageOfTotal?: number | undefined;
     paymentTerms?: string | undefined;
     directPaymentApplicable?: boolean | undefined;
+    durationMonths?: number | undefined;
     occurredAt: Date;
   }): void {
     if (input.amountValue !== undefined && input.amountValue < 0) {
@@ -90,6 +105,9 @@ export class SubcontractorDeclaration {
     if (input.percentageOfTotal !== undefined && (input.percentageOfTotal < 0 || input.percentageOfTotal > 100)) {
       throw new InvalidSubcontractorAmountError("percentageOfTotal must be between 0 and 100");
     }
+    if (input.durationMonths !== undefined && input.durationMonths < 0) {
+      throw new InvalidSubcontractorAmountError("durationMonths must not be negative");
+    }
     if (input.subcontractorName !== undefined) this.props.subcontractorName = input.subcontractorName;
     if (input.servicesDescription !== undefined) this.props.servicesDescription = input.servicesDescription;
     if (input.amountValue !== undefined) this.props.amountValue = input.amountValue;
@@ -97,6 +115,7 @@ export class SubcontractorDeclaration {
     if (input.percentageOfTotal !== undefined) this.props.percentageOfTotal = input.percentageOfTotal;
     if (input.paymentTerms !== undefined) this.props.paymentTerms = input.paymentTerms;
     if (input.directPaymentApplicable !== undefined) this.props.directPaymentApplicable = input.directPaymentApplicable;
+    if (input.durationMonths !== undefined) this.props.durationMonths = input.durationMonths;
     this.props.updatedAt = input.occurredAt;
   }
 
@@ -143,6 +162,12 @@ export class SubcontractorDeclaration {
   }
   get administrativeDocumentId(): string | undefined {
     return this.props.administrativeDocumentId;
+  }
+  get subcontractorProfileId(): string | undefined {
+    return this.props.subcontractorProfileId;
+  }
+  get durationMonths(): number | undefined {
+    return this.props.durationMonths;
   }
   get createdBy(): string {
     return this.props.createdBy;

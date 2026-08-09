@@ -12,6 +12,7 @@ export type PersistedDc1Declaration = {
   signatoryCapacity: string | null;
   signingPowerId: string | null;
   administrativeDocumentId: string | null;
+  exclusionAttestation: boolean | null;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -29,6 +30,7 @@ export function toDomainDc1Declaration(record: PersistedDc1Declaration): Dc1Decl
     signatoryCapacity: record.signatoryCapacity ?? undefined,
     signingPowerId: record.signingPowerId ?? undefined,
     administrativeDocumentId: record.administrativeDocumentId ?? undefined,
+    exclusionAttestation: record.exclusionAttestation ?? undefined,
     createdBy: record.createdBy,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -47,6 +49,7 @@ export function toDc1DeclarationRow(declaration: Dc1Declaration) {
     signatoryCapacity: declaration.signatoryCapacity ?? null,
     signingPowerId: declaration.signingPowerId ?? null,
     administrativeDocumentId: declaration.administrativeDocumentId ?? null,
+    exclusionAttestation: declaration.exclusionAttestation ?? null,
     createdBy: declaration.createdBy,
     createdAt: declaration.createdAt,
     updatedAt: declaration.updatedAt,

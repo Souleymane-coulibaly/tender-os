@@ -45,6 +45,7 @@ export type UpdateDc1DeclarationCommand = Readonly<{
   signatoryCapacity?: string | undefined;
   signingPowerId?: string | undefined;
   administrativeDocumentId?: string | undefined;
+  exclusionAttestation?: boolean | undefined;
 }>;
 
 @Injectable()
@@ -69,6 +70,7 @@ export class UpdateDc1DeclarationUseCase {
       signatoryName: command.signatoryName,
       signatoryCapacity: command.signatoryCapacity,
       signingPowerId: command.signingPowerId,
+      exclusionAttestation: command.exclusionAttestation,
       occurredAt,
     });
     if (command.administrativeDocumentId !== undefined) {

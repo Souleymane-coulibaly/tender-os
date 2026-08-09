@@ -41,6 +41,13 @@ import { TenderDocumentGenerationController } from "./interfaces/http/tender-doc
  * généralise ni ne remplace leur moteur de composition depuis IR (mission — décision validée
  * "nouveau module dédié, technique différente : remplissage d'un fichier .docx réel uploadé, jamais
  * une composition depuis notre propre structure de données").
+ *
+ * V2 Sprint 11 — `exports` ajouté : `DocumentGenerationExecutionService` et les deux ports
+ * repository sont désormais accessibles à un appelant interne contrôlé (`administrative-dossier`,
+ * décision Sprint 10 "réservé à un futur appelant interne qui résout une provenance réelle côté
+ * serveur avant d'appeler directement, jamais via HTTP"). Les use cases HTTP publics
+ * (`GenerateDocumentUseCase`/...) restent, eux, volontairement NON exportés — le flux
+ * administratif ne doit jamais transiter par le chemin qui accepte un `data` fourni par le client.
  */
 @Module({
   imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, DocumentsModule, OutboxModule],
@@ -66,5 +73,6 @@ import { TenderDocumentGenerationController } from "./interfaces/http/tender-doc
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
   ],
+  exports: [DocumentGenerationExecutionService, DOCUMENT_TEMPLATE_REPOSITORY, GENERATED_DOCUMENT_REPOSITORY, ATOMIC_TRANSACTION_RUNNER],
 })
 export class DocumentGenerationModule {}

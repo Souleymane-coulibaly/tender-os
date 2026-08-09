@@ -63,6 +63,16 @@ const STATUS_BY_CODE: Record<string, number> = {
   BUYER_PROVIDED_FORM_TEMPLATE_NOT_FOUND: HttpStatus.NOT_FOUND,
   UNSUPPORTED_ADMINISTRATIVE_FORM_TYPE: HttpStatus.UNPROCESSABLE_ENTITY,
   ADMINISTRATIVE_FORM_NOT_READY_FOR_GENERATION: HttpStatus.UNPROCESSABLE_ENTITY,
+
+  // V2 Sprint 11 (préremplissage des formulaires officiels réels) — cette route réutilise
+  // directement `DocumentGenerationExecutionService` (module `document-generation`), dont les
+  // erreurs de domaine peuvent donc remonter jusqu'ici — mêmes codes/statuts que
+  // `DocumentGenerationErrorFilter`, jamais une correspondance divergente pour la même erreur.
+  OFFICIAL_FORM_TEMPLATE_NOT_CONFIGURED: HttpStatus.UNPROCESSABLE_ENTITY,
+  NO_ACTIVE_DOCUMENT_TEMPLATE_VERSION: HttpStatus.UNPROCESSABLE_ENTITY,
+  REQUIRED_FIELDS_MISSING: HttpStatus.UNPROCESSABLE_ENTITY,
+  DOCX_MERGE_FAILED: HttpStatus.UNPROCESSABLE_ENTITY,
+  SUBCONTRACTOR_PROFILE_NOT_FOUND: HttpStatus.NOT_FOUND,
 };
 
 @Catch(DomainError)

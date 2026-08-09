@@ -316,3 +316,15 @@ export class AdministrativeFormNotReadyForGenerationError extends DomainError {
     super(`Cannot generate: blocking issues remain (${blockingCodes.join(", ")}).`);
   }
 }
+
+// --- V2 Sprint 11 (préremplissage des formulaires officiels réels DC1/DC4) ---
+
+/** Aucune `DocumentTemplateVersion` ACTIVE n'a été enregistrée pour ce type de formulaire dans
+ *  cette organisation (mission — chaque organisation doit importer une fois le gabarit DOCX réel
+ *  via le moteur documentaire Sprint 10, jamais un gabarit implicite/partagé cross-organisation). */
+export class OfficialFormTemplateNotConfiguredError extends DomainError {
+  readonly code = "OFFICIAL_FORM_TEMPLATE_NOT_CONFIGURED";
+  constructor(readonly documentType: string) {
+    super(`No active DocumentTemplateVersion configured for the official ${documentType} form in this organization.`);
+  }
+}

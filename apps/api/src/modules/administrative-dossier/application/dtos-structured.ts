@@ -45,6 +45,7 @@ export type Dc1DeclarationSummary = {
   signatoryCapacity?: string | undefined;
   signingPowerId?: string | undefined;
   administrativeDocumentId?: string | undefined;
+  exclusionAttestation?: boolean | undefined;
   createdAt: string;
   updatedAt: string;
 };
@@ -59,6 +60,7 @@ export function toDc1DeclarationSummary(dc1: Dc1Declaration): Dc1DeclarationSumm
     signatoryCapacity: dc1.signatoryCapacity,
     signingPowerId: dc1.signingPowerId,
     administrativeDocumentId: dc1.administrativeDocumentId,
+    exclusionAttestation: dc1.exclusionAttestation,
     createdAt: dc1.createdAt.toISOString(),
     updatedAt: dc1.updatedAt.toISOString(),
   };
@@ -95,6 +97,8 @@ export type SubcontractorDeclarationSummary = {
   directPaymentApplicable?: boolean | undefined;
   requiredDocuments: readonly string[];
   administrativeDocumentId?: string | undefined;
+  subcontractorProfileId?: string | undefined;
+  durationMonths?: number | undefined;
   createdAt: string;
   updatedAt: string;
 };
@@ -112,6 +116,8 @@ export function toSubcontractorDeclarationSummary(sub: SubcontractorDeclaration)
     directPaymentApplicable: sub.directPaymentApplicable,
     requiredDocuments: sub.requiredDocuments,
     administrativeDocumentId: sub.administrativeDocumentId,
+    subcontractorProfileId: sub.subcontractorProfileId,
+    durationMonths: sub.durationMonths,
     createdAt: sub.createdAt.toISOString(),
     updatedAt: sub.updatedAt.toISOString(),
   };

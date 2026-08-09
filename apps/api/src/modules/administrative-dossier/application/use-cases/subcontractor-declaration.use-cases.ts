@@ -38,6 +38,8 @@ export type CreateSubcontractorDeclarationCommand = Readonly<{
   paymentTerms?: string | undefined;
   directPaymentApplicable?: boolean | undefined;
   requiredDocuments?: readonly AdministrativeDocumentType[] | undefined;
+  subcontractorProfileId?: string | undefined;
+  durationMonths?: number | undefined;
 }>;
 
 /** Mission §12 — "plusieurs DC4 doivent être possibles" : jamais un seul par Tender. */
@@ -68,6 +70,8 @@ export class CreateSubcontractorDeclarationUseCase {
       paymentTerms: command.paymentTerms,
       directPaymentApplicable: command.directPaymentApplicable,
       requiredDocuments: command.requiredDocuments,
+      subcontractorProfileId: command.subcontractorProfileId,
+      durationMonths: command.durationMonths,
       createdBy: command.actorId,
       occurredAt: this.clock.now(),
     });
@@ -89,6 +93,7 @@ export type UpdateSubcontractorDeclarationCommand = Readonly<{
   paymentTerms?: string | undefined;
   directPaymentApplicable?: boolean | undefined;
   administrativeDocumentId?: string | undefined;
+  durationMonths?: number | undefined;
 }>;
 
 @Injectable()
@@ -119,6 +124,7 @@ export class UpdateSubcontractorDeclarationUseCase {
       percentageOfTotal: command.percentageOfTotal,
       paymentTerms: command.paymentTerms,
       directPaymentApplicable: command.directPaymentApplicable,
+      durationMonths: command.durationMonths,
       occurredAt,
     });
     if (command.administrativeDocumentId !== undefined) {

@@ -54,6 +54,14 @@ export const TenderPermission = {
    *  ClientPermission.ReadDocumentGeneration" vit au palier client (`assertDocumentGenerationAccess`),
    *  jamais ici. */
   UseDocumentGeneration: "tender:use_document_generation",
+  /** V2 Sprint 11 (Dossier administratif — préremplissage DC1/DC2/DC4) — même palier que
+   *  `UseDocumentGeneration` (CONTRIBUTOR inclus) : générer un formulaire administratif officiel
+   *  reste une action de production de contenu (DRAFT), pas une action réservée. Consulter le
+   *  dossier/la readiness/la preview reste couvert par `TenderPermission.Read`, déjà accordé à
+   *  tous les rôles ci-dessous — mission §51/§52 "un utilisateur peut consulter sans pouvoir
+   *  générer" : la restriction fine vit au palier client (`ClientPermission.
+   *  GenerateAdministrativeForm`, via `assertAdministrativeFormAccess`), jamais ici. */
+  GenerateAdministrativeForm: "tender:generate_administrative_form",
 } as const;
 
 export type TenderPermission = (typeof TenderPermission)[keyof typeof TenderPermission];
@@ -74,7 +82,15 @@ export const ROLE_TENDER_PERMISSIONS: Record<string, readonly TenderPermission[]
   OWNER: Object.values(TenderPermission),
   ORGANIZATION_ADMIN: Object.values(TenderPermission),
   BID_MANAGER: Object.values(TenderPermission),
-  CONTRIBUTOR: [TenderPermission.Read, TenderPermission.List, TenderPermission.ManageChecklist, TenderPermission.ManageWorkspace, TenderPermission.UseChat, TenderPermission.UseDocumentGeneration],
+  CONTRIBUTOR: [
+    TenderPermission.Read,
+    TenderPermission.List,
+    TenderPermission.ManageChecklist,
+    TenderPermission.ManageWorkspace,
+    TenderPermission.UseChat,
+    TenderPermission.UseDocumentGeneration,
+    TenderPermission.GenerateAdministrativeForm,
+  ],
   REVIEWER: [TenderPermission.Read, TenderPermission.List],
   EXECUTIVE: [TenderPermission.Read, TenderPermission.List],
   EXTERNAL_CONSULTANT: [TenderPermission.Read, TenderPermission.List],

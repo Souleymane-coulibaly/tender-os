@@ -15,6 +15,8 @@ export type PersistedSubcontractorDeclaration = {
   directPaymentApplicable: boolean | null;
   requiredDocuments: unknown;
   administrativeDocumentId: string | null;
+  subcontractorProfileId: string | null;
+  durationMonths: number | null;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -35,6 +37,8 @@ export function toDomainSubcontractorDeclaration(record: PersistedSubcontractorD
     directPaymentApplicable: record.directPaymentApplicable ?? undefined,
     requiredDocuments: (record.requiredDocuments ?? []) as readonly AdministrativeDocumentType[],
     administrativeDocumentId: record.administrativeDocumentId ?? undefined,
+    subcontractorProfileId: record.subcontractorProfileId ?? undefined,
+    durationMonths: record.durationMonths ?? undefined,
     createdBy: record.createdBy,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -56,6 +60,8 @@ export function toSubcontractorDeclarationRow(declaration: SubcontractorDeclarat
     directPaymentApplicable: declaration.directPaymentApplicable ?? null,
     requiredDocuments: declaration.requiredDocuments as unknown as object,
     administrativeDocumentId: declaration.administrativeDocumentId ?? null,
+    subcontractorProfileId: declaration.subcontractorProfileId ?? null,
+    durationMonths: declaration.durationMonths ?? null,
     createdBy: declaration.createdBy,
     createdAt: declaration.createdAt,
     updatedAt: declaration.updatedAt,

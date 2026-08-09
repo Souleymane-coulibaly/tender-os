@@ -71,6 +71,14 @@ export const ClientPermission = {
   ValidateAdministrativeDossier: "CLIENT_VALIDATE_ADMINISTRATIVE_DOSSIER",
   ManageAdministrativeDocuments: "CLIENT_MANAGE_ADMINISTRATIVE_DOCUMENTS",
   ValidateAdministrativeDocuments: "CLIENT_VALIDATE_ADMINISTRATIVE_DOCUMENTS",
+  /** V2 Sprint 11 (Préremplissage DC1/DC2/DC4) — mission §51/§52 : consulter le dossier/la
+   *  readiness/la preview ne donne PAS automatiquement le droit de générer un DOCX officiel
+   *  (`ReadAdministrativeDossier` reste suffisant pour readiness/preview, jamais assimilé à
+   *  `GENERATE_ADMINISTRATIVE_FORM` — "ne pas assimiler ReadTender -> Generate DC"). Palier
+   *  distinct de `ManageAdministrativeDossier`/`ManageAdministrativeDocuments` : produire un
+   *  livrable officiel (DOCX réel) est une action plus engageante que gérer les exigences/pièces
+   *  du dossier, même motif que `ManageDocumentGeneration` (Sprint 10) au palier client. */
+  GenerateAdministrativeForm: "CLIENT_GENERATE_ADMINISTRATIVE_FORM",
   /** Sprint 9 (Dépôt manuel assisté) — même motif additif que `ReadAdministrativeDossier`/
    *  `ManageAdministrativeDossier`/`ValidateAdministrativeDossier` : consulter le suivi de dépôt vs.
    *  préparer/enregistrer/ajouter une preuve/remplacer/rejeter vs. confirmer un reçu ("règle simple"
@@ -182,6 +190,7 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ValidateAdministrativeDossier,
   ClientPermission.ManageAdministrativeDocuments,
   ClientPermission.ValidateAdministrativeDocuments,
+  ClientPermission.GenerateAdministrativeForm,
   ClientPermission.ReadSubmission,
   ClientPermission.ManageSubmission,
   ClientPermission.ConfirmSubmission,
@@ -264,6 +273,10 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ValidateAdministrativeDossier,
     ClientPermission.ManageAdministrativeDocuments,
     ClientPermission.ValidateAdministrativeDocuments,
+    /** V2 Sprint 11 — le CLIENT_MANAGER peut générer un formulaire officiel DC1/DC2/DC4, même
+     *  palier que CONTRIBUTOR ci-dessous (aucun palier "règle stricte" pour la génération
+     *  elle-même — la génération produit un DRAFT, jamais une validation officielle). */
+    ClientPermission.GenerateAdministrativeForm,
     /** Sprint 9 — le CLIENT_MANAGER a tous les droits de suivi de dépôt, y compris le retrait
      *  ("règle stricte"). */
     ClientPermission.ReadSubmission,
@@ -330,6 +343,9 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadAdministrativeDossier,
     ClientPermission.ManageAdministrativeDossier,
     ClientPermission.ManageAdministrativeDocuments,
+    /** V2 Sprint 11 — même palier que CLIENT_MANAGER : la génération d'un DOCX officiel
+     *  DC1/DC2/DC4 reste une action de production de contenu (DRAFT), pas une action réservée. */
+    ClientPermission.GenerateAdministrativeForm,
     /** Sprint 9 — le CONTRIBUTOR peut consulter/préparer/enregistrer/ajouter une preuve/remplacer/
      *  rejeter (`ManageSubmission`) et confirmer un reçu ("règle simple"), mais jamais retirer un
      *  dépôt ("règle stricte" réservée au CLIENT_MANAGER ci-dessus, mission §15/§20). */

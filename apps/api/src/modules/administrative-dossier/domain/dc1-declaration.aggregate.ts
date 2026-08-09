@@ -16,6 +16,10 @@ export type Dc1DeclarationProps = {
   signatoryCapacity?: string | undefined;
   signingPowerId?: string | undefined;
   administrativeDocumentId?: string | undefined;
+  /** V2 Sprint 11 — rubrique F du DC1 réel : attestation sur l'honneur d'absence de motif
+   *  d'exclusion. `undefined` tant que non déclarée — jamais présumée `true` (mission "jamais une
+   *  valeur inventée"). */
+  exclusionAttestation?: boolean | undefined;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -71,6 +75,7 @@ export class Dc1Declaration {
     signatoryName?: string | undefined;
     signatoryCapacity?: string | undefined;
     signingPowerId?: string | undefined;
+    exclusionAttestation?: boolean | undefined;
     occurredAt: Date;
   }): void {
     if (input.candidateType !== undefined) this.props.candidateType = input.candidateType;
@@ -79,6 +84,7 @@ export class Dc1Declaration {
     if (input.signatoryName !== undefined) this.props.signatoryName = input.signatoryName;
     if (input.signatoryCapacity !== undefined) this.props.signatoryCapacity = input.signatoryCapacity;
     if (input.signingPowerId !== undefined) this.props.signingPowerId = input.signingPowerId;
+    if (input.exclusionAttestation !== undefined) this.props.exclusionAttestation = input.exclusionAttestation;
     if (this.props.candidateType === Dc1CandidateType.Individual) this.props.consortiumId = undefined;
     this.props.updatedAt = input.occurredAt;
   }
@@ -117,6 +123,9 @@ export class Dc1Declaration {
   }
   get administrativeDocumentId(): string | undefined {
     return this.props.administrativeDocumentId;
+  }
+  get exclusionAttestation(): boolean | undefined {
+    return this.props.exclusionAttestation;
   }
   get createdBy(): string {
     return this.props.createdBy;
