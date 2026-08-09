@@ -8,6 +8,7 @@ const SUB_NAV_ITEMS = [
   { href: "/app/ai-configuration/routing-policies", label: "Routing" },
   { href: "/app/ai-configuration/prompts", label: "Prompts" },
   { href: "/app/ai-configuration/export-templates", label: "Templates d'export" },
+  { href: "/app/ai-configuration/document-templates", label: "Templates documentaires" },
   { href: "/app/ai-configuration/deliverable-templates", label: "Templates de mémoire" },
   { href: "/app/ai-configuration/document-themes", label: "Identité documentaire" },
 ];

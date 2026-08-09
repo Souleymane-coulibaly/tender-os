@@ -119,6 +119,13 @@ export const ClientPermission = {
    *  aucune action IA autonome à approuver. */
   ReadChat: "CLIENT_READ_CHAT",
   UseChat: "CLIENT_USE_CHAT",
+  /** V2 Sprint 10 (Moteur documentaire — Templates DOCX) — même motif additif que `ReadExport`/
+   *  `ManageExport` : consulter les documents déjà générés pour ce client (lignées + révisions,
+   *  téléchargement) vs. lancer une génération/régénération. La gestion des TEMPLATES eux-mêmes
+   *  (upload/version/activation) ne passe PAS par ce palier client — voir `DocumentGenerationPermission`
+   *  (org-tier, module `document-generation`), même séparation que templates Export vs. usage Export. */
+  ReadDocumentGeneration: "CLIENT_READ_DOCUMENT_GENERATION",
+  ManageDocumentGeneration: "CLIENT_MANAGE_DOCUMENT_GENERATION",
   /** Répertoire organisationnel de sous-traitants (mission §6) — PAS scopé par ClientAccount
    *  (réutilisable par plusieurs entreprises candidates de la même organisation), donc absent de
    *  `ROLE_CLIENT_ACTION_PERMISSIONS` ci-dessous ; vérifié uniquement au palier organisation via
@@ -191,6 +198,8 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ValidateWorkspace,
   ClientPermission.ReadChat,
   ClientPermission.UseChat,
+  ClientPermission.ReadDocumentGeneration,
+  ClientPermission.ManageDocumentGeneration,
   // V2 Sprint 5 (audit Codex, round 2 — P1 confirmé) — `RecordGoNoGoDecision`/`PromoteOpportunity`
   // sont volontairement ABSENTES de ce bypass organisation-tier silencieux : le chemin normal exige
   // une affectation CLIENT_MANAGER réelle sur le client précis, y compris pour OWNER/
@@ -285,6 +294,12 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
      *  métier). */
     ClientPermission.ReadChat,
     ClientPermission.UseChat,
+    /** V2 Sprint 10 — le CLIENT_MANAGER peut consulter et lancer/régénérer une génération
+     *  documentaire, comme tous les autres rôles ci-dessous (aucun palier "règle stricte" ce
+     *  sprint — la validation métier d'un document généré, distincte de sa génération technique,
+     *  est hors périmètre Sprint 10). */
+    ClientPermission.ReadDocumentGeneration,
+    ClientPermission.ManageDocumentGeneration,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -340,6 +355,9 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
      *  `ManageWorkspace` ci-dessus. */
     ClientPermission.ReadChat,
     ClientPermission.UseChat,
+    /** V2 Sprint 10 — même palier que `UseChat`/`ManageWorkspace` ci-dessus. */
+    ClientPermission.ReadDocumentGeneration,
+    ClientPermission.ManageDocumentGeneration,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -365,6 +383,9 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     /** V2 Sprint 9 — le VIEWER consulte le Chat (conversations/messages existants), jamais n'en
      *  crée ni n'envoie de message (`UseChat` réservé aux rôles ci-dessus). */
     ClientPermission.ReadChat,
+    /** V2 Sprint 10 — le VIEWER consulte les documents déjà générés, jamais n'en lance/régénère
+     *  (`ManageDocumentGeneration` réservé aux rôles ci-dessus). */
+    ClientPermission.ReadDocumentGeneration,
   ],
 };
 

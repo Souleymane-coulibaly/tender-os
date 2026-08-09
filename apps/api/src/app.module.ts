@@ -12,6 +12,7 @@ import { CockpitModule } from "./modules/cockpit";
 import { CompanyProfileModule } from "./modules/company-profile";
 import { DceModule } from "./modules/dce/dce.module";
 import { DeliverablesModule, ExportThemeResolverBridgeModule } from "./modules/deliverables";
+import { DocumentGenerationModule } from "./modules/document-generation";
 import { DocumentsModule } from "./modules/documents/documents.module";
 import { ExportModule } from "./modules/export";
 import { ExtractionModule } from "./modules/extraction/extraction.module";
@@ -75,6 +76,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     ChecklistIntelligenceModule,
     WorkspaceModule,
     ChatModule,
+    DocumentGenerationModule,
   ],
 })
 export class AppModule {}

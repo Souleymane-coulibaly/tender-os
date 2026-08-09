@@ -46,6 +46,14 @@ export const TenderPermission = {
    *  la restriction fine "lecture uniquement si ClientPermission.ReadChat" vit au palier client
    *  (`assertChatAccess`), jamais ici. */
   UseChat: "tender:use_chat",
+  /** V2 Sprint 10 (Moteur documentaire — Templates DOCX) — même palier que `UseChat` (CONTRIBUTOR
+   *  inclus, jamais READ_ONLY/REVIEWER/EXECUTIVE/EXTERNAL_CONSULTANT) : lancer/régénérer une
+   *  génération documentaire est une action de production de contenu, pas une action réservée. La
+   *  LECTURE (consulter/télécharger un document déjà généré) reste couverte par `TenderPermission.
+   *  Read`, déjà accordée à tous les rôles ci-dessous — la restriction fine "lecture uniquement si
+   *  ClientPermission.ReadDocumentGeneration" vit au palier client (`assertDocumentGenerationAccess`),
+   *  jamais ici. */
+  UseDocumentGeneration: "tender:use_document_generation",
 } as const;
 
 export type TenderPermission = (typeof TenderPermission)[keyof typeof TenderPermission];
@@ -66,7 +74,7 @@ export const ROLE_TENDER_PERMISSIONS: Record<string, readonly TenderPermission[]
   OWNER: Object.values(TenderPermission),
   ORGANIZATION_ADMIN: Object.values(TenderPermission),
   BID_MANAGER: Object.values(TenderPermission),
-  CONTRIBUTOR: [TenderPermission.Read, TenderPermission.List, TenderPermission.ManageChecklist, TenderPermission.ManageWorkspace, TenderPermission.UseChat],
+  CONTRIBUTOR: [TenderPermission.Read, TenderPermission.List, TenderPermission.ManageChecklist, TenderPermission.ManageWorkspace, TenderPermission.UseChat, TenderPermission.UseDocumentGeneration],
   REVIEWER: [TenderPermission.Read, TenderPermission.List],
   EXECUTIVE: [TenderPermission.Read, TenderPermission.List],
   EXTERNAL_CONSULTANT: [TenderPermission.Read, TenderPermission.List],

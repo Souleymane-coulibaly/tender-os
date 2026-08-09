@@ -407,6 +407,7 @@ model Tender {
   deliverables               Deliverable[]
   deliverableTemplates       DeliverableTemplate[]
   documentThemes             DocumentTheme[]
+  generatedDocuments         GeneratedDocument[]
   administrativeDossiers     AdministrativeDossier[]
   administrativeRequirements AdministrativeRequirement[]
   administrativeDocuments    AdministrativeDocument[]
@@ -2336,6 +2337,7 @@ model ClientAccount {
   deliverableTemplates   DeliverableTemplate[]
   documentThemes         DocumentTheme[]
   administrativeDossiers AdministrativeDossier[]
+  generatedDocuments     GeneratedDocument[]
   /// V2 Sprint 5 — Opportunities de préqualification rattachées à ce candidat, avant même la
   /// création d'un Tender.
   opportunities          Opportunity[]
@@ -5968,4 +5970,204 @@ model MessageCitation {
   @@unique([id, organizationId])
   @@index([organizationId, messageId])
   @@map("message_citations")
+}
+
+/// V2 Sprint 10 (Moteur documentaire — Templates DOCX) — un template EST le fichier .docx source
+/// uploadé, jamais recomposé depuis une IR (motif volontairement DIFFÉRENT d'`ExportTemplate`, qui
+/// compose un document depuis une structure contrôlée par notre code : ici le document réel d'un
+/// tiers — DC1/DC2/DC4/ATTRI1 en Sprint 11 — doit rester visuellement identique, ses placeholders
+/// remplis en place). `DocumentTemplate` est l'identité stable, `DocumentTemplateVersion` porte le
+/// fichier et la configuration réels.
+model DocumentTemplate {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// SYSTEM | ORGANIZATION — CHECK (migration). Mission §"Scope Template limité à SYSTEM/
+  /// ORGANIZATION" — jamais Candidate/Client ce sprint.
+  scope String @db.VarChar(12)
+
+  name        String  @db.VarChar(200)
+  description String?
+
+  createdBy  String    @map("created_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at")
+  archivedAt DateTime? @map("archived_at")
+
+  versions DocumentTemplateVersion[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, name])
+  @@map("document_templates")
+}
+
+/// Mission §"une seule version ACTIVE par template" — même motif que
+/// `export_template_versions_org_template_active_key` (index partiel ajouté à la main, voir
+/// migration). Une version ACTIVE est immuable : `sourceDocumentVersionId`/`sourceChecksum`/
+/// `discoveredPlaceholders` ne changent JAMAIS après activation (mission "ne jamais modifier
+/// template.docx en place" — toute évolution crée une NOUVELLE version).
+model DocumentTemplateVersion {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  documentTemplateId String           @map("document_template_id") @db.Uuid
+  documentTemplate   DocumentTemplate @relation(fields: [documentTemplateId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  version Int
+
+  /// DRAFT | ACTIVE | ARCHIVED — CHECK (migration).
+  status String @db.VarChar(10)
+
+  /// Le fichier .docx source, réutilise le module Documents existant tel quel (aucun second
+  /// stockage) — jamais réécrit après upload, une régénération de template = nouvelle version.
+  sourceDocumentId        String @map("source_document_id") @db.Uuid
+  sourceDocumentVersionId String @map("source_document_version_id") @db.Uuid
+
+  /// SHA-256 du fichier source au moment de l'upload — preuve d'immuabilité (mission "empreinte
+  /// avant/après génération"), jamais recalculée après création.
+  sourceChecksum String @map("source_checksum") @db.VarChar(64)
+
+  /// Placeholders réellement détectés dans le document par le parseur OOXML à l'upload —
+  /// `Array<{ fieldKey: string; occurrences: number }>`. Base de la Field Mapping et de la
+  /// détection de champs orphelins (mission "ne jamais inventer une valeur manquante").
+  discoveredPlaceholders Json @map("discovered_placeholders")
+
+  /// false (défaut) = un champ requis manquant bloque toute génération ; true = la génération
+  /// peut aboutir avec des champs manquants listés (mission "génération partielle selon la règle
+  /// du template").
+  allowPartialGeneration Boolean @default(false) @map("allow_partial_generation")
+
+  createdBy   String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  activatedAt DateTime? @map("activated_at")
+  archivedAt  DateTime? @map("archived_at")
+
+  fieldMappings              DocumentTemplateFieldMapping[]
+  generatedDocumentRevisions GeneratedDocumentRevision[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, documentTemplateId, version])
+  @@map("document_template_versions")
+}
+
+/// Abstraction GÉNÉRIQUE (mission "ne doit explicitement PAS contenir de logique métier DC1/DC2/
+/// DC4/ATTRI1") — décrit uniquement la TRANSFORMATION d'affichage d'un placeholder détecté, jamais
+/// sa provenance métier (résolue par l'appelant, hors de ce module, via le `dataSnapshot` fourni à
+/// la génération). Aucune colonne `defaultValue` : une valeur absente reste absente, jamais
+/// inventée (mission §"jamais un random SIRET/montant/signataire").
+model DocumentTemplateFieldMapping {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  documentTemplateVersionId String                  @map("document_template_version_id") @db.Uuid
+  documentTemplateVersion   DocumentTemplateVersion @relation(fields: [documentTemplateVersionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Nom exact du placeholder tel qu'il apparaît dans le document (ex. "tender.reference").
+  fieldKey String @map("field_key") @db.VarChar(150)
+  label    String @db.VarChar(200)
+
+  /// STRING | DATE | CURRENCY | PERCENTAGE | BOOLEAN | CHECKBOX | MULTILINE | LIST | TABLE — CHECK
+  /// (migration).
+  fieldType String @map("field_type") @db.VarChar(12)
+
+  required Boolean @default(false)
+
+  /// Options de formatage déclaratif (ex. devise, format de date) — jamais une valeur, seulement
+  /// la manière de la présenter.
+  formatOptions Json? @map("format_options")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([documentTemplateVersionId, fieldKey])
+  @@map("document_template_field_mappings")
+}
+
+/// Racine d'agrégat — une lignée de générations pour un même (Tender, Template) : les révisions
+/// successives (régénérations) s'accumulent DESSOUS, jamais en écrasant (mission "GeneratedDocument/
+/// Deliverable avec historique de Révisions en append-only, jamais écraser R2 en générant R3").
+model GeneratedDocument {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Dénormalisé en LECTURE SEULE — jamais de FK stricte vers `DocumentTemplate` (même motif que
+  /// `PrismaGenerationCostReader`, Sprint 7) : la validité réelle passe par le use case public de
+  /// ce module, jamais par la DB.
+  documentTemplateId String @map("document_template_id") @db.Uuid
+
+  /// Titre dénormalisé depuis le nom du template au moment de la création — jamais recalculé si
+  /// le template est renommé ensuite (même motif que `ExportJob.documentType`).
+  title String @db.VarChar(200)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  revisions GeneratedDocumentRevision[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId])
+  @@map("generated_documents")
+}
+
+/// Une ligne par tentative de génération, JAMAIS mutée après COMPLETED/FAILED (même motif
+/// qu'`ExportJob`/`DeliverableRevision`). `documentTemplateVersionId` et `dataSnapshot` sont
+/// EXPLICITEMENT figés à cette ligne au lancement — jamais résolus implicitement plus tard (mission
+/// §concurrence "templateVersionId et snapshot fixés au lancement, jamais via template.currentVersion").
+model GeneratedDocumentRevision {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  generatedDocumentId String            @map("generated_document_id") @db.Uuid
+  generatedDocument   GeneratedDocument @relation(fields: [generatedDocumentId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  revisionNumber     Int     @map("revision_number")
+  previousRevisionId String? @map("previous_revision_id") @db.Uuid
+
+  documentTemplateVersionId String                  @map("document_template_version_id") @db.Uuid
+  documentTemplateVersion   DocumentTemplateVersion @relation(fields: [documentTemplateVersionId, organizationId], references: [id, organizationId])
+
+  /// PENDING | GENERATING | COMPLETED | FAILED — CHECK (migration).
+  status String @db.VarChar(10)
+
+  /// Cliché figé des valeurs de champs fournies par l'appelant au lancement (fieldKey -> valeur) —
+  /// jamais relu plus tard depuis les entités source (mission "un futur edit de ClientAccount ne
+  /// doit jamais altérer un document déjà généré").
+  dataSnapshot Json @map("data_snapshot")
+
+  /// Provenance champ par champ — `Array<{ fieldKey, sourceEntityType?, sourceEntityId?,
+  /// sourceEntityVersion?, valuePath?, provided: boolean }>` (mission "traçabilité au niveau du
+  /// champ", groundwork Sprint 11).
+  provenance Json
+
+  /// Champs requis absents du `dataSnapshot` au lancement — jamais une valeur inventée à la place
+  /// (mission "produire une liste missingFields, jamais un random SIRET/montant/signataire").
+  missingFields Json @map("missing_fields")
+
+  /// GENERATED | REVIEWED | VALIDATED — CHECK (migration). Distinct de `status` (technique) :
+  /// la génération réussie n'est pas une validation métier (mission "generation != business
+  /// validation").
+  reviewStatus String @default("GENERATED") @map("review_status") @db.VarChar(10)
+
+  /// Artefact final, dénormalisé en LECTURE SEULE vers Documents (même motif que
+  /// `AdministrativeDocumentRevision.documentId`) — jamais un second stockage, jamais une URL
+  /// publique permanente (téléchargement toujours vérifié par permission, voir
+  /// `DownloadGeneratedDocumentRevisionUseCase`).
+  artifactDocumentId        String? @map("artifact_document_id") @db.Uuid
+  artifactDocumentVersionId String? @map("artifact_document_version_id") @db.Uuid
+
+  errorCode    String? @map("error_code") @db.VarChar(60)
+  errorMessage String? @map("error_message")
+
+  createdBy   String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+
+  @@unique([id, organizationId])
+  @@unique([generatedDocumentId, revisionNumber])
+  @@index([organizationId, generatedDocumentId])
+  @@map("generated_document_revisions")
 }

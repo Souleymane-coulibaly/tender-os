@@ -190,6 +190,9 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         <Link href={`/app/tenders/${tender.id}/export`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
           Export
         </Link>
+        <Link href={`/app/tenders/${tender.id}/documents-generated`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
+          Documents générés
+        </Link>
         <Link href={`/app/tenders/${tender.id}/validation`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
           Validation
         </Link>
