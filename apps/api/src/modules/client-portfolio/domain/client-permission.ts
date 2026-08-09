@@ -113,6 +113,12 @@ export const ClientPermission = {
   ReadWorkspace: "CLIENT_READ_WORKSPACE",
   ManageWorkspace: "CLIENT_MANAGE_WORKSPACE",
   ValidateWorkspace: "CLIENT_VALIDATE_WORKSPACE",
+  /** V2 Sprint 9 (Chat IA conversationnel) — même motif additif que `ReadWorkspace`/`ManageWorkspace` :
+   *  consulter une conversation existante (et son historique) vs. en créer une/envoyer un message.
+   *  Pas de troisième palier "valider" — le Chat reste read-only sur les données métier ce sprint,
+   *  aucune action IA autonome à approuver. */
+  ReadChat: "CLIENT_READ_CHAT",
+  UseChat: "CLIENT_USE_CHAT",
   /** Répertoire organisationnel de sous-traitants (mission §6) — PAS scopé par ClientAccount
    *  (réutilisable par plusieurs entreprises candidates de la même organisation), donc absent de
    *  `ROLE_CLIENT_ACTION_PERMISSIONS` ci-dessous ; vérifié uniquement au palier organisation via
@@ -183,6 +189,8 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ReadWorkspace,
   ClientPermission.ManageWorkspace,
   ClientPermission.ValidateWorkspace,
+  ClientPermission.ReadChat,
+  ClientPermission.UseChat,
   // V2 Sprint 5 (audit Codex, round 2 — P1 confirmé) — `RecordGoNoGoDecision`/`PromoteOpportunity`
   // sont volontairement ABSENTES de ce bypass organisation-tier silencieux : le chemin normal exige
   // une affectation CLIENT_MANAGER réelle sur le client précis, y compris pour OWNER/
@@ -272,6 +280,11 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadWorkspace,
     ClientPermission.ManageWorkspace,
     ClientPermission.ValidateWorkspace,
+    /** V2 Sprint 9 — le CLIENT_MANAGER peut consulter et utiliser le Chat, comme tous les autres
+     *  rôles ci-dessous (aucun palier "règle stricte" pour ce sprint, read-only sur les données
+     *  métier). */
+    ClientPermission.ReadChat,
+    ClientPermission.UseChat,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -323,6 +336,10 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
      *  ci-dessus, mission §29/§41). */
     ClientPermission.ReadWorkspace,
     ClientPermission.ManageWorkspace,
+    /** V2 Sprint 9 — le CONTRIBUTOR peut consulter et utiliser le Chat, même palier que
+     *  `ManageWorkspace` ci-dessus. */
+    ClientPermission.ReadChat,
+    ClientPermission.UseChat,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -345,6 +362,9 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     /** V2 Sprint 7 — le VIEWER consulte le Workspace (participants, tâches, activité), jamais ne
      *  le modifie ni ne valide. */
     ClientPermission.ReadWorkspace,
+    /** V2 Sprint 9 — le VIEWER consulte le Chat (conversations/messages existants), jamais n'en
+     *  crée ni n'envoie de message (`UseChat` réservé aux rôles ci-dessus). */
+    ClientPermission.ReadChat,
   ],
 };
 

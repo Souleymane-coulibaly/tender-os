@@ -9,6 +9,7 @@ function reference(extension: string, mimeType = "application/octet-stream"): St
   return {
     organizationId: "org-1",
     documentId: "doc-1",
+    documentVersionId: "version-1",
     storageKey: "key",
     mimeType,
     extension,

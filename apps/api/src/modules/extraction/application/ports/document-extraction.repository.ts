@@ -36,6 +36,9 @@ export type FinalizeAttemptOutcome =
       language?: string | undefined;
       warnings: string[];
       contentChecksum?: string | undefined;
+      /** Correctif audit Codex round 2 P1 (Chat IA conversationnel) — version EXACTE de `Document`
+       *  réellement lue pour produire `chunks` ci-dessous, voir `DocumentExtractionProps.documentVersionId`. */
+      documentVersionId?: string | undefined;
       chunks: readonly ExtractionChunk[];
     }
   | { kind: "not_processable" }

@@ -94,7 +94,9 @@ import { KnowledgeController } from "./interfaces/http/knowledge.controller";
   ],
   // SearchKnowledgeBaseUseCase exporté pour le module Generation (Sprint 6) — réutilise la
   // recherche déjà scopée par client via ListAccessibleClientsUseCase, jamais une seconde
-  // implémentation de recherche.
-  exports: [SearchKnowledgeBaseUseCase],
+  // implémentation de recherche. GetKnowledgeVersionUseCase exporté pour `chat` (Sprint 9,
+  // correctif audit Codex P1) — résout l'identifiant réel de version pour une citation
+  // KNOWLEDGE_ENTRY, jamais un second accès direct à `KnowledgeEntryVersionRepository`.
+  exports: [SearchKnowledgeBaseUseCase, GetKnowledgeVersionUseCase],
 })
 export class KnowledgeBaseModule {}

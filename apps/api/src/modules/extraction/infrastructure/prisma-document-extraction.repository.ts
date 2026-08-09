@@ -99,6 +99,9 @@ export class PrismaDocumentExtractionRepository implements DocumentExtractionRep
               language: input.outcome.language ?? null,
               warnings: input.outcome.warnings,
               lastError: null,
+              // Correctif audit Codex round 2 P1 (Chat IA conversationnel) — version RÉELLEMENT
+              // lue pour produire les chunks ci-dessous, jamais recalculée après coup.
+              documentVersionId: input.outcome.documentVersionId ?? null,
               updatedAt: input.occurredAt,
             }
           : input.outcome.kind === "failed"

@@ -429,6 +429,9 @@ model Tender {
   opportunity                Opportunity?
   goNoGoReports              GoNoGoReport[]
   goNoGoDecisions            GoNoGoDecision[]
+  /// V2 Sprint 9 (Chat IA conversationnel) — une Conversation appartient toujours à EXACTEMENT UN
+  /// Tender, jamais réaffectable (voir `Conversation.tenderId`, immuable après création).
+  conversations              Conversation[]
 
   /// AUDIT-007 : contrainte composite support de la FK composée de TenderLot ci-dessous — garantit
   /// au niveau base de données qu'un TenderLot ne peut jamais référencer un couple
@@ -1410,6 +1413,16 @@ model DocumentExtraction {
   lastError       String?  @map("last_error")
   contentChecksum String?  @map("content_checksum") @db.VarChar(64)
 
+  /// V2 Sprint 9 (correctif audit Codex round 2 P1, Chat IA conversationnel) — version EXACTE de
+  /// `Document` réellement lue au moment où CETTE extraction a produit ses chunks (renseignée par
+  /// `ProcessDocumentExtractionUseCase`, jamais recalculée après coup depuis
+  /// `Document.currentVersionId` qui peut avoir avancé depuis) : c'est cette colonne, jamais
+  /// `Document.currentVersionId`, qui fait foi pour une citation DCE côté Chat. Scalaire simple,
+  /// jamais une FK stricte (même motif que les colonnes de provenance des Finding) — NULL pour
+  /// toute extraction terminée AVANT cette migration (jamais de backfill approximatif) et pour les
+  /// tentatives échouées avant lecture du fichier.
+  documentVersionId String? @map("document_version_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -2337,6 +2350,10 @@ model ClientAccount {
   humanResources       CompanyHumanResource[]
   materialResources    CompanyMaterialResource[]
   documentAssociations DocumentClientAccountAssociation[]
+
+  /// V2 Sprint 9 (Chat IA conversationnel) — conversations dénormalisées sur ce client au moment
+  /// de leur création (voir `Conversation.clientAccountId`), jamais réaffectées.
+  conversations Conversation[]
 
   @@unique([id, organizationId])
   @@unique([organizationId, nameNormalized])
@@ -5809,4 +5826,146 @@ model SubcontractorProfileDocument {
   @@unique([documentId, subcontractorProfileId])
   @@index([organizationId, subcontractorProfileId])
   @@map("subcontractor_profile_documents")
+}
+
+/// V2 Sprint 9 (Chat IA conversationnel métier) — une conversation appartient TOUJOURS à
+/// EXACTEMENT UN Tender, jamais réaffectable (mission §5 "ne jamais permettre de changer
+/// silencieusement de Tender"). `clientAccountId` est dénormalisé depuis `Tender.clientAccountId`
+/// AU MOMENT de la création (même motif d'immutabilité que `KnowledgeEntry.clientAccountId`,
+/// Sprint 8) — jamais modifié ensuite, y compris si le Tender change de candidat. `lotId` reste un
+/// simple filtre optionnel (scalaire, jamais une relation Prisma stricte — même motif que les
+/// champs de provenance des Finding, `TenderRequirementFinding.documentId` etc.) : revérifié
+/// applicativement (appartenance au même Tender) à chaque usage, jamais fait confiance en base.
+model Conversation {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// NULL uniquement si le Tender lui-même n'a pas encore de client (cas théorique — `Tender.clientAccountId`
+  /// est obligatoire en pratique) ; jamais réaffecté après création (mission §9 "immuable").
+  clientAccountId String?        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
+
+  /// Filtre optionnel "Lot X" (mission §6) — scalaire, jamais une FK stricte : un Lot supprimé ne
+  /// doit jamais faire échouer la suppression ou la lecture d'une conversation existante.
+  lotId String? @map("lot_id") @db.Uuid
+
+  createdByUserId String  @map("created_by_user_id") @db.Uuid
+  title           String? @db.VarChar(300)
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  archivedAt DateTime? @map("archived_at")
+
+  messages Message[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId, archivedAt])
+  @@index([organizationId, clientAccountId])
+  @@map("conversations")
+}
+
+/// V2 Sprint 9 — un message USER ou ASSISTANT (jamais SYSTEM en persistance côté utilisateur, voir
+/// `chat/domain/message-role.ts`) ; `status` gouverne le cycle de vie d'UNE génération assistant
+/// (PENDING tant que l'appel IA est en cours, COMPLETED/FAILED à l'issue — mission §9). Le token
+/// usage est tracé (mêmes champs qu'`AnalysisJob`), jamais appliqué comme quota bloquant (aucune
+/// infrastructure de quota existante dans le repo, Sprint 9 §51/§52).
+model Message {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  conversationId String       @map("conversation_id") @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// USER | ASSISTANT — protégée par une contrainte CHECK (migration).
+  role String @db.VarChar(20)
+
+  content String
+
+  /// PENDING | COMPLETED | FAILED — protégée par une contrainte CHECK (migration). Un message USER
+  /// est toujours créé COMPLETED (aucune génération ne lui est propre) ; seul un message ASSISTANT
+  /// démarre PENDING.
+  status String @default("COMPLETED") @db.VarChar(20)
+
+  /// NULL pour un message ASSISTANT (mission §8 "jamais permettre au frontend de créer
+  /// arbitrairement un message SYSTEM" — l'acteur d'un message ASSISTANT est toujours le système).
+  createdByUserId String? @map("created_by_user_id") @db.Uuid
+
+  model         String? @db.VarChar(100)
+  /// Version du prompt système RÉELLEMENT utilisée pour produire ce message (mission §35), jamais
+  /// modifiable après coup — voir `chat/infrastructure/chat-system-prompt.ts`.
+  promptVersion Int?    @map("prompt_version")
+
+  inputTokenCount  Int? @map("input_token_count")
+  outputTokenCount Int? @map("output_token_count")
+  totalTokenCount  Int? @map("total_token_count")
+
+  errorMessage String? @map("error_message")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  citations MessageCitation[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, conversationId, createdAt])
+  /// Garde anti-abus (mission §4/§57) — au plus UN message ASSISTANT PENDING par conversation à la
+  /// fois. Vérifiée applicativement AVANT écriture (voir `SendMessageUseCase`, plus rapide, meilleur
+  /// message d'erreur) ET protégée par un index unique PARTIEL en base (correctif audit Codex P2 —
+  /// `WHERE status = 'PENDING' AND role = 'ASSISTANT'`, non exprimable dans le DSL Prisma, ajouté à
+  /// la main dans la migration `..._chat_pending_guard`, même motif que
+  /// `tender_participants_active_unique`, Sprint 7) : la vérification applicative seule laissait
+  /// passer une course sous PostgreSQL READ COMMITTED entre deux transactions concurrentes.
+  @@index([organizationId, conversationId, status])
+  @@map("messages")
+}
+
+/// V2 Sprint 9 — provenance d'UN message assistant (mission §20 "citation ≠ texte libre") :
+/// colonnes concrètes typées nullables, JAMAIS un blob JSON (même motif que les Finding, ex.
+/// `TenderRequirementFinding.documentId`/`chunkSequence`/`pageStart`...). Les colonnes de RÉFÉRENCE
+/// (documentId, knowledgeEntryId, checklistItemId, findingId...) restent volontairement des
+/// scalaires SANS relation Prisma stricte, même motif que les Finding : une citation traverse des
+/// modules qui ne se connaissent pas entre eux (Documents, Knowledge Base, Checklist, Analysis),
+/// jamais un couplage de schéma cross-module. Seule `messageId` est une relation réelle (le message
+/// est le seul propriétaire véritable d'une citation).
+model MessageCitation {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  messageId String  @map("message_id") @db.Uuid
+  message   Message @relation(fields: [messageId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// DOCUMENT | KNOWLEDGE_ENTRY | CHECKLIST_ITEM | FINDING | TENDER_FIELD — protégée par une
+  /// contrainte CHECK (migration).
+  sourceType String @map("source_type") @db.VarChar(20)
+
+  documentId        String? @map("document_id") @db.Uuid
+  documentVersionId String? @map("document_version_id") @db.Uuid
+  chunkSequence     Int?    @map("chunk_sequence")
+  pageStart         Int?    @map("page_start")
+  pageEnd           Int?    @map("page_end")
+  sheetName         String? @map("sheet_name") @db.VarChar(120)
+  sectionTitle      String? @map("section_title") @db.VarChar(300)
+
+  knowledgeEntryId        String? @map("knowledge_entry_id") @db.Uuid
+  knowledgeEntryVersionId String? @map("knowledge_entry_version_id") @db.Uuid
+
+  checklistItemId String? @map("checklist_item_id") @db.Uuid
+
+  /// Type du Finding cité (ex. "REQUIREMENT", "RISK", "DEADLINE"...) — jamais une FK stricte, même
+  /// motif que le reste de ce modèle.
+  findingType String? @map("finding_type") @db.VarChar(30)
+  findingId   String? @map("finding_id") @db.Uuid
+
+  /// Toujours rempli, affichable tel quel côté frontend (mission §22 "Sources (3)" — jamais une
+  /// citation sans libellé lisible, même quand `excerpt` est absent).
+  label   String  @db.VarChar(300)
+  excerpt String? @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, messageId])
+  @@map("message_citations")
 }

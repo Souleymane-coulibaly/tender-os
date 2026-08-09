@@ -17,6 +17,7 @@ export type DocumentExtractionPersistenceData = {
   warnings: string[];
   lastError: string | null;
   contentChecksum: string | null;
+  documentVersionId: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -36,6 +37,7 @@ export function toDomain(record: DocumentExtractionRecord): DocumentExtraction {
     warnings: record.warnings,
     lastError: record.lastError ?? undefined,
     contentChecksum: record.contentChecksum ?? undefined,
+    documentVersionId: record.documentVersionId ?? undefined,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   });
@@ -56,6 +58,7 @@ export function toPersistence(extraction: DocumentExtraction): DocumentExtractio
     warnings: extraction.warnings,
     lastError: extraction.lastError ?? null,
     contentChecksum: extraction.contentChecksum ?? null,
+    documentVersionId: extraction.documentVersionId ?? null,
     createdAt: extraction.createdAt,
     updatedAt: extraction.updatedAt,
   };

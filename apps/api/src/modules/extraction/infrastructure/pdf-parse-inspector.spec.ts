@@ -7,6 +7,7 @@ function reference(storageKey: string) {
   return {
     organizationId: "org-1",
     documentId: "doc-1",
+    documentVersionId: "version-1",
     storageKey,
     mimeType: "application/pdf",
     extension: "pdf",

@@ -80,5 +80,10 @@ import { OpportunitiesController } from "./interfaces/http/opportunities.control
     { provide: GO_NO_GO_DECISION_REPOSITORY, useClass: PrismaGoNoGoDecisionRepository },
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
   ],
+  // V2 Sprint 9 (Chat IA conversationnel) — réexporté UNIQUEMENT pour `chat` : le dernier GO/NO-GO
+  // d'un Tender fait partie de la hiérarchie des sources structurées (mission §18), jamais
+  // recalculé par le Chat lui-même. Reste RBAC-gated (`ClientPermission.ReadGoNoGo`) : Chat ne
+  // contourne rien, il consomme le même chemin qu'un acteur humain.
+  exports: [GetGoNoGoReportUseCase],
 })
 export class OpportunityModule {}

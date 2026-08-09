@@ -9,6 +9,7 @@ function reference(storageKey: string, extension = "xlsx") {
   return {
     organizationId: "org-1",
     documentId: "doc-1",
+    documentVersionId: "version-1",
     storageKey,
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     extension,

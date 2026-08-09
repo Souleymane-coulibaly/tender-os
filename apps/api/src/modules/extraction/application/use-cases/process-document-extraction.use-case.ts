@@ -255,6 +255,10 @@ export class ProcessDocumentExtractionUseCase {
         language,
         warnings,
         contentChecksum,
+        // Correctif audit Codex round 2 P1 (Chat IA conversationnel) — la version RÉELLEMENT lue
+        // pour produire ces chunks (`reference`, résolue au tout début de cette phase), jamais
+        // relue depuis `Document.currentVersionId` au moment de la finalisation.
+        documentVersionId: reference.documentVersionId,
         chunks,
       };
     } catch (error) {
@@ -390,6 +394,7 @@ export class ProcessDocumentExtractionUseCase {
     return {
       organizationId,
       documentId,
+      documentVersionId: document.currentVersionId,
       storageKey: version.storageKey,
       mimeType: version.mimeType,
       extension: version.extension,

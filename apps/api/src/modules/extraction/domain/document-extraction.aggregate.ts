@@ -21,6 +21,12 @@ export type DocumentExtractionProps = {
   warnings: string[];
   lastError?: string | undefined;
   contentChecksum?: string | undefined;
+  /** Correctif audit Codex round 2 P1 (Chat IA conversationnel) — version EXACTE de `Document`
+   *  réellement lue pour produire les chunks de CETTE extraction, jamais recalculée après coup
+   *  depuis `Document.currentVersionId` (voir le commentaire du modèle Prisma). `undefined` pour
+   *  toute extraction créée avant cette migration ou dont la tentative a échoué avant lecture du
+   *  fichier — jamais un backfill approximatif. */
+  documentVersionId?: string | undefined;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -34,6 +40,9 @@ export type DocumentExtractionCompletionInput = {
   language?: string | undefined;
   warnings?: string[] | undefined;
   contentChecksum?: string | undefined;
+  /** La version RÉELLEMENT lue pour produire ces chunks (voir `DocumentExtractionProps.documentVersionId`)
+   *  — fournie par l'orchestrateur (`ProcessDocumentExtractionUseCase`), jamais devinée ici. */
+  documentVersionId?: string | undefined;
 };
 
 /**
@@ -110,6 +119,7 @@ export class DocumentExtraction {
     this.props.language = input.language;
     this.props.warnings = input.warnings ?? [];
     this.props.contentChecksum = input.contentChecksum;
+    this.props.documentVersionId = input.documentVersionId;
     this.props.lastError = undefined;
   }
 
@@ -172,6 +182,9 @@ export class DocumentExtraction {
   }
   get contentChecksum(): string | undefined {
     return this.props.contentChecksum;
+  }
+  get documentVersionId(): string | undefined {
+    return this.props.documentVersionId;
   }
   get createdAt(): Date {
     return this.props.createdAt;

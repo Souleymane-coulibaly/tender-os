@@ -197,6 +197,41 @@ describe("PrismaDocumentExtractionRepository (PostgreSQL)", () => {
       expect(persistedChunks).toHaveLength(1);
     });
 
+    it("correctif audit Codex round 2 P1 — persists documentVersionId from the outcome (the version REALLY read for this extraction, never Document.currentVersionId recomputed after the fact)", async () => {
+      const documentId = await seedPendingExtraction();
+      await repository.reserveForProcessing({ organizationId, documentId, occurredAt: new Date() });
+
+      const chunk = ExtractionChunk.create({ id: randomUUID(), documentId, organizationId, sequence: 0, content: "V1 content.", occurredAt: new Date() });
+      const versionV1 = randomUUID();
+      await repository.finalizeAttempt({
+        organizationId,
+        documentId,
+        expectedAttemptCount: 1,
+        occurredAt: new Date(),
+        outcome: { kind: "succeeded", strategy: DocumentExtractionStrategy.NativeText, characterCount: chunk.characterCount, chunkCount: 1, warnings: [], chunks: [chunk], documentVersionId: versionV1 },
+      });
+
+      const extraction = await repository.findByDocumentId({ organizationId, documentId });
+      expect(extraction?.documentVersionId).toBe(versionV1);
+    });
+
+    it("leaves documentVersionId NULL when the outcome does not carry one — never a backfill, never invented (mission — 'ne pas faire de backfill approximatif')", async () => {
+      const documentId = await seedPendingExtraction();
+      await repository.reserveForProcessing({ organizationId, documentId, occurredAt: new Date() });
+
+      const chunk = ExtractionChunk.create({ id: randomUUID(), documentId, organizationId, sequence: 0, content: "Content.", occurredAt: new Date() });
+      await repository.finalizeAttempt({
+        organizationId,
+        documentId,
+        expectedAttemptCount: 1,
+        occurredAt: new Date(),
+        outcome: { kind: "succeeded", strategy: DocumentExtractionStrategy.NativeText, characterCount: chunk.characterCount, chunkCount: 1, warnings: [], chunks: [chunk] },
+      });
+
+      const extraction = await repository.findByDocumentId({ organizationId, documentId });
+      expect(extraction?.documentVersionId).toBeUndefined();
+    });
+
     it("never duplicates chunks across two finalizations of successive attempts (retry never accumulates)", async () => {
       const documentId = await seedPendingExtraction();
       await repository.reserveForProcessing({ organizationId, documentId, occurredAt: new Date() });

@@ -39,6 +39,13 @@ export const TenderPermission = {
    */
   ManageWorkspace: "tender:manage_workspace",
   ValidateWorkspace: "tender:validate_workspace",
+  /** V2 Sprint 9 (Chat IA conversationnel) — même palier que `ManageWorkspace` (CONTRIBUTOR inclus,
+   *  jamais READ_ONLY/REVIEWER/EXECUTIVE/EXTERNAL_CONSULTANT) : envoyer un message au Chat reste une
+   *  action de production de contenu, pas une action réservée. La LECTURE (consulter une conversation
+   *  existante) reste couverte par `TenderPermission.Read`, déjà accordée à tous les rôles ci-dessous —
+   *  la restriction fine "lecture uniquement si ClientPermission.ReadChat" vit au palier client
+   *  (`assertChatAccess`), jamais ici. */
+  UseChat: "tender:use_chat",
 } as const;
 
 export type TenderPermission = (typeof TenderPermission)[keyof typeof TenderPermission];
@@ -59,7 +66,7 @@ export const ROLE_TENDER_PERMISSIONS: Record<string, readonly TenderPermission[]
   OWNER: Object.values(TenderPermission),
   ORGANIZATION_ADMIN: Object.values(TenderPermission),
   BID_MANAGER: Object.values(TenderPermission),
-  CONTRIBUTOR: [TenderPermission.Read, TenderPermission.List, TenderPermission.ManageChecklist, TenderPermission.ManageWorkspace],
+  CONTRIBUTOR: [TenderPermission.Read, TenderPermission.List, TenderPermission.ManageChecklist, TenderPermission.ManageWorkspace, TenderPermission.UseChat],
   REVIEWER: [TenderPermission.Read, TenderPermission.List],
   EXECUTIVE: [TenderPermission.Read, TenderPermission.List],
   EXTERNAL_CONSULTANT: [TenderPermission.Read, TenderPermission.List],

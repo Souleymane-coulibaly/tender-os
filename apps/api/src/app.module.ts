@@ -5,6 +5,7 @@ import { AiBenchmarkModule, RoutingPolicyBridgeModule } from "./modules/ai-bench
 import { AiSuggestionModule } from "./modules/ai-suggestion";
 import { AiSuggestionBridgeModule } from "./modules/ai-suggestion-bridge";
 import { AnalysisModule } from "./modules/analysis/analysis.module";
+import { ChatModule } from "./modules/chat/chat.module";
 import { ChecklistIntelligenceModule } from "./modules/checklist-intelligence/checklist-intelligence.module";
 import { ClientPortfolioModule } from "./modules/client-portfolio/client-portfolio.module";
 import { CockpitModule } from "./modules/cockpit";
@@ -73,6 +74,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     OpportunityModule,
     ChecklistIntelligenceModule,
     WorkspaceModule,
+    ChatModule,
   ],
 })
 export class AppModule {}

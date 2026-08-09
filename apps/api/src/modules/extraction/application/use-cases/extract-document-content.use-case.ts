@@ -210,6 +210,7 @@ export class ExtractDocumentContentUseCase {
     return {
       organizationId,
       documentId,
+      documentVersionId: document.currentVersionId,
       storageKey: version.storageKey,
       mimeType: version.mimeType,
       extension: version.extension,

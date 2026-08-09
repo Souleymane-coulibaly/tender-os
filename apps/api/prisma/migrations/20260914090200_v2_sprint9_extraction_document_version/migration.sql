@@ -1,0 +1,11 @@
+-- Correctif audit Codex round 2 P1 (Sprint 9, Chat IA conversationnel) — une citation DCE doit
+-- pouvoir désigner la version EXACTE du document qui a réellement été extraite/chunkée, jamais
+-- `Document.currentVersionId` au moment où le Chat répond (qui peut avoir avancé depuis, rendant la
+-- citation historiquement fausse — scénario : V1 extrait → chunk cité → upload V2 → le Chat citerait
+-- alors V2 pour un contenu qui vient de V1). `document_extractions` n'avait jusqu'ici aucune
+-- référence de version : additive, nullable — les extractions déjà terminées restent NULL (jamais un
+-- backfill approximatif avec la version courante, qui réintroduirait exactement le bug), affichées
+-- comme "version inconnue" par le Chat. Seules les extractions qui se finalisent APRÈS cette
+-- migration renseignent la colonne (`ProcessDocumentExtractionUseCase`, version lue au moment où le
+-- fichier a réellement été ouvert pour extraction).
+ALTER TABLE "document_extractions" ADD COLUMN "document_version_id" UUID;
