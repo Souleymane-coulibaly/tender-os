@@ -12,6 +12,7 @@ type GeneratedDocumentRow = {
   tenderId: string;
   documentTemplateId: string;
   title: string;
+  subjectId: string | null;
   createdBy: string;
   createdAt: Date;
 };
@@ -45,6 +46,7 @@ export function toDomainGeneratedDocument(record: GeneratedDocumentRow): Generat
     tenderId: record.tenderId,
     documentTemplateId: record.documentTemplateId,
     title: record.title,
+    subjectId: record.subjectId ?? undefined,
     createdBy: record.createdBy,
     createdAt: record.createdAt,
   });

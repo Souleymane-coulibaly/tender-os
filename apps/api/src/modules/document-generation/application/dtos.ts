@@ -118,6 +118,10 @@ export type GeneratedDocumentSummary = {
   tenderId: string;
   documentTemplateId: string;
   title: string;
+  /** V2 Sprint 11B — voir `GeneratedDocument.subjectId` (domaine) : exposé pour que les appelants
+   *  (ex. `administrative-dossier`) puissent filtrer une liste de lignées par opérateur, jamais un
+   *  second endpoint dupliqué pour ça. */
+  subjectId?: string | undefined;
   createdBy: string;
   createdAt: string;
   revisions?: readonly GeneratedDocumentRevisionSummary[] | undefined;
@@ -131,6 +135,7 @@ export function toGeneratedDocumentSummary(generatedDocument: GeneratedDocument,
     tenderId: generatedDocument.tenderId,
     documentTemplateId: generatedDocument.documentTemplateId,
     title: generatedDocument.title,
+    subjectId: generatedDocument.subjectId,
     createdBy: generatedDocument.createdBy,
     createdAt: generatedDocument.createdAt.toISOString(),
     revisions: revisions?.map(toGeneratedDocumentRevisionSummary),

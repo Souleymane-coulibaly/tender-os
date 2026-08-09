@@ -69,6 +69,9 @@ export type GeneratedDocumentSummary = {
   tenderId: string;
   documentTemplateId: string;
   title: string;
+  /** V2 Sprint 11B — voir le DTO backend : distingue plusieurs lignées d'un même (tenderId,
+   *  documentTemplateId), ex. un DC2 par membre de groupement. */
+  subjectId?: string;
   createdAt: string;
   revisions?: GeneratedDocumentRevisionSummary[];
 };

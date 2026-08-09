@@ -73,6 +73,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   REQUIRED_FIELDS_MISSING: HttpStatus.UNPROCESSABLE_ENTITY,
   DOCX_MERGE_FAILED: HttpStatus.UNPROCESSABLE_ENTITY,
   SUBCONTRACTOR_PROFILE_NOT_FOUND: HttpStatus.NOT_FOUND,
+
+  // V2 Sprint 11B (DC2 — finalisation administrative)
+  CONSORTIUM_MEMBER_NOT_FOUND: HttpStatus.NOT_FOUND,
 };
 
 @Catch(DomainError)

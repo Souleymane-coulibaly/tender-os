@@ -142,6 +142,16 @@ export class ConsortiumMandataireNotAMemberError extends DomainError {
   }
 }
 
+/** V2 Sprint 11B — un `memberId` de groupement fourni par l'appelant (DC2 par membre, mission §9)
+ *  doit toujours correspondre à un membre RÉELLEMENT déclaré sur CE Consortium — jamais résolu
+ *  implicitement, jamais un memberId d'un autre Tender/organisation accepté silencieusement. */
+export class ConsortiumMemberNotFoundError extends DomainError {
+  readonly code = "CONSORTIUM_MEMBER_NOT_FOUND";
+  constructor() {
+    super("Consortium member not found for this tender.");
+  }
+}
+
 export class ConsortiumMemberPercentagesExceed100Error extends DomainError {
   readonly code = "CONSORTIUM_MEMBER_PERCENTAGES_EXCEED_100";
   constructor() {

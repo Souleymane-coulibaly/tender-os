@@ -265,6 +265,66 @@ describe("Administrative Dossier — V2 Sprint 11 DC1 real official form fill (r
     expect(documentXml).toContain("Marche DC1");
   });
 
+  it("BLOCKING (mission §58/§39 history) — generating twice for the SAME tender appends revision #2 to the SAME lineage, never creates a second independent lineage, and R1's snapshot stays frozen", async () => {
+    const { tenderId, clientAccountId } = await createClientTenderAndCandidate({ tradeName: "Couverture Marchand SAS", siret: "35600000000048" });
+
+    const firstRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/official-forms/dc1/generate`, { method: "POST", headers: jsonHeaders(tokenOwner) });
+    expect(firstRes.status).toBe(201);
+    const first = (await firstRes.json()) as { id: string; revisions: { revisionNumber: number }[] };
+    expect(first.revisions.map((r) => r.revisionNumber)).toEqual([1]);
+
+    // La fiche source change ENTRE les deux générations — R1 doit rester figé sur l'ancien nom.
+    const updateRes = await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/legal-identity`, {
+      method: "PATCH",
+      headers: jsonHeaders(tokenOwner),
+      body: JSON.stringify({ tradeName: "Couverture Marchand SAS (renommee)", confirmDuplicate: true }),
+    });
+    expect(updateRes.status).toBe(200);
+
+    const secondRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/official-forms/dc1/generate`, { method: "POST", headers: jsonHeaders(tokenOwner) });
+    expect(secondRes.status).toBe(201);
+    const second = (await secondRes.json()) as { id: string; revisions: { revisionNumber: number; artifactDocumentId?: string }[] };
+
+    // Même lignée (même `GeneratedDocument.id`), jamais une seconde lignée indépendante.
+    expect(second.id).toBe(first.id);
+    expect(second.revisions.map((r) => r.revisionNumber).sort()).toEqual([1, 2]);
+
+    const lineageCount = await prisma.generatedDocument.count({ where: { organizationId: orgId, tenderId } });
+    expect(lineageCount).toBe(1);
+
+    const revision1 = second.revisions.find((r) => r.revisionNumber === 1)!;
+    const revision2 = second.revisions.find((r) => r.revisionNumber === 2)!;
+    const download1 = await fetch(`${baseUrl}/api/v1/documents/${revision1.artifactDocumentId}/download`, { headers: jsonHeaders(tokenOwner) });
+    const zip1 = await JSZip.loadAsync(Buffer.from(await download1.arrayBuffer()));
+    const xml1 = await zip1.file("word/document.xml")?.async("string");
+    expect(xml1).toContain("Couverture Marchand SAS");
+    expect(xml1).not.toContain("renommee");
+
+    const download2 = await fetch(`${baseUrl}/api/v1/documents/${revision2.artifactDocumentId}/download`, { headers: jsonHeaders(tokenOwner) });
+    const zip2 = await JSZip.loadAsync(Buffer.from(await download2.arrayBuffer()));
+    const xml2 = await zip2.file("word/document.xml")?.async("string");
+    expect(xml2).toContain("renommee");
+  });
+
+  it("BLOCKING (correctif audit Codex P2 — concurrence) — two simultaneous first-time generate calls on the SAME tender never create two independent lineages", async () => {
+    const { tenderId } = await createClientTenderAndCandidate({ tradeName: "Toiture Bernard SARL", siret: "35600000000048" });
+
+    const [resA, resB] = await Promise.all([
+      fetch(`${baseUrl}/api/v1/tenders/${tenderId}/official-forms/dc1/generate`, { method: "POST", headers: jsonHeaders(tokenOwner) }),
+      fetch(`${baseUrl}/api/v1/tenders/${tenderId}/official-forms/dc1/generate`, { method: "POST", headers: jsonHeaders(tokenOwner) }),
+    ]);
+    expect(resA.status).toBe(201);
+    expect(resB.status).toBe(201);
+    const bodyA = (await resA.json()) as { id: string };
+    const bodyB = (await resB.json()) as { id: string };
+
+    expect(bodyA.id).toBe(bodyB.id);
+    const lineageCount = await prisma.generatedDocument.count({ where: { organizationId: orgId, tenderId } });
+    expect(lineageCount).toBe(1);
+    const revisions = await prisma.generatedDocumentRevision.findMany({ where: { organizationId: orgId, generatedDocumentId: bodyA.id }, orderBy: { revisionNumber: "asc" } });
+    expect(revisions.map((r) => r.revisionNumber)).toEqual([1, 2]);
+  });
+
   it("BLOCKING — a contributor without a client assignment on this Tender's client cannot read or generate the DC1 form (never leaks existence — 404, same convention as document-generation's own cross-client tests)", async () => {
     const { clientAccountId, tenderId } = await createClientTenderAndCandidate({ tradeName: "Isolation SAS", siret: "35600000000048" });
     void clientAccountId;

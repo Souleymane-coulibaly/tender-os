@@ -10,11 +10,32 @@
  * position devinée depuis une connaissance théorique du formulaire.
  */
 
-/** Une case à cocher Word héritée (`w:ffData`/`FORMCHECKBOX`) — construction EXACTE à 3 runs
- *  vérifiée dans les fichiers réels fournis (`<w:r><w:fldChar begin><w:ffData>...<w:checkBox>...
- *  </w:fldChar></w:r><w:r><w:instrText> FORMCHECKBOX </w:instrText></w:r><w:r><w:fldChar end/>
- *  </w:r>`). */
-const CHECKBOX_TRIPLET_RE = /<w:r><w:fldChar w:fldCharType="begin"><w:ffData>[\s\S]*?<\/w:ffData><\/w:fldChar><\/w:r><w:r><w:instrText[^>]*> FORMCHECKBOX <\/w:instrText><\/w:r><w:r><w:fldChar w:fldCharType="end"\/><\/w:r>/g;
+/** Une case à cocher Word héritée (`w:ffData`/`FORMCHECKBOX`) — construction à 3 runs vérifiée dans
+ *  les fichiers réels fournis (`<w:r>[<w:rPr>...</w:rPr>]<w:fldChar begin><w:ffData>...<w:checkBox>
+ *  ...</w:fldChar></w:r>[<w:bookmarkStart .../>]<w:r>[<w:rPr>...</w:rPr>]<w:instrText>
+ *  FORMCHECKBOX </w:instrText></w:r><w:r>[<w:rPr>...</w:rPr>]<w:fldChar end/></w:r>`). Deux
+ *  variations optionnelles vérifiées par inspection réelle (jamais supposées) : le bloc `<w:rPr>`
+ *  (police du run) est présent dans DC2 (`Marianne`), absent dans DC1 ; un `<w:bookmarkStart/>`
+ *  auto-fermant (nom d'ancre accessibilité, ex. `CaseACocher3`) s'intercale parfois entre le run
+ *  "begin" et le run "instrText" dans DC2 (5 des 9 cases), jamais dans DC1. */
+// Correctif bug réel découvert sur DC2 : un `[\s\S]*?` lazy NON borné, quand le littéral qui le
+// suit ne correspond pas immédiatement après la PREMIÈRE occurrence rencontrée, backtrack en
+// élargissant la capture jusqu'à une occurrence BEAUCOUP plus loin dans le document (traversant
+// silencieusement des dizaines de runs/paragraphes non liés) — un remplacement de case à cocher a
+// ainsi englouti jusqu'à 37 Ko de contenu réel. Un essai avec lookahead négatif pour borner la
+// traversée a échoué à son tour (0 correspondance). Fix RETENU, robuste et simple à auditer : les
+// contenus `<w:rPr>...</w:rPr>` et `<w:ffData>...</w:ffData>` réels de ces runs de case à cocher
+// font quelques dizaines à ~150 caractères (vérifié par inspection directe des 3 fichiers réels) —
+// une répétition BORNÉE (`{0,N}`) élimine tout backtracking incontrôlé par construction, la
+// recherche ne peut plus jamais s'étendre au-delà de la fenêtre déclarée.
+const RUN_PROPS_OPT = "(?:<w:rPr>[\\s\\S]{0,200}?<\\/w:rPr>)?";
+const BOOKMARK_START_OPT = "(?:<w:bookmarkStart[^>]*\\/>)?";
+/** Exporté UNIQUEMENT pour le diagnostic (`debug-dc2-checkbox.ts`) — jamais utilisé par le code de
+ *  préparation lui-même en dehors de `replaceCheckboxesInOrder`. */
+export const CHECKBOX_TRIPLET_RE = new RegExp(
+  `<w:r>${RUN_PROPS_OPT}<w:fldChar w:fldCharType="begin"><w:ffData>[\\s\\S]{0,400}?<\\/w:ffData><\\/w:fldChar><\\/w:r>${BOOKMARK_START_OPT}<w:r>${RUN_PROPS_OPT}<w:instrText[^>]*> FORMCHECKBOX <\\/w:instrText><\\/w:r><w:r>${RUN_PROPS_OPT}<w:fldChar w:fldCharType="end"\\/><\\/w:r>`,
+  "g",
+);
 
 function placeholderRun(fieldKey: string): string {
   return `<w:r><w:t xml:space="preserve">{{${fieldKey}}}</w:t></w:r>`;

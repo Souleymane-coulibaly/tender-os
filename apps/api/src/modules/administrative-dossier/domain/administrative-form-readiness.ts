@@ -18,7 +18,7 @@ export type AdministrativeFormFieldReadiness = Readonly<{
 }>;
 
 export type AdministrativeFormReadiness = Readonly<{
-  documentType: "DC1" | "DC4";
+  documentType: "DC1" | "DC2" | "DC4";
   fields: readonly AdministrativeFormFieldReadiness[];
   applicableFieldCount: number;
   availableFieldCount: number;
@@ -29,7 +29,7 @@ export type AdministrativeFormReadiness = Readonly<{
 
 /** Fonction PURE, réutilisée par les deux résolveurs (DC1/DC4) — jamais un second calcul divergent
  *  du pourcentage/de la liste des champs manquants (mission §20 "jamais un pourcentage inventé"). */
-export function summarizeAdministrativeFormReadiness(documentType: "DC1" | "DC4", fields: readonly AdministrativeFormFieldReadiness[]): AdministrativeFormReadiness {
+export function summarizeAdministrativeFormReadiness(documentType: "DC1" | "DC2" | "DC4", fields: readonly AdministrativeFormFieldReadiness[]): AdministrativeFormReadiness {
   const applicable = fields.filter((f) => f.status !== "NOT_APPLICABLE");
   const available = applicable.filter((f) => f.status === "AVAILABLE");
   const missing = applicable.filter((f) => f.status === "MISSING").map((f) => f.fieldKey);

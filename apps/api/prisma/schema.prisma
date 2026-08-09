@@ -6132,6 +6132,14 @@ model GeneratedDocument {
   /// le template est renommé ensuite (même motif que `ExportJob.documentType`).
   title String @db.VarChar(200)
 
+  /// V2 Sprint 11B — clé de portée GÉNÉRIQUE (jamais de logique métier DC1/DC2/DC4 ici) distinguant
+  /// plusieurs lignées indépendantes pour un même (tenderId, documentTemplateId) — ex. un DC2 par
+  /// membre de groupement, un DC4 par déclaration de sous-traitance. `null` = une seule lignée
+  /// possible pour ce (tenderId, documentTemplateId) (mission "jamais deux implémentations
+  /// divergentes de la découverte de lignée" — administrative-dossier choisit la clé, ce module ne
+  /// fait qu'indexer dessus pour retrouver-ou-créer la bonne lignée avant chaque génération).
+  subjectId String? @map("subject_id") @db.VarChar(200)
+
   createdBy String   @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -6139,6 +6147,14 @@ model GeneratedDocument {
 
   @@unique([id, organizationId])
   @@index([organizationId, tenderId])
+  @@index([organizationId, tenderId, documentTemplateId, subjectId])
+  /// Correctif audit Codex P2 (Sprint 11B) — au plus une lignée par (organizationId, tenderId,
+  /// documentTemplateId, subjectId) : filet de sécurité de dernier recours contre le
+  /// `pg_advisory_xact_lock` de portée (`lockGenerationScope`), même motif que
+  /// `document_template_versions_org_template_active_key`. Deux index partiels ajoutés à la main
+  /// en fin de migration (Prisma ne modélise pas nativement `WHERE` dans le DSL) — un pour
+  /// `subject_id IS NOT NULL` (DC2/DC4), un pour `subject_id IS NULL` (DC1, Postgres traite
+  /// normalement chaque NULL comme distinct dans un index unique classique).
   @@map("generated_documents")
 }
 

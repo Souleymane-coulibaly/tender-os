@@ -9,6 +9,7 @@ import {
   GetDc1FormFillReadinessUseCase,
   GetDc4FormFillReadinessUseCase,
 } from "../../application/use-cases/official-form-fill.use-cases";
+import { GenerateDc2FormFillUseCase, GetDc2FormFillReadinessUseCase } from "../../application/use-cases/dc2-form-fill.use-cases";
 import { AdministrativeDossierErrorFilter } from "./administrative-dossier-error.filter";
 import { IdParamSchema } from "./schemas";
 
@@ -28,6 +29,8 @@ export class AdministrativeDossierFormFillController {
   constructor(
     private readonly getDc1ReadinessUseCase: GetDc1FormFillReadinessUseCase,
     private readonly generateDc1UseCase: GenerateDc1FormFillUseCase,
+    private readonly getDc2ReadinessUseCase: GetDc2FormFillReadinessUseCase,
+    private readonly generateDc2UseCase: GenerateDc2FormFillUseCase,
     private readonly getDc4ReadinessUseCase: GetDc4FormFillReadinessUseCase,
     private readonly generateDc4UseCase: GenerateDc4FormFillUseCase,
   ) {}
@@ -46,6 +49,47 @@ export class AdministrativeDossierFormFillController {
     @Req() request: RequestWithId,
   ) {
     return this.generateDc1UseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId, requestId: request.id });
+  }
+
+  // V2 Sprint 11B — mission §9 "economicOperatorId explicite" : deux familles de routes, jamais un
+  // paramètre optionnel ambigu — le candidat et chaque membre de groupement ont leur propre
+  // sous-ressource, jamais résolus implicitement l'un pour l'autre.
+  @Get("tenders/:tenderId/official-forms/dc2/candidate/readiness")
+  async dc2CandidateReadiness(@CurrentActor() actor: AuthenticatedActor, @CurrentMembershipContext() membership: MembershipContext, @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string) {
+    return this.getDc2ReadinessUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId, scope: { kind: "CANDIDATE" } });
+  }
+
+  @Post("tenders/:tenderId/official-forms/dc2/candidate/generate")
+  @HttpCode(HttpStatus.CREATED)
+  async generateDc2Candidate(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Req() request: RequestWithId,
+  ) {
+    return this.generateDc2UseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId, scope: { kind: "CANDIDATE" }, requestId: request.id });
+  }
+
+  @Get("tenders/:tenderId/official-forms/dc2/members/:memberId/readiness")
+  async dc2MemberReadiness(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Param("memberId") memberId: string,
+  ) {
+    return this.getDc2ReadinessUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId, scope: { kind: "MEMBER", memberId } });
+  }
+
+  @Post("tenders/:tenderId/official-forms/dc2/members/:memberId/generate")
+  @HttpCode(HttpStatus.CREATED)
+  async generateDc2Member(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Param("memberId") memberId: string,
+    @Req() request: RequestWithId,
+  ) {
+    return this.generateDc2UseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId, scope: { kind: "MEMBER", memberId }, requestId: request.id });
   }
 
   @Get("subcontractor-declarations/:id/official-forms/dc4/readiness")

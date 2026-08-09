@@ -13,6 +13,11 @@ export class PrismaGeneratedDocumentRepository implements GeneratedDocumentRepos
     await this.prisma.currentClient().$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${input.organizationId}:${input.generatedDocumentId}`}))`;
   }
 
+  async lockGenerationScope(input: { organizationId: string; tenderId: string; documentTemplateId: string; subjectId: string | null }): Promise<void> {
+    const key = `${input.organizationId}:${input.tenderId}:${input.documentTemplateId}:${input.subjectId ?? ""}`;
+    await this.prisma.currentClient().$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+  }
+
   async create(generatedDocument: GeneratedDocument): Promise<void> {
     await this.prisma.currentClient().generatedDocument.create({
       data: {
@@ -22,6 +27,7 @@ export class PrismaGeneratedDocumentRepository implements GeneratedDocumentRepos
         tenderId: generatedDocument.tenderId,
         documentTemplateId: generatedDocument.documentTemplateId,
         title: generatedDocument.title,
+        subjectId: generatedDocument.subjectId ?? null,
         createdBy: generatedDocument.createdBy,
         createdAt: generatedDocument.createdAt,
       },
@@ -30,6 +36,14 @@ export class PrismaGeneratedDocumentRepository implements GeneratedDocumentRepos
 
   async findById(input: { organizationId: string; generatedDocumentId: string }): Promise<GeneratedDocument | null> {
     const record = await this.prisma.currentClient().generatedDocument.findFirst({ where: { id: input.generatedDocumentId, organizationId: input.organizationId } });
+    return record ? toDomainGeneratedDocument(record) : null;
+  }
+
+  async findLatestByScope(input: { organizationId: string; tenderId: string; documentTemplateId: string; subjectId: string | null }): Promise<GeneratedDocument | null> {
+    const record = await this.prisma.currentClient().generatedDocument.findFirst({
+      where: { organizationId: input.organizationId, tenderId: input.tenderId, documentTemplateId: input.documentTemplateId, subjectId: input.subjectId },
+      orderBy: { createdAt: "desc" },
+    });
     return record ? toDomainGeneratedDocument(record) : null;
   }
 

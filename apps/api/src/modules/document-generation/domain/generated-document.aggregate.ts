@@ -5,6 +5,9 @@ export type GeneratedDocumentProps = {
   tenderId: string;
   documentTemplateId: string;
   title: string;
+  /** V2 Sprint 11B — voir le commentaire du modèle Prisma : clé de portée générique permettant
+   *  plusieurs lignées indépendantes pour un même (tenderId, documentTemplateId). */
+  subjectId?: string | undefined;
   createdBy: string;
   createdAt: Date;
 };
@@ -25,6 +28,7 @@ export class GeneratedDocument {
     tenderId: string;
     documentTemplateId: string;
     title: string;
+    subjectId?: string | undefined;
     createdBy: string;
     occurredAt: Date;
   }): GeneratedDocument {
@@ -39,6 +43,7 @@ export class GeneratedDocument {
       tenderId: input.tenderId,
       documentTemplateId: input.documentTemplateId,
       title: trimmedTitle,
+      subjectId: input.subjectId,
       createdBy: input.createdBy,
       createdAt: input.occurredAt,
     });
@@ -65,6 +70,9 @@ export class GeneratedDocument {
   }
   get title(): string {
     return this.props.title;
+  }
+  get subjectId(): string | undefined {
+    return this.props.subjectId;
   }
   get createdBy(): string {
     return this.props.createdBy;

@@ -75,13 +75,16 @@ import {
   GetDc1FormFillReadinessUseCase,
   GetDc4FormFillReadinessUseCase,
 } from "./application/use-cases/official-form-fill.use-cases";
+import { GenerateDc2FormFillUseCase, GetDc2FormFillReadinessUseCase } from "./application/use-cases/dc2-form-fill.use-cases";
 
 import { AdministrativeDossierAccessService } from "./application/services/administrative-dossier-access.service";
 import { AdministrativeDossierRecalculationService } from "./application/services/administrative-dossier-recalculation.service";
 import { AdministrativeFormDataAssembler } from "./application/services/administrative-form-data-assembler.service";
 import { AdministrativeGeneratedDocumentService } from "./application/services/administrative-generated-document.service";
 import { Dc1OfficialFormResolver } from "./application/services/official-form-mappers/dc1-official-form-resolver.service";
+import { Dc2OfficialFormResolver } from "./application/services/official-form-mappers/dc2-official-form-resolver.service";
 import { Dc4OfficialFormResolver } from "./application/services/official-form-mappers/dc4-official-form-resolver.service";
+import { OfficialFormGenerationRunner } from "./application/services/official-form-generation-runner.service";
 
 import { PrismaAdministrativeDocumentRepository } from "./infrastructure/prisma-administrative-document.repository";
 import { PrismaAdministrativeDocumentRevisionRepository } from "./infrastructure/prisma-administrative-document-revision.repository";
@@ -189,9 +192,13 @@ import { AdministrativeDossierStructuredController } from "./interfaces/http/adm
     AdministrativeGeneratedDocumentService,
 
     Dc1OfficialFormResolver,
+    Dc2OfficialFormResolver,
     Dc4OfficialFormResolver,
+    OfficialFormGenerationRunner,
     GetDc1FormFillReadinessUseCase,
     GenerateDc1FormFillUseCase,
+    GetDc2FormFillReadinessUseCase,
+    GenerateDc2FormFillUseCase,
     GetDc4FormFillReadinessUseCase,
     GenerateDc4FormFillUseCase,
 
