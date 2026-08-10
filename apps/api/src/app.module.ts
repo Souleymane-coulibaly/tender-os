@@ -26,6 +26,7 @@ import { OrganizationsModule } from "./modules/organizations/organizations.modul
 import { OutboxModule } from "./modules/outbox";
 import { PlatformAdministrationModule } from "./modules/platform-administration/platform-administration.module";
 import { PricingModule } from "./modules/pricing/pricing.module";
+import { PricingScheduleModule } from "./modules/pricing-schedule";
 import { SignatureModule } from "./modules/signature";
 import { SubcontractorsModule, SubcontractorSubjectValidationBridgeModule } from "./modules/subcontractors";
 import { SubmissionModule } from "./modules/submission";
@@ -79,6 +80,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     ChatModule,
     DocumentGenerationModule,
     TechnicalMemoModule,
+    PricingScheduleModule,
   ],
 })
 export class AppModule {}

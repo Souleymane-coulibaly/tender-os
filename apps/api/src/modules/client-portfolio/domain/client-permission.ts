@@ -145,6 +145,17 @@ export const ClientPermission = {
   ManageTechnicalMemo: "CLIENT_MANAGE_TECHNICAL_MEMO",
   ValidateTechnicalMemo: "CLIENT_VALIDATE_TECHNICAL_MEMO",
   ExportTechnicalMemo: "CLIENT_EXPORT_TECHNICAL_MEMO",
+  /** V2 Sprint 13 (Chiffrage BPU/DPGF/DQE) — même motif additif que `ReadTechnicalMemo`/
+   *  `ManageTechnicalMemo`/`ValidateTechnicalMemo`/`ExportTechnicalMemo` : consulter un chiffrage/
+   *  ses lignes/contrôles vs. détecter/extraire/saisir un prix (simple ou avancé)/corriger un
+   *  mapping vs. valider une version ("règle stricte" — mission "validation humaine explicite",
+   *  une version VALIDATED devient immuable, jamais délégué au CONTRIBUTOR) vs. générer le(s)
+   *  fichier(s) financier(s) final(aux) — action de production distincte et EXPLICITE (mission "Je
+   *  préfère séparer : Validate → puis → Generate"), même palier que `ExportTechnicalMemo`. */
+  ReadPricingSchedule: "CLIENT_READ_PRICING_SCHEDULE",
+  ManagePricingSchedule: "CLIENT_MANAGE_PRICING_SCHEDULE",
+  ValidatePricingSchedule: "CLIENT_VALIDATE_PRICING_SCHEDULE",
+  GeneratePricingScheduleFiles: "CLIENT_GENERATE_PRICING_SCHEDULE_FILES",
   /** Répertoire organisationnel de sous-traitants (mission §6) — PAS scopé par ClientAccount
    *  (réutilisable par plusieurs entreprises candidates de la même organisation), donc absent de
    *  `ROLE_CLIENT_ACTION_PERMISSIONS` ci-dessous ; vérifié uniquement au palier organisation via
@@ -224,6 +235,10 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ManageTechnicalMemo,
   ClientPermission.ValidateTechnicalMemo,
   ClientPermission.ExportTechnicalMemo,
+  ClientPermission.ReadPricingSchedule,
+  ClientPermission.ManagePricingSchedule,
+  ClientPermission.ValidatePricingSchedule,
+  ClientPermission.GeneratePricingScheduleFiles,
   // V2 Sprint 5 (audit Codex, round 2 — P1 confirmé) — `RecordGoNoGoDecision`/`PromoteOpportunity`
   // sont volontairement ABSENTES de ce bypass organisation-tier silencieux : le chemin normal exige
   // une affectation CLIENT_MANAGER réelle sur le client précis, y compris pour OWNER/
@@ -334,6 +349,12 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ManageTechnicalMemo,
     ClientPermission.ValidateTechnicalMemo,
     ClientPermission.ExportTechnicalMemo,
+    /** V2 Sprint 13 — le CLIENT_MANAGER a tous les droits Chiffrage, y compris valider une version
+     *  ("règle stricte", immutabilité post-validation) et générer les fichiers financiers finaux. */
+    ClientPermission.ReadPricingSchedule,
+    ClientPermission.ManagePricingSchedule,
+    ClientPermission.ValidatePricingSchedule,
+    ClientPermission.GeneratePricingScheduleFiles,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -401,6 +422,12 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadTechnicalMemo,
     ClientPermission.ManageTechnicalMemo,
     ClientPermission.ExportTechnicalMemo,
+    /** V2 Sprint 13 — le CONTRIBUTOR peut consulter/détecter/extraire/saisir un prix et générer les
+     *  fichiers financiers finaux, mais jamais valider une version ("règle stricte" réservée au
+     *  CLIENT_MANAGER ci-dessus, immutabilité post-validation). */
+    ClientPermission.ReadPricingSchedule,
+    ClientPermission.ManagePricingSchedule,
+    ClientPermission.GeneratePricingScheduleFiles,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -433,6 +460,10 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
      *  jamais n'en gère/génère/valide/exporte (`ManageTechnicalMemo`/`ValidateTechnicalMemo`/
      *  `ExportTechnicalMemo` réservés aux rôles ci-dessus). */
     ClientPermission.ReadTechnicalMemo,
+    /** V2 Sprint 13 — le VIEWER consulte le chiffrage (lignes, contrôles, versions), jamais n'en
+     *  gère/valide/génère (`ManagePricingSchedule`/`ValidatePricingSchedule`/
+     *  `GeneratePricingScheduleFiles` réservés aux rôles ci-dessus). */
+    ClientPermission.ReadPricingSchedule,
   ],
 };
 

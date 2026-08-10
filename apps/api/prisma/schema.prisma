@@ -408,6 +408,7 @@ model Tender {
   deliverableTemplates       DeliverableTemplate[]
   documentThemes             DocumentTheme[]
   technicalMemos             TechnicalMemo[]
+  pricingSchedules           PricingSchedule[]
   generatedDocuments         GeneratedDocument[]
   administrativeDossiers     AdministrativeDossier[]
   administrativeRequirements AdministrativeRequirement[]
@@ -6440,4 +6441,185 @@ model TechnicalMemoSectionRequirement {
   @@unique([technicalMemoSectionId, findingType, findingId])
   @@index([organizationId, findingType, findingId])
   @@map("technical_memo_section_requirements")
+}
+
+/// V2 Sprint 13 (Chiffrage BPU/DPGF/DQE) — un chiffrage par (Tender, lot optionnel, candidate,
+/// fichier source financier du DCE) : un lot peut porter PLUSIEURS chiffrages simultanés (BPU +
+/// DQE + DPGF, mission §20), jamais un seul agrégat fourre-tout. `sourceDocumentId` pointe
+/// TOUJOURS vers un `Document`/`DocumentVersion` déjà présent dans le DCE (mission §7 "pas de
+/// réimport obligatoire") — jamais un second stockage parallèle du même fichier acheteur.
+model PricingSchedule {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  lotId String? @map("lot_id") @db.Uuid
+
+  /// Mission §69 — jamais réutilisé aveuglément entre deux candidates du même Tender.
+  clientAccountId String @map("client_account_id") @db.Uuid
+
+  /// BPU | DPGF | DQE | OTHER_FINANCIAL_SCHEDULE — CHECK (migration).
+  financialDocumentType String @map("financial_document_type") @db.VarChar(30)
+
+  /// Fichier acheteur ORIGINAL (mission §9 "immuable") — jamais modifié, jamais réimporté si déjà
+  /// présent dans le DCE.
+  sourceDocumentId        String @map("source_document_id") @db.Uuid
+  sourceDocumentVersionId String @map("source_document_version_id") @db.Uuid
+
+  /// DRAFT | READY | VALIDATED | EXPORTED — dénormalisé depuis la version courante (mission §43),
+  /// jamais la seule source de vérité (voir `PricingScheduleVersion.status`).
+  status String @default("DRAFT") @db.VarChar(20)
+
+  currentVersionId     String? @map("current_version_id") @db.Uuid
+  currentVersionNumber Int     @default(0) @map("current_version_number")
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  versions PricingScheduleVersion[]
+
+  @@unique([id, organizationId])
+  /// Un seul chiffrage par (Tender, lot, candidate, fichier source) — appliqué via DEUX index
+  /// partiels écrits à la main dans la migration (le DSL Prisma ne peut pas exprimer `WHERE`),
+  /// même motif que `TechnicalMemo` (Sprint 12) : Postgres traite chaque `lotId` NULL comme
+  /// distinct dans un index unique classique.
+  @@index([organizationId, tenderId])
+  @@index([organizationId, clientAccountId])
+  @@map("pricing_schedules")
+}
+
+/// Historique APPEND-ONLY d'un chiffrage (mission §22 "V1, V2, V3-VALIDATED... jamais écraser une
+/// version validée") — chaque version fige sa PROPRE `sourceDocumentVersionId` (mission §8/§23,
+/// jamais `document.currentVersion` implicite) et porte SES PROPRES lignes
+/// (`PricingScheduleLine.pricingScheduleVersionId`) : créer V2 ne mute jamais les lignes de V1.
+model PricingScheduleVersion {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  pricingScheduleId String          @map("pricing_schedule_id") @db.Uuid
+  pricingSchedule   PricingSchedule @relation(fields: [pricingScheduleId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  versionNumber Int @map("version_number")
+
+  /// DRAFT | IN_REVIEW | VALIDATED — CHECK. Une version VALIDATED est immuable (mission §45).
+  status String @default("DRAFT") @db.VarChar(20)
+
+  /// Figée à la création de CETTE version (mission §8) — jamais recalculée si le Document source
+  /// change ensuite (une nouvelle version de chiffrage devrait alors être créée explicitement).
+  sourceDocumentVersionId String @map("source_document_version_id") @db.Uuid
+
+  /// Incrémentée uniquement si l'utilisateur corrige le mapping colonnes/feuille (mission §14) —
+  /// jamais recalculée en silence pour une version déjà créée.
+  mappingVersion Int @default(1) @map("mapping_version")
+
+  createdBy   String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  validatedBy String?   @map("validated_by") @db.Uuid
+  validatedAt DateTime? @map("validated_at")
+
+  lines      PricingScheduleLine[]
+  finalFiles PricingScheduleFinalFile[]
+
+  @@unique([id, organizationId])
+  @@unique([pricingScheduleId, versionNumber])
+  @@index([organizationId, pricingScheduleId])
+  @@map("pricing_schedule_versions")
+}
+
+/// Une ligne extraite du classeur acheteur (mission §15) — appartient à UNE VERSION précise
+/// (jamais mutable après la validation de cette version, mission §45 "create new version"). Les
+/// champs acheteur (désignation/unité/quantité/référence cellule) sont VERROUILLÉS côté domaine
+/// (mission §29/§30) ; seul `proposedUnitPrice`/`proposedTotal` (et le detail `costBreakdown`
+/// optionnel) sont modifiables par l'entreprise avant validation.
+model PricingScheduleLine {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  pricingScheduleVersionId String                 @map("pricing_schedule_version_id") @db.Uuid
+  pricingScheduleVersion   PricingScheduleVersion @relation(fields: [pricingScheduleVersionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  sheetName String @map("sheet_name") @db.VarChar(200)
+  rowNumber Int    @map("row_number")
+
+  /// PRICE_ITEM | SECTION_HEADER | SUBTOTAL | NOTE — CHECK (mission §18 "ne pas traiter toutes les
+  /// lignes comme PricingLine tarifaire"). Seul PRICE_ITEM porte un prix.
+  kind String @default("PRICE_ITEM") @db.VarChar(20)
+
+  /// Hiérarchie DPGF (mission §39 "chapitre → sous-chapitre → poste") — profondeur 0 = racine,
+  /// jamais recalculée après extraction.
+  hierarchyLevel Int     @default(0) @map("hierarchy_level")
+  parentLineId   String? @map("parent_line_id") @db.Uuid
+
+  /// Données ACHETEUR verrouillées — jamais modifiables via l'API (mission §29/§30).
+  designation String   @db.VarChar(1000)
+  unit        String?  @db.VarChar(60)
+  quantity    Decimal? @db.Decimal(18, 6)
+
+  /// Provenance cellule ACHETEUR (mission §16/§17) — jamais perdue, toujours la source de vérité
+  /// pour une future réinjection.
+  designationCellRef    String? @map("designation_cell_ref") @db.VarChar(20)
+  quantityCellRef       String? @map("quantity_cell_ref") @db.VarChar(20)
+  buyerUnitPriceCellRef String? @map("buyer_unit_price_cell_ref") @db.VarChar(20)
+  buyerTotalCellRef     String? @map("buyer_total_cell_ref") @db.VarChar(20)
+
+  /// Champs ENTREPRISE modifiables — jamais renseignés à l'extraction, jamais suggérés
+  /// automatiquement par une IA comme valeur finale (mission §27/§28).
+  proposedUnitPrice Decimal? @map("proposed_unit_price") @db.Decimal(18, 6)
+  proposedTotal     Decimal? @map("proposed_total") @db.Decimal(18, 6)
+  currencyCode      String   @default("EUR") @map("currency_code") @db.VarChar(3)
+
+  /// Mode avancé optionnel (mission §26) — jamais obligatoire, jamais un ERP comptable.
+  costBreakdown Json? @map("cost_breakdown")
+
+  candidateComment String? @map("candidate_comment")
+
+  /// EMPTY | PRICED | NEEDS_REVIEW — CHECK.
+  status String @default("EMPTY") @db.VarChar(20)
+
+  /// Clé de rapprochement BPU↔DQE normalisée (mission §38) — jamais une fusion automatique sur
+  /// simple similarité texte, seulement un signal proposé.
+  matchingKey String? @map("matching_key") @db.VarChar(300)
+
+  metadata Json @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@unique([pricingScheduleVersionId, sheetName, rowNumber])
+  @@index([organizationId, pricingScheduleVersionId])
+  @@index([organizationId, matchingKey])
+  @@map("pricing_schedule_lines")
+}
+
+/// Artefact APPEND-ONLY (mission "snapshot au moment de la génération... historique complet") —
+/// un simple pointeur de provenance vers le fichier financier final RÉEL, dont les octets vivent
+/// dans Document/DocumentVersion (mission "réutiliser Document/DocumentVersion... jamais un système
+/// de stockage parallèle") : cette table ne stocke JAMAIS elle-même un fichier, uniquement l'ID de
+/// la `PricingScheduleVersion` VALIDATED source et l'ID du Document/DocumentVersion produit. Une
+/// même version VALIDATED peut produire plusieurs lignes ici (nouvelle tentative après échec de
+/// stockage, ou régénération explicite) — jamais mise à jour en place, toujours une nouvelle ligne.
+model PricingScheduleFinalFile {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  pricingScheduleVersionId String                 @map("pricing_schedule_version_id") @db.Uuid
+  pricingScheduleVersion   PricingScheduleVersion @relation(fields: [pricingScheduleVersionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Fichier RÉEL produit (copie chirurgicale du classeur source, mission §9 "jamais modifier
+  /// l'original") — stocké via le module Documents, jamais une seconde infrastructure de fichier.
+  documentId        String @map("document_id") @db.Uuid
+  documentVersionId String @map("document_version_id") @db.Uuid
+
+  injectedCellCount Int @map("injected_cell_count")
+
+  generatedBy String   @map("generated_by") @db.Uuid
+  generatedAt DateTime @default(now()) @map("generated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, pricingScheduleVersionId])
+  @@map("pricing_schedule_final_files")
 }

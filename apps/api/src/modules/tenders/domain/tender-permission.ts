@@ -70,6 +70,13 @@ export const TenderPermission = {
    *  "règle stricte" pour VALIDER une section vit au palier client (`ClientPermission.
    *  ValidateTechnicalMemo`, via `assertTechnicalMemoAccess`), jamais ici. */
   UseTechnicalMemo: "tender:use_technical_memo",
+  /** V2 Sprint 13 (Chiffrage BPU/DPGF/DQE) — même palier que `UseTechnicalMemo`/
+   *  `GenerateAdministrativeForm` (CONTRIBUTOR inclus) : détecter/extraire/saisir un prix/générer
+   *  un fichier financier restent des actions de production de contenu, pas des actions réservées.
+   *  La LECTURE reste couverte par `TenderPermission.Read` — la restriction fine "règle stricte"
+   *  pour VALIDER une version vit au palier client (`ClientPermission.ValidatePricingSchedule`),
+   *  jamais ici. */
+  UsePricingSchedule: "tender:use_pricing_schedule",
 } as const;
 
 export type TenderPermission = (typeof TenderPermission)[keyof typeof TenderPermission];
@@ -99,6 +106,7 @@ export const ROLE_TENDER_PERMISSIONS: Record<string, readonly TenderPermission[]
     TenderPermission.UseDocumentGeneration,
     TenderPermission.GenerateAdministrativeForm,
     TenderPermission.UseTechnicalMemo,
+    TenderPermission.UsePricingSchedule,
   ],
   REVIEWER: [TenderPermission.Read, TenderPermission.List],
   EXECUTIVE: [TenderPermission.Read, TenderPermission.List],

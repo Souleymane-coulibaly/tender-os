@@ -28,6 +28,11 @@ export type DceDocumentSummary = {
   extension: string;
   sizeBytes: number;
   checksum: string;
+  /** V2 Sprint 13 (Chiffrage) — déjà présent côté API (`DceDocumentSummary`), simplement absent de
+   *  ce type frontend jusqu'ici (aucun consommateur n'en avait besoin) : requis pour créer un
+   *  chiffrage sur une version précise du document sans jamais dépendre implicitement de
+   *  `document.currentVersion` au moment de l'extraction. */
+  currentVersionId: string;
   currentVersionNumber: number;
   category: DceDocumentCategory;
   processingStatus: DceDocumentProcessingStatus;

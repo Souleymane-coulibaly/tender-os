@@ -53,6 +53,7 @@ const documents: DceDocumentSummary[] = [
     extension: "pdf",
     sizeBytes: 2048,
     checksum: "hash-1",
+    currentVersionId: "document-1-version-1",
     currentVersionNumber: 1,
     category: "TECHNICAL",
     processingStatus: "READY_FOR_ANALYSIS",
