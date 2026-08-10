@@ -134,6 +134,17 @@ export const ClientPermission = {
    *  (org-tier, module `document-generation`), même séparation que templates Export vs. usage Export. */
   ReadDocumentGeneration: "CLIENT_READ_DOCUMENT_GENERATION",
   ManageDocumentGeneration: "CLIENT_MANAGE_DOCUMENT_GENERATION",
+  /** V2 Sprint 12 (Mémoire technique IA) — même motif additif que `ReadAdministrativeDossier`/
+   *  `ManageAdministrativeDossier`/`ValidateAdministrativeDossier` : consulter un mémoire/ses
+   *  sections/sources/couverture vs. uploader un modèle, analyser, mapper, générer/régénérer une
+   *  section, éditer, exporter le DOCX final (mission §57-59, action de production tant qu'aucune
+   *  validation humaine n'est requise) vs. valider une section ("règle stricte", mission §38
+   *  "AI_GENERATED ≠ VALIDATED", jamais délégué au CONTRIBUTOR — même palier que
+   *  `ValidateDeliverable`/`ValidateAdministrativeDossier`). */
+  ReadTechnicalMemo: "CLIENT_READ_TECHNICAL_MEMO",
+  ManageTechnicalMemo: "CLIENT_MANAGE_TECHNICAL_MEMO",
+  ValidateTechnicalMemo: "CLIENT_VALIDATE_TECHNICAL_MEMO",
+  ExportTechnicalMemo: "CLIENT_EXPORT_TECHNICAL_MEMO",
   /** Répertoire organisationnel de sous-traitants (mission §6) — PAS scopé par ClientAccount
    *  (réutilisable par plusieurs entreprises candidates de la même organisation), donc absent de
    *  `ROLE_CLIENT_ACTION_PERMISSIONS` ci-dessous ; vérifié uniquement au palier organisation via
@@ -209,6 +220,10 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.UseChat,
   ClientPermission.ReadDocumentGeneration,
   ClientPermission.ManageDocumentGeneration,
+  ClientPermission.ReadTechnicalMemo,
+  ClientPermission.ManageTechnicalMemo,
+  ClientPermission.ValidateTechnicalMemo,
+  ClientPermission.ExportTechnicalMemo,
   // V2 Sprint 5 (audit Codex, round 2 — P1 confirmé) — `RecordGoNoGoDecision`/`PromoteOpportunity`
   // sont volontairement ABSENTES de ce bypass organisation-tier silencieux : le chemin normal exige
   // une affectation CLIENT_MANAGER réelle sur le client précis, y compris pour OWNER/
@@ -313,6 +328,12 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
      *  est hors périmètre Sprint 10). */
     ClientPermission.ReadDocumentGeneration,
     ClientPermission.ManageDocumentGeneration,
+    /** V2 Sprint 12 — le CLIENT_MANAGER a tous les droits Mémoire technique, y compris valider une
+     *  section ("règle stricte", mission §38) et exporter le DOCX final. */
+    ClientPermission.ReadTechnicalMemo,
+    ClientPermission.ManageTechnicalMemo,
+    ClientPermission.ValidateTechnicalMemo,
+    ClientPermission.ExportTechnicalMemo,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -374,6 +395,12 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     /** V2 Sprint 10 — même palier que `UseChat`/`ManageWorkspace` ci-dessus. */
     ClientPermission.ReadDocumentGeneration,
     ClientPermission.ManageDocumentGeneration,
+    /** V2 Sprint 12 — le CONTRIBUTOR peut consulter/uploader/analyser/mapper/générer/éditer/
+     *  exporter mais jamais valider une section ("règle stricte" réservée au CLIENT_MANAGER
+     *  ci-dessus, mission §38 "AI_GENERATED ≠ VALIDATED"). */
+    ClientPermission.ReadTechnicalMemo,
+    ClientPermission.ManageTechnicalMemo,
+    ClientPermission.ExportTechnicalMemo,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -402,6 +429,10 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     /** V2 Sprint 10 — le VIEWER consulte les documents déjà générés, jamais n'en lance/régénère
      *  (`ManageDocumentGeneration` réservé aux rôles ci-dessus). */
     ClientPermission.ReadDocumentGeneration,
+    /** V2 Sprint 12 — le VIEWER consulte le mémoire technique (sections, sources, couverture),
+     *  jamais n'en gère/génère/valide/exporte (`ManageTechnicalMemo`/`ValidateTechnicalMemo`/
+     *  `ExportTechnicalMemo` réservés aux rôles ci-dessus). */
+    ClientPermission.ReadTechnicalMemo,
   ],
 };
 

@@ -41,6 +41,12 @@ export { ListTenderQuestionsUseCase } from "./application/use-cases/list-tender-
 export type { ListTenderFindingsQuery, FindingsPageResult } from "./application/use-cases/list-tender-findings.shared";
 export { TenderBusinessAnalysisNotFoundError } from "./domain/errors";
 
+// V2 Sprint 12 (`technical-memo`) — types de résultat des 3 findings pertinents pour le mapping DCE
+// d'un mémoire technique (mission §21 : Requirement/Criterion/Clause), réexportés en LECTURE SEULE
+// (aucun port d'écriture) pour construire `TechnicalMemoSectionRequirement` sans dupliquer ces
+// formes, même motif que la réexportation de `RequirementFindingRecord`-like types ailleurs.
+export type { RequirementFindingRecord, CriterionFindingRecord, ClauseFindingRecord } from "./application/ports/business-analysis.repository";
+
 // V2 Sprint 6 — réexportés UNIQUEMENT pour le nouveau module `checklist-intelligence`
 // (réconciliation checklist ↔ nouvelle analyse, §22) : réutilise EXACTEMENT le même mapping
 // gouverné Finding -> proposition CHECKLIST_ITEM que `MapAnalysisFindingsToAiSuggestionsUseCase`,

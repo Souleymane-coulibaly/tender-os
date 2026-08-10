@@ -62,6 +62,14 @@ export const TenderPermission = {
    *  générer" : la restriction fine vit au palier client (`ClientPermission.
    *  GenerateAdministrativeForm`, via `assertAdministrativeFormAccess`), jamais ici. */
   GenerateAdministrativeForm: "tender:generate_administrative_form",
+  /** V2 Sprint 12 (Mémoire technique IA) — même palier que `GenerateAdministrativeForm`/
+   *  `UseDocumentGeneration` (CONTRIBUTOR inclus) : analyser un modèle, mapper les sections,
+   *  générer/régénérer une section, éditer, et exporter le DOCX final restent des actions de
+   *  production de contenu, pas des actions réservées. La LECTURE reste couverte par
+   *  `TenderPermission.Read`, déjà accordée à tous les rôles ci-dessous — la restriction fine
+   *  "règle stricte" pour VALIDER une section vit au palier client (`ClientPermission.
+   *  ValidateTechnicalMemo`, via `assertTechnicalMemoAccess`), jamais ici. */
+  UseTechnicalMemo: "tender:use_technical_memo",
 } as const;
 
 export type TenderPermission = (typeof TenderPermission)[keyof typeof TenderPermission];
@@ -90,6 +98,7 @@ export const ROLE_TENDER_PERMISSIONS: Record<string, readonly TenderPermission[]
     TenderPermission.UseChat,
     TenderPermission.UseDocumentGeneration,
     TenderPermission.GenerateAdministrativeForm,
+    TenderPermission.UseTechnicalMemo,
   ],
   REVIEWER: [TenderPermission.Read, TenderPermission.List],
   EXECUTIVE: [TenderPermission.Read, TenderPermission.List],

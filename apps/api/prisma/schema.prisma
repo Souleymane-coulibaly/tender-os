@@ -407,6 +407,7 @@ model Tender {
   deliverables               Deliverable[]
   deliverableTemplates       DeliverableTemplate[]
   documentThemes             DocumentTheme[]
+  technicalMemos             TechnicalMemo[]
   generatedDocuments         GeneratedDocument[]
   administrativeDossiers     AdministrativeDossier[]
   administrativeRequirements AdministrativeRequirement[]
@@ -6215,4 +6216,228 @@ model GeneratedDocumentRevision {
   @@unique([generatedDocumentId, revisionNumber])
   @@index([organizationId, generatedDocumentId])
   @@map("generated_document_revisions")
+}
+
+// ============================================================================
+// V2 Sprint 12 — Mémoire technique IA (module `technical-memo`, distinct de
+// `Deliverable.type = TECHNICAL_MEMO` qui compose depuis une IR via le thème
+// TenderOS générique et ne préserve jamais un DOCX réel uploadé — décision
+// validée : nouveau module séparé, réutilise `document-generation` (Sprint 10)
+// pour le remplissage DOCX réel, jamais un second moteur OOXML).
+// ============================================================================
+
+/// Racine d'agrégat — un mémoire par (Tender, lot optionnel). `lotId` null = mémoire global au
+/// Tender. Réutilise `document-generation` pour le rendu final : `documentTemplateId` référence un
+/// `DocumentTemplate` préparé (gabarit dérivé, placeholders insérés par section), jamais un second
+/// mécanisme de stockage/version.
+model TechnicalMemo {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// Dénormalisé depuis `Tender.clientAccountId` au moment de la création, immuable (même motif
+  /// que `Conversation.clientAccountId`, Sprint 9) — jamais réévalué implicitement si le candidat
+  /// change ensuite (mission "jamais mélanger silencieusement Candidate A et B").
+  clientAccountId String  @map("client_account_id") @db.Uuid
+  lotId           String? @map("lot_id") @db.Uuid
+
+  /// COMPANY_TEMPLATE | DCE_REQUIRED_TEMPLATE | TENDEROS_SYSTEM — CHECK (migration).
+  templateOrigin String @map("template_origin") @db.VarChar(30)
+
+  /// Original uploadé par l'utilisateur (COMPANY_TEMPLATE/DCE_REQUIRED_TEMPLATE) — JAMAIS modifié
+  /// (mission §7, même motif que `DocumentTemplateVersion.officialSourceDocumentId`, Sprint 11).
+  /// `null` pour TENDEROS_SYSTEM (pas d'upload, gabarit système déjà préparé).
+  originalDocumentId        String? @map("original_document_id") @db.Uuid
+  originalDocumentVersionId String? @map("original_document_version_id") @db.Uuid
+
+  /// Renseigné une fois l'analyse structurelle terminée et le gabarit dérivé préparé — nullable
+  /// tant que le mémoire est encore en cours d'analyse/mapping (mission §9 "analyse ≠
+  /// modification", aucun gabarit exploitable tant que l'utilisateur n'a pas confirmé la
+  /// structure).
+  documentTemplateId String? @map("document_template_id") @db.Uuid
+
+  /// DRAFT (structure importée, mapping en cours) | READY (sections prêtes, génération possible) |
+  /// EXPORTED (au moins un DOCX final généré) — CHECK (migration). Jamais confondu avec le statut
+  /// de VALIDATION (porté par chaque section, mission §38 "génération ≠ validation").
+  status String @default("DRAFT") @db.VarChar(20)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sections TechnicalMemoSection[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId])
+  /// Au plus un TechnicalMemo par (tenderId, lotId) — deux index partiels (même motif que
+  /// `generated_documents_org_tender_template_subject_key`, Sprint 11B) : Postgres traite chaque
+  /// `lotId` NULL comme distinct dans un index unique classique.
+  @@map("technical_memos")
+}
+
+/// Une section de l'outline détecté (ou du template système) — `sectionKey` stable dérivé à
+/// l'analyse, jamais recalculé après coup pour ne pas casser les liens de mapping/citations déjà
+/// posés. `content` reflète TOUJOURS le contenu de la DERNIÈRE `TechnicalMemoSectionRevision` (mis
+/// à jour dans la même transaction — jamais désynchronisé).
+model TechnicalMemoSection {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  technicalMemoId String        @map("technical_memo_id") @db.Uuid
+  technicalMemo   TechnicalMemo @relation(fields: [technicalMemoId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  parentSectionId String? @map("parent_section_id") @db.Uuid
+
+  sectionKey String @map("section_key") @db.VarChar(80)
+  title      String @db.VarChar(300)
+  order      Int
+  level      Int
+
+  /// Catalogue fermé (mission §16) + NEEDS_MAPPING (mission §14 "ne pas ignorer une section non
+  /// comprise") — CHECK (migration). Suggestion IA possible (mission §15) mais jamais appliquée
+  /// sans confirmation pour les cas ambigus.
+  category                String  @default("NEEDS_MAPPING") @map("category") @db.VarChar(30)
+  categoryConfirmedByUser Boolean @default(false) @map("category_confirmed_by_user")
+
+  /// Texte/consigne source extrait du modèle (ex. "Décrivez votre méthodologie en 2 pages max.") —
+  /// jamais réécrit par l'IA, seulement lu pour construire le contexte de génération.
+  instructionText String? @map("instruction_text")
+  isTable         Boolean @default(false) @map("is_table")
+
+  wordLimit Int? @map("word_limit")
+  pageLimit Int? @map("page_limit")
+
+  /// EMPTY | READY_TO_GENERATE | GENERATING | DRAFT | NEEDS_REVIEW | VALIDATED | FAILED — CHECK.
+  status String @default("EMPTY") @db.VarChar(20)
+
+  content String?
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  revisions        TechnicalMemoSectionRevision[]
+  requirementLinks TechnicalMemoSectionRequirement[]
+
+  @@unique([id, organizationId])
+  @@unique([technicalMemoId, sectionKey])
+  @@index([organizationId, technicalMemoId, order])
+  @@map("technical_memo_sections")
+}
+
+/// Historique APPEND-ONLY d'une section — chaque génération IA, régénération IA, ou édition
+/// manuelle crée une nouvelle ligne, jamais un écrasement (mission §39/§42). Les sources
+/// (`TechnicalMemoSectionCitation`) sont figées PAR révision (mission §85 "fixer les versions des
+/// sources au lancement").
+model TechnicalMemoSectionRevision {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  technicalMemoSectionId String               @map("technical_memo_section_id") @db.Uuid
+  section                TechnicalMemoSection @relation(fields: [technicalMemoSectionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  revisionNumber Int @map("revision_number")
+
+  /// AI_GENERATED | MANUAL | AI_REGENERATED — CHECK.
+  source String @db.VarChar(20)
+
+  content String
+
+  /// Instruction utilisateur pour une régénération guidée (mission §41, ex. "insister davantage
+  /// sur la cybersécurité") — conservée pour l'audit, jamais appliquée à une révision différente.
+  userInstruction String? @map("user_instruction")
+
+  aiModel          String? @map("ai_model") @db.VarChar(100)
+  promptVersion    Int?    @map("prompt_version")
+  inputTokenCount  Int?    @map("input_token_count")
+  outputTokenCount Int?    @map("output_token_count")
+  totalTokenCount  Int?    @map("total_token_count")
+
+  /// Libellés métier des données manquantes détectées par le modèle (mission §36, ex. "Nombre
+  /// d'ingénieurs mobilisés") — jamais une balise textuelle imposée dans le contenu lui-même sans
+  /// validation utilisateur.
+  missingDataNotes Json @default("[]") @map("missing_data_notes")
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  citations TechnicalMemoSectionCitation[]
+
+  @@unique([id, organizationId])
+  @@unique([technicalMemoSectionId, revisionNumber])
+  @@index([organizationId, technicalMemoSectionId])
+  @@map("technical_memo_section_revisions")
+}
+
+/// Provenance d'UNE révision de section — même discipline que `MessageCitation` (Sprint 9) :
+/// colonnes concrètes typées nullables, JAMAIS un blob JSON, JAMAIS de FK stricte cross-module
+/// (une citation traverse Analysis/Knowledge Base/company-profile, qui ne se connaissent pas entre
+/// eux). Motif COPIÉ, jamais une table partagée entre modules.
+model TechnicalMemoSectionCitation {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  technicalMemoSectionRevisionId String                       @map("technical_memo_section_revision_id") @db.Uuid
+  revision                       TechnicalMemoSectionRevision @relation(fields: [technicalMemoSectionRevisionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// FINDING | KNOWLEDGE_ENTRY | CANDIDATE_FIELD | REFERENCE | DCE_CHUNK — CHECK.
+  sourceType String @map("source_type") @db.VarChar(20)
+
+  findingType String? @map("finding_type") @db.VarChar(30)
+  findingId   String? @map("finding_id") @db.Uuid
+
+  knowledgeEntryId        String? @map("knowledge_entry_id") @db.Uuid
+  knowledgeEntryVersionId String? @map("knowledge_entry_version_id") @db.Uuid
+
+  companyReferenceId String? @map("company_reference_id") @db.Uuid
+
+  candidateFieldPath String? @map("candidate_field_path") @db.VarChar(120)
+
+  documentId    String? @map("document_id") @db.Uuid
+  chunkSequence Int?    @map("chunk_sequence")
+  pageStart     Int?    @map("page_start")
+  pageEnd       Int?    @map("page_end")
+
+  label   String  @db.VarChar(300)
+  excerpt String? @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, technicalMemoSectionRevisionId])
+  @@map("technical_memo_section_citations")
+}
+
+/// Lien Section ↔ exigence DCE (mission §45 "Requirement ↔ Section"), calculé par une règle
+/// déterministe auditable (catégorie + mots-clés — mission §47/§96 "pas besoin d'un algorithme
+/// parfait mais une logique auditable"), corrigible par l'utilisateur. Alimente le calcul de
+/// couverture (mission §43-46).
+model TechnicalMemoSectionRequirement {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  technicalMemoSectionId String               @map("technical_memo_section_id") @db.Uuid
+  section                TechnicalMemoSection @relation(fields: [technicalMemoSectionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// REQUIREMENT | CRITERION | CLAUSE — CHECK (sous-ensemble des 6 types Finding, ceux pertinents
+  /// pour une couverture de mémoire — RISK/DEADLINE/QUESTION ne sont jamais "couverts" par une
+  /// section rédactionnelle).
+  findingType String @map("finding_type") @db.VarChar(30)
+  findingId   String @map("finding_id") @db.Uuid
+
+  /// COVERED | PARTIALLY_COVERED | NOT_COVERED | NOT_APPLICABLE | NEEDS_REVIEW — CHECK.
+  coverageStatus String  @default("NEEDS_REVIEW") @map("coverage_status") @db.VarChar(20)
+  coverageReason String? @map("coverage_reason")
+
+  confirmedByUser Boolean @default(false) @map("confirmed_by_user")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@unique([technicalMemoSectionId, findingType, findingId])
+  @@index([organizationId, findingType, findingId])
+  @@map("technical_memo_section_requirements")
 }

@@ -30,6 +30,7 @@ import { SignatureModule } from "./modules/signature";
 import { SubcontractorsModule, SubcontractorSubjectValidationBridgeModule } from "./modules/subcontractors";
 import { SubmissionModule } from "./modules/submission";
 import { SubmissionPackageModule } from "./modules/submission-package";
+import { TechnicalMemoModule } from "./modules/technical-memo";
 import { TendersModule } from "./modules/tenders/tenders.module";
 import { ValidationModule } from "./modules/validation";
 import { WorkspaceModule } from "./modules/workspace/workspace.module";
@@ -77,6 +78,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     WorkspaceModule,
     ChatModule,
     DocumentGenerationModule,
+    TechnicalMemoModule,
   ],
 })
 export class AppModule {}

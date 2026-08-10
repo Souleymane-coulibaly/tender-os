@@ -12,6 +12,19 @@ export { DocumentTemplateScope } from "./domain/document-template-scope";
 export { FieldType } from "./domain/field-type";
 export { DocumentGenerationPermission, roleHasDocumentGenerationPermission } from "./domain/document-generation-permission";
 
+// V2 Sprint 12 (`technical-memo`) — même motif que l'export de `DocumentGenerationExecutionService`
+// (Sprint 11) : un appelant interne contrôlé qui doit CRÉER lui-même un DocumentTemplate/Version
+// dérivé (un par mémoire technique, jamais réutilisable entre Tenders — contrairement aux templates
+// gérés par un OWNER/ADMIN via l'UI publique) ne doit PAS passer par `CreateDocumentTemplateUseCase`/
+// `CreateDocumentTemplateVersionUseCase` : ces use cases HTTP appliquent `DocumentGenerationPermission.
+// ManageTemplates` (réservé à OWNER/ORGANIZATION_ADMIN, mission "gestion de bibliothèque org-wide"),
+// une permission sans rapport avec le droit d'un CONTRIBUTOR à générer SON PROPRE mémoire technique
+// (`TenderPermission.UseTechnicalMemo`, déjà vérifié par l'appelant avant d'atteindre ce point).
+export { DocumentTemplate } from "./domain/document-template.aggregate";
+export { DocumentTemplateVersion } from "./domain/document-template-version.entity";
+export type { DiscoveredPlaceholder } from "./domain/document-template-version.entity";
+export type { DocumentTemplateFieldMapping } from "./domain/document-template-field-mapping";
+
 // Réexportés pour Sprint 11 (module `administrative-dossier`) — appelant interne contrôlé qui
 // résout une provenance RÉELLE côté serveur avant d'appeler `DocumentGenerationExecutionService`
 // directement, jamais via HTTP (voir le commentaire `exports` de `DocumentGenerationModule`).
