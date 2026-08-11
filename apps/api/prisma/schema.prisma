@@ -6911,3 +6911,260 @@ model WebhookDelivery {
   @@index([status, nextAvailableAt])
   @@map("webhook_deliveries")
 }
+
+/// V2 Sprint 17 (Veille & détection des marchés) — marché externe collecté et normalisé
+/// (mission §8). Scope organisationnel (comme tout le reste du schéma, mission §73) : décision
+/// délibérée de simplification — un marché public (BOAMP/TED) collecté pour deux organisations
+/// distinctes est stocké deux fois plutôt que partagé globalement, ce qui évite d'introduire le
+/// premier modèle "non tenant-scopé" de tout le schéma (150+ modèles, tous organizationId-first).
+/// Voir rapport Sprint 17 §"risques résiduels" pour la piste d'optimisation différée (cache
+/// global + projection par organisation). `source`/`marketType` réutilisent tels quels
+/// `TenderSource`/`MarketType` (tenders/domain) — jamais un second catalogue parallèle.
+model ExternalTender {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// MANUAL | BOAMP | TED | PRIVATE | OTHER (`TenderSource`, réutilisé tel quel).
+  source     String @db.VarChar(20)
+  /// PUBLIC | PRIVATE (`MarketType`, réutilisé tel quel — mission §6/§7).
+  marketType String @map("market_type") @db.VarChar(10)
+  /// Identifiant stable côté source (ex. `idweb` BOAMP) — clé de déduplication avec `source`
+  /// (mission §11 "priorité source + externalId").
+  externalId String @map("external_id") @db.VarChar(255)
+
+  title       String  @db.VarChar(500)
+  description String?
+
+  buyerName String? @map("buyer_name") @db.VarChar(300)
+  buyerType String? @map("buyer_type") @db.VarChar(80)
+
+  /// Géographie STRUCTURÉE (décision Sprint 17, validée) — délibérément distincte du texte libre
+  /// `Tender.executionLocation`/`geographicZone` : nécessaire pour un filtre HARD fiable
+  /// (mission §22, test bloquant §122 — un pays ne peut être exclu de façon fiable qu'avec un
+  /// champ structuré, jamais un substring sur texte libre).
+  country    String? @db.VarChar(10)
+  region     String? @db.VarChar(120)
+  department String? @db.VarChar(10)
+  city       String? @db.VarChar(160)
+
+  /// Codes CPV bruts (ex. "34300000") — matching par préfixe hiérarchique (décision Sprint 17),
+  /// aucun référentiel de libellés importé ce sprint (mission §21, "ne pas faire uniquement du
+  /// substring" satisfait par la comparaison de préfixe, pas par un lookup de labels).
+  cpvCodes String[] @default([]) @map("cpv_codes")
+
+  /// NULL = montant inconnu à la source (mission §23 — fréquent en pratique, ex. BOAMP ne
+  /// structure quasi jamais le montant en JSON) : ne doit jamais exclure arbitrairement un
+  /// marché, voir `SavedSearch.includeUnknownAmount`.
+  estimatedAmount Decimal? @map("estimated_amount") @db.Decimal(19, 4)
+  currency        String?  @db.Char(3)
+
+  procedureType String? @map("procedure_type") @db.VarChar(120)
+
+  publicationDate    DateTime? @map("publication_date")
+  submissionDeadline DateTime? @map("submission_deadline")
+
+  sourceUrl String? @map("source_url") @db.VarChar(2048)
+
+  /// Lots minimaux (mission §25) — jamais le detail complet du DCE, juste de quoi afficher/matcher
+  /// "Lot 3 pertinent" : `[{ number, description, cpvCode? }]`.
+  lots Json?
+
+  /// Mission §9 — jamais le payload source complet : uniquement les champs bruts utiles au
+  /// debug/reprocessing/provenance (jamais un blob de plusieurs Ko par marché).
+  rawMetadata Json? @map("raw_metadata")
+
+  /// Détecte une mise à jour significative côté source (mission §12) — hash des champs normalisés
+  /// ci-dessus (jamais `rawMetadata`, trop volatile/bruyant pour un hash stable).
+  checksum String? @db.VarChar(64)
+
+  firstSeenAt   DateTime @default(now()) @map("first_seen_at")
+  lastFetchedAt DateTime @default(now()) @map("last_fetched_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  matches SavedSearchMatch[]
+
+  @@unique([id, organizationId])
+  /// Déduplication (mission §11) — priorité absolue source+externalId, jamais une fusion agressive
+  /// sur d'autres signaux (buyer/titre/deadline, mission §11 "ne pas fusionner agressivement").
+  @@unique([organizationId, source, externalId])
+  @@index([organizationId, publicationDate])
+  @@index([organizationId, submissionDeadline])
+  @@index([organizationId, country])
+  @@index([organizationId, source])
+  @@map("external_tenders")
+}
+
+/// V2 Sprint 17 — profil de veille personnel (mission §15, "SavedTenderSearch"/"TenderWatchProfile"
+/// équivalent). Scope PERSONAL uniquement ce sprint (mission §16 "au minimum PERSONAL") —
+/// `ownerUserId` obligatoire, jamais de partage organisation cette tranche.
+model SavedSearch {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  ownerUserId    String @map("owner_user_id") @db.Uuid
+
+  /// Contexte client optionnel (mission §18) — si renseigné, ClientAccess gouverne
+  /// visibilité/édition/notifications (mission §19/§71), jamais un élargissement de ClientAccess
+  /// (mission §18 "ne jamais élargir").
+  clientAccountId String? @map("client_account_id") @db.Uuid
+
+  name String @db.VarChar(160)
+
+  /// Mission §20 — normalisation case-insensitive appliquée en application, jamais ici.
+  includeKeywords String[] @default([]) @map("include_keywords")
+  excludeKeywords String[] @default([]) @map("exclude_keywords")
+
+  /// Préfixes CPV (mission §21) — HARD filter si non vide.
+  cpvCodes String[] @default([]) @map("cpv_codes")
+
+  /// Géographie HARD (mission §22/§122) — listes vides = pas de restriction sur cette dimension.
+  countries   String[] @default([])
+  regions     String[] @default([])
+  departments String[] @default([])
+  cities      String[] @default([])
+
+  marketTypes String[] @default([]) @map("market_types")
+  sources     String[] @default([])
+
+  minAmount            Decimal? @map("min_amount") @db.Decimal(19, 4)
+  maxAmount            Decimal? @map("max_amount") @db.Decimal(19, 4)
+  /// Mission §23 — comportement explicite plutôt qu'une exclusion arbitraire par défaut.
+  includeUnknownAmount Boolean  @default(true) @map("include_unknown_amount")
+
+  publishedAfter     DateTime? @map("published_after")
+  /// "Deadline dans plus de X jours" (mission §24) — évalué au moment du matching, jamais figé.
+  deadlineAfterDays  Int?      @map("deadline_after_days")
+  deadlineBeforeDate DateTime? @map("deadline_before_date")
+
+  procedureTypes String[] @default([]) @map("procedure_types")
+
+  alertInApp     Boolean @default(true) @map("alert_in_app")
+  alertEmail     Boolean @default(false) @map("alert_email")
+  /// IMMEDIATE | DAILY_DIGEST (mission §43, recommandation retenue).
+  emailFrequency String  @default("DAILY_DIGEST") @map("email_frequency") @db.VarChar(20)
+
+  /// Mission §115 — désactivation : plus de nouveaux matches/alertes, jamais de suppression des
+  /// ExternalTenders déjà collectés.
+  isActive Boolean @default(true) @map("is_active")
+
+  /// Dernier digest quotidien envoyé (mission §111 idempotence) — un match déjà inclus dans un
+  /// digest précédent n'est jamais renvoyé.
+  lastDigestSentAt DateTime? @map("last_digest_sent_at")
+
+  createdBy String    @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  matches SavedSearchMatch[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, ownerUserId])
+  @@index([organizationId, isActive])
+  @@map("saved_searches")
+}
+
+/// V2 Sprint 17 — occurrence de correspondance entre un `SavedSearch` et un `ExternalTender`
+/// (mission §49, "TenderAlertMatch"/"SavedSearchMatch" équivalent). Idempotent par construction
+/// (`@@unique([savedSearchId, externalTenderId])`, mission §48 "le même marché ne doit pas
+/// produire plusieurs alertes pour le même profil s'il n'a pas changé").
+model SavedSearchMatch {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  savedSearchId String      @map("saved_search_id") @db.Uuid
+  savedSearch   SavedSearch @relation(fields: [savedSearchId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  externalTenderId String         @map("external_tender_id") @db.Uuid
+  externalTender   ExternalTender @relation(fields: [externalTenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// 0-100, uniquement dérivé des critères SOFT (mission §29 "explicable" — jamais un nombre
+  /// arbitraire ; les critères HARD ne contribuent jamais au score, ils éliminent en amont,
+  /// mission §28).
+  score        Int  @default(0)
+  /// `[{ criterion, label, matched }]` (mission §30 whyMatched) — jamais un texte libre.
+  matchReasons Json @map("match_reasons")
+
+  /// NEW | INTERESTED | IGNORED (mission §51/§52).
+  status String @default("NEW") @db.VarChar(20)
+
+  firstMatchedAt DateTime @default(now()) @map("first_matched_at")
+  lastMatchedAt  DateTime @default(now()) @map("last_matched_at")
+
+  notifiedInAppAt DateTime? @map("notified_in_app_at")
+
+  /// Mission §66/§67 — jamais envoyé dans la transaction de matching : un worker séparé CLAIME
+  /// atomiquement (`UPDATE ... FOR UPDATE SKIP LOCKED`, correctif audit P1-001) les matches
+  /// `PENDING`, tente l'envoi, et met à jour ces trois champs. PENDING | SENDING (transitoire, posé
+  /// par le claim) | SENT | FAILED (FAILED = abandon après `EMAIL_ALERT_MAX_ATTEMPTS`, jamais un
+  /// retry indéfini).
+  emailStatus       String    @default("PENDING") @map("email_status") @db.VarChar(20)
+  emailAttemptCount Int       @default(0) @map("email_attempt_count")
+  emailLastError    String?   @map("email_last_error") @db.VarChar(500)
+  notifiedEmailAt   DateTime? @map("notified_email_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@unique([savedSearchId, externalTenderId])
+  @@index([organizationId, savedSearchId, status])
+  @@index([organizationId, externalTenderId])
+  @@index([organizationId, emailStatus])
+  @@map("saved_search_matches")
+}
+
+/// V2 Sprint 17 — trace de promotion ExternalTender -> Opportunity (mission §56 "prévenir
+/// l'utilisateur, ne pas dupliquer silencieusement"). Délibérément découplé du module
+/// `opportunity` (aucune colonne ajoutée à `Opportunity`, aucun couplage Prisma cross-module,
+/// même motif que `WebhookDelivery.eventId` référence `OutboxEvent.id` par simple scalaire).
+/// Correctif audit P1-002 — la vraie protection contre une double promotion concurrente est un
+/// `pg_advisory_xact_lock` (voir `PrismaExternalTenderPromotionRepository.lockForPromotion`) acquis
+/// avant la lecture de dédoublonnage, dans la même transaction que la création. En DEUXIÈME ligne
+/// de défense, deux index uniques PARTIELS existent en base (non représentables via `@@unique` en
+/// Prisma, posés à la main dans la migration `..._p1_fixes`) :
+///   - (organizationId, externalTenderId, clientAccountId) WHERE clientAccountId IS NOT NULL
+///   - (organizationId, externalTenderId) WHERE clientAccountId IS NULL
+/// (deux index car Postgres ne déduplique jamais les NULL dans un index unique classique).
+model ExternalTenderPromotion {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  externalTenderId String  @map("external_tender_id") @db.Uuid
+  clientAccountId  String? @map("client_account_id") @db.Uuid
+
+  opportunityId String @map("opportunity_id") @db.Uuid
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, externalTenderId])
+  @@map("external_tender_promotions")
+}
+
+/// V2 Sprint 17 — socle minimal de notification in-app (mission §37 "ne pas reconstruire un énorme
+/// système"). Générique (pas seulement Market Watch) via `type`, mais SEUL producteur ce sprint :
+/// `SavedSearchMatch`.
+model Notification {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  userId         String @map("user_id") @db.Uuid
+
+  type      String  @db.VarChar(60)
+  title     String  @db.VarChar(300)
+  body      String?
+  targetUrl String? @map("target_url") @db.VarChar(500)
+  metadata  Json?
+
+  /// NULL = non lue (mission §38).
+  readAt DateTime? @map("read_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, userId, readAt])
+  @@index([organizationId, userId, createdAt])
+  @@map("notifications")
+}

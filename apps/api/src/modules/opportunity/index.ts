@@ -14,3 +14,9 @@ export { GoNoGoReportNotFoundError } from "./domain/errors";
 export { GetGoNoGoSummaryForDashboardUseCase } from "./application/use-cases/get-go-no-go-summary-for-dashboard.use-case";
 export type { GetGoNoGoSummaryForDashboardQuery, GoNoGoSummaryForDashboard } from "./application/use-cases/get-go-no-go-summary-for-dashboard.use-case";
 export { GoNoGoDecisionValue } from "./domain/go-no-go-decision";
+
+// V2 Sprint 17 (Veille & détection des marchés) — réexporté UNIQUEMENT pour `market-watch`
+// (promotion ExternalTender -> Opportunity, mission §53) : jamais un second chemin de création.
+export { CreateOpportunityUseCase } from "./application/use-cases/create-opportunity.use-case";
+export type { CreateOpportunityCommand } from "./application/use-cases/create-opportunity.use-case";
+export type { OpportunitySummary } from "./application/dtos";

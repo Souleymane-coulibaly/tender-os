@@ -1,0 +1,66 @@
+import { Prisma, type ExternalTender as PrismaExternalTender } from "@prisma/client";
+import { ExternalTender, type ExternalTenderLot } from "../domain/external-tender.entity";
+
+export function toDomainExternalTender(row: PrismaExternalTender): ExternalTender {
+  return ExternalTender.rehydrate({
+    id: row.id,
+    organizationId: row.organizationId,
+    source: row.source,
+    marketType: row.marketType,
+    externalId: row.externalId,
+    title: row.title,
+    description: row.description ?? undefined,
+    buyerName: row.buyerName ?? undefined,
+    buyerType: row.buyerType ?? undefined,
+    country: row.country ?? undefined,
+    region: row.region ?? undefined,
+    department: row.department ?? undefined,
+    city: row.city ?? undefined,
+    cpvCodes: row.cpvCodes,
+    estimatedAmount: row.estimatedAmount ? Number(row.estimatedAmount) : undefined,
+    currency: row.currency ?? undefined,
+    procedureType: row.procedureType ?? undefined,
+    publicationDate: row.publicationDate ?? undefined,
+    submissionDeadline: row.submissionDeadline ?? undefined,
+    sourceUrl: row.sourceUrl ?? undefined,
+    lots: (row.lots as unknown as ExternalTenderLot[] | null) ?? undefined,
+    rawMetadata: (row.rawMetadata as Record<string, unknown> | null) ?? undefined,
+    checksum: row.checksum ?? undefined,
+    firstSeenAt: row.firstSeenAt,
+    lastFetchedAt: row.lastFetchedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  });
+}
+
+export function toExternalTenderData(tender: ExternalTender): Prisma.ExternalTenderUncheckedCreateInput {
+  return {
+    id: tender.id,
+    organizationId: tender.organizationId,
+    source: tender.source,
+    marketType: tender.marketType,
+    externalId: tender.externalId,
+    title: tender.title,
+    description: tender.description ?? null,
+    buyerName: tender.buyerName ?? null,
+    buyerType: tender.buyerType ?? null,
+    country: tender.country ?? null,
+    region: tender.region ?? null,
+    department: tender.department ?? null,
+    city: tender.city ?? null,
+    cpvCodes: [...tender.cpvCodes],
+    estimatedAmount: tender.estimatedAmount ?? null,
+    currency: tender.currency ?? null,
+    procedureType: tender.procedureType ?? null,
+    publicationDate: tender.publicationDate ?? null,
+    submissionDeadline: tender.submissionDeadline ?? null,
+    sourceUrl: tender.sourceUrl ?? null,
+    lots: tender.lots ? (tender.lots as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+    rawMetadata: tender.rawMetadata ? (tender.rawMetadata as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+    checksum: tender.checksum ?? null,
+    firstSeenAt: tender.firstSeenAt,
+    lastFetchedAt: tender.lastFetchedAt,
+    createdAt: tender.createdAt,
+    updatedAt: tender.updatedAt,
+  };
+}

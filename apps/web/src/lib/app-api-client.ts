@@ -16,6 +16,10 @@ export class AppApiError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    /** V2 Sprint 17 — champ optionnel additif du format d'erreur `{error:{code,message,requestId,details?}}`
+     *  (ex. `EXTERNAL_TENDER_ALREADY_PROMOTED` porte `existingOpportunityId`). Absent pour toute
+     *  erreur qui n'en fournit pas — jamais un défaut inventé. */
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "AppApiError";
@@ -34,11 +38,12 @@ export async function getAppOrganizationId(): Promise<string | undefined> {
 
 async function parseErrorBody(response: Response): Promise<never> {
   const body: unknown = await response.json().catch(() => null);
-  const errorBody = body as { error?: { code?: string; message?: string } } | null;
+  const errorBody = body as { error?: { code?: string; message?: string; details?: Record<string, unknown> } } | null;
   throw new AppApiError(
     response.status,
     errorBody?.error?.code ?? "UNKNOWN_ERROR",
     errorBody?.error?.message ?? "Unexpected error.",
+    errorBody?.error?.details,
   );
 }
 

@@ -1,0 +1,75 @@
+import type { Prisma, SavedSearch as PrismaSavedSearch } from "@prisma/client";
+import { SavedSearch } from "../domain/saved-search.entity";
+
+export function toDomainSavedSearch(row: PrismaSavedSearch): SavedSearch {
+  return SavedSearch.rehydrate({
+    id: row.id,
+    organizationId: row.organizationId,
+    ownerUserId: row.ownerUserId,
+    clientAccountId: row.clientAccountId ?? undefined,
+    name: row.name,
+    criteria: {
+      includeKeywords: row.includeKeywords,
+      excludeKeywords: row.excludeKeywords,
+      cpvCodes: row.cpvCodes,
+      countries: row.countries,
+      regions: row.regions,
+      departments: row.departments,
+      cities: row.cities,
+      marketTypes: row.marketTypes,
+      sources: row.sources,
+      minAmount: row.minAmount ? Number(row.minAmount) : undefined,
+      maxAmount: row.maxAmount ? Number(row.maxAmount) : undefined,
+      includeUnknownAmount: row.includeUnknownAmount,
+      publishedAfter: row.publishedAfter ?? undefined,
+      deadlineAfterDays: row.deadlineAfterDays ?? undefined,
+      deadlineBeforeDate: row.deadlineBeforeDate ?? undefined,
+      procedureTypes: row.procedureTypes,
+    },
+    alertInApp: row.alertInApp,
+    alertEmail: row.alertEmail,
+    emailFrequency: row.emailFrequency,
+    isActive: row.isActive,
+    lastDigestSentAt: row.lastDigestSentAt ?? undefined,
+    createdBy: row.createdBy,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    deletedAt: row.deletedAt ?? undefined,
+  });
+}
+
+export function toSavedSearchData(search: SavedSearch): Prisma.SavedSearchUncheckedCreateInput {
+  const criteria = search.criteria;
+  return {
+    id: search.id,
+    organizationId: search.organizationId,
+    ownerUserId: search.ownerUserId,
+    clientAccountId: search.clientAccountId ?? null,
+    name: search.name,
+    includeKeywords: [...criteria.includeKeywords],
+    excludeKeywords: [...criteria.excludeKeywords],
+    cpvCodes: [...criteria.cpvCodes],
+    countries: [...criteria.countries],
+    regions: [...criteria.regions],
+    departments: [...criteria.departments],
+    cities: [...criteria.cities],
+    marketTypes: [...criteria.marketTypes],
+    sources: [...criteria.sources],
+    minAmount: criteria.minAmount ?? null,
+    maxAmount: criteria.maxAmount ?? null,
+    includeUnknownAmount: criteria.includeUnknownAmount,
+    publishedAfter: criteria.publishedAfter ?? null,
+    deadlineAfterDays: criteria.deadlineAfterDays ?? null,
+    deadlineBeforeDate: criteria.deadlineBeforeDate ?? null,
+    procedureTypes: [...criteria.procedureTypes],
+    alertInApp: search.alertInApp,
+    alertEmail: search.alertEmail,
+    emailFrequency: search.emailFrequency,
+    isActive: search.isActive,
+    lastDigestSentAt: search.lastDigestSentAt ?? null,
+    createdBy: search.createdBy,
+    createdAt: search.createdAt,
+    updatedAt: search.updatedAt,
+    deletedAt: search.deletedAt ?? null,
+  };
+}

@@ -1,10 +1,12 @@
 import { InvalidTenderSourceError } from "./errors";
 
 /**
- * Provenance du Tender (mission architecture §6) — MANUAL aujourd'hui pour tout dépôt saisi à la
- * main ; BOAMP/TED/PRIVATE préparés pour de futurs connecteurs (`TenderSourceConnector`, voir
- * application/ports/tender-source-connector.ts) mais aucun connecteur réel n'existe dans cette
- * tranche. La source ne doit jamais changer le comportement interne du moteur DCE (mission §7).
+ * Provenance du Tender (mission architecture §6) — MANUAL pour tout dépôt saisi à la main ;
+ * BOAMP/TED/PRIVATE réutilisés tels quels par le module `market-watch` (V2 Sprint 17, connecteurs
+ * de veille réels — `market-watch/application/ports/market-source-connector.ts`) pour qualifier la
+ * provenance d'un `ExternalTender`. La source ne doit jamais changer le comportement interne du
+ * moteur DCE (mission §7) : un Tender promu depuis un ExternalTender entre dans le même pipeline
+ * qu'un Tender créé manuellement.
  */
 export const TenderSource = {
   Manual: "MANUAL",

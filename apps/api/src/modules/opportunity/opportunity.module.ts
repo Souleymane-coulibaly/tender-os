@@ -88,6 +88,9 @@ import { OpportunitiesController } from "./interfaces/http/opportunities.control
   // contourne rien, il consomme le même chemin qu'un acteur humain.
   // V2 Sprint 15 — réexporté pour `dashboard` (voir index.ts), même motif que `GetGoNoGoReportUseCase`
   // ci-dessus pour `chat` (Sprint 9).
-  exports: [GetGoNoGoReportUseCase, GetGoNoGoSummaryForDashboardUseCase],
+  // V2 Sprint 17 — réexporté UNIQUEMENT pour `market-watch` (promotion ExternalTender ->
+  // Opportunity, mission §53) : jamais un second chemin de création, `CreateOpportunityUseCase`
+  // reste l'unique point d'entrée (permission/ClientAccess/audit/Outbox déjà là, jamais dupliqués).
+  exports: [GetGoNoGoReportUseCase, GetGoNoGoSummaryForDashboardUseCase, CreateOpportunityUseCase],
 })
 export class OpportunityModule {}

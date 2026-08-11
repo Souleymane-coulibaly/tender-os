@@ -22,7 +22,9 @@ import { GenerationModule } from "./modules/generation";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { IntegrationEventConsumersModule, IntegrationsModule, INTEGRATION_OUTBOX_HANDLERS } from "./modules/integrations";
 import { KnowledgeBaseModule } from "./modules/knowledge-base/knowledge-base.module";
+import { MarketWatchModule } from "./modules/market-watch";
 import { MembershipsModule } from "./modules/memberships/memberships.module";
+import { NotificationsModule } from "./modules/notifications";
 import { OpportunityModule } from "./modules/opportunity";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { OutboxModule } from "./modules/outbox";
@@ -92,6 +94,8 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     ResponsePackageModule,
     DashboardModule,
     IntegrationsModule,
+    NotificationsModule,
+    MarketWatchModule,
   ],
 })
 export class AppModule {}

@@ -24,6 +24,12 @@ export const GOVERNED_WEBHOOK_EVENT_TYPES = [
   "opportunity.no_go_decided",
   "response_package.validated",
   "response_package.generated",
+  // V2 Sprint 17 (Veille & détection des marchés, mission §65) — nouveaux producteurs, convention
+  // dot-notation directement (comme response_package.* ci-dessus), aucune traduction PascalCase.
+  "external_tender.created",
+  "external_tender.updated",
+  "saved_search.match_found",
+  "notification.created",
 ] as const;
 export type GovernedWebhookEventType = (typeof GOVERNED_WEBHOOK_EVENT_TYPES)[number];
 
@@ -57,6 +63,14 @@ export function resolvePublicEventType(internalEventType: string, payload: unkno
       return "response_package.validated";
     case "response_package.generated":
       return "response_package.generated";
+    case "external_tender.created":
+      return "external_tender.created";
+    case "external_tender.updated":
+      return "external_tender.updated";
+    case "saved_search.match_found":
+      return "saved_search.match_found";
+    case "notification.created":
+      return "notification.created";
     default:
       return undefined;
   }
