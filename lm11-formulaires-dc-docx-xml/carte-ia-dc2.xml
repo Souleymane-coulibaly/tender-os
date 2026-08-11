@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Carte de remplissage assistee par IA — formulaire DC2
+  Déclaration du candidat individuel ou du membre du groupement
+  Source du formulaire : DAJ, ministere de l'Economie (formulaires DC).
+  Reutilise sous Licence Ouverte Etalab 2.0. Contenu reglementaire non modifie.
+  Cette carte liste les champs du formulaire pour faciliter un remplissage assiste par IA.
+-->
+<carte form="DC2" version="2023-11-21" modele="DC2-2023.docx">
+  <intitule>Déclaration du candidat individuel ou du membre du groupement</intitule>
+  <champs>
+    <champ rubrique="A" nom="acheteur" type="donnees_entreprise"><libelle>Identification de l&#x27;acheteur</libelle></champ>
+    <champ rubrique="B" nom="objet_consultation" type="donnees_entreprise"><libelle>Objet de la consultation (+ lot)</libelle></champ>
+    <champ rubrique="C1" nom="denomination_sociale" type="donnees_entreprise"><libelle>Nom commercial et dénomination sociale</libelle></champ>
+    <champ rubrique="C1" nom="adresse" type="donnees_entreprise"><libelle>Adresse postale et siège social</libelle></champ>
+    <champ rubrique="C1" nom="email" type="donnees_entreprise"><libelle>Adresse électronique</libelle></champ>
+    <champ rubrique="C1" nom="telephone" type="donnees_entreprise"><libelle>Téléphone</libelle></champ>
+    <champ rubrique="C1" nom="siret" type="donnees_entreprise"><libelle>Numéro SIRET</libelle></champ>
+    <champ rubrique="C1" nom="forme_juridique" type="donnees_entreprise"><libelle>Forme juridique</libelle></champ>
+    <champ rubrique="C1" nom="pme" type="choix">
+      <libelle>Le candidat est-il une micro/petite/moyenne entreprise ?</libelle>
+      <options><option>oui</option> <option>non</option></options>
+    </champ>
+    <champ rubrique="C2" nom="marche_reserve" type="conditionnel"><libelle>Cas particuliers marché réservé (insertion, handicap, ESS, pénitentiaire)</libelle></champ>
+    <champ rubrique="C3" nom="liste_officielle" type="conditionnel"><libelle>Inscription sur liste officielle d&#x27;opérateurs agréés</libelle></champ>
+    <champ rubrique="C3" nom="declaration_simplifiee" type="conditionnel"><libelle>Déclaration sur l&#x27;honneur simplifiée (aptitude/capacités)</libelle></champ>
+    <champ rubrique="E1" nom="inscription_registre" type="saisie_manuelle"><libelle>Inscription sur un registre professionnel (RCS + ville)</libelle></champ>
+    <champ rubrique="E2" nom="autorisation_specifique" type="conditionnel"><libelle>Autorisation / organisation spécifique (profession réglementée)</libelle></champ>
+    <champ rubrique="E3" nom="preuves_en_ligne_aptitude" type="choix">
+      <libelle>Adresse internet des preuves d&#x27;aptitude</libelle>
+      <options><option>vide</option> <option>renseignee</option></options>
+    </champ>
+    <champ rubrique="F1" nom="ca_exercice_1" type="saisie_manuelle"><libelle>CA HT exercice N-1 (+ dates)</libelle></champ>
+    <champ rubrique="F1" nom="ca_exercice_2" type="saisie_manuelle"><libelle>CA HT exercice N-2 (+ dates)</libelle></champ>
+    <champ rubrique="F1" nom="ca_exercice_3" type="saisie_manuelle"><libelle>CA HT exercice N-3 (+ dates)</libelle></champ>
+    <champ rubrique="F1" nom="date_creation" type="saisie_manuelle"><libelle>Date de création / début d&#x27;activité (si CA indisponible sur 3 ans)</libelle></champ>
+    <champ rubrique="F2" nom="autres_eco_financieres" type="saisie_manuelle"><libelle>Autres infos éco/financières demandées (assurance RC pro…)</libelle></champ>
+    <champ rubrique="F3" nom="assurance_decennale" type="conditionnel"><libelle>Assurance responsabilité décennale (marchés de travaux)</libelle></champ>
+    <champ rubrique="F4" nom="preuves_en_ligne_eco" type="choix">
+      <libelle>Adresse internet des preuves éco/financières</libelle>
+      <options><option>vide</option> <option>renseignee</option></options>
+    </champ>
+    <champ rubrique="G1" nom="capacite_technique" type="saisie_manuelle"><libelle>Capacité technique et professionnelle (effectifs, moyens, références similaires 3 ans)</libelle></champ>
+    <champ rubrique="G2" nom="preuves_en_ligne_technique" type="choix">
+      <libelle>Adresse internet des preuves techniques</libelle>
+      <options><option>vide</option> <option>renseignee</option></options>
+    </champ>
+    <champ rubrique="H" nom="appui_operateur" type="conditionnel"><libelle>Capacités d&#x27;autres opérateurs sur lesquels le candidat s&#x27;appuie</libelle></champ>
+    <champ rubrique="I" nom="mds" type="conditionnel"><libelle>Renseignements spécifiques marchés de défense ou de sécurité</libelle></champ>
+  </champs>
+  <legende>
+    <type nom="donnees_entreprise">À remplir automatiquement depuis les informations de votre entreprise (identité, SIRET, capacités).</type>
+    <type nom="choix">Choisir une option ou cocher la case correspondant à votre situation.</type>
+    <type nom="conditionnel">À compléter uniquement si la situation décrite s&#x27;applique (ex. groupement, sous-traitance).</type>
+    <type nom="saisie_manuelle">Information propre au marché ou au dossier, à saisir manuellement.</type>
+  </legende>
+</carte>

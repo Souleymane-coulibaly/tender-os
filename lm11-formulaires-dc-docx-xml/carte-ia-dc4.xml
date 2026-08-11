@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Carte de remplissage assistee par IA — formulaire DC4
+  Déclaration de sous-traitance
+  Source du formulaire : DAJ, ministere de l'Economie (formulaires DC).
+  Reutilise sous Licence Ouverte Etalab 2.0. Contenu reglementaire non modifie.
+  Cette carte liste les champs du formulaire pour faciliter un remplissage assiste par IA.
+-->
+<carte form="DC4" version="2023-10-12" modele="DC4-2023.docx">
+  <intitule>Déclaration de sous-traitance</intitule>
+  <champs>
+    <champ rubrique="A" nom="acheteur" type="donnees_entreprise"><libelle>Désignation de l&#x27;acheteur</libelle></champ>
+    <champ rubrique="A" nom="personne_habilitee_nantissement" type="saisie_manuelle"><libelle>Personne habilitée (nantissements / cessions de créances)</libelle></champ>
+    <champ rubrique="B" nom="objet_marche" type="donnees_entreprise"><libelle>Objet du marché public (+ lot)</libelle></champ>
+    <champ rubrique="C" nom="objet_declaration" type="choix">
+      <libelle>Objet de la déclaration de sous-traitance</libelle>
+      <options><option>annexe_offre</option> <option>acte_special_acceptation</option> <option>acte_special_modificatif</option></options>
+    </champ>
+    <champ rubrique="D" nom="titulaire" type="donnees_entreprise"><libelle>Identification du soumissionnaire / titulaire</libelle></champ>
+    <champ rubrique="E" nom="st_denomination" type="saisie_manuelle"><libelle>Sous-traitant — dénomination, adresse, email, tél, SIRET</libelle></champ>
+    <champ rubrique="E" nom="st_forme_juridique" type="saisie_manuelle"><libelle>Sous-traitant — forme juridique + n° d&#x27;enregistrement</libelle></champ>
+    <champ rubrique="E" nom="st_dirigeant" type="saisie_manuelle"><libelle>Sous-traitant — personne(s) habilitée(s) à l&#x27;engager</libelle></champ>
+    <champ rubrique="E" nom="st_pme" type="choix">
+      <libelle>Le sous-traitant est-il une PME / artisan ?</libelle>
+      <options><option>oui</option> <option>non</option></options>
+    </champ>
+    <champ rubrique="F" nom="nature_prestations" type="saisie_manuelle"><libelle>Nature des prestations sous-traitées</libelle></champ>
+    <champ rubrique="F" nom="rgpd_traitement" type="conditionnel"><libelle>Sous-traitance de traitement de données personnelles (le cas échéant)</libelle></champ>
+    <champ rubrique="G" nom="montant_ht" type="saisie_manuelle"><libelle>Montant HT des prestations sous-traitées</libelle></champ>
+    <champ rubrique="G" nom="taux_tva" type="saisie_manuelle"><libelle>Taux de TVA</libelle></champ>
+    <champ rubrique="G" nom="montant_ttc" type="saisie_manuelle"><libelle>Montant TTC</libelle></champ>
+    <champ rubrique="G" nom="variation_prix" type="saisie_manuelle"><libelle>Modalités de variation des prix</libelle></champ>
+    <champ rubrique="G" nom="paiement_direct" type="choix">
+      <libelle>Le sous-traitant a-t-il droit au paiement direct ?</libelle>
+      <options><option>oui</option> <option>non</option></options>
+    </champ>
+    <champ rubrique="H" nom="compte_bancaire" type="saisie_manuelle"><libelle>Compte à créditer (RIB) — si paiement direct</libelle></champ>
+    <champ rubrique="H" nom="avance" type="choix">
+      <libelle>Le sous-traitant demande-t-il une avance ?</libelle>
+      <options><option>oui</option> <option>non</option></options>
+    </champ>
+    <champ rubrique="I" nom="duree_mois" type="saisie_manuelle"><libelle>Durée du contrat de sous-traitance (en nombre de mois)</libelle></champ>
+    <champ rubrique="J" nom="capacites_st" type="conditionnel"><libelle>Capacités du sous-traitant (si exigées et non transmises via DC2 rubrique H)</libelle></champ>
+    <champ rubrique="K" nom="attestation_exclusions_st" type="choix">
+      <libelle>Attestation sur l&#x27;honneur du sous-traitant — absence de cas d&#x27;exclusion</libelle>
+      <options><option>coche</option> <option>non_coche</option></options>
+    </champ>
+    <champ rubrique="L" nom="cession_nantissement" type="conditionnel"><libelle>Cession ou nantissement des créances (si acte spécial)</libelle></champ>
+    <champ rubrique="M" nom="signatures" type="saisie_manuelle"><libelle>Acceptation et agrément des conditions de paiement (signatures)</libelle></champ>
+  </champs>
+  <legende>
+    <type nom="donnees_entreprise">À remplir automatiquement depuis les informations de votre entreprise (identité, SIRET, capacités).</type>
+    <type nom="choix">Choisir une option ou cocher la case correspondant à votre situation.</type>
+    <type nom="conditionnel">À compléter uniquement si la situation décrite s&#x27;applique (ex. groupement, sous-traitance).</type>
+    <type nom="saisie_manuelle">Information propre au marché ou au dossier, à saisir manuellement.</type>
+  </legende>
+</carte>

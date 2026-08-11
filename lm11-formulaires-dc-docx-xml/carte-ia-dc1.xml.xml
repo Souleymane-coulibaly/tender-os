@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Carte de remplissage assistee par IA — formulaire DC1
+  Lettre de candidature et désignation du mandataire
+  Source du formulaire : DAJ, ministere de l'Economie (formulaires DC).
+  Reutilise sous Licence Ouverte Etalab 2.0. Contenu reglementaire non modifie.
+  Cette carte liste les champs du formulaire pour faciliter un remplissage assiste par IA.
+-->
+<carte form="DC1" version="2019-04-01" modele="DC1-2019.docx">
+  <intitule>Lettre de candidature et désignation du mandataire</intitule>
+  <champs>
+    <champ rubrique="A" nom="acheteur" type="donnees_entreprise"><libelle>Identification de l&#x27;acheteur</libelle></champ>
+    <champ rubrique="A" nom="reference_consultation" type="saisie_manuelle"><libelle>Référence / n° de dossier de la consultation</libelle></champ>
+    <champ rubrique="B" nom="objet_consultation" type="donnees_entreprise"><libelle>Objet de la consultation</libelle></champ>
+    <champ rubrique="C" nom="objet_candidature" type="choix">
+      <libelle>Objet de la candidature</libelle>
+      <options><option>marche_unique</option> <option>tous_lots</option> <option>lot_n</option></options>
+    </champ>
+    <champ rubrique="C" nom="lot_numero" type="donnees_entreprise"><libelle>N° et intitulé du lot</libelle></champ>
+    <champ rubrique="D" nom="presentation" type="choix">
+      <libelle>Présentation du candidat</libelle>
+      <options><option>seul</option> <option>groupement_conjoint</option> <option>groupement_solidaire</option></options>
+    </champ>
+    <champ rubrique="D" nom="mandataire_solidaire" type="conditionnel"><libelle>En groupement conjoint, le mandataire est solidaire</libelle></champ>
+    <champ rubrique="D" nom="denomination_sociale" type="donnees_entreprise"><libelle>Nom commercial et dénomination sociale</libelle></champ>
+    <champ rubrique="D" nom="adresse" type="donnees_entreprise"><libelle>Adresse postale et siège social</libelle></champ>
+    <champ rubrique="D" nom="email" type="donnees_entreprise"><libelle>Adresse électronique</libelle></champ>
+    <champ rubrique="D" nom="telephone" type="donnees_entreprise"><libelle>Téléphone</libelle></champ>
+    <champ rubrique="D" nom="telecopie" type="conditionnel"><libelle>Télécopie</libelle></champ>
+    <champ rubrique="D" nom="siret" type="donnees_entreprise"><libelle>Numéro SIRET</libelle></champ>
+    <champ rubrique="E" nom="membres_groupement" type="conditionnel"><libelle>Identification des membres du groupement et répartition des prestations</libelle></champ>
+    <champ rubrique="F1" nom="attestation_exclusions" type="choix">
+      <libelle>Attestation sur l&#x27;honneur — absence de cas d&#x27;exclusion (L.2141-1 à -5, L.2141-7 à -10)</libelle>
+      <options><option>coche</option> <option>non_coche</option></options>
+    </champ>
+    <champ rubrique="F2" nom="preuves_en_ligne_url" type="choix">
+      <libelle>Adresse internet des documents de preuve accessibles gratuitement</libelle>
+      <options><option>vide</option> <option>renseignee</option></options>
+    </champ>
+    <champ rubrique="F3" nom="capacites" type="choix">
+      <libelle>Production des capacités</libelle>
+      <options><option>dc2</option> <option>documents</option></options>
+    </champ>
+    <champ rubrique="G" nom="mandataire" type="conditionnel"><libelle>Désignation du mandataire</libelle></champ>
+  </champs>
+  <legende>
+    <type nom="donnees_entreprise">À remplir automatiquement depuis les informations de votre entreprise (identité, SIRET, capacités).</type>
+    <type nom="choix">Choisir une option ou cocher la case correspondant à votre situation.</type>
+    <type nom="conditionnel">À compléter uniquement si la situation décrite s&#x27;applique (ex. groupement, sous-traitance).</type>
+    <type nom="saisie_manuelle">Information propre au marché ou au dossier, à saisir manuellement.</type>
+  </legende>
+</carte>
