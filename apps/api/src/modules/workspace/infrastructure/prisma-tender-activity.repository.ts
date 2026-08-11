@@ -41,6 +41,20 @@ export class PrismaTenderActivityRepository implements TenderActivityRepository 
     };
   }
 
+  async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[]; limit: number }): Promise<TenderActivityRecord[]> {
+    if (input.tenderIds.length === 0) {
+      return [];
+    }
+
+    const records = await this.prisma.currentClient().tenderActivity.findMany({
+      where: { organizationId: input.organizationId, tenderId: { in: [...input.tenderIds] } },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: input.limit,
+    });
+
+    return records.map(toRecord);
+  }
+
   async create(activity: CreateTenderActivityInput): Promise<void> {
     await this.prisma.currentClient().tenderActivity.create({
       data: {

@@ -234,6 +234,10 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     CreateChecklistItemUseCase,
     UpdateChecklistItemUseCase,
     AUDIT_LOG_WRITER,
+
+    // V2 Sprint 15 — réexportés pour `dashboard` (voir index.ts).
+    GetTenderStatisticsUseCase,
+    GetTenderListViewUseCase,
   ],
 })
 export class TendersModule {}

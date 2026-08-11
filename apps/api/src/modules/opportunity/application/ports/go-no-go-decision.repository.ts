@@ -40,6 +40,11 @@ export interface GoNoGoDecisionRepository {
   listByTender(input: { organizationId: string; tenderId: string }): Promise<GoNoGoDecisionRecord[]>;
   getLatestByOpportunity(input: { organizationId: string; opportunityId: string }): Promise<GoNoGoDecisionRecord | null>;
   getLatestByTender(input: { organizationId: string; tenderId: string }): Promise<GoNoGoDecisionRecord | null>;
+  /** V2 Sprint 15 (Dashboard) — une seule requête groupée `WHERE tenderId IN (...) AND decidedAt >=
+   *  since` plutôt qu'un `listByTender` par Tender (mission §54 "pas de N+1") : `tenderIds` doit
+   *  déjà être le périmètre ClientAccess résolu par l'appelant, jamais recalculé ici (même motif
+   *  que `ChecklistItemRepository.listByTenderIds`). */
+  listRecentByTenderIds(input: { organizationId: string; tenderIds: readonly string[]; since: Date }): Promise<GoNoGoDecisionRecord[]>;
 }
 
 export const GO_NO_GO_DECISION_REPOSITORY = Symbol("GO_NO_GO_DECISION_REPOSITORY");

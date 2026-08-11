@@ -20,6 +20,7 @@ import { ComputeOpportunityQuickScoreUseCase } from "./application/use-cases/com
 import { CreateOpportunityUseCase } from "./application/use-cases/create-opportunity.use-case";
 import { GenerateGoNoGoReportUseCase } from "./application/use-cases/generate-go-no-go-report.use-case";
 import { GetGoNoGoReportUseCase } from "./application/use-cases/get-go-no-go-report.use-case";
+import { GetGoNoGoSummaryForDashboardUseCase } from "./application/use-cases/get-go-no-go-summary-for-dashboard.use-case";
 import { GetOpportunityUseCase } from "./application/use-cases/get-opportunity.use-case";
 import { GetOpportunityQuickScoreUseCase } from "./application/use-cases/get-opportunity-quick-score.use-case";
 import { ListGoNoGoReportsUseCase } from "./application/use-cases/list-go-no-go-reports.use-case";
@@ -70,6 +71,7 @@ import { OpportunitiesController } from "./interfaces/http/opportunities.control
     RecordTenderGoNoGoDecisionUseCase,
     ListOpportunityGoNoGoDecisionsUseCase,
     ListTenderGoNoGoDecisionsUseCase,
+    GetGoNoGoSummaryForDashboardUseCase,
 
     PromoteOpportunityToTenderUseCase,
 
@@ -84,6 +86,8 @@ import { OpportunitiesController } from "./interfaces/http/opportunities.control
   // d'un Tender fait partie de la hiérarchie des sources structurées (mission §18), jamais
   // recalculé par le Chat lui-même. Reste RBAC-gated (`ClientPermission.ReadGoNoGo`) : Chat ne
   // contourne rien, il consomme le même chemin qu'un acteur humain.
-  exports: [GetGoNoGoReportUseCase],
+  // V2 Sprint 15 — réexporté pour `dashboard` (voir index.ts), même motif que `GetGoNoGoReportUseCase`
+  // ci-dessus pour `chat` (Sprint 9).
+  exports: [GetGoNoGoReportUseCase, GetGoNoGoSummaryForDashboardUseCase],
 })
 export class OpportunityModule {}

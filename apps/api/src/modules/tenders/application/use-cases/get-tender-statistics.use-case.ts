@@ -18,7 +18,16 @@ import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.reposi
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
 import { enrichTenders } from "../tender-enrichment";
 
-export type GetTenderStatisticsQuery = Readonly<{ organizationId: string; actorId: string; actorRole: string }>;
+export type GetTenderStatisticsQuery = Readonly<{
+  organizationId: string;
+  actorId: string;
+  actorRole: string;
+  /** V2 Sprint 15 (Dashboard) — filtre explicite optionnel (sélecteur client), distinct de la
+   *  restriction ClientAccess automatique ci-dessous — même motif que `clientAccountId` sur
+   *  `ListTendersQuery`/`GetTenderListViewQuery`. Un `clientAccountId` non accessible ne peut
+   *  jamais élargir le périmètre : narrows to `[]`, jamais un contournement (mission §72). */
+  clientAccountId?: string | undefined;
+}>;
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -55,7 +64,14 @@ export class GetTenderStatisticsUseCase {
     if (!accessible.allClients && accessible.clientAccountIds.length === 0) {
       return { totalActive: 0, byStatus: {}, deadlinesNext7Days: 0, overdueCount: 0, readyToSubmitCount: 0, atRiskCount: 0, averageReadinessScore: 0 };
     }
-    const restrictToClientAccountIds = accessible.allClients ? undefined : accessible.clientAccountIds;
+
+    let restrictToClientAccountIds: readonly string[] | undefined;
+    if (query.clientAccountId) {
+      const authorized = accessible.allClients || accessible.clientAccountIds.includes(query.clientAccountId);
+      restrictToClientAccountIds = authorized ? [query.clientAccountId] : [];
+    } else {
+      restrictToClientAccountIds = accessible.allClients ? undefined : accessible.clientAccountIds;
+    }
 
     const [byStatus, deadlinesNext7Days, overdueCount, activePage] = await Promise.all([
       this.tenderRepository.countByStatus({ organizationId, restrictToClientAccountIds }),

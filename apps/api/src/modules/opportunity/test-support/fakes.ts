@@ -310,6 +310,12 @@ export class InMemoryGoNoGoDecisionRepository implements GoNoGoDecisionRepositor
     const list = await this.listByTender(input);
     return list[0] ?? null;
   }
+
+  async listRecentByTenderIds(input: { organizationId: string; tenderIds: readonly string[]; since: Date }): Promise<GoNoGoDecisionRecord[]> {
+    return this.records.filter(
+      (r) => r.organizationId === input.organizationId && r.level === "TENDER" && r.tenderId !== undefined && input.tenderIds.includes(r.tenderId) && new Date(r.decidedAt) >= input.since,
+    );
+  }
 }
 
 export type GoNoGoDecisionValueLiteral = GoNoGoDecisionValue;

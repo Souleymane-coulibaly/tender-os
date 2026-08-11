@@ -5,7 +5,7 @@ import type { AuditLogWriter, ResponsePackageAuditLogEntry } from "../applicatio
 import type { PackageArtifactRepository } from "../application/ports/package-artifact.repository";
 import type { PackageItemRepository } from "../application/ports/package-item.repository";
 import type { ResponsePackageVersionRepository } from "../application/ports/response-package-version.repository";
-import type { ResponsePackageRepository } from "../application/ports/response-package.repository";
+import type { ResponsePackageDashboardRow, ResponsePackageRepository } from "../application/ports/response-package.repository";
 import type { PackageArtifact } from "../domain/package-artifact.value-object";
 import type { PackageItem } from "../domain/package-item.entity";
 import type { ResponsePackageVersion } from "../domain/response-package-version.entity";
@@ -68,6 +68,11 @@ export class InMemoryResponsePackageRepository implements ResponsePackageReposit
     return this.packages.filter(
       (p) => p.organizationId === input.organizationId && p.tenderId === input.tenderId && (input.lotId === undefined || p.lotId === input.lotId) && (input.clientAccountId === undefined || p.clientAccountId === input.clientAccountId),
     );
+  }
+  async listForDashboard(input: { organizationId: string; restrictToClientAccountIds?: readonly string[] | undefined }): Promise<readonly ResponsePackageDashboardRow[]> {
+    return this.packages
+      .filter((p) => p.organizationId === input.organizationId && (input.restrictToClientAccountIds === undefined || input.restrictToClientAccountIds.includes(p.clientAccountId)))
+      .map((p) => ({ id: p.id, tenderId: p.tenderId, lotId: p.lotId ?? null, clientAccountId: p.clientAccountId, status: p.status }));
   }
 }
 

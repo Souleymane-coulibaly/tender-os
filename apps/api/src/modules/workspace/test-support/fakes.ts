@@ -180,6 +180,13 @@ export class InMemoryTenderActivityRepository implements TenderActivityRepositor
     return { items: items.slice(0, input.limit), nextCursor: null };
   }
 
+  async listByTenderIds(input: { organizationId: string; tenderIds: readonly string[]; limit: number }): Promise<TenderActivityRecord[]> {
+    return this.activities
+      .filter((a) => a.organizationId === input.organizationId && input.tenderIds.includes(a.tenderId))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, input.limit);
+  }
+
   async create(activity: CreateTenderActivityInput): Promise<void> {
     this.activities.push(activity);
   }

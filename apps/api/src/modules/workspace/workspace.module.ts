@@ -37,6 +37,7 @@ import { ListApprovalsUseCase } from "./application/use-cases/list-approvals.use
 import { GetTenderActivityUseCase } from "./application/use-cases/get-tender-activity.use-case";
 import { GetMyTasksUseCase } from "./application/use-cases/get-my-tasks.use-case";
 import { ListWorkspaceMembersUseCase } from "./application/use-cases/list-workspace-members.use-case";
+import { ListRecentActivityForDashboardUseCase } from "./application/use-cases/list-recent-activity-for-dashboard.use-case";
 
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
 import { PrismaApprovalRequestRepository } from "./infrastructure/prisma-approval-request.repository";
@@ -89,6 +90,7 @@ import { MyTasksController } from "./interfaces/http/me-tasks.controller";
     GetTenderActivityUseCase,
     GetMyTasksUseCase,
     ListWorkspaceMembersUseCase,
+    ListRecentActivityForDashboardUseCase,
 
     { provide: TENDER_PARTICIPANT_REPOSITORY, useClass: PrismaTenderParticipantRepository },
     { provide: TASK_REPOSITORY, useClass: PrismaTaskRepository },
@@ -99,5 +101,7 @@ import { MyTasksController } from "./interfaces/http/me-tasks.controller";
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
   ],
+  // V2 Sprint 15 — réexportés pour `dashboard` (voir index.ts). Premier export de ce module.
+  exports: [GetMyTasksUseCase, ListRecentActivityForDashboardUseCase],
 })
 export class WorkspaceModule {}

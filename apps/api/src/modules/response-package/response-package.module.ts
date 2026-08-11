@@ -23,6 +23,7 @@ import { DownloadResponsePackageArtifactUseCase } from "./application/use-cases/
 import { GenerateResponsePackageZipUseCase } from "./application/use-cases/generate-response-package-zip.use-case";
 import { GetPackageCompletenessUseCase } from "./application/use-cases/get-package-completeness.use-case";
 import { GetResponsePackageUseCase } from "./application/use-cases/get-response-package.use-case";
+import { GetResponsePackagePortfolioSummaryForDashboardUseCase } from "./application/use-cases/get-response-package-portfolio-summary-for-dashboard.use-case";
 import { ListResponsePackagesUseCase } from "./application/use-cases/list-response-packages.use-case";
 import { SelectPackageItemDocumentUseCase } from "./application/use-cases/select-package-item-document.use-case";
 import { ValidateResponsePackageVersionUseCase } from "./application/use-cases/validate-response-package-version.use-case";
@@ -64,6 +65,7 @@ import { TenderResponsePackagesController } from "./interfaces/http/tender-respo
     ValidateResponsePackageVersionUseCase,
     GenerateResponsePackageZipUseCase,
     DownloadResponsePackageArtifactUseCase,
+    GetResponsePackagePortfolioSummaryForDashboardUseCase,
 
     ResponsePackageAccessService,
     PackageItemEditGuard,
@@ -76,6 +78,7 @@ import { TenderResponsePackagesController } from "./interfaces/http/tender-respo
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
     { provide: ZIP_ARCHIVE_PORT, useClass: JszipArchiveAdapter },
   ],
-  exports: [],
+  // V2 Sprint 15 — réexporté pour `dashboard` (voir index.ts). Premier export de ce module.
+  exports: [GetResponsePackagePortfolioSummaryForDashboardUseCase],
 })
 export class ResponsePackageModule {}

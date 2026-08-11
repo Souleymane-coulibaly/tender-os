@@ -110,3 +110,18 @@ export { SUBCONTRACTOR_SUBJECT_VALIDATOR } from "./application/ports/subcontract
 export type { SubcontractorSubjectValidator } from "./application/ports/subcontractor-subject-validator";
 export { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
 export type { AuditLogWriter, TenderAuditLogEntry } from "./application/ports/audit-log-writer";
+
+// V2 Sprint 15 (Dashboard opérationnel) — réexportés UNIQUEMENT pour `dashboard` : les KPI/pipeline
+// (score de préparation, risques, échéances, "à traiter") réutilisent EXACTEMENT le moteur de
+// lecture déjà éprouvé par la vue Statistiques/Liste Tenders (mission §53 "le Dashboard est une
+// projection/read model, il ne doit pas réimplémenter la logique métier"), jamais un second calcul
+// de readiness/pipeline dupliqué. Restent RBAC/ClientAccess-gated exactement comme leurs appelants
+// existants (`TendersController`) — Dashboard ne contourne rien, il consomme le même chemin qu'un
+// acteur humain sur la vue Tenders.
+export { GetTenderStatisticsUseCase } from "./application/use-cases/get-tender-statistics.use-case";
+export type { GetTenderStatisticsQuery } from "./application/use-cases/get-tender-statistics.use-case";
+export { GetTenderListViewUseCase } from "./application/use-cases/get-tender-list-view.use-case";
+export type { GetTenderListViewQuery, GetTenderListViewResult } from "./application/use-cases/get-tender-list-view.use-case";
+export type { TenderStatisticsDto, TenderListItemDto, TenderBoardItemDto } from "./application/board-dtos";
+export { ReadinessStatus } from "./domain/readiness-status";
+export { TenderStatus } from "./domain/tender-status";

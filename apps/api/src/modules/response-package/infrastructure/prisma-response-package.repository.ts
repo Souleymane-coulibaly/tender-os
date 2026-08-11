@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
-import type { ResponsePackageRepository } from "../application/ports/response-package.repository";
+import type { ResponsePackageDashboardRow, ResponsePackageRepository } from "../application/ports/response-package.repository";
+import type { ResponsePackageStatus } from "../domain/enums";
 import type { ResponsePackage } from "../domain/response-package.aggregate";
 import { toDomainResponsePackage, toResponsePackageRow } from "./response-package.persistence-mapper";
 
@@ -42,5 +43,23 @@ export class PrismaResponsePackageRepository implements ResponsePackageRepositor
       orderBy: { createdAt: "desc" },
     });
     return records.map(toDomainResponsePackage);
+  }
+
+  async listForDashboard(input: { organizationId: string; restrictToClientAccountIds?: readonly string[] | undefined }): Promise<readonly ResponsePackageDashboardRow[]> {
+    const records = await this.prisma.currentClient().responsePackage.findMany({
+      where: {
+        organizationId: input.organizationId,
+        ...(input.restrictToClientAccountIds ? { clientAccountId: { in: [...input.restrictToClientAccountIds] } } : {}),
+      },
+      select: { id: true, tenderId: true, lotId: true, clientAccountId: true, status: true },
+    });
+
+    return records.map((record) => ({
+      id: record.id,
+      tenderId: record.tenderId,
+      lotId: record.lotId,
+      clientAccountId: record.clientAccountId,
+      status: record.status as ResponsePackageStatus,
+    }));
   }
 }

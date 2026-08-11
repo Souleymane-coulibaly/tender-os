@@ -10,6 +10,7 @@ import { ChecklistIntelligenceModule } from "./modules/checklist-intelligence/ch
 import { ClientPortfolioModule } from "./modules/client-portfolio/client-portfolio.module";
 import { CockpitModule } from "./modules/cockpit";
 import { CompanyProfileModule } from "./modules/company-profile";
+import { DashboardModule } from "./modules/dashboard";
 import { DceModule } from "./modules/dce/dce.module";
 import { DeliverablesModule, ExportThemeResolverBridgeModule } from "./modules/deliverables";
 import { DocumentGenerationModule } from "./modules/document-generation";
@@ -83,6 +84,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     TechnicalMemoModule,
     PricingScheduleModule,
     ResponsePackageModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}

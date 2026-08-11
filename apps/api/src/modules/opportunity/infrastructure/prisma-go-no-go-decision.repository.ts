@@ -81,4 +81,15 @@ export class PrismaGoNoGoDecisionRepository implements GoNoGoDecisionRepository 
     });
     return row ? toRecord(row) : null;
   }
+
+  async listRecentByTenderIds(input: { organizationId: string; tenderIds: readonly string[]; since: Date }): Promise<GoNoGoDecisionRecord[]> {
+    if (input.tenderIds.length === 0) {
+      return [];
+    }
+    const rows = await this.prisma.currentClient().goNoGoDecision.findMany({
+      where: { organizationId: input.organizationId, level: "TENDER", tenderId: { in: [...input.tenderIds] }, decidedAt: { gte: input.since } },
+      orderBy: { insertSeq: "desc" },
+    });
+    return rows.map(toRecord);
+  }
 }

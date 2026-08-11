@@ -5,6 +5,7 @@ import { getAppSessionToken } from "../../../lib/app-api-client";
 import { logoutAction } from "../actions";
 
 const NAV_ITEMS = [
+  { href: "/app", label: "Tableau de bord" },
   { href: "/app/clients", label: "Clients" },
   { href: "/app/subcontractor-profiles", label: "Sous-traitants" },
   { href: "/app/opportunities", label: "Opportunités" },
@@ -34,19 +35,22 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </button>
         </form>
       </header>
-      <div className="flex flex-1">
-        <nav className="w-56 shrink-0 border-r border-neutral-200 p-4">
-          <ul className="flex flex-col gap-1">
+      <div className="flex flex-1 flex-col md:flex-row">
+        {/* Mission Sprint 15 §7/§9/§107 — barre horizontale scrollable en mobile/tablette (jamais
+            une largeur fixe qui provoque un débordement horizontal global), sidebar classique à
+            partir de md:. Bénéficie à toutes les pages, pas seulement au Dashboard. */}
+        <nav className="shrink-0 overflow-x-auto border-b border-neutral-200 p-2 md:w-56 md:overflow-visible md:border-b-0 md:border-r md:p-4">
+          <ul className="flex gap-1 md:flex-col">
             {NAV_ITEMS.map((item) => (
-              <li key={item.href}>
-                <Link href={item.href} className="block rounded px-3 py-2 text-sm hover:bg-neutral-100">
+              <li key={item.href} className="shrink-0 md:shrink">
+                <Link href={item.href} className="block whitespace-nowrap rounded px-3 py-2 text-sm hover:bg-neutral-100">
                   {item.label}
                 </Link>
               </li>
             ))}
           </ul>
         </nav>
-        <main className="flex-1 p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
     </div>
   );
