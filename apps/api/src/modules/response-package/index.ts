@@ -7,3 +7,8 @@ export { GetResponsePackagePortfolioSummaryForDashboardUseCase } from "./applica
 export type { GetResponsePackagePortfolioSummaryForDashboardQuery } from "./application/use-cases/get-response-package-portfolio-summary-for-dashboard.use-case";
 export type { ResponsePackageDashboardRow } from "./application/ports/response-package.repository";
 export { ResponsePackageStatus } from "./domain/enums";
+
+// V2 Sprint 16 (Integration Hub) — réexporté UNIQUEMENT pour `integrations` (Public API en
+// lecture seule, mission §85/§86), même motif que ci-dessus pour `dashboard`.
+export { GetResponsePackageForPublicApiUseCase } from "./application/use-cases/get-response-package-for-public-api.use-case";
+export type { GetResponsePackageForPublicApiQuery, ResponsePackagePublicSummary } from "./application/use-cases/get-response-package-for-public-api.use-case";

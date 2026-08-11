@@ -27,10 +27,11 @@ export class PublishPendingOutboxEventsUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  async execute(input: { batchSize?: number } = {}): Promise<PublishPendingOutboxEventsResult> {
+  async execute(input: { batchSize?: number; staleProcessingThresholdMs?: number } = {}): Promise<PublishPendingOutboxEventsResult> {
     const limit = input.batchSize ?? 100;
+    const staleProcessingThresholdMs = input.staleProcessingThresholdMs ?? 5 * 60 * 1000;
     const now = this.clock.now();
-    const claimed = await this.repository.claimPendingBatch({ limit, now });
+    const claimed = await this.repository.claimPendingBatch({ limit, now, staleProcessingThresholdMs });
 
     let published = 0;
     let failed = 0;

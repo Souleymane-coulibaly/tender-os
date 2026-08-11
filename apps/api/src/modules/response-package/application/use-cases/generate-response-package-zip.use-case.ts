@@ -6,6 +6,7 @@ import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-gen
 import { readStreamToBuffer } from "../../../../shared-kernel/read-stream-to-buffer";
 import { ClientPermission } from "../../../client-portfolio";
 import { DOCUMENT_VERSION_REPOSITORY, STORAGE_PROVIDER, type DocumentVersionRepository, type StorageProvider } from "../../../documents";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { buildSafeArchivePath } from "../../domain/archive-path-safety";
 import { PackageItemCategory } from "../../domain/enums";
 import { PackageArtifactNotReadyError, ResponsePackageVersionNotFoundError } from "../../domain/errors";
@@ -62,6 +63,7 @@ export class GenerateResponsePackageZipUseCase {
     @Inject(ZIP_ARCHIVE_PORT) private readonly zipArchivePort: ZipArchivePort,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(ATOMIC_TRANSACTION_RUNNER) private readonly atomicTransactionRunner: AtomicTransactionRunner,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly accessService: ResponsePackageAccessService,
@@ -163,6 +165,19 @@ export class GenerateResponsePackageZipUseCase {
           resourceId: artifact.id,
           requestId: command.requestId,
           metadata: { responsePackageId: pkg.id, responsePackageVersionId: version.id, itemCount: manifestItems.length, checksum },
+        });
+        // V2 Sprint 16 (Integration Hub) — mission §87/§135 : même motif que Validate ci-dessus.
+        await this.outboxWriter.write({
+          organizationId: command.organizationId,
+          events: [
+            {
+              eventType: "response_package.generated",
+              aggregateType: "PackageArtifact",
+              aggregateId: artifact.id,
+              payload: { responsePackageId: pkg.id, responsePackageVersionId: version.id, tenderId: pkg.tenderId, lotId: pkg.lotId ?? null, clientAccountId: pkg.clientAccountId, fileName, checksum },
+              occurredAt,
+            },
+          ],
         });
       });
 

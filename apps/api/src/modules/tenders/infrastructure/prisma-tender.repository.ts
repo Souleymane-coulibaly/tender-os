@@ -25,6 +25,7 @@ function buildWhere(input: TenderListFilter): Prisma.TenderWhereInput {
   if (input.idsFilter) andConditions.push({ id: { in: [...input.idsFilter] } });
   if (input.deadlineAfter) andConditions.push({ submissionDeadline: { gte: input.deadlineAfter } });
   if (input.deadlineBefore) andConditions.push({ submissionDeadline: { lte: input.deadlineBefore } });
+  if (input.updatedSince) andConditions.push({ updatedAt: { gte: input.updatedSince } });
   if (input.overdue) {
     andConditions.push({
       submissionDeadline: { lt: new Date() },

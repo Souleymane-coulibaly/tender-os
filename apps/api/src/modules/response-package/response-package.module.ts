@@ -4,6 +4,7 @@ import { ClientPortfolioModule } from "../client-portfolio";
 import { DocumentsModule } from "../documents";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
+import { OutboxWriterModule } from "../outbox";
 import { PricingScheduleModule } from "../pricing-schedule";
 import { TechnicalMemoModule } from "../technical-memo";
 import { TendersModule } from "../tenders";
@@ -24,6 +25,7 @@ import { GenerateResponsePackageZipUseCase } from "./application/use-cases/gener
 import { GetPackageCompletenessUseCase } from "./application/use-cases/get-package-completeness.use-case";
 import { GetResponsePackageUseCase } from "./application/use-cases/get-response-package.use-case";
 import { GetResponsePackagePortfolioSummaryForDashboardUseCase } from "./application/use-cases/get-response-package-portfolio-summary-for-dashboard.use-case";
+import { GetResponsePackageForPublicApiUseCase } from "./application/use-cases/get-response-package-for-public-api.use-case";
 import { ListResponsePackagesUseCase } from "./application/use-cases/list-response-packages.use-case";
 import { SelectPackageItemDocumentUseCase } from "./application/use-cases/select-package-item-document.use-case";
 import { ValidateResponsePackageVersionUseCase } from "./application/use-cases/validate-response-package-version.use-case";
@@ -52,7 +54,7 @@ import { TenderResponsePackagesController } from "./interfaces/http/tender-respo
  * `DOCUMENT_VERSION_REPOSITORY` pour l'assemblage ZIP réel.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, DocumentsModule, AdministrativeDossierModule, TechnicalMemoModule, PricingScheduleModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, DocumentsModule, AdministrativeDossierModule, TechnicalMemoModule, PricingScheduleModule, OutboxWriterModule],
   controllers: [TenderResponsePackagesController, ResponsePackagesController, PackageArtifactsController],
   providers: [
     CreateResponsePackageUseCase,
@@ -66,6 +68,7 @@ import { TenderResponsePackagesController } from "./interfaces/http/tender-respo
     GenerateResponsePackageZipUseCase,
     DownloadResponsePackageArtifactUseCase,
     GetResponsePackagePortfolioSummaryForDashboardUseCase,
+    GetResponsePackageForPublicApiUseCase,
 
     ResponsePackageAccessService,
     PackageItemEditGuard,
@@ -78,7 +81,7 @@ import { TenderResponsePackagesController } from "./interfaces/http/tender-respo
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
     { provide: ZIP_ARCHIVE_PORT, useClass: JszipArchiveAdapter },
   ],
-  // V2 Sprint 15 — réexporté pour `dashboard` (voir index.ts). Premier export de ce module.
-  exports: [GetResponsePackagePortfolioSummaryForDashboardUseCase],
+  // V2 Sprint 15/16 — réexportés pour `dashboard`/`integrations` (voir index.ts).
+  exports: [GetResponsePackagePortfolioSummaryForDashboardUseCase, GetResponsePackageForPublicApiUseCase],
 })
 export class ResponsePackageModule {}

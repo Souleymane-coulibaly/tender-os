@@ -1,0 +1,415 @@
+openapi: 3.0.3
+info:
+  title: TenderOS Public API
+  version: "1.0.0"
+  description: >
+    API publique en lecture prioritaire pour les automatisations externes (n8n, scripts,
+    intégrations tierces). Rédigée à la main (V2 Sprint 16 — Integration Hub) : aucune dépendance
+    Swagger n'a été ajoutée au projet, cohérent avec la philosophie "pas de dépendance inutile"
+    déjà appliquée aux Sprints précédents. Ce document décrit le comportement RÉEL du code livré,
+    jamais une intention — chaque route, code d'erreur et en-tête ci-dessous est backé par
+    `apps/api/src/modules/integrations/interfaces/http/integrations-http.integration.spec.ts`.
+servers:
+  - url: http://localhost:4000
+    description: Développement local
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Public API
+    description: Endpoints lus par une automatisation externe via une clé API (jamais une session).
+  - name: Gestion des intégrations
+    description: >
+      Endpoints de gestion (création/révocation de clés API, création/désactivation/suppression de
+      webhooks, journal des livraisons) — authentification par SESSION utilisateur (cookie),
+      réservés OWNER/ORGANIZATION_ADMIN. Jamais appelés par n8n lui-même ; utilisés depuis l'écran
+      Intégrations de TenderOS pour PRÉPARER l'automatisation.
+
+paths:
+  /api/v1/public/tenders:
+    get:
+      tags: [Public API]
+      summary: Liste les appels d'offres accessibles à la clé API
+      description: >
+        Pagination par curseur, tri `updatedAt desc` fixe (jamais un tri arbitraire). Si la clé
+        porte une restriction client (`allowedClientAccountIds` non vide), seuls les Tenders des
+        clients autorisés sont retournés — jamais un filtrage côté client, toujours appliqué avant
+        la requête base de données (même principe que le Dashboard Sprint 15).
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+          description: Filtre optionnel sur le statut du Tender (valeurs du domaine `TenderStatus`).
+        - name: clientId
+          in: query
+          schema: { type: string, format: uuid }
+          description: >
+            Filtre optionnel sur un client précis. Si la clé est restreinte à une liste de clients,
+            un `clientId` hors de cette liste ne renvoie jamais les données d'un autre client
+            (rejeté avec le même 404 anti-énumération qu'un Tender introuvable).
+        - name: updatedSince
+          in: query
+          schema: { type: string, format: date-time }
+          description: Ne renvoie que les Tenders modifiés depuis cette date (ISO 8601).
+        - name: cursor
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Liste paginée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/TenderSummary" } }
+                  nextCursor: { type: string, format: uuid, nullable: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/ScopeMissing" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/public/tenders/{id}:
+    get:
+      tags: [Public API]
+      summary: Récupère un appel d'offres par identifiant
+      description: >
+        Anti-énumération (mission §101/§102) : un Tender d'une autre organisation, ou hors de la
+        restriction client de la clé, renvoie EXACTEMENT le même 404 qu'un Tender inexistant —
+        jamais un 403 qui confirmerait son existence.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Le Tender
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenderSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/ScopeMissing" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/public/response-packages/{id}:
+    get:
+      tags: [Public API]
+      summary: Récupère les métadonnées d'un dossier de réponse (jamais le fichier ZIP)
+      description: >
+        Métadonnées uniquement — id, tender, lot, client, statut (readiness DÉJÀ calculée, jamais
+        recalculée ici), numéro de version courante. Le téléchargement du ZIP lui-même est différé
+        (voir la section "Éléments différés" du rapport de Sprint 16).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Le dossier de réponse
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResponsePackagePublicSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/ScopeMissing" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/integrations/api-keys:
+    get:
+      tags: [Gestion des intégrations]
+      summary: Liste les clés API de l'organisation (jamais la clé complète ni le hash)
+      security: [{ SessionAuth: [] }]
+      responses:
+        "200":
+          description: Liste des clés
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ApiKeySummary" } }
+    post:
+      tags: [Gestion des intégrations]
+      summary: Crée une clé API — réservé OWNER/ORGANIZATION_ADMIN
+      security: [{ SessionAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, scopes]
+              properties:
+                name: { type: string, maxLength: 160 }
+                scopes:
+                  type: array
+                  items: { $ref: "#/components/schemas/ApiKeyScope" }
+                allowedClientAccountIds:
+                  type: array
+                  items: { type: string, format: uuid }
+                  description: >
+                    Narrowing STRICT (jamais un élargissement). Liste vide/absente = pas de
+                    restriction supplémentaire au-delà des scopes.
+                expiresAt: { type: string, format: date-time }
+      responses:
+        "201":
+          description: >
+            La clé complète (`fullKey`) n'est renvoyée QU'ICI, une seule fois. Elle ne sera plus
+            jamais rejouée par aucun autre endpoint (mission §10/§11).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fullKey: { type: string, example: "tos_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
+                  apiKey: { $ref: "#/components/schemas/ApiKeySummary" }
+        "403": { description: Réservé OWNER/ORGANIZATION_ADMIN }
+
+  /api/v1/integrations/api-keys/{id}/revoke:
+    post:
+      tags: [Gestion des intégrations]
+      summary: Révoque une clé API — effet immédiat, irréversible
+      security: [{ SessionAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Révoquée }
+
+  /api/v1/integrations/webhooks:
+    get:
+      tags: [Gestion des intégrations]
+      summary: Liste les abonnements webhook de l'organisation
+      security: [{ SessionAuth: [] }]
+      responses:
+        "200":
+          description: Liste des abonnements
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/WebhookSubscriptionSummary" } }
+    post:
+      tags: [Gestion des intégrations]
+      summary: Crée un abonnement webhook — réservé OWNER/ORGANIZATION_ADMIN
+      description: >
+        L'URL est vérifiée contre les réseaux privés/internes/de métadonnées cloud (mission §31,
+        protection SSRF) à la création, PUIS à nouveau après résolution DNS à chaque livraison
+        (défense en profondeur contre le DNS rebinding).
+      security: [{ SessionAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpointUrl, events]
+              properties:
+                endpointUrl: { type: string, format: uri, maxLength: 2048 }
+                description: { type: string, maxLength: 300 }
+                events:
+                  type: array
+                  items: { $ref: "#/components/schemas/WebhookEventType" }
+                allowedClientAccountIds:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "201":
+          description: >
+            Le secret complet (`whsec_...`) n'est renvoyé QU'ICI, une seule fois — utilisez-le pour
+            vérifier la signature HMAC-SHA256 des livraisons (voir le guide n8n).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secret: { type: string, example: "whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
+                  subscription: { $ref: "#/components/schemas/WebhookSubscriptionSummary" }
+        "422": { description: "URL non autorisée (réseau privé/interne) ou événement non gouverné" }
+
+  /api/v1/integrations/webhooks/{id}:
+    get:
+      tags: [Gestion des intégrations]
+      summary: Détail d'un abonnement webhook (jamais le secret)
+      security: [{ SessionAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Détail, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookSubscriptionSummary" } } } }
+
+  /api/v1/integrations/webhooks/{id}/status:
+    post:
+      tags: [Gestion des intégrations]
+      summary: Active ou désactive un abonnement (un abonnement désactivé ne reçoit plus aucune nouvelle livraison)
+      security: [{ SessionAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [enabled], properties: { enabled: { type: boolean } } } } }
+      responses: { "200": { description: Mis à jour } }
+
+  /api/v1/integrations/webhooks/{id}/delete:
+    post:
+      tags: [Gestion des intégrations]
+      summary: Supprime (soft-delete) un abonnement webhook
+      security: [{ SessionAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { "200": { description: Supprimé } }
+
+  /api/v1/integrations/webhooks/{id}/deliveries:
+    get:
+      tags: [Gestion des intégrations]
+      summary: Journal des livraisons d'un abonnement (diagnostic)
+      security: [{ SessionAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: cursor, in: query, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+      responses:
+        "200":
+          description: Page de livraisons
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/WebhookDeliverySummary" } }
+                  nextCursor: { type: string, format: uuid, nullable: true }
+
+  /api/v1/integrations/webhooks/deliveries/{deliveryId}/retry:
+    post:
+      tags: [Gestion des intégrations]
+      summary: Relance manuellement une livraison en échec (RETRYING ou DEAD uniquement)
+      security: [{ SessionAuth: [] }]
+      parameters: [{ name: deliveryId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Replanifiée }
+        "409": { description: "La livraison a déjà réussi ou n'est pas dans un état permettant une relance" }
+
+  /api/v1/integrations/webhooks/{id}/test:
+    post:
+      tags: [Gestion des intégrations]
+      summary: Envoie un événement `webhook.test` réel (traité par le même worker que les événements métier)
+      security: [{ SessionAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { "201": { description: "Delivery créée, livrée au prochain cycle du worker (~2s)" } }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: "tos_live_<43 caractères base64url>"
+      description: >
+        En-tête `Authorization: Bearer tos_live_...`. L'organisation est dérivée de la clé
+        elle-même — jamais besoin d'un en-tête `X-Organization-Id` séparé (contrairement aux
+        endpoints internes en session).
+    SessionAuth:
+      type: apiKey
+      in: cookie
+      name: tenderos_app_session
+      description: Session utilisateur TenderOS — jamais utilisée par une automatisation externe.
+
+  responses:
+    Unauthorized:
+      description: "Clé invalide, révoquée, expirée, ou absente — jamais distingué (anti-énumération)."
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
+    ScopeMissing:
+      description: "La clé est valide mais ne porte pas le scope requis pour cette opération."
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
+    NotFound:
+      description: "Ressource inexistante OU hors du périmètre organisation/client de la clé — même réponse dans les deux cas."
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
+    RateLimited:
+      description: "Limite de débit dépassée pour cette clé API (100 requêtes / 60s par défaut)."
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      description: Format d'erreur unique, systématique, sur toute l'API TenderOS.
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, example: "API_KEY_AUTHENTICATION_FAILED" }
+            message: { type: string }
+            requestId: { type: string }
+
+    ApiKeyScope:
+      type: string
+      enum: [tenders:read, lots:read, documents:read, checklist:read, tasks:read, tasks:write, response-packages:read, webhooks:manage]
+
+    WebhookEventType:
+      type: string
+      description: Catalogue gouverné — aucun autre type accepté.
+      enum:
+        - tender.created
+        - task.created
+        - task.completed
+        - opportunity.go_decided
+        - opportunity.no_go_decided
+        - response_package.validated
+        - response_package.generated
+
+    ApiKeySummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        keyPrefix: { type: string, example: "tos_live_ntp8S37M" }
+        scopes: { type: array, items: { $ref: "#/components/schemas/ApiKeyScope" } }
+        allowedClientAccountIds: { type: array, items: { type: string, format: uuid } }
+        createdBy: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        status: { type: string, enum: [ACTIVE, EXPIRED, REVOKED] }
+
+    WebhookSubscriptionSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        endpointUrl: { type: string, format: uri }
+        description: { type: string, nullable: true }
+        events: { type: array, items: { $ref: "#/components/schemas/WebhookEventType" } }
+        status: { type: string, enum: [ACTIVE, DISABLED] }
+        allowedClientAccountIds: { type: array, items: { type: string, format: uuid } }
+        createdBy: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    WebhookDeliverySummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        eventId: { type: string, format: uuid }
+        eventType: { type: string }
+        status: { type: string, enum: [PENDING, DELIVERING, SUCCEEDED, RETRYING, DEAD] }
+        attemptCount: { type: integer }
+        httpStatus: { type: integer, nullable: true }
+        startedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        nextAvailableAt: { type: string, format: date-time }
+        errorSummary: { type: string, nullable: true, description: "Tronqué à 500 caractères, jamais le corps brut de la réponse externe." }
+        createdAt: { type: string, format: date-time }
+
+    TenderSummary:
+      type: object
+      description: Sous-ensemble des champs les plus utiles ; voir `TenderSummary` (apps/api/src/modules/tenders/application/dtos.ts) pour la liste complète.
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        clientAccountId: { type: string, format: uuid }
+        title: { type: string }
+        reference: { type: string, nullable: true }
+        status: { type: string }
+        submissionDeadline: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: string, format: date-time }
+
+    ResponsePackagePublicSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenderId: { type: string, format: uuid }
+        lotId: { type: string, format: uuid, nullable: true }
+        clientAccountId: { type: string, format: uuid }
+        status: { type: string }
+        currentVersionNumber: { type: integer }

@@ -46,13 +46,20 @@ export class PrismaOutboxEventRepository implements OutboxEventRepository {
     });
   }
 
-  async claimPendingBatch(input: { limit: number; now: Date }): Promise<ClaimedOutboxEvent[]> {
+  /** Audit Codex OUTBOX-P1-02 — reprend aussi les lignes PROCESSING dont le bail a expiré (crash
+   *  worker après claim, avant publication/échec). Aucune nouvelle colonne : `available_at` sert
+   *  de double usage (prochaine tentative pour PENDING/FAILED, échéance de bail pour PROCESSING) —
+   *  posé à `now + staleProcessingThresholdMs` au moment du claim ci-dessous, jamais une colonne
+   *  `processingStartedAt` séparée qui aurait exigé une migration. */
+  async claimPendingBatch(input: { limit: number; now: Date; staleProcessingThresholdMs: number }): Promise<ClaimedOutboxEvent[]> {
+    const leaseExpiresAt = new Date(input.now.getTime() + input.staleProcessingThresholdMs);
+
     return this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<ClaimedRow[]>`
         SELECT id, organization_id, event_type, event_version, aggregate_type, aggregate_id,
                payload, occurred_at, correlation_id, attempt_count
         FROM outbox_events
-        WHERE status IN ('PENDING', 'FAILED') AND available_at <= ${input.now}
+        WHERE status IN ('PENDING', 'FAILED', 'PROCESSING') AND available_at <= ${input.now}
         ORDER BY created_at
         LIMIT ${input.limit}
         FOR UPDATE SKIP LOCKED
@@ -64,7 +71,7 @@ export class PrismaOutboxEventRepository implements OutboxEventRepository {
 
       await tx.outboxEvent.updateMany({
         where: { id: { in: rows.map((row) => row.id) } },
-        data: { status: OutboxEventStatus.Processing },
+        data: { status: OutboxEventStatus.Processing, availableAt: leaseExpiresAt },
       });
 
       return rows.map(

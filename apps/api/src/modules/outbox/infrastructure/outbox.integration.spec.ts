@@ -89,12 +89,12 @@ describe("Outbox repositories (PostgreSQL réel)", () => {
   it("claims pending events, marks them PROCESSING, and does not return them again to a second claim", async () => {
     await outboxRepository.insertMany({ organizationId, events: [{ eventType: "TEST_EVENT", aggregateType: "Test", aggregateId: randomUUID(), payload: {}, occurredAt: new Date() }] });
 
-    const firstClaim = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date() }), organizationId);
+    const firstClaim = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date(), staleProcessingThresholdMs: 5 * 60 * 1000 }), organizationId);
     expect(firstClaim).toHaveLength(1);
     const [claimed] = firstClaim;
     if (!claimed) throw new Error("expected one claimed event");
 
-    const secondClaim = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date() }), organizationId);
+    const secondClaim = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date(), staleProcessingThresholdMs: 5 * 60 * 1000 }), organizationId);
     expect(secondClaim).toHaveLength(0);
 
     const stored = await prisma.outboxEvent.findUnique({ where: { id: claimed.id } });
@@ -103,23 +103,56 @@ describe("Outbox repositories (PostgreSQL réel)", () => {
 
   it("does not claim a failed event before its rescheduled availableAt", async () => {
     await outboxRepository.insertMany({ organizationId, events: [{ eventType: "TEST_EVENT", aggregateType: "Test", aggregateId: randomUUID(), payload: {}, occurredAt: new Date() }] });
-    const [claimed] = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date() }), organizationId);
+    const [claimed] = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date(), staleProcessingThresholdMs: 5 * 60 * 1000 }), organizationId);
     if (!claimed) throw new Error("expected one claimed event");
 
     const farFuture = new Date(Date.now() + 60 * 60 * 1000);
     await outboxRepository.markFailedAndReschedule({ id: claimed.id, organizationId, error: "boom", nextAvailableAt: farFuture, attemptCount: 1 });
 
-    const tooEarly = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date() }), organizationId);
+    const tooEarly = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date(), staleProcessingThresholdMs: 5 * 60 * 1000 }), organizationId);
     expect(tooEarly).toHaveLength(0);
 
-    const afterBackoff = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date(farFuture.getTime() + 1000) }), organizationId);
+    const afterBackoff = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date(farFuture.getTime() + 1000), staleProcessingThresholdMs: 5 * 60 * 1000 }), organizationId);
     expect(afterBackoff).toHaveLength(1);
+  });
+
+  it("audit Codex OUTBOX-P1-02 — a PROCESSING event whose lease expired (worker crashed before publish/fail) is reclaimed, never stuck forever", async () => {
+    const aggregateId = randomUUID();
+    await outboxRepository.insertMany({ organizationId, events: [{ eventType: "TEST_EVENT", aggregateType: "Test", aggregateId, payload: {}, occurredAt: new Date() }] });
+
+    const claimedAt = new Date();
+    const [claimed] = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: claimedAt, staleProcessingThresholdMs: 5 * 60 * 1000 }), organizationId);
+    if (!claimed) throw new Error("expected one claimed event");
+
+    const stillLeased = await prisma.outboxEvent.findUnique({ where: { id: claimed.id } });
+    expect(stillLeased?.status).toBe(OutboxEventStatus.Processing);
+
+    // Le worker "crashe" ici : jamais markPublished/markFailedAndReschedule/moveToDeadLetter
+    // appelé. Avant que le bail n'expire, un autre worker ne doit JAMAIS reclaimer cette ligne.
+    const withinLease = mine(
+      await outboxRepository.claimPendingBatch({ limit: 50, now: new Date(claimedAt.getTime() + 60 * 1000), staleProcessingThresholdMs: 5 * 60 * 1000 }),
+      organizationId,
+    );
+    expect(withinLease).toHaveLength(0);
+
+    // Après expiration du bail (staleProcessingThresholdMs), un nouveau worker doit reclaimer la
+    // ligne PROCESSING abandonnée — jamais bloquée indéfiniment.
+    const afterLeaseExpiry = mine(
+      await outboxRepository.claimPendingBatch({ limit: 50, now: new Date(claimedAt.getTime() + 6 * 60 * 1000), staleProcessingThresholdMs: 5 * 60 * 1000 }),
+      organizationId,
+    );
+    expect(afterLeaseExpiry).toHaveLength(1);
+    expect(afterLeaseExpiry[0]!.id).toBe(claimed.id);
+    // attemptCount n'a pas été incrémenté par la reprise elle-même (seul un échec explicite via
+    // markFailedAndReschedule l'incrémente) — la reprise n'est pas comptée comme une tentative
+    // supplémentaire au-delà de ce que le worker qui la traite décidera lui-même.
+    expect(afterLeaseExpiry[0]!.attemptCount).toBe(0);
   });
 
   it("moving an event to dead-letter creates a DeadLetterEvent row and sets the terminal status", async () => {
     const aggregateId = randomUUID();
     await outboxRepository.insertMany({ organizationId, events: [{ eventType: "TEST_EVENT", aggregateType: "Test", aggregateId, payload: { a: 1 }, occurredAt: new Date() }] });
-    const [claimed] = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date() }), organizationId);
+    const [claimed] = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date(), staleProcessingThresholdMs: 5 * 60 * 1000 }), organizationId);
     if (!claimed) throw new Error("expected one claimed event");
 
     await outboxRepository.moveToDeadLetter({ id: claimed.id, organizationId, error: "definitive failure", attemptCount: 5 });
@@ -142,7 +175,7 @@ describe("Outbox repositories (PostgreSQL réel)", () => {
 
   it("processed-event ledger is idempotent: recording the same (event, consumer) pair twice never throws and never duplicates", async () => {
     await outboxRepository.insertMany({ organizationId, events: [{ eventType: "TEST_EVENT", aggregateType: "Test", aggregateId: randomUUID(), payload: {}, occurredAt: new Date() }] });
-    const [claimed] = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date() }), organizationId);
+    const [claimed] = mine(await outboxRepository.claimPendingBatch({ limit: 50, now: new Date(), staleProcessingThresholdMs: 5 * 60 * 1000 }), organizationId);
     if (!claimed) throw new Error("expected one claimed event");
 
     await processedEventRepository.recordProcessed({ organizationId, outboxEventId: claimed.id, consumerName: "test-consumer" });

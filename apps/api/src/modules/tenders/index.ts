@@ -124,4 +124,13 @@ export { GetTenderListViewUseCase } from "./application/use-cases/get-tender-lis
 export type { GetTenderListViewQuery, GetTenderListViewResult } from "./application/use-cases/get-tender-list-view.use-case";
 export type { TenderStatisticsDto, TenderListItemDto, TenderBoardItemDto } from "./application/board-dtos";
 export { ReadinessStatus } from "./domain/readiness-status";
-export { TenderStatus } from "./domain/tender-status";
+export { TenderStatus, isTenderStatus } from "./domain/tender-status";
+
+// V2 Sprint 16 (Integration Hub) — réexportés UNIQUEMENT pour `integrations` (Public API en
+// lecture seule) : même repository que `ListTendersUseCase`/`GetTenderUseCase`, mais le périmètre
+// ClientAccess est fourni directement par l'appelant (principal technique ApiKey, jamais un
+// `actorId` humain — `ListAccessibleClientsUseCase` ne s'applique pas à ce principal).
+export { ListTendersForPublicApiUseCase } from "./application/use-cases/list-tenders-for-public-api.use-case";
+export type { ListTendersForPublicApiQuery, ListTendersForPublicApiResult } from "./application/use-cases/list-tenders-for-public-api.use-case";
+export { GetTenderForPublicApiUseCase } from "./application/use-cases/get-tender-for-public-api.use-case";
+export type { GetTenderForPublicApiQuery } from "./application/use-cases/get-tender-for-public-api.use-case";

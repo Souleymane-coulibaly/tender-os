@@ -38,8 +38,12 @@ export type ClaimedOutboxEvent = Readonly<{
 export interface OutboxEventRepository {
   insertMany(input: { organizationId: string; events: OutboxEventInput[] }, tx?: OutboxTransaction): Promise<void>;
 
-  /** DATABASE_PATTERNS.md §40 — `FOR UPDATE SKIP LOCKED`, supporte plusieurs workers concurrents. */
-  claimPendingBatch(input: { limit: number; now: Date }): Promise<ClaimedOutboxEvent[]>;
+  /** DATABASE_PATTERNS.md §40 — `FOR UPDATE SKIP LOCKED`, supporte plusieurs workers concurrents.
+   *  Audit Codex OUTBOX-P1-02 — `staleProcessingThresholdMs` : reprend aussi les lignes bloquées en
+   *  PROCESSING au-delà de ce seuil (crash worker après claim, avant `markPublished`/
+   *  `markFailedAndReschedule`/`moveToDeadLetter`), même motif que
+   *  `WebhookDeliveryRepository.claimPendingBatch`/`staleDeliveringThresholdMs`. */
+  claimPendingBatch(input: { limit: number; now: Date; staleProcessingThresholdMs: number }): Promise<ClaimedOutboxEvent[]>;
 
   markPublished(input: { id: string; organizationId: string }): Promise<void>;
 

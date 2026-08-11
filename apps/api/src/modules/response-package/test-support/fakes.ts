@@ -1,5 +1,6 @@
 import type { Clock } from "../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../shared-kernel/id-generator";
+import type { OutboxEventInput, OutboxWriter } from "../../outbox";
 import type { AtomicTransactionRunner } from "../application/ports/atomic-transaction-runner";
 import type { AuditLogWriter, ResponsePackageAuditLogEntry } from "../application/ports/audit-log-writer";
 import type { PackageArtifactRepository } from "../application/ports/package-artifact.repository";
@@ -41,6 +42,13 @@ export class InMemoryAuditLogWriter implements AuditLogWriter {
   readonly entries: ResponsePackageAuditLogEntry[] = [];
   async record(entry: ResponsePackageAuditLogEntry): Promise<void> {
     this.entries.push(entry);
+  }
+}
+
+export class InMemoryOutboxWriter implements OutboxWriter {
+  readonly events: (OutboxEventInput & { organizationId: string })[] = [];
+  async write(input: { organizationId: string; events: OutboxEventInput[] }): Promise<void> {
+    this.events.push(...input.events.map((event) => ({ ...event, organizationId: input.organizationId })));
   }
 }
 

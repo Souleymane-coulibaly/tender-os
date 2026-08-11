@@ -8,6 +8,7 @@ import {
   FakeAtomicTransactionRunner,
   FixedClock,
   InMemoryAuditLogWriter,
+  InMemoryOutboxWriter,
   InMemoryPackageItemRepository,
   InMemoryResponsePackageVersionRepository,
   InMemoryResponsePackageRepository,
@@ -45,6 +46,7 @@ describe("ValidateResponsePackageVersionUseCase — mission §42/§44/§97", () 
       itemRepository,
       auditLogWriter,
       new FakeAtomicTransactionRunner(),
+      new InMemoryOutboxWriter(),
       clock,
       accessService as unknown as ResponsePackageAccessService,
     );

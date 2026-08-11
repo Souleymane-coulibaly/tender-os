@@ -3,7 +3,7 @@ import { CompanyProfileModule } from "../company-profile";
 import { DocumentsModule } from "../documents";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
-import { OutboxModule } from "../outbox";
+import { OutboxWriterModule } from "../outbox";
 
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
 import {
@@ -54,7 +54,7 @@ import { SubcontractorController } from "./interfaces/http/subcontractor.control
  * `company-profile` n'importe jamais `subcontractors` en retour.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, CompanyProfileModule, DocumentsModule, OutboxModule],
+  imports: [IdentityModule, MembershipsModule, CompanyProfileModule, DocumentsModule, OutboxWriterModule],
   controllers: [SubcontractorController],
   providers: [
     SubcontractorAccessService,

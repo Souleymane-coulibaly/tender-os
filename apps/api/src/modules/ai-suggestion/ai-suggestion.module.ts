@@ -1,7 +1,7 @@
 import { Module } from "@nestjs/common";
 import { IdentityModule } from "../identity/identity.module";
 import { MembershipsModule } from "../memberships/memberships.module";
-import { OutboxModule } from "../outbox";
+import { OutboxWriterModule } from "../outbox";
 import { DatabaseModule } from "../../shared-kernel/database.module";
 import { SharedKernelModule } from "../../shared-kernel/shared-kernel.module";
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
@@ -30,7 +30,7 @@ import { AiSuggestionController } from "./interfaces/http/ai-suggestion.controll
  * injecteur (résolution NestJS locale-d'abord), rendant le rebind global inopérant.
  */
 @Module({
-  imports: [SharedKernelModule, DatabaseModule, IdentityModule, MembershipsModule, OutboxModule],
+  imports: [SharedKernelModule, DatabaseModule, IdentityModule, MembershipsModule, OutboxWriterModule],
   controllers: [AiSuggestionController],
   providers: [
     PrismaAiSuggestionRepository,

@@ -6803,3 +6803,111 @@ model PackageArtifact {
   @@index([organizationId, responsePackageVersionId])
   @@map("package_artifacts")
 }
+
+/// V2 Sprint 16 (Integration Hub) — clé API d'organisation (mission §10). La clé brute n'est
+/// JAMAIS stockée (mission §10/§97) : seul `keyHash` (SHA-256 hex) permet la vérification,
+/// `keyPrefix` (unique, retrouvable en clair) sert de lookup O(1) sans exposer le secret. Une
+/// clé porte ses propres `scopes` (mission §14, jamais omnipotente par défaut) et une restriction
+/// client OPTIONNELLE (`allowedClientAccountIds`, décision validée) : liste vide = aucune
+/// restriction supplémentaire (le principal technique voit tout ce que ses scopes autorisent),
+/// liste renseignée = narrowing STRICT, jamais un élargissement (mission §18/§100).
+model ApiKey {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  name      String @db.VarChar(160)
+  keyPrefix String @unique @map("key_prefix") @db.VarChar(24)
+  keyHash   String @map("key_hash") @db.VarChar(128)
+
+  /// Catalogue gouverné (mission §14/§21) — CHECK laissé libre ici (array), validé en
+  /// application contre `API_KEY_SCOPES` (jamais un scope arbitraire accepté à la création).
+  scopes String[] @default([])
+
+  /// Vide = pas de restriction client additionnelle. Non-vide = narrowing strict (mission §18).
+  allowedClientAccountIds String[] @default([]) @map("allowed_client_account_ids")
+
+  createdBy  String    @map("created_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  expiresAt  DateTime? @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  revokedBy  String?   @map("revoked_by") @db.Uuid
+
+  @@unique([id, organizationId])
+  @@index([organizationId])
+  @@map("api_keys")
+}
+
+/// V2 Sprint 16 — abonnement webhook d'organisation (mission §20). `secret` est stocké en clair
+/// (VOLONTAIRE, documenté) : contrairement à une ApiKey, TenderOS doit pouvoir le relire pour
+/// calculer la signature HMAC de CHAQUE livraison sortante — un hash unidirectionnel serait
+/// inutilisable ici (même compromis qu'un webhook secret Stripe/GitHub). Jamais exposé après la
+/// création dans une réponse API, jamais journalisé (mission §30/§34).
+model WebhookSubscription {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  endpointUrl String  @map("endpoint_url") @db.VarChar(2048)
+  description String? @db.VarChar(300)
+
+  /// Catalogue gouverné (mission §21/§22), validé en application contre `INTEGRATION_EVENT_CATALOG`.
+  events String[] @default([])
+
+  secret String @db.VarChar(128)
+
+  /// ACTIVE | DISABLED (mission §57) — DISABLED : aucune nouvelle delivery.
+  status String @default("ACTIVE") @db.VarChar(20)
+
+  /// Même motif que `ApiKey.allowedClientAccountIds` (mission §79 "Webhook Filter Client").
+  allowedClientAccountIds String[] @default([]) @map("allowed_client_account_ids")
+
+  createdBy String    @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  deliveries WebhookDelivery[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId])
+  @@map("webhook_subscriptions")
+}
+
+/// V2 Sprint 16 — trace de livraison (mission §33). `eventId` = `OutboxEvent.id` (mission §25,
+/// réutilisé tel quel, jamais un second identifiant d'événement parallèle) ; l'unicité
+/// `(subscriptionId, eventId)` rend la création par le handler Outbox idempotente (mission §44/§90
+/// — un même événement métier ne doit jamais produire deux deliveries pour le même abonnement,
+/// même si l'événement Outbox est re-traité après un échec partiel).
+model WebhookDelivery {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  subscriptionId String              @map("subscription_id") @db.Uuid
+  subscription   WebhookSubscription @relation(fields: [subscriptionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  eventId   String @map("event_id") @db.Uuid
+  eventType String @map("event_type") @db.VarChar(80)
+  payload   Json
+
+  /// PENDING | DELIVERING | SUCCEEDED | RETRYING | DEAD (mission §35, "ou équivalent" — FAILED
+  /// fusionné dans RETRYING/DEAD, jamais un état de repos distinct, voir rapport Sprint 16).
+  status       String    @default("PENDING") @db.VarChar(20)
+  attemptCount Int       @default(0) @map("attempt_count")
+  httpStatus   Int?      @map("http_status")
+  startedAt    DateTime? @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+
+  /// Prochain moment éligible à une reprise (mission §40 backoff) — sert aussi de fenêtre de
+  /// "claim" (WHERE status IN (...) AND nextAvailableAt <= now), même motif que
+  /// `outbox_events.available_at`.
+  nextAvailableAt DateTime @default(now()) @map("next_available_at")
+  errorSummary    String?  @map("error_summary") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([id, organizationId])
+  @@unique([subscriptionId, eventId])
+  @@index([organizationId, subscriptionId, createdAt])
+  @@index([status, nextAvailableAt])
+  @@map("webhook_deliveries")
+}

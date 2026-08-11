@@ -2,7 +2,7 @@ import { Module } from "@nestjs/common";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
-import { OutboxModule } from "../outbox";
+import { OutboxWriterModule } from "../outbox";
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
 import { ALERT_REPOSITORY } from "./application/ports/alert.repository";
 import { AWARD_CRITERION_REPOSITORY } from "./application/ports/award-criterion.repository";
@@ -29,6 +29,8 @@ import { GetTenderListViewUseCase } from "./application/use-cases/get-tender-lis
 import { GetTenderReadinessUseCase } from "./application/use-cases/get-tender-readiness.use-case";
 import { GetTenderStatisticsUseCase } from "./application/use-cases/get-tender-statistics.use-case";
 import { ListTendersUseCase } from "./application/use-cases/list-tenders.use-case";
+import { ListTendersForPublicApiUseCase } from "./application/use-cases/list-tenders-for-public-api.use-case";
+import { GetTenderForPublicApiUseCase } from "./application/use-cases/get-tender-for-public-api.use-case";
 import { ListTenderStatusHistoryUseCase } from "./application/use-cases/list-tender-status-history.use-case";
 import { UpdateTenderUseCase } from "./application/use-cases/update-tender.use-case";
 import {
@@ -108,7 +110,7 @@ import { TenderLotsController } from "./interfaces/http/tender-lots.controller";
 import { TendersController } from "./interfaces/http/tenders.controller";
 
 @Module({
-  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, OutboxModule],
+  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, OutboxWriterModule],
   controllers: [TendersController, TenderLotsController, BuyersController],
   providers: [
     CreateTenderUseCase,
@@ -119,6 +121,8 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     GetTenderBoardUseCase,
     GetTenderListViewUseCase,
     GetTenderStatisticsUseCase,
+    ListTendersForPublicApiUseCase,
+    GetTenderForPublicApiUseCase,
     ChangeTenderStatusUseCase,
     ChangeTenderClientAccountUseCase,
     ArchiveTenderUseCase,
@@ -238,6 +242,9 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     // V2 Sprint 15 — réexportés pour `dashboard` (voir index.ts).
     GetTenderStatisticsUseCase,
     GetTenderListViewUseCase,
+    // V2 Sprint 16 — réexportés pour `integrations` (voir index.ts).
+    ListTendersForPublicApiUseCase,
+    GetTenderForPublicApiUseCase,
   ],
 })
 export class TendersModule {}

@@ -6,7 +6,7 @@ import { CompanyProfileModule } from "../company-profile";
 import { DceModule } from "../dce";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
-import { OutboxModule } from "../outbox";
+import { OutboxWriterModule } from "../outbox";
 import { TendersModule } from "../tenders";
 import { ATOMIC_TRANSACTION_RUNNER } from "./application/ports/atomic-transaction-runner";
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
@@ -48,7 +48,7 @@ import { OpportunitiesController } from "./interfaces/http/opportunities.control
  * que `ai-suggestion-bridge` (voir le plan Sprint 5, décision d'architecture §1).
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, TendersModule, AnalysisModule, AiSuggestionModule, CompanyProfileModule, DceModule, OutboxModule],
+  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, TendersModule, AnalysisModule, AiSuggestionModule, CompanyProfileModule, DceModule, OutboxWriterModule],
   controllers: [OpportunitiesController, GoNoGoController],
   providers: [
     CreateOpportunityUseCase,

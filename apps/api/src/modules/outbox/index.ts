@@ -10,3 +10,4 @@ export type { PublishPendingOutboxEventsResult } from "./application/use-cases/p
 export { RecordEventProcessedByConsumerUseCase } from "./application/use-cases/record-event-processed-by-consumer.use-case";
 export { OutboxEventStatus } from "./domain/outbox-event-status";
 export { OutboxModule } from "./outbox.module";
+export { OutboxWriterModule } from "./outbox-writer.module";

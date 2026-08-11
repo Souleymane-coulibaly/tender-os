@@ -5,7 +5,7 @@ import { IdentityModule } from "../identity";
 import { KnowledgeBaseModule } from "../knowledge-base";
 import { MembershipsModule } from "../memberships";
 import { OpportunityModule } from "../opportunity";
-import { OutboxModule } from "../outbox";
+import { OutboxWriterModule } from "../outbox";
 import { TendersModule } from "../tenders";
 import { ArchiveConversationUseCase } from "./application/use-cases/archive-conversation.use-case";
 import { CreateConversationUseCase } from "./application/use-cases/create-conversation.use-case";
@@ -38,7 +38,7 @@ import { ChatController } from "./interfaces/http/chat.controller";
  * dépendance vers Workspace/Generation/Export.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, KnowledgeBaseModule, AnalysisModule, OpportunityModule, OutboxModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, KnowledgeBaseModule, AnalysisModule, OpportunityModule, OutboxWriterModule],
   controllers: [ChatController],
   providers: [
     CreateConversationUseCase,

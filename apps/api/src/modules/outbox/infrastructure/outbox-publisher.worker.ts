@@ -53,7 +53,8 @@ export class OutboxPublisherWorker implements OnModuleInit, OnModuleDestroy {
     this.ticking = true;
     try {
       const batchSize = this.readPositiveIntEnv("OUTBOX_BATCH_SIZE", 100);
-      const result = await this.publishPendingOutboxEventsUseCase.execute({ batchSize });
+      const staleProcessingThresholdMs = this.readPositiveIntEnv("OUTBOX_STALE_PROCESSING_THRESHOLD_MS", 5 * 60 * 1000);
+      const result = await this.publishPendingOutboxEventsUseCase.execute({ batchSize, staleProcessingThresholdMs });
       if (result.claimed > 0) {
         this.logger.log(`Outbox tick: claimed=${result.claimed} published=${result.published} failed=${result.failed} deadLettered=${result.deadLettered}`);
       }

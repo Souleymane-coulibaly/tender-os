@@ -4,7 +4,7 @@ import { DocumentsModule } from "../documents";
 import { ExtractionModule } from "../extraction";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
-import { OutboxModule } from "../outbox";
+import { OutboxWriterModule } from "../outbox";
 import { TendersModule } from "../tenders";
 
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
@@ -51,7 +51,7 @@ import { StaticPromptTemplateProvider } from "./infrastructure/static-prompt-tem
 import { AnalysisController } from "./interfaces/http/analysis.controller";
 
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ExtractionModule, AiSuggestionModule, OutboxModule, DocumentsModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ExtractionModule, AiSuggestionModule, OutboxWriterModule, DocumentsModule],
   controllers: [AnalysisController],
   providers: [
     StartTenderAnalysisUseCase,

@@ -27,6 +27,7 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^10.2.0",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^6.2.1",
     "docx": "^9.7.1",
     "docxtemplater": "^3.69.3",

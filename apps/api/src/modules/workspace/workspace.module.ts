@@ -3,7 +3,7 @@ import { ClientPortfolioModule } from "../client-portfolio";
 import { DocumentsModule } from "../documents";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
-import { OutboxModule } from "../outbox";
+import { OutboxWriterModule } from "../outbox";
 import { TendersModule } from "../tenders";
 
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
@@ -60,7 +60,7 @@ import { MyTasksController } from "./interfaces/http/me-tasks.controller";
  * jamais importé par `tenders`.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, TendersModule, DocumentsModule, OutboxModule],
+  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, TendersModule, DocumentsModule, OutboxWriterModule],
   controllers: [WorkspaceController, MyTasksController],
   providers: [
     TenderActivityRecorderService,

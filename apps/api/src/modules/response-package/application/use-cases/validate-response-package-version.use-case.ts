@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ClientPermission } from "../../../client-portfolio";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { computePackageCompleteness } from "../../domain/services/compute-package-completeness";
 import { ResponsePackageValidationBlockedError, ResponsePackageVersionNotFoundError } from "../../domain/errors";
 import type { ResponsePackageVersion } from "../../domain/response-package-version.entity";
@@ -38,6 +39,7 @@ export class ValidateResponsePackageVersionUseCase {
     @Inject(PACKAGE_ITEM_REPOSITORY) private readonly itemRepository: PackageItemRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(ATOMIC_TRANSACTION_RUNNER) private readonly atomicTransactionRunner: AtomicTransactionRunner,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly accessService: ResponsePackageAccessService,
   ) {}
@@ -82,6 +84,22 @@ export class ValidateResponsePackageVersionUseCase {
         resourceId: version.id,
         requestId: command.requestId,
         metadata: { responsePackageId: pkg.id, versionNumber: version.versionNumber, requiredApplicableTotal: completeness.requiredApplicableTotal },
+      });
+      // V2 Sprint 16 (Integration Hub) — mission §135 scénario A : ferme la boucle
+      // événement -> Outbox -> webhook pour ce moment métier précis, dans la MÊME transaction que
+      // la mutation (mission §91 "jamais avant commit métier"). Jamais un second moteur
+      // d'événements : réutilise `OUTBOX_WRITER` déjà éprouvé par Tenders/Workspace/Opportunity.
+      await this.outboxWriter.write({
+        organizationId: command.organizationId,
+        events: [
+          {
+            eventType: "response_package.validated",
+            aggregateType: "ResponsePackageVersion",
+            aggregateId: version.id,
+            payload: { responsePackageId: pkg.id, responsePackageVersionId: version.id, tenderId: pkg.tenderId, lotId: pkg.lotId ?? null, clientAccountId: pkg.clientAccountId, versionNumber: version.versionNumber },
+            occurredAt,
+          },
+        ],
       });
     });
 

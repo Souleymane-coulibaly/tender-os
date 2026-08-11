@@ -21,6 +21,9 @@ export type TenderListFilter = Readonly<{
   deadlineAfter?: Date | undefined;
   deadlineBefore?: Date | undefined;
   overdue?: boolean | undefined;
+  /** V2 Sprint 16 (Integration Hub) — filtre de synchronisation incrémentale pour la Public API
+   *  (mission §68 "updatedSince"), gouverné/whitelisté au même titre que les autres filtres. */
+  updatedSince?: Date | undefined;
 }>;
 
 export type TenderCountByStatusFilter = Readonly<{ organizationId: string; restrictToClientAccountIds?: readonly string[] | undefined }>;

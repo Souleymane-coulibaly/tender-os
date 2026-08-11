@@ -3,7 +3,7 @@ import { ClientPortfolioModule } from "../client-portfolio";
 import { DocumentsModule } from "../documents";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
-import { OutboxModule } from "../outbox";
+import { OutboxWriterModule } from "../outbox";
 
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
 import {
@@ -64,7 +64,7 @@ import { CompanyProfileController } from "./interfaces/http/company-profile.cont
  * directement dans le profil entreprise.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, DocumentsModule, OutboxModule],
+  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, DocumentsModule, OutboxWriterModule],
   controllers: [CompanyProfileController],
   exports: [GetCompanyProfileUseCase],
   providers: [

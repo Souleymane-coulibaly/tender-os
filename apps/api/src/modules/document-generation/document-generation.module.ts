@@ -3,7 +3,7 @@ import { ClientPortfolioModule } from "../client-portfolio";
 import { DocumentsModule } from "../documents";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
-import { OutboxModule } from "../outbox";
+import { OutboxWriterModule } from "../outbox";
 import { TendersModule } from "../tenders";
 import { ActivateDocumentTemplateVersionUseCase } from "./application/use-cases/activate-document-template-version.use-case";
 import { CreateDocumentTemplateUseCase } from "./application/use-cases/create-document-template.use-case";
@@ -36,7 +36,7 @@ import { TenderDocumentGenerationController } from "./interfaces/http/tender-doc
  * Module Moteur documentaire V2 (Sprint 10) — importe `DocumentsModule` (réutilise Document/
  * DocumentVersion/StorageProvider/`CreateDocumentWithFirstVersionUseCase` tel quel, AUCUN second
  * stockage), `TendersModule`/`ClientPortfolioModule` (même motif dual-tier que Chat/Export/
- * Deliverables), `OutboxModule`. Aucun de ces modules n'importe jamais document-generation en
+ * Deliverables), `OutboxWriterModule`. Aucun de ces modules n'importe jamais document-generation en
  * retour. Volontairement SANS dépendance vers `export`/`administrative-dossier` : ce module ne
  * généralise ni ne remplace leur moteur de composition depuis IR (mission — décision validée
  * "nouveau module dédié, technique différente : remplissage d'un fichier .docx réel uploadé, jamais
@@ -50,7 +50,7 @@ import { TenderDocumentGenerationController } from "./interfaces/http/tender-doc
  * administratif ne doit jamais transiter par le chemin qui accepte un `data` fourni par le client.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, DocumentsModule, OutboxModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, DocumentsModule, OutboxWriterModule],
   controllers: [DocumentTemplatesController, TenderDocumentGenerationController, GeneratedDocumentsController],
   providers: [
     CreateDocumentTemplateUseCase,

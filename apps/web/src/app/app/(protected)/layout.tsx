@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: "/app/knowledge", label: "Base de connaissances" },
   { href: "/app/pricing", label: "Pricing organisation" },
   { href: "/app/ai-configuration/models", label: "Configuration IA" },
+  { href: "/app/integrations/api-keys", label: "Intégrations" },
 ];
 
 export default async function AppLayout({ children }: { children: ReactNode }) {

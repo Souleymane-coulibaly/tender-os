@@ -6,7 +6,7 @@ import { CompanyProfileModule } from "../company-profile";
 import { DocumentsModule } from "../documents";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
-import { OutboxModule } from "../outbox";
+import { OutboxWriterModule } from "../outbox";
 import { SubcontractorsModule } from "../subcontractors";
 import { TendersModule } from "../tenders";
 import { AttachChecklistItemDocumentUseCase, DetachChecklistItemDocumentUseCase } from "./application/use-cases/attach-checklist-item-document.use-case";
@@ -23,7 +23,7 @@ import { ChecklistIntelligenceController } from "./interfaces/http/checklist-int
  * (modules qui orchestrent plusieurs modules "feuille" sans jamais être importés par eux).
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, TendersModule, DocumentsModule, CompanyProfileModule, SubcontractorsModule, AnalysisModule, AiSuggestionModule, OutboxModule],
+  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, TendersModule, DocumentsModule, CompanyProfileModule, SubcontractorsModule, AnalysisModule, AiSuggestionModule, OutboxWriterModule],
   controllers: [ChecklistIntelligenceController],
   providers: [FindChecklistItemDocumentMatchesUseCase, AttachChecklistItemDocumentUseCase, DetachChecklistItemDocumentUseCase, ReconcileChecklistWithNewAnalysisUseCase],
 })

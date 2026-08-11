@@ -20,6 +20,7 @@ import { ExtractionModule } from "./modules/extraction/extraction.module";
 import { ExtractionTriggerBridgeModule } from "./modules/extraction";
 import { GenerationModule } from "./modules/generation";
 import { IdentityModule } from "./modules/identity/identity.module";
+import { IntegrationEventConsumersModule, IntegrationsModule, INTEGRATION_OUTBOX_HANDLERS } from "./modules/integrations";
 import { KnowledgeBaseModule } from "./modules/knowledge-base/knowledge-base.module";
 import { MembershipsModule } from "./modules/memberships/memberships.module";
 import { OpportunityModule } from "./modules/opportunity";
@@ -44,7 +45,12 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
   imports: [
     SharedKernelModule,
     DatabaseModule,
-    OutboxModule,
+    // V2 Sprint 16 — ferme la boucle event -> Outbox -> handler réel (mission §38/§134) :
+    // `OutboxModule.forRoot` est le SEUL point d'assemblage des handlers Outbox de toute
+    // l'application, appelé UNE SEULE FOIS ici. Voir la note d'architecture dans
+    // outbox.module.ts/integration-event-consumers.module.ts (pourquoi ce n'est pas un simple
+    // provider ajouté par le module consommateur).
+    OutboxModule.forRoot({ handlerImports: [IntegrationEventConsumersModule], handlers: INTEGRATION_OUTBOX_HANDLERS }),
     HealthModule,
     IdentityModule,
     OrganizationsModule,
@@ -85,6 +91,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     PricingScheduleModule,
     ResponsePackageModule,
     DashboardModule,
+    IntegrationsModule,
   ],
 })
 export class AppModule {}

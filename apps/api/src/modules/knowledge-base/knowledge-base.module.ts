@@ -4,7 +4,7 @@ import { DocumentsModule } from "../documents";
 import { ExtractionModule } from "../extraction";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
-import { OutboxModule } from "../outbox";
+import { OutboxWriterModule } from "../outbox";
 import { TendersModule } from "../tenders";
 
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
@@ -55,7 +55,7 @@ import { ChecklistPromotionController } from "./interfaces/http/checklist-promot
 import { KnowledgeController } from "./interfaces/http/knowledge.controller";
 
 @Module({
-  imports: [IdentityModule, MembershipsModule, DocumentsModule, ExtractionModule, ClientPortfolioModule, OutboxModule, TendersModule],
+  imports: [IdentityModule, MembershipsModule, DocumentsModule, ExtractionModule, ClientPortfolioModule, OutboxWriterModule, TendersModule],
   controllers: [KnowledgeController, ChecklistPromotionController],
   providers: [
     GetOrCreateDefaultKnowledgeSpaceUseCase,
