@@ -83,6 +83,10 @@ import { TenderDocumentsController } from "./interfaces/http/tender-documents.co
     // structurellement rattachée au Tender de la soumission (correctif audit Codex P1), jamais un
     // second mécanisme d'association.
     AttachDocumentToTenderUseCase,
+    // Réexporté en LECTURE SEULE pour Sprint 14 (module `response-package`, correctif audit Codex
+    // RP-P1-01) — vérifier qu'un document sélectionné manuellement appartient bien au Tender du
+    // dossier de réponse avant de l'y rattacher.
+    DOCUMENT_TENDER_ASSOCIATION_REPOSITORY,
   ],
 })
 export class DocumentsModule {}

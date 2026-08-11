@@ -77,6 +77,13 @@ export const TenderPermission = {
    *  pour VALIDER une version vit au palier client (`ClientPermission.ValidatePricingSchedule`),
    *  jamais ici. */
   UsePricingSchedule: "tender:use_pricing_schedule",
+  /** V2 Sprint 14 (Finalisation du dossier de réponse / Package final) — même palier que
+   *  `UsePricingSchedule`/`UseTechnicalMemo` (CONTRIBUTOR inclus) : assembler/qualifier/générer un
+   *  dossier de réponse reste une action de production de contenu, pas une action réservée. La
+   *  LECTURE reste couverte par `TenderPermission.Read` — la restriction fine "règle stricte" pour
+   *  VALIDER une version vit au palier client (`ClientPermission.ValidateResponsePackage`), jamais
+   *  ici. */
+  UseResponsePackage: "tender:use_response_package",
 } as const;
 
 export type TenderPermission = (typeof TenderPermission)[keyof typeof TenderPermission];
@@ -107,6 +114,7 @@ export const ROLE_TENDER_PERMISSIONS: Record<string, readonly TenderPermission[]
     TenderPermission.GenerateAdministrativeForm,
     TenderPermission.UseTechnicalMemo,
     TenderPermission.UsePricingSchedule,
+    TenderPermission.UseResponsePackage,
   ],
   REVIEWER: [TenderPermission.Read, TenderPermission.List],
   EXECUTIVE: [TenderPermission.Read, TenderPermission.List],

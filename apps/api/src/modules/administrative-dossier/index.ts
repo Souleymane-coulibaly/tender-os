@@ -5,3 +5,8 @@ export { AdministrativeDossierModule } from "./administrative-dossier.module";
 // repositories, jamais une écriture depuis submission-package.
 export { ListValidatedAdministrativeDocumentsForPackageUseCase } from "./application/use-cases/list-validated-administrative-documents-for-package.use-case";
 export type { AdministrativeDocumentForPackage, ListValidatedAdministrativeDocumentsForPackageQuery } from "./application/use-cases/list-validated-administrative-documents-for-package.use-case";
+
+// Réexporté en LECTURE SEULE pour Sprint 14 (module `response-package`) — signal de présence
+// groupement/sous-traitant déjà déclaré, jamais un second système de déclaration.
+export { GetCandidateContextForPackageUseCase } from "./application/use-cases/get-candidate-context-for-package.use-case";
+export type { CandidateContextForPackage, GetCandidateContextForPackageQuery } from "./application/use-cases/get-candidate-context-for-package.use-case";

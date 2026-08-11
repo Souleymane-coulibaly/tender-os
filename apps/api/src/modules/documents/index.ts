@@ -60,3 +60,11 @@ export type { ListTenderDocumentsQuery } from "./application/use-cases/list-tend
 // garantie comme appartenant au même Tender"), jamais un second mécanisme d'association.
 export { AttachDocumentToTenderUseCase } from "./application/use-cases/attach-document-to-tender.use-case";
 export type { AttachDocumentToTenderCommand } from "./application/use-cases/attach-document-to-tender.use-case";
+
+// Réexporté en LECTURE SEULE pour Sprint 14 (module `response-package`, correctif audit Codex
+// RP-P1-01) — même motif que `AttachDocumentToTenderUseCase` (Sprint 9) : garantit qu'un document
+// sélectionné manuellement pour un `PackageItem` est structurellement rattaché au MÊME Tender que
+// le dossier de réponse, jamais un document d'un autre client/tender de la même organisation
+// accepté silencieusement. Jamais une écriture depuis response-package, uniquement `.exists(...)`.
+export { DOCUMENT_TENDER_ASSOCIATION_REPOSITORY } from "./application/ports/document-tender-association.repository";
+export type { DocumentTenderAssociationRepository } from "./application/ports/document-tender-association.repository";

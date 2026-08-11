@@ -19,6 +19,7 @@ import { GeneratePricingScheduleFinalFileUseCase } from "./application/use-cases
 import { GetBpuDqeCoherenceUseCase } from "./application/use-cases/get-bpu-dqe-coherence.use-case";
 import { GetPricingScheduleControlsUseCase } from "./application/use-cases/get-pricing-schedule-controls.use-case";
 import { GetPricingScheduleUseCase } from "./application/use-cases/get-pricing-schedule.use-case";
+import { ListFinalFilesForPackageUseCase } from "./application/use-cases/list-final-files-for-package.use-case";
 import { ListPricingSchedulesUseCase } from "./application/use-cases/list-pricing-schedules.use-case";
 import { SetPricingScheduleLineCommentUseCase } from "./application/use-cases/set-pricing-schedule-line-comment.use-case";
 import { SetPricingScheduleLineCostBreakdownUseCase } from "./application/use-cases/set-pricing-schedule-line-cost-breakdown.use-case";
@@ -51,6 +52,7 @@ import { TenderPricingSchedulesController } from "./interfaces/http/tender-prici
     ExtractPricingScheduleVersionUseCase,
     GetPricingScheduleUseCase,
     ListPricingSchedulesUseCase,
+    ListFinalFilesForPackageUseCase,
     SetPricingScheduleLineUnitPriceUseCase,
     SetPricingScheduleLineCostBreakdownUseCase,
     SetPricingScheduleLineCommentUseCase,
@@ -69,6 +71,8 @@ import { TenderPricingSchedulesController } from "./interfaces/http/tender-prici
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
   ],
-  exports: [],
+  // Sprint 14 — exporte UNIQUEMENT le port en lecture seule pour `response-package` (même motif
+  // que `AdministrativeDossierModule.exports`), jamais l'ensemble du module.
+  exports: [ListFinalFilesForPackageUseCase],
 })
 export class PricingScheduleModule {}

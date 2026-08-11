@@ -156,6 +156,20 @@ export const ClientPermission = {
   ManagePricingSchedule: "CLIENT_MANAGE_PRICING_SCHEDULE",
   ValidatePricingSchedule: "CLIENT_VALIDATE_PRICING_SCHEDULE",
   GeneratePricingScheduleFiles: "CLIENT_GENERATE_PRICING_SCHEDULE_FILES",
+  /** V2 Sprint 14 (Finalisation du dossier de réponse / Package final) — même motif additif que
+   *  `ReadPricingSchedule`/`ManagePricingSchedule`/`ValidatePricingSchedule`/
+   *  `GeneratePricingScheduleFiles` : consulter un dossier de réponse/ses pièces/sa complétude vs.
+   *  assembler/qualifier/sélectionner un document vs. valider une version ("règle stricte",
+   *  mission §42/§50, jamais délégué au CONTRIBUTOR) vs. générer le ZIP final — action de
+   *  production distincte et EXPLICITE (mission §55 "VALIDATED ≠ ZIP immédiatement généré") vs.
+   *  télécharger l'archive — mission §84/§65 la traite comme une permission séparée, toujours
+   *  revérifiée côté backend (jamais une URL publique permanente).
+   */
+  ReadResponsePackage: "CLIENT_READ_RESPONSE_PACKAGE",
+  ManageResponsePackage: "CLIENT_MANAGE_RESPONSE_PACKAGE",
+  ValidateResponsePackage: "CLIENT_VALIDATE_RESPONSE_PACKAGE",
+  GenerateResponsePackage: "CLIENT_GENERATE_RESPONSE_PACKAGE",
+  DownloadResponsePackage: "CLIENT_DOWNLOAD_RESPONSE_PACKAGE",
   /** Répertoire organisationnel de sous-traitants (mission §6) — PAS scopé par ClientAccount
    *  (réutilisable par plusieurs entreprises candidates de la même organisation), donc absent de
    *  `ROLE_CLIENT_ACTION_PERMISSIONS` ci-dessous ; vérifié uniquement au palier organisation via
@@ -239,6 +253,11 @@ const PORTFOLIO_PERMISSIONS: readonly ClientPermission[] = [
   ClientPermission.ManagePricingSchedule,
   ClientPermission.ValidatePricingSchedule,
   ClientPermission.GeneratePricingScheduleFiles,
+  ClientPermission.ReadResponsePackage,
+  ClientPermission.ManageResponsePackage,
+  ClientPermission.ValidateResponsePackage,
+  ClientPermission.GenerateResponsePackage,
+  ClientPermission.DownloadResponsePackage,
   // V2 Sprint 5 (audit Codex, round 2 — P1 confirmé) — `RecordGoNoGoDecision`/`PromoteOpportunity`
   // sont volontairement ABSENTES de ce bypass organisation-tier silencieux : le chemin normal exige
   // une affectation CLIENT_MANAGER réelle sur le client précis, y compris pour OWNER/
@@ -355,6 +374,13 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ManagePricingSchedule,
     ClientPermission.ValidatePricingSchedule,
     ClientPermission.GeneratePricingScheduleFiles,
+    /** V2 Sprint 14 — le CLIENT_MANAGER a tous les droits Dossier de réponse, y compris valider
+     *  une version ("règle stricte", immutabilité post-validation). */
+    ClientPermission.ReadResponsePackage,
+    ClientPermission.ManageResponsePackage,
+    ClientPermission.ValidateResponsePackage,
+    ClientPermission.GenerateResponsePackage,
+    ClientPermission.DownloadResponsePackage,
   ],
   [ClientRole.Contributor]: [
     ClientPermission.Read,
@@ -428,6 +454,13 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
     ClientPermission.ReadPricingSchedule,
     ClientPermission.ManagePricingSchedule,
     ClientPermission.GeneratePricingScheduleFiles,
+    /** V2 Sprint 14 — le CONTRIBUTOR peut consulter/assembler/qualifier/générer le ZIP et le
+     *  télécharger, mais jamais valider une version ("règle stricte" réservée au CLIENT_MANAGER
+     *  ci-dessus). */
+    ClientPermission.ReadResponsePackage,
+    ClientPermission.ManageResponsePackage,
+    ClientPermission.GenerateResponsePackage,
+    ClientPermission.DownloadResponsePackage,
   ],
   [ClientRole.Viewer]: [
     ClientPermission.Read,
@@ -464,6 +497,11 @@ export const ROLE_CLIENT_ACTION_PERMISSIONS: Record<string, readonly ClientPermi
      *  gère/valide/génère (`ManagePricingSchedule`/`ValidatePricingSchedule`/
      *  `GeneratePricingScheduleFiles` réservés aux rôles ci-dessus). */
     ClientPermission.ReadPricingSchedule,
+    /** V2 Sprint 14 — le VIEWER consulte le dossier de réponse et peut télécharger le ZIP déjà
+     *  généré (lecture au sens large), jamais n'en gère/valide/génère (`ManageResponsePackage`/
+     *  `ValidateResponsePackage`/`GenerateResponsePackage` réservés aux rôles ci-dessus). */
+    ClientPermission.ReadResponsePackage,
+    ClientPermission.DownloadResponsePackage,
   ],
 };
 

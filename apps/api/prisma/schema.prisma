@@ -409,6 +409,7 @@ model Tender {
   documentThemes             DocumentTheme[]
   technicalMemos             TechnicalMemo[]
   pricingSchedules           PricingSchedule[]
+  responsePackages           ResponsePackage[]
   generatedDocuments         GeneratedDocument[]
   administrativeDossiers     AdministrativeDossier[]
   administrativeRequirements AdministrativeRequirement[]
@@ -6622,4 +6623,183 @@ model PricingScheduleFinalFile {
   @@unique([id, organizationId])
   @@index([organizationId, pricingScheduleVersionId])
   @@map("pricing_schedule_final_files")
+}
+
+// ============================================================================
+// V2 Sprint 14 — Finalisation du dossier de réponse / Package final (module `response-package`).
+// Décision architecturale validée (AskUserQuestion) : un module NOUVEAU et ÉTROIT, scopé
+// Tender+Lot+Candidate, plutôt qu'un rétrofit de `submission-package`/`export`/`validation`/
+// `deliverables`/`signature` (6 modules déjà livrés, strictement Tender-only, jamais lotId — audit
+// confirmé par recherche exhaustive). Ce module ne recrée AUCUN moteur : il assemble des
+// `DocumentVersion` déjà produites par DCE/Documents/dossier administratif/mémoire technique/
+// chiffrage, réutilise la technique ZIP+manifest+checksum+anti-zip-slip déjà éprouvée par
+// `submission-package` (copiée, jamais importée à travers la frontière du module — même motif que
+// `AtomicTransactionRunner`/`AuditLogWriter` dupliqués volontairement partout dans ce dépôt).
+// ============================================================================
+
+/// Racine d'agrégat — un dossier de réponse par (Tender, lot optionnel, candidate). `lotId` null =
+/// package "global" (mission §9 — pièces communes à plusieurs lots, jamais dupliquées
+/// physiquement : le PackageItem référence la même DocumentVersion, seul le snapshot par version
+/// diffère). `clientAccountId` dénormalisé depuis `Tender.clientAccountId` (mission §10 — pas de
+/// `CandidateCompany` dédié dans ce dépôt, confirmé par audit : le candidat EST le ClientAccount du
+/// Tender), immuable après création.
+model ResponsePackage {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  tenderId String @map("tender_id") @db.Uuid
+  tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  lotId String? @map("lot_id") @db.Uuid
+
+  clientAccountId String @map("client_account_id") @db.Uuid
+
+  /// DRAFT | IN_REVIEW | READY | VALIDATED | EXPORTED | INVALIDATED — dénormalisé depuis la
+  /// version courante (mission §41), jamais la seule source de vérité (voir
+  /// `ResponsePackageVersion.status`).
+  status String @default("DRAFT") @db.VarChar(20)
+
+  currentVersionId     String? @map("current_version_id") @db.Uuid
+  currentVersionNumber Int     @default(0) @map("current_version_number")
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  versions ResponsePackageVersion[]
+
+  @@unique([id, organizationId])
+  /// Un seul dossier de réponse par (Tender, lot, candidate) — deux index partiels écrits à la
+  /// main dans la migration (même motif que `PricingSchedule`/`TechnicalMemo`, Postgres traite
+  /// chaque `lotId` NULL comme distinct dans un index unique classique).
+  @@index([organizationId, tenderId])
+  @@index([organizationId, clientAccountId])
+  @@map("response_packages")
+}
+
+/// Historique APPEND-ONLY (mission §11 "une version validée ne doit jamais être écrasée
+/// silencieusement") — chaque version porte SES PROPRES `PackageItem` (mission §50 "après
+/// validation : PackageVersion immuable, toute modification : nouvelle version"), jamais une
+/// mutation des items d'une version antérieure.
+model ResponsePackageVersion {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  responsePackageId String          @map("response_package_id") @db.Uuid
+  responsePackage   ResponsePackage @relation(fields: [responsePackageId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  versionNumber Int @map("version_number")
+
+  /// DRAFT | IN_REVIEW | VALIDATED — CHECK. VALIDATED est un état terminal et immuable (mission
+  /// §50) pour cette version précise.
+  status String @default("DRAFT") @db.VarChar(20)
+
+  createdBy   String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  validatedBy String?   @map("validated_by") @db.Uuid
+  validatedAt DateTime? @map("validated_at")
+
+  items     PackageItem[]
+  artifacts PackageArtifact[]
+
+  @@unique([id, organizationId])
+  @@unique([responsePackageId, versionNumber])
+  @@index([organizationId, responsePackageId])
+  @@map("response_package_versions")
+}
+
+/// Une pièce attendue explicitement représentée (mission §12) — jamais un simple booléen
+/// `required` (mission §13 "empêcherait de représenter correctement les documents
+/// conditionnels") : `requirementType` (REQUIRED/OPTIONAL/CONDITIONAL) et `applicabilityStatus`
+/// (APPLICABLE/NOT_APPLICABLE/NEEDS_REVIEW) sont deux axes SÉPARÉS, corrigibles indépendamment par
+/// un utilisateur autorisé (mission §21/§72) sans jamais modifier silencieusement la Checklist
+/// source (mission §32 "Checklist ≠ Package"). `documentVersionId` est TOUJOURS figé au moment de
+/// l'ajout/du snapshot (mission §16 POINT CRITIQUE) — jamais recalculé implicitement depuis
+/// `document.currentVersion`.
+model PackageItem {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  responsePackageVersionId String                 @map("response_package_version_id") @db.Uuid
+  responsePackageVersion   ResponsePackageVersion @relation(fields: [responsePackageVersionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// ADMINISTRATIVE | TECHNICAL | FINANCIAL | LEGAL | CERTIFICATE | ANNEX | OTHER — CHECK
+  /// (mission §14 "ne pas utiliser uniquement le nom du fichier pour comprendre le dossier").
+  category String @db.VarChar(20)
+
+  /// Nom de la pièce ATTENDUE (ex. "Attestation fiscale") — jamais dérivé uniquement du nom de
+  /// fichier du document éventuellement rattaché.
+  label String @db.VarChar(300)
+
+  /// Étiquette libre du type de document (ex. "DC1", "BPU_FINAL") — jamais un catalogue fermé
+  /// supplémentaire redondant avec `category`.
+  documentType String? @map("document_type") @db.VarChar(60)
+
+  /// CHECKLIST_ITEM | ADMINISTRATIVE_DOCUMENT | TECHNICAL_MEMO | PRICING_SCHEDULE_FINAL_FILE |
+  /// UPLOADED_DOCUMENT | MANUAL — CHECK (mission §15 "sources des livrables").
+  sourceType String  @map("source_type") @db.VarChar(30)
+  sourceId   String? @map("source_id") @db.Uuid
+
+  /// Mission §16 POINT CRITIQUE — jamais seulement `documentId`, toujours la version FIGÉE.
+  documentId        String? @map("document_id") @db.Uuid
+  documentVersionId String? @map("document_version_id") @db.Uuid
+
+  /// REQUIRED | OPTIONAL | CONDITIONAL — CHECK (mission §13/§20).
+  requirementType String @map("requirement_type") @db.VarChar(20)
+
+  /// APPLICABLE | NOT_APPLICABLE | NEEDS_REVIEW — CHECK (mission §3/§28 "condition inconnue →
+  /// NEEDS_REVIEW, jamais un blocage automatique sur une déduction incertaine").
+  applicabilityStatus String  @map("applicability_status") @db.VarChar(20)
+  conditionText       String? @map("condition_text")
+
+  /// READY | MISSING_BLOCKING | MISSING_NON_BLOCKING | NOT_APPLICABLE | NEEDS_REVIEW — dérivé
+  /// (mission §26/§27), jamais la seule source de vérité pour le calcul de complétude (recalculé
+  /// à la lecture, même motif que les contrôles Sprint 13).
+  status String @db.VarChar(30)
+
+  /// Dénormalisé depuis le `ResponsePackage` parent — jamais mélangé silencieusement entre lots
+  /// (mission §8).
+  lotId String? @map("lot_id") @db.Uuid
+
+  /// Mission §30 — contrôle de validité si une date d'expiration est connue.
+  expiresAt DateTime? @map("expires_at")
+
+  metadata Json @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, responsePackageVersionId])
+  @@map("package_items")
+}
+
+/// Artefact ZIP APPEND-ONLY (mission §63 "PackageArtifact") — même motif que
+/// `PricingScheduleFinalFile` (Sprint 13) : un pointeur de provenance, les octets réels vivent dans
+/// le stockage via `StorageProvider` (module Documents), jamais un second système de fichiers.
+/// `manifest` fige la liste des pièces incluses au moment de la génération (mission §61), jamais
+/// recalculé après coup.
+model PackageArtifact {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  responsePackageVersionId String                 @map("response_package_version_id") @db.Uuid
+  responsePackageVersion   ResponsePackageVersion @relation(fields: [responsePackageVersionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  storageKey String @map("storage_key") @db.VarChar(500)
+  fileName   String @map("file_name") @db.VarChar(300)
+  mimeType   String @map("mime_type") @db.VarChar(120)
+  sizeBytes  Int    @map("size_bytes")
+
+  /// SHA-256 hexadécimal (mission §62), calculé sur l'archive ZIP finale elle-même.
+  checksum String @db.VarChar(64)
+
+  manifest Json
+
+  generatedBy String   @map("generated_by") @db.Uuid
+  generatedAt DateTime @default(now()) @map("generated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, responsePackageVersionId])
+  @@map("package_artifacts")
 }

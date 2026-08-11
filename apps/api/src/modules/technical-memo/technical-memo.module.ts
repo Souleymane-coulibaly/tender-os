@@ -24,6 +24,7 @@ import { GenerateTechnicalMemoSectionUseCase } from "./application/use-cases/gen
 import { GetTechnicalMemoCoverageUseCase } from "./application/use-cases/get-technical-memo-coverage.use-case";
 import { GetTechnicalMemoUseCase } from "./application/use-cases/get-technical-memo.use-case";
 import { ListTechnicalMemosUseCase } from "./application/use-cases/list-technical-memos.use-case";
+import { ListValidatedTechnicalMemosForPackageUseCase } from "./application/use-cases/list-validated-technical-memos-for-package.use-case";
 import { MapTechnicalMemoSectionsUseCase } from "./application/use-cases/map-technical-memo-sections.use-case";
 import { PrepareTechnicalMemoTemplateUseCase } from "./application/use-cases/prepare-technical-memo-template.use-case";
 import { ValidateTechnicalMemoSectionUseCase } from "./application/use-cases/validate-technical-memo-section.use-case";
@@ -68,6 +69,7 @@ import { TenderTechnicalMemosController } from "./interfaces/http/tender-technic
     CreateTechnicalMemoUseCase,
     GetTechnicalMemoUseCase,
     ListTechnicalMemosUseCase,
+    ListValidatedTechnicalMemosForPackageUseCase,
     PrepareTechnicalMemoTemplateUseCase,
     MapTechnicalMemoSectionsUseCase,
     GenerateTechnicalMemoSectionUseCase,
@@ -88,6 +90,8 @@ import { TenderTechnicalMemosController } from "./interfaces/http/tender-technic
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
     { provide: TECHNICAL_MEMO_AI_CONFIG, useValue: loadTechnicalMemoAiConfig() },
   ],
-  exports: [],
+  // Sprint 14 — exporte UNIQUEMENT le port en lecture seule pour `response-package` (même motif
+  // que `AdministrativeDossierModule.exports`), jamais l'ensemble du module.
+  exports: [ListValidatedTechnicalMemosForPackageUseCase],
 })
 export class TechnicalMemoModule {}
