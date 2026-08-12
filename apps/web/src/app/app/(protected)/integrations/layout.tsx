@@ -4,6 +4,7 @@ import Link from "next/link";
 const SUB_NAV_ITEMS = [
   { href: "/app/integrations/api-keys", label: "Clés API" },
   { href: "/app/integrations/webhooks", label: "Webhooks" },
+  { href: "/app/integrations/connectors", label: "Connecteurs" },
 ];
 
 /** Sous-navigation locale à la section Intégrations (V2 Sprint 16) — même motif que

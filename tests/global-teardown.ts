@@ -31,6 +31,12 @@ export default async function globalTeardown(): Promise<void> {
       // Ordre enfants → parents pour les données réellement créées par les specs existantes
       // (cockpit/livrables/mémoire-technique/templates-thèmes) — best-effort, chaque table
       // manquante ici est absorbée par le catch englobant, jamais un échec de suite.
+      // V2 Sprint 19 (connecteurs) — `SyncConfiguration`/`CalendarSyncedEvent` cascadent déjà via
+      // leur FK vers `ExternalConnection` (onDelete: Cascade) ; `OAuthFlowState` n'a aucune FK
+      // (même motif que le reste du schéma : organizationId en colonne simple, jamais une FK dure
+      // vers `Organization`), donc supprimé explicitement ici.
+      await prisma.oAuthFlowState.deleteMany({ where: { organizationId } });
+      await prisma.externalConnection.deleteMany({ where: { organizationId } });
       await prisma.deliverableExportSelection.deleteMany({ where: { organizationId } });
       await prisma.deliverableComment.deleteMany({ where: { organizationId } });
       await prisma.deliverableReview.deleteMany({ where: { organizationId } });

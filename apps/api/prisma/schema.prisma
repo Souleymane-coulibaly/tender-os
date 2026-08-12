@@ -6921,6 +6921,150 @@ model WebhookDelivery {
   @@map("webhook_deliveries")
 }
 
+/// V2 Sprint 19 (Connecteurs Microsoft 365 & Google Workspace) — connexion OAuth organisationnelle
+/// vers un provider externe (mission §4). Scopée `organizationId` uniquement, JAMAIS un
+/// `ClientAssignment` — même motif que `ApiKey`/`WebhookSubscription` ci-dessus (décision Sprint 19
+/// validée) : `allowedClientAccountIds` est un narrowing optionnel, jamais un élargissement
+/// (mission §49). ORGANIZATION connection uniquement ce sprint (mission §47, PERSONAL différé —
+/// aucune colonne créée pour une valeur qui ne serait jamais utilisée). Au plus une connexion
+/// PENDING/ACTIVE/REAUTH_REQUIRED par (organizationId, provider) — index partiel ci-dessous (une
+/// connexion REVOKED n'empêche jamais une reconnexion, l'historique reste consultable).
+model ExternalConnection {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// MICROSOFT_365 | GOOGLE_WORKSPACE (mission §5) — catalogue gouverné en application.
+  provider String @db.VarChar(30)
+
+  name String @db.VarChar(160)
+
+  /// PENDING | ACTIVE | REAUTH_REQUIRED | REVOKED — jamais une suppression silencieuse sur échec
+  /// de refresh (mission §11).
+  status String @default("PENDING") @db.VarChar(20)
+
+  /// Catalogue gouverné, jamais tous les scopes disponibles (mission §13, least privilege).
+  scopes String[] @default([])
+
+  /// Metadata compte/tenant (mission §15) — jamais la seule adresse email comme identité.
+  externalAccountId    String  @map("external_account_id") @db.VarChar(200)
+  externalTenantId     String? @map("external_tenant_id") @db.VarChar(200)
+  externalAccountLabel String? @map("external_account_label") @db.VarChar(300)
+
+  /// Chiffrés AES-256-GCM par `CredentialCipher` (mission §10, POINT CRITIQUE) — jamais en clair,
+  /// jamais loggés (mission §60/§61).
+  encryptedAccessToken  String? @map("encrypted_access_token") @db.Text
+  encryptedRefreshToken String? @map("encrypted_refresh_token") @db.Text
+
+  expiresAt            DateTime? @map("expires_at")
+  lastRefreshAt        DateTime? @map("last_refresh_at")
+  lastSuccessfulSyncAt DateTime? @map("last_successful_sync_at")
+  lastError            String?   @map("last_error") @db.VarChar(500)
+
+  /// Vide = pas de restriction client additionnelle. Non-vide = narrowing strict (mission §49),
+  /// même motif que `ApiKey.allowedClientAccountIds` — jamais via `ClientAssignment`.
+  allowedClientAccountIds String[] @default([]) @map("allowed_client_account_ids")
+
+  createdBy   String    @map("created_by") @db.Uuid
+  connectedBy String    @map("connected_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  revokedAt   DateTime? @map("revoked_at")
+  revokedBy   String?   @map("revoked_by") @db.Uuid
+
+  syncConfigurations   SyncConfiguration[]
+  calendarSyncedEvents CalendarSyncedEvent[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId])
+  @@map("external_connections")
+}
+
+/// V2 Sprint 19 — état éphémère du flow OAuth Authorization Code + PKCE (mission §6/§7/§8/§55).
+/// Usage unique (`consumedAt`), courte durée de vie (`expiresAt`) — jamais réutilisable, jamais
+/// partagé entre organisations/utilisateurs. Table volontairement séparée d'`ExternalConnection`
+/// (une ligne par tentative de connexion, pas de connexion établie tant que le callback n'a pas
+/// réussi).
+model OAuthFlowState {
+  id             String @id @default(uuid()) @db.Uuid
+  state          String @unique @db.VarChar(128)
+  organizationId String @map("organization_id") @db.Uuid
+  userId         String @map("user_id") @db.Uuid
+  provider       String @db.VarChar(30)
+
+  /// Présent uniquement pour une RÉAUTORISATION d'une connexion existante (mission §11, statut
+  /// REAUTH_REQUIRED -> ACTIVE) : le callback réutilise cette ligne au lieu d'en créer une
+  /// nouvelle. Absent = nouvelle connexion (mission §6).
+  connectionId String? @map("connection_id") @db.Uuid
+
+  /// PKCE code_verifier (mission §8) — jamais loggé, la ligne entière devient inerte une fois
+  /// `consumedAt` posé.
+  codeVerifier String @map("code_verifier") @db.VarChar(200)
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+
+  @@index([expiresAt])
+  @@map("oauth_flow_states")
+}
+
+/// V2 Sprint 19 — configuration de synchronisation (mission §35). Modèle créé pour poser les bases,
+/// mais AUCUN worker automatique ne le consomme ce sprint (décision validée AskUserQuestion :
+/// import/export manuels uniquement, mission §37 "Manual First" — la sync automatique "peut ENSUITE
+/// être activée"). `direction` limité à IMPORT_ONLY/EXPORT_ONLY (mission §36, BIDIRECTIONAL
+/// explicitement non requis ce sprint).
+model SyncConfiguration {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  connectionId   String             @map("connection_id") @db.Uuid
+  connection     ExternalConnection @relation(fields: [connectionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  clientAccountId String? @map("client_account_id") @db.Uuid
+  tenderId        String? @map("tender_id") @db.Uuid
+
+  remoteContainerId String @map("remote_container_id") @db.VarChar(300)
+  remoteFolderId    String @map("remote_folder_id") @db.VarChar(300)
+
+  /// IMPORT_ONLY | EXPORT_ONLY (mission §36).
+  direction String @db.VarChar(20)
+
+  enabled        Boolean   @default(true)
+  conflictPolicy String    @default("NEEDS_REVIEW") @map("conflict_policy") @db.VarChar(20)
+  lastSyncAt     DateTime? @map("last_sync_at")
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, connectionId])
+  @@map("sync_configurations")
+}
+
+/// V2 Sprint 19 — trace d'un événement calendrier créé depuis TenderOS (mission §25/§34). Empêche
+/// la double-création silencieuse au niveau applicatif (vérification avant insertion dans la même
+/// transaction) : deux clics sur "Créer l'événement" pour la même échéance ne créent jamais deux
+/// événements distants.
+model CalendarSyncedEvent {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  connectionId   String             @map("connection_id") @db.Uuid
+  connection     ExternalConnection @relation(fields: [connectionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  tenderId    String  @map("tender_id") @db.Uuid
+  milestoneId String? @map("milestone_id") @db.Uuid
+
+  externalEventId String @map("external_event_id") @db.VarChar(300)
+
+  createdBy String    @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@unique([id, organizationId])
+  @@index([organizationId, tenderId])
+  @@map("calendar_synced_events")
+}
+
 /// V2 Sprint 17 (Veille & détection des marchés) — marché externe collecté et normalisé
 /// (mission §8). Scope organisationnel (comme tout le reste du schéma, mission §73) : décision
 /// délibérée de simplification — un marché public (BOAMP/TED) collecté pour deux organisations
