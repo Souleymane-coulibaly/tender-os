@@ -64,6 +64,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <KpiCard label="Prêts à déposer" value={overview.kpis.readyToSubmit} tone="good" href="/app/tenders?status=READY_TO_SUBMIT" />
         <KpiCard label="Packages prêts" value={overview.kpis.packagesReady} tone="good" />
         <KpiCard label="À traiter" value={overview.kpis.needingAttention} tone={overview.kpis.needingAttention > 0 ? "critical" : undefined} href="#attention" />
+        <KpiCard label="Validations en attente" value={overview.kpis.pendingApprovals} tone={overview.kpis.pendingApprovals > 0 ? "warning" : undefined} href="/app/validations" />
       </div>
 
       {overview.kpis.activeTenders === 0 ? (

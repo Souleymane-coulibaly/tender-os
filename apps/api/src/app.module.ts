@@ -24,7 +24,7 @@ import { IntegrationEventConsumersModule, IntegrationsModule, INTEGRATION_OUTBOX
 import { KnowledgeBaseModule } from "./modules/knowledge-base/knowledge-base.module";
 import { MarketWatchModule } from "./modules/market-watch";
 import { MembershipsModule } from "./modules/memberships/memberships.module";
-import { NotificationsModule } from "./modules/notifications";
+import { NotificationEventConsumersModule, NotificationsModule, NOTIFICATION_OUTBOX_HANDLERS } from "./modules/notifications";
 import { OpportunityModule } from "./modules/opportunity";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { OutboxModule } from "./modules/outbox";
@@ -51,8 +51,14 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     // `OutboxModule.forRoot` est le SEUL point d'assemblage des handlers Outbox de toute
     // l'application, appelé UNE SEULE FOIS ici. Voir la note d'architecture dans
     // outbox.module.ts/integration-event-consumers.module.ts (pourquoi ce n'est pas un simple
-    // provider ajouté par le module consommateur).
-    OutboxModule.forRoot({ handlerImports: [IntegrationEventConsumersModule], handlers: INTEGRATION_OUTBOX_HANDLERS }),
+    // provider ajouté par le module consommateur). V2 Sprint 18 — `NotificationEventConsumersModule`/
+    // `NOTIFICATION_OUTBOX_HANDLERS` ajoutés au même point d'assemblage (mission §15/§21/§50/§51),
+    // 6 types d'événements `workspace` jusqu'ici sans aucun handler (aucune collision avec
+    // `INTEGRATION_OUTBOX_HANDLERS`, voir notification-event-consumers.module.ts).
+    OutboxModule.forRoot({
+      handlerImports: [IntegrationEventConsumersModule, NotificationEventConsumersModule],
+      handlers: [...INTEGRATION_OUTBOX_HANDLERS, ...NOTIFICATION_OUTBOX_HANDLERS],
+    }),
     HealthModule,
     IdentityModule,
     OrganizationsModule,

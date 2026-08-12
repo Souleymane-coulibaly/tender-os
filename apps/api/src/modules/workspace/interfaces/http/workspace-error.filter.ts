@@ -21,6 +21,8 @@ const STATUS_BY_CODE: Record<string, number> = {
   APPROVAL_AUTO_VALIDATION_FORBIDDEN: HttpStatus.UNPROCESSABLE_ENTITY,
   APPROVAL_REVIEWER_NOT_AUTHORIZED: HttpStatus.FORBIDDEN,
   APPROVAL_REQUEST_ALREADY_REVIEWED: HttpStatus.CONFLICT,
+  APPROVAL_REJECTION_REASON_REQUIRED: HttpStatus.UNPROCESSABLE_ENTITY,
+  APPROVAL_TARGET_NOT_IMMUTABLE: HttpStatus.UNPROCESSABLE_ENTITY,
 
   // Erreurs cross-module réelles (mêmes conventions que checklist-intelligence/tenders) — jamais
   // révéler l'existence d'une ressource inaccessible, même 404 anti-énumération.

@@ -247,6 +247,29 @@ export async function requestApprovalChangesAction(tenderId: string, approvalId:
   return {};
 }
 
+/** V2 Sprint 18 (mission §27/§34) — raison OBLIGATOIRE (jamais un refus muet), distinct de
+ *  `requestApprovalChangesAction` ("à corriger") : un refus définitif. */
+export async function rejectApprovalAction(tenderId: string, approvalId: string, reason: string): Promise<WorkspaceActionState> {
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/approvals/${approvalId}/reject`, { method: "POST", body: JSON.stringify({ reason }) });
+  } catch (error) {
+    return { error: describeWorkspaceActionError(error) };
+  }
+  revalidatePath(`/app/tenders/${tenderId}/workspace`);
+  revalidatePath("/app/validations");
+  return {};
+}
+
+// ---- Mes validations (Review Center, V2 Sprint 18 mission §63-65) ----
+
+export async function fetchMyApprovals(filters?: { status?: ApprovalRequest["status"]; clientAccountId?: string }): Promise<ApprovalRequest[]> {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.clientAccountId) params.set("clientAccountId", filters.clientAccountId);
+  const query = params.toString();
+  return appApiFetch<ApprovalRequest[]>(`/api/v1/me/approvals${query ? `?${query}` : ""}`);
+}
+
 // ---- Activity ----
 
 export async function fetchActivity(tenderId: string, cursor?: string): Promise<TenderActivityPage> {

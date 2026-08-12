@@ -133,3 +133,22 @@ export class ApprovalRequestAlreadyReviewedError extends DomainError {
     super("Cette demande de validation a déjà été traitée.");
   }
 }
+
+/** V2 Sprint 18 (mission §34) — un rejet exige toujours une raison, jamais un refus muet. */
+export class ApprovalRejectionReasonRequiredError extends DomainError {
+  readonly code = "APPROVAL_REJECTION_REASON_REQUIRED";
+  constructor() {
+    super("Une raison est requise pour rejeter cette demande de validation.");
+  }
+}
+
+/** V2 Sprint 18 (mission §25/§46) — une ApprovalRequest sur TECHNICAL_MEMO_SECTION_REVISION/
+ *  PRICING_SCHEDULE_VERSION/RESPONSE_PACKAGE_VERSION ne peut cibler qu'une version déjà immuable
+ *  (VALIDATED, ou — pour une révision de section mémoire — la révision elle-même, intrinsèquement
+ *  figée dès sa création) : "version précise, jamais latest" (mission §25, "point critique"). */
+export class ApprovalTargetNotImmutableError extends DomainError {
+  readonly code = "APPROVAL_TARGET_NOT_IMMUTABLE";
+  constructor() {
+    super("Cette version n'est pas encore validée : impossible de demander une validation dessus.");
+  }
+}

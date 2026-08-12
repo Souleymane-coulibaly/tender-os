@@ -7,7 +7,6 @@ import { OpportunityModule } from "../opportunity";
 import { OutboxWriterModule } from "../outbox";
 import { ATOMIC_TRANSACTION_RUNNER } from "./application/ports/atomic-transaction-runner";
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
-import { EMAIL_PROVIDER } from "./application/ports/email-provider";
 import { EXTERNAL_TENDER_REPOSITORY } from "./application/ports/external-tender.repository";
 import { EXTERNAL_TENDER_PROMOTION_REPOSITORY } from "./application/ports/external-tender-promotion.repository";
 import { MARKET_SOURCE_CONNECTORS } from "./application/ports/market-source-connector";
@@ -27,8 +26,6 @@ import { SyncMarketSourceUseCase } from "./application/use-cases/sync-market-sou
 import { UpdateSavedSearchUseCase } from "./application/use-cases/update-saved-search.use-case";
 import { BoampSourceConnector } from "./infrastructure/connectors/boamp-source-connector";
 import { EmailAlertWorker } from "./infrastructure/email-alert.worker";
-import { LoggingEmailProvider } from "./infrastructure/email/logging-email.provider";
-import { ResendEmailProvider } from "./infrastructure/email/resend-email.provider";
 import { MarketSourceSyncWorker } from "./infrastructure/market-source-sync.worker";
 import { PrismaAtomicTransactionRunner } from "./infrastructure/prisma-atomic-transaction-runner";
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
@@ -42,12 +39,10 @@ import { SavedSearchesController } from "./interfaces/http/saved-searches.contro
 /**
  * V2 Sprint 17 (Veille & détection des marchés) — module autonome, importe `OutboxWriterModule`
  * (jamais `OutboxModule` complet, même motif que tous les producteurs depuis le correctif Sprint
- * 16). `EMAIL_PROVIDER` bascule sur `ResendEmailProvider` UNIQUEMENT si `RESEND_API_KEY` est
- * réellement présente au démarrage (mission §42) — sinon `LoggingEmailProvider` (jamais un échec
- * silencieux, jamais une exigence de secret de production pour que le Sprint fonctionne, mission
- * §41). `BoampSourceConnector` est le seul connecteur réel enregistré ce sprint (mission §5) ;
+ * 16). `BoampSourceConnector` est le seul connecteur réel enregistré ce sprint (mission §5) ;
  * `MARKET_SOURCE_CONNECTORS` reste un tableau pour permettre d'en ajouter d'autres sans toucher au
- * worker.
+ * worker. `EMAIL_PROVIDER` (relocalisé dans `notifications` au Sprint 18, mission §51/§100 "ne pas
+ * créer un second pipeline email") est fourni par `NotificationsModule`, déjà importé ci-dessous.
  */
 @Module({
   imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, OpportunityModule, NotificationsModule, OutboxWriterModule],
@@ -71,10 +66,6 @@ import { SavedSearchesController } from "./interfaces/http/saved-searches.contro
 
     BoampSourceConnector,
     { provide: MARKET_SOURCE_CONNECTORS, useFactory: (boamp: BoampSourceConnector) => [boamp], inject: [BoampSourceConnector] },
-
-    LoggingEmailProvider,
-    ResendEmailProvider,
-    { provide: EMAIL_PROVIDER, useClass: process.env.RESEND_API_KEY ? ResendEmailProvider : LoggingEmailProvider },
 
     { provide: EXTERNAL_TENDER_REPOSITORY, useClass: PrismaExternalTenderRepository },
     { provide: SAVED_SEARCH_REPOSITORY, useClass: PrismaSavedSearchRepository },

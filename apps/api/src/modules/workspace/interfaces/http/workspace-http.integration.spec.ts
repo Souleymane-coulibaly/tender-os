@@ -8,6 +8,7 @@ import { MembershipId } from "../../../memberships/domain/membership-id.value-ob
 import { OrganizationMembership } from "../../../memberships/domain/organization-membership.aggregate";
 import { OrganizationRole } from "../../../memberships/domain/organization-role";
 import { PrismaMembershipRepository } from "../../../memberships/infrastructure/prisma-membership.repository";
+import { OutboxPublisherWorker } from "../../../outbox/infrastructure/outbox-publisher.worker";
 
 /**
  * V2 Sprint 7 (Workspace collaboratif) — preuve réelle contre HTTP + PostgreSQL (NestJS) : flux
@@ -19,6 +20,7 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let baseUrl: string;
+  let outboxWorker: OutboxPublisherWorker;
 
   const orgAId = randomUUID();
   const orgBId = randomUUID();
@@ -76,6 +78,51 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
     return { clientAccountId: clientAccount.id, tenderId: tender.id };
   }
 
+  /** V2 Sprint 18 — cible immuable la plus simple à fabriquer directement (pas de Document/
+   *  DocumentVersion source requis, contrairement à PricingScheduleVersion). `status` par défaut
+   *  DRAFT (mission §25 "jamais latest/modifiable" — les tests ci-dessous vérifient explicitement
+   *  qu'une demande de validation est refusée tant que ce n'est pas VALIDATED). */
+  async function createResponsePackageVersion(input: { organizationId: string; tenderId: string; clientAccountId: string; userId: string; status?: "DRAFT" | "VALIDATED"; versionNumber?: number }) {
+    const pkg = await prisma.responsePackage.create({
+      data: { id: randomUUID(), organizationId: input.organizationId, tenderId: input.tenderId, clientAccountId: input.clientAccountId, status: "DRAFT", createdBy: input.userId },
+    });
+    const version = await prisma.responsePackageVersion.create({
+      data: {
+        id: randomUUID(),
+        organizationId: input.organizationId,
+        responsePackageId: pkg.id,
+        versionNumber: input.versionNumber ?? 1,
+        status: input.status ?? "DRAFT",
+        createdBy: input.userId,
+        validatedBy: input.status === "VALIDATED" ? input.userId : null,
+        validatedAt: input.status === "VALIDATED" ? new Date() : null,
+      },
+    });
+    return { responsePackageId: pkg.id, versionId: version.id };
+  }
+
+  /** Correctif audit — CHAQUE fichier d'intégration de ce dépôt boote son propre `AppModule` complet
+   *  via `Test.createTestingModule`, donc son propre `OutboxPublisherWorker` avec un vrai minuteur
+   *  périodique (`onModuleInit`, jamais désactivé en test). Quand plusieurs fichiers tournent en
+   *  parallèle (comportement par défaut de vitest), ces workers indépendants se disputent les MÊMES
+   *  lignes `outbox_events` via `FOR UPDATE SKIP LOCKED` : un `.tick()` isolé peut légitimement
+   *  "sauter" un événement qu'un AUTRE worker a déjà verrouillé au même instant, sans que sa
+   *  transaction n'ait encore committé. Un seul tick + assertion immédiate est donc intrinsèquement
+   *  fragile sous exécution concurrente (déjà vrai avant ce sprint, aggravé par le nombre de tests
+   *  qui vérifient maintenant des effets Notification précis) — on retente donc plusieurs tick()
+   *  espacés avant d'échouer, jamais une seule tentative sèche. */
+  async function waitForNotification(predicate: () => Promise<boolean>, timeoutMs = 10000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      await outboxWorker.tick();
+      if (await predicate()) return;
+      if (Date.now() >= deadline) {
+        throw new Error(`waitForNotification: condition not met within ${timeoutMs}ms`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -87,6 +134,7 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
     baseUrl = `http://127.0.0.1:${port}`;
 
     prisma = moduleRef.get(PrismaService);
+    outboxWorker = moduleRef.get(OutboxPublisherWorker);
 
     await prisma.organization.createMany({
       data: [
@@ -114,6 +162,10 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
   }, 60000);
 
   afterAll(async () => {
+    await prisma.notification.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.responsePackageVersion.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.responsePackage.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.tenderLot.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.mention.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.comment.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.approvalRequest.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -346,6 +398,31 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
     expect(crossTenderCommentRes.status).toBe(404);
   });
 
+  it("BLOQUANT — audit fix: GET .../comments?entityType=&entityId= never leaks comments of an entity belonging to a DIFFERENT Tender of the SAME organization", async () => {
+    const tenderA = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    const tenderB = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    await assignClient({ organizationId: orgAId, clientAccountId: tenderB.clientAccountId, userId: karimUserId, role: "CONTRIBUTOR", createdBy: ownerAUserId });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderB.tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: karimUserId, role: "VIEWER" }) });
+
+    const taskRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderA.tenderId}/tasks`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ title: "Tâche confidentielle A" }) });
+    const task = (await taskRes.json()) as { id: string };
+    const commentRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderA.tenderId}/comments`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ entityType: "TASK", entityId: task.id, body: "Contenu confidentiel du Tender A" }),
+    });
+    expect(commentRes.status).toBe(201);
+
+    // Karim a un accès réel au Tender B (jamais au Tender A) — il connaît/devine l'UUID de la tâche A
+    // et tente de lire ses commentaires via l'URL du Tender B auquel il a accès. Avant le correctif,
+    // `listByEntity` filtrait seulement organizationId+entityType+entityId (jamais tenderId) :
+    // le commentaire du Tender A était renvoyé.
+    const leakRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderB.tenderId}/comments?entityType=TASK&entityId=${task.id}`, { headers: authHeaders(tokenKarim, orgAId) });
+    expect(leakRes.status).toBe(200);
+    const leaked = (await leakRes.json()) as unknown[];
+    expect(leaked).toHaveLength(0);
+  });
+
   it("never mentions a user without access to this Tender, even when explicitly requested — the WHOLE comment is refused (mission §23/§47)", async () => {
     const { tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
 
@@ -390,5 +467,257 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
     ]);
     const statuses = [first.status, second.status].sort();
     expect(statuses).toEqual([200, 409]);
+  });
+
+  // ---- V2 Sprint 18 (Collaboration avancée & validations finales) ----
+
+  it("BLOQUANT — mission §25/§46: an ApprovalRequest on RESPONSE_PACKAGE_VERSION is refused while the version is not yet VALIDATED", async () => {
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    await assignClient({ organizationId: orgAId, clientAccountId, userId: karimUserId, role: "CLIENT_MANAGER", createdBy: ownerAUserId });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: ownerAUserId, role: "TENDER_MANAGER" }) });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: karimUserId, role: "REVIEWER" }) });
+
+    const { versionId: draftVersionId } = await createResponsePackageVersion({ organizationId: orgAId, tenderId, clientAccountId, userId: ownerAUserId, status: "DRAFT" });
+
+    const blockedRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ entityType: "RESPONSE_PACKAGE_VERSION", entityId: draftVersionId, reviewerId: karimUserId }),
+    });
+    expect(blockedRes.status).toBe(422);
+    expect(((await blockedRes.json()) as { error: { code: string } }).error.code).toBe("APPROVAL_TARGET_NOT_IMMUTABLE");
+  });
+
+  it("BLOQUANT — mission §26/§31/§50: full flow on RESPONSE_PACKAGE_VERSION once VALIDATED — reviewer authority reuses ValidateResponsePackage, both request and decision create real Notification rows, activity reflects it", async () => {
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    await assignClient({ organizationId: orgAId, clientAccountId, userId: ownerAUserId, role: "CLIENT_MANAGER", createdBy: ownerAUserId });
+    await assignClient({ organizationId: orgAId, clientAccountId, userId: karimUserId, role: "CLIENT_MANAGER", createdBy: ownerAUserId });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: ownerAUserId, role: "TENDER_MANAGER" }) });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: karimUserId, role: "REVIEWER" }) });
+
+    const { versionId } = await createResponsePackageVersion({ organizationId: orgAId, tenderId, clientAccountId, userId: ownerAUserId, status: "VALIDATED" });
+
+    const requestRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ entityType: "RESPONSE_PACKAGE_VERSION", entityId: versionId, reviewerId: karimUserId, comment: "Merci de valider avant dépôt." }),
+    });
+    expect(requestRes.status).toBe(201);
+    const approval = (await requestRes.json()) as { id: string; status: string };
+    expect(approval.status).toBe("PENDING");
+
+    // Mission §50 "Demande créée → approver notifié" — vraie ligne Notification, pas seulement un
+    // événement Outbox non consommé (le bug corrigé lors de l'audit Sprint 18). `karimUserId` est
+    // réutilisé par d'autres tests de ce fichier : on cherche la notification qui référence CETTE
+    // approbation précise, jamais `[0]`.
+    await waitForNotification(async () => {
+      const rows = await prisma.notification.findMany({ where: { organizationId: orgAId, userId: karimUserId, type: "WORKSPACE_APPROVAL_REQUESTED" } });
+      return rows.some((n) => n.targetUrl?.includes(approval.id));
+    });
+
+    const approveRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals/${approval.id}/approve`, {
+      method: "POST",
+      headers: authHeaders(tokenKarim, orgAId),
+      body: JSON.stringify({ comment: "Dossier conforme, approuvé." }),
+    });
+    expect(approveRes.status).toBe(200);
+    expect(((await approveRes.json()) as { status: string }).status).toBe("APPROVED");
+
+    // Mission §50 "Approved/Rejected → requester notified".
+    await waitForNotification(async () => {
+      const rows = await prisma.notification.findMany({ where: { organizationId: orgAId, userId: ownerAUserId, type: "WORKSPACE_APPROVAL_APPROVED" } });
+      return rows.some((n) => n.targetUrl?.includes(approval.id));
+    });
+
+    const activityRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/activity`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const activity = (await activityRes.json()) as { items: { type: string }[] };
+    expect(activity.items.map((item) => item.type)).toEqual(expect.arrayContaining(["APPROVAL_REQUESTED", "APPROVAL_APPROVED"]));
+  });
+
+  it("BLOQUANT — mission §27/§34/§48: reject() requires a non-empty reason, transitions to REJECTED, notifies the requester, and a second decision is refused", async () => {
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    await assignClient({ organizationId: orgAId, clientAccountId, userId: karimUserId, role: "CLIENT_MANAGER", createdBy: ownerAUserId });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: ownerAUserId, role: "TENDER_MANAGER" }) });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: karimUserId, role: "REVIEWER" }) });
+
+    const { versionId } = await createResponsePackageVersion({ organizationId: orgAId, tenderId, clientAccountId, userId: ownerAUserId, status: "VALIDATED" });
+    const requestRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ entityType: "RESPONSE_PACKAGE_VERSION", entityId: versionId, reviewerId: karimUserId }),
+    });
+    const approval = (await requestRes.json()) as { id: string };
+
+    const emptyReasonRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals/${approval.id}/reject`, { method: "POST", headers: authHeaders(tokenKarim, orgAId), body: JSON.stringify({ reason: "" }) });
+    expect(emptyReasonRes.status).toBe(400);
+
+    const rejectRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals/${approval.id}/reject`, {
+      method: "POST",
+      headers: authHeaders(tokenKarim, orgAId),
+      body: JSON.stringify({ reason: "Pièce financière manquante." }),
+    });
+    expect(rejectRes.status).toBe(200);
+    const rejected = (await rejectRes.json()) as { status: string; comment: string };
+    expect(rejected.status).toBe("REJECTED");
+    expect(rejected.comment).toBe("Pièce financière manquante.");
+
+    await waitForNotification(async () => {
+      const rows = await prisma.notification.findMany({ where: { organizationId: orgAId, userId: ownerAUserId, type: "WORKSPACE_APPROVAL_REJECTED" } });
+      return rows.some((n) => n.targetUrl?.includes(approval.id));
+    });
+
+    const secondDecisionRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals/${approval.id}/approve`, { method: "POST", headers: authHeaders(tokenKarim, orgAId), body: JSON.stringify({}) });
+    expect(secondDecisionRes.status).toBe(409);
+  });
+
+  it("BLOQUANT — mission §82/§83: authority downgraded between request and decision blocks approval, even for the exact designated reviewer", async () => {
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    const assignment = await prisma.clientAssignment.create({
+      data: { id: randomUUID(), organizationId: orgAId, clientAccountId, userId: karimUserId, role: "CLIENT_MANAGER", createdBy: ownerAUserId },
+    });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: ownerAUserId, role: "TENDER_MANAGER" }) });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: karimUserId, role: "REVIEWER" }) });
+
+    const { versionId } = await createResponsePackageVersion({ organizationId: orgAId, tenderId, clientAccountId, userId: ownerAUserId, status: "VALIDATED" });
+    const requestRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ entityType: "RESPONSE_PACKAGE_VERSION", entityId: versionId, reviewerId: karimUserId }),
+    });
+    const approval = (await requestRes.json()) as { id: string };
+
+    // Downgrade CLIENT_MANAGER -> CONTRIBUTOR : garde ReadWorkspace/ManageWorkspace (le premier
+    // palier de `ApproveApprovalUseCase` passe toujours) mais PERD ValidateResponsePackage — preuve
+    // ciblée que le correctif Sprint 18 revérifie l'autorité PRÉCISE en direct, pas seulement
+    // l'accès de base.
+    await prisma.clientAssignment.update({ where: { id: assignment.id }, data: { role: "CONTRIBUTOR" } });
+
+    const approveRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals/${approval.id}/approve`, { method: "POST", headers: authHeaders(tokenKarim, orgAId), body: JSON.stringify({}) });
+    expect(approveRes.status).toBe(403);
+    expect(((await approveRes.json()) as { error: { code: string } }).error.code).toBe("APPROVAL_REVIEWER_NOT_AUTHORIZED");
+
+    // Preuve complémentaire : un accès entièrement révoqué (aucune affectation) retombe sur la
+    // convention anti-énumération 404 déjà établie (ReadWorkspace lui-même échoue), jamais 403.
+    await prisma.clientAssignment.delete({ where: { id: assignment.id } });
+    const noAccessRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals/${approval.id}/approve`, { method: "POST", headers: authHeaders(tokenKarim, orgAId), body: JSON.stringify({}) });
+    expect(noAccessRes.status).toBe(404);
+  });
+
+  it("mass assignment: forged status/requestedBy/id fields in the request body have no effect — the backend is the source of truth", async () => {
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    await assignClient({ organizationId: orgAId, clientAccountId, userId: karimUserId, role: "CLIENT_MANAGER", createdBy: ownerAUserId });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: ownerAUserId, role: "TENDER_MANAGER" }) });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: karimUserId, role: "REVIEWER" }) });
+
+    const { versionId } = await createResponsePackageVersion({ organizationId: orgAId, tenderId, clientAccountId, userId: ownerAUserId, status: "VALIDATED" });
+
+    const forgedRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({
+        entityType: "RESPONSE_PACKAGE_VERSION",
+        entityId: versionId,
+        reviewerId: karimUserId,
+        // Champs forgés — aucun n'existe dans RequestApprovalBodySchema, donc silencieusement
+        // dépouillés par Zod avant que le contrôleur ne construise la commande explicitement.
+        status: "APPROVED",
+        id: randomUUID(),
+        organizationId: orgBId,
+        requestedBy: karimUserId,
+        approvedAt: new Date().toISOString(),
+      }),
+    });
+    expect(forgedRes.status).toBe(201);
+    const approval = (await forgedRes.json()) as { status: string; organizationId?: string };
+    expect(approval.status).toBe("PENDING");
+
+    const stored = await prisma.approvalRequest.findFirst({ where: { entityId: versionId, organizationId: orgAId } });
+    expect(stored?.requestedBy).toBe(ownerAUserId);
+    expect(stored?.organizationId).toBe(orgAId);
+  });
+
+  it("cross-tenant: organization B cannot request an approval on organization A's RESPONSE_PACKAGE_VERSION (404, never leaking existence)", async () => {
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    const { versionId } = await createResponsePackageVersion({ organizationId: orgAId, tenderId, clientAccountId, userId: ownerAUserId, status: "VALIDATED" });
+
+    const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerB, orgBId),
+      body: JSON.stringify({ entityType: "RESPONSE_PACKAGE_VERSION", entityId: versionId, reviewerId: ownerBUserId }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("mission §116 version pinning: approving version V1 never affects a LATER version V2 of the same package", async () => {
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    await assignClient({ organizationId: orgAId, clientAccountId, userId: karimUserId, role: "CLIENT_MANAGER", createdBy: ownerAUserId });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: ownerAUserId, role: "TENDER_MANAGER" }) });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: karimUserId, role: "REVIEWER" }) });
+
+    const { responsePackageId, versionId: v1Id } = await createResponsePackageVersion({ organizationId: orgAId, tenderId, clientAccountId, userId: ownerAUserId, status: "VALIDATED", versionNumber: 1 });
+
+    const requestRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ entityType: "RESPONSE_PACKAGE_VERSION", entityId: v1Id, reviewerId: karimUserId }),
+    });
+    const approval = (await requestRes.json()) as { id: string };
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals/${approval.id}/approve`, { method: "POST", headers: authHeaders(tokenKarim, orgAId), body: JSON.stringify({}) });
+
+    // V2 créée APRÈS l'approbation de V1 — jamais héritée (mission §38/§39 "stale approval").
+    const v2 = await prisma.responsePackageVersion.create({
+      data: { id: randomUUID(), organizationId: orgAId, responsePackageId, versionNumber: 2, status: "DRAFT", createdBy: ownerAUserId },
+    });
+
+    const listRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const approvals = (await listRes.json()) as { id: string; entityId: string; status: string }[];
+    const pinned = approvals.find((a) => a.id === approval.id);
+    expect(pinned?.entityId).toBe(v1Id);
+    expect(pinned?.entityId).not.toBe(v2.id);
+    expect(pinned?.status).toBe("APPROVED");
+  });
+
+  it("mission §7: a comment can target a LOT, scoped to the same Tender", async () => {
+    const { tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    const lot = await prisma.tenderLot.create({ data: { id: randomUUID(), organizationId: orgAId, tenderId, lotNumber: "1", title: "Lot 1 — Travaux" } });
+
+    const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/comments`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ entityType: "LOT", entityId: lot.id, body: "Question sur le périmètre du lot." }),
+    });
+    expect(res.status).toBe(201);
+    const comment = (await res.json()) as { entityType: string; entityId: string };
+    expect(comment.entityType).toBe("LOT");
+    expect(comment.entityId).toBe(lot.id);
+
+    // Un lot d'un AUTRE Tender est refusé (même discipline que Task/ChecklistItem, mission §20).
+    const otherTender = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    const crossLotRes = await fetch(`${baseUrl}/api/v1/tenders/${otherTender.tenderId}/comments`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ entityType: "LOT", entityId: lot.id, body: "x" }),
+    });
+    expect(crossLotRes.status).toBe(404);
+  });
+
+  it("mission §21/§110 task assignment notification: assigning a task creates a real Notification row for the assignee", async () => {
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    await assignClient({ organizationId: orgAId, clientAccountId, userId: karimUserId, role: "CONTRIBUTOR", createdBy: ownerAUserId });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: karimUserId, role: "TECHNICAL_WRITER" }) });
+
+    const taskRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/tasks`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ title: "Fournir le mémoire technique", assigneeId: karimUserId }),
+    });
+    expect(taskRes.status).toBe(201);
+
+    // `tenderId` est frais (créé au début de ce test) — suffisant pour désambiguïser sans dépendre
+    // de la forme exacte du JSON `metadata` stocké.
+    await waitForNotification(async () => {
+      const rows = await prisma.notification.findMany({ where: { organizationId: orgAId, userId: karimUserId, type: "WORKSPACE_TASK_ASSIGNED" } });
+      return rows.some((n) => n.targetUrl?.includes(tenderId));
+    });
   });
 });

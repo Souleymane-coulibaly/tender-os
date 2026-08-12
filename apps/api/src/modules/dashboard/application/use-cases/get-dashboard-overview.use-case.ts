@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ListAccessibleClientsUseCase } from "../../../client-portfolio";
-import { GetMyTasksUseCase, ListRecentActivityForDashboardUseCase } from "../../../workspace";
+import { GetMyTasksUseCase, ListMyApprovalsUseCase, ListRecentActivityForDashboardUseCase } from "../../../workspace";
 import { GetResponsePackagePortfolioSummaryForDashboardUseCase, ResponsePackageStatus } from "../../../response-package";
 import { GetGoNoGoSummaryForDashboardUseCase } from "../../../opportunity";
 import { GetTenderListViewUseCase, GetTenderStatisticsUseCase, TenderPermission, TenderStatus, assertHasTenderPermission } from "../../../tenders";
@@ -65,6 +65,7 @@ export class GetDashboardOverviewUseCase {
     private readonly getTenderStatisticsUseCase: GetTenderStatisticsUseCase,
     private readonly getTenderListViewUseCase: GetTenderListViewUseCase,
     private readonly getMyTasksUseCase: GetMyTasksUseCase,
+    private readonly listMyApprovalsUseCase: ListMyApprovalsUseCase,
     private readonly listRecentActivityForDashboardUseCase: ListRecentActivityForDashboardUseCase,
     private readonly getResponsePackagePortfolioSummaryForDashboardUseCase: GetResponsePackagePortfolioSummaryForDashboardUseCase,
     private readonly getGoNoGoSummaryForDashboardUseCase: GetGoNoGoSummaryForDashboardUseCase,
@@ -104,7 +105,7 @@ export class GetDashboardOverviewUseCase {
       return EMPTY_DASHBOARD_OVERVIEW(now.toISOString(), scope, periodDays);
     }
 
-    const [tenderStats, activeTendersPage, myTasksOverdue, packageRowsAll] = await Promise.all([
+    const [tenderStats, activeTendersPage, myTasksOverdue, packageRowsAll, myPendingApprovals] = await Promise.all([
       this.getTenderStatisticsUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, clientAccountId: scopedClientAccountId }),
       this.getTenderListViewUseCase.execute({
         organizationId: query.organizationId,
@@ -117,6 +118,9 @@ export class GetDashboardOverviewUseCase {
       }),
       this.getMyTasksUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, clientAccountId: scopedClientAccountId, overdueOnly: true }),
       this.getResponsePackagePortfolioSummaryForDashboardUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole }),
+      // V2 Sprint 18 (mission §66-68) — "Validations en attente : N", même discipline ClientAccess
+      // que myTasksOverdue ci-dessus.
+      this.listMyApprovalsUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, clientAccountId: scopedClientAccountId, status: "PENDING" }),
     ]);
 
     const packageRows = scopedClientAccountId ? packageRowsAll.filter((row) => row.clientAccountId === scopedClientAccountId) : packageRowsAll;
@@ -195,6 +199,7 @@ export class GetDashboardOverviewUseCase {
         // page affichée.
         needingAttention: attentionItems.length,
         overdueTasks: myTasksOverdue.length,
+        pendingApprovals: myPendingApprovals.length,
       },
       pipeline,
       deadlines: deadlineItems.slice(0, DEADLINES_DISPLAY_LIMIT),

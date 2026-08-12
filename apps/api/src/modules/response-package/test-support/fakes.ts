@@ -3,6 +3,7 @@ import type { IdGenerator } from "../../../shared-kernel/id-generator";
 import type { OutboxEventInput, OutboxWriter } from "../../outbox";
 import type { AtomicTransactionRunner } from "../application/ports/atomic-transaction-runner";
 import type { AuditLogWriter, ResponsePackageAuditLogEntry } from "../application/ports/audit-log-writer";
+import type { TenderActivityEntry, TenderActivityWriter } from "../application/ports/tender-activity-writer";
 import type { PackageArtifactRepository } from "../application/ports/package-artifact.repository";
 import type { PackageItemRepository } from "../application/ports/package-item.repository";
 import type { ResponsePackageVersionRepository } from "../application/ports/response-package-version.repository";
@@ -41,6 +42,13 @@ export class FakeAtomicTransactionRunner implements AtomicTransactionRunner {
 export class InMemoryAuditLogWriter implements AuditLogWriter {
   readonly entries: ResponsePackageAuditLogEntry[] = [];
   async record(entry: ResponsePackageAuditLogEntry): Promise<void> {
+    this.entries.push(entry);
+  }
+}
+
+export class InMemoryTenderActivityWriter implements TenderActivityWriter {
+  readonly entries: TenderActivityEntry[] = [];
+  async record(entry: TenderActivityEntry): Promise<void> {
     this.entries.push(entry);
   }
 }

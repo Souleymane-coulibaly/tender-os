@@ -832,9 +832,10 @@ model Comment {
   tenderId       String @map("tender_id") @db.Uuid
   tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
 
-  /// TENDER | TASK | CHECKLIST_ITEM — CHECK (migration). Jamais DOCUMENT ce sprint (mission §19 le
-  /// rend optionnel "si l'architecture existante le permet" — elle ne le permet pas proprement ce
-  /// sprint, réduction de périmètre assumée).
+  /// TENDER | TASK | CHECKLIST_ITEM | LOT — CHECK (migration). V2 Sprint 18 (mission §7) ajoute
+  /// LOT. TechnicalMemo section / Pricing version / ResponsePackage restent hors périmètre
+  /// (résolveur cross-module non trivial, voir rapport Sprint 18 "éléments différés"). Jamais
+  /// DOCUMENT (mission §19, réduction de périmètre assumée dès Sprint 7).
   entityType String @map("entity_type") @db.VarChar(20)
   entityId   String @map("entity_id") @db.Uuid
 
@@ -879,27 +880,35 @@ model Mention {
 /// V2 Sprint 7 §26-30 — validation collaborative INTERNE ("cette personne a validé cette étape de
 /// travail"), jamais une signature juridique/un engagement contractuel/une validation officielle de
 /// l'offre (mission §28, règle absolue — ne jamais confondre avec la future signature
-/// électronique). Scope volontairement restreint à `entityType: TASK | CHECKLIST_ITEM` : le
-/// document/les livrables/l'export possèdent déjà leurs propres mécanismes de validation
-/// (`FinalApproval`, `DeliverableReview`), jamais dupliqués ici.
+/// électronique). Scope initialement restreint à `entityType: TASK | CHECKLIST_ITEM`. V2 Sprint 18
+/// (mission §24-31, décision AskUserQuestion) étend `entityType` à trois cibles immuables
+/// supplémentaires (TECHNICAL_MEMO_SECTION_REVISION/PRICING_SCHEDULE_VERSION/RESPONSE_PACKAGE_VERSION)
+/// plutôt que de retrofiter `FinalApproval` (couplé à `ExportJob`/`ValidationRun`, pipeline
+/// Tender-only déjà écarté par Sprint 14 lui-même) ou de créer un second mécanisme.
 model ApprovalRequest {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
   tenderId       String @map("tender_id") @db.Uuid
   tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
 
-  /// TASK | CHECKLIST_ITEM — CHECK (migration). Même motif dénormalisé que `Comment.entityId`.
-  entityType String @map("entity_type") @db.VarChar(20)
+  /// TASK | CHECKLIST_ITEM | TECHNICAL_MEMO_SECTION_REVISION | PRICING_SCHEDULE_VERSION |
+  /// RESPONSE_PACKAGE_VERSION — CHECK (migration). Même motif dénormalisé que `Comment.entityId`.
+  /// Pour les trois cibles documentaires, `entityId` référence une ligne DÉJÀ immuable (une
+  /// révision mémoire technique, ou une version Pricing/ResponsePackage déjà VALIDATED au moment de
+  /// la demande) — jamais "latest" (mission §25, "point critique").
+  entityType String @map("entity_type") @db.VarChar(40)
   entityId   String @map("entity_id") @db.Uuid
 
   requestedBy String @map("requested_by") @db.Uuid
-  /// Doit être un `TenderParticipant` actif ET disposer de `ClientPermission.ValidateWorkspace`
-  /// (mission §29) — jamais un simple CONTRIBUTOR. Auto-validation (`requestedBy === reviewerId`)
-  /// interdite par défaut (mission §30).
+  /// Doit être un `TenderParticipant` actif ET disposer de la permission `Validate*` propre à
+  /// `entityType` (`ValidateWorkspace`/`ValidateTechnicalMemo`/`ValidatePricingSchedule`/
+  /// `ValidateResponsePackage`, mission §29/§31) — jamais un simple CONTRIBUTOR. Auto-validation
+  /// (`requestedBy === reviewerId`) interdite par défaut (mission §30).
   reviewerId  String @map("reviewer_id") @db.Uuid
 
-  /// PENDING | APPROVED | CHANGES_REQUESTED | CANCELLED — CHECK (migration). Vocabulaire
-  /// CHANGES_REQUESTED (jamais REJECTED, mission §27).
+  /// PENDING | APPROVED | CHANGES_REQUESTED | REJECTED | CANCELLED — CHECK (migration). REJECTED
+  /// ajouté au Sprint 18 (mission §27/§34, décision AskUserQuestion) : refus définitif avec raison
+  /// obligatoire, distinct de CHANGES_REQUESTED ("à corriger").
   status String @default("PENDING") @db.VarChar(20)
 
   comment String?

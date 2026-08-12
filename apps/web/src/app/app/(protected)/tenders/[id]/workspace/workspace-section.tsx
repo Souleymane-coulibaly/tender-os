@@ -10,11 +10,13 @@ import {
   createCommentAction,
   createTaskAction,
   fetchComments,
+  rejectApprovalAction,
   removeParticipantAction,
   requestApprovalAction,
   requestApprovalChangesAction,
 } from "../../../../workspace-actions";
 import {
+  APPROVAL_ENTITY_TYPE_LABELS,
   APPROVAL_STATUS_LABELS,
   canManageWorkspace,
   canValidateWorkspaceOrgTier,
@@ -381,6 +383,21 @@ function TasksPanel({ tenderId, tasks, participants, canManage, getName }: { ten
   );
 }
 
+function approvalStatusBadgeClass(status: ApprovalRequest["status"]): string {
+  switch (status) {
+    case "APPROVED":
+      return "bg-green-100 text-green-800";
+    case "REJECTED":
+      return "bg-red-100 text-red-800";
+    case "CHANGES_REQUESTED":
+      return "bg-amber-100 text-amber-800";
+    case "CANCELLED":
+      return "bg-neutral-200 text-neutral-500";
+    default:
+      return "bg-blue-100 text-blue-800";
+  }
+}
+
 function ApprovalsPanel({
   tenderId,
   approvals,
@@ -401,6 +418,8 @@ function ApprovalsPanel({
   const router = useRouter();
   const [error, setError] = useState<string | undefined>();
   const [isPending, setIsPending] = useState(false);
+  const [rejectingId, setRejectingId] = useState<string | undefined>();
+  const [rejectReason, setRejectReason] = useState("");
 
   return (
     <section className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
@@ -416,17 +435,17 @@ function ApprovalsPanel({
         <ul>
           {approvals.map((approval) => (
             <li key={approval.id} className="flex flex-col gap-1 border-b border-neutral-100 py-2 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-700">{approval.entityType}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-700">{APPROVAL_ENTITY_TYPE_LABELS[approval.entityType]}</span>
                 <span className="text-xs text-neutral-600">
-                  Demandé par {getName(approval.requestedBy)} — Reviewer : {getName(approval.reviewerId)}
+                  Demandé par {getName(approval.requestedBy)} — Approbateur : {getName(approval.reviewerId)}
                 </span>
-                <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-800">{APPROVAL_STATUS_LABELS[approval.status]}</span>
+                <span className={`rounded px-1.5 py-0.5 text-xs ${approvalStatusBadgeClass(approval.status)}`}>{APPROVAL_STATUS_LABELS[approval.status]}</span>
               </div>
               {approval.comment ? <p className="text-xs italic text-neutral-500">{approval.comment}</p> : null}
-              {/* Jamais présenté comme "signé" — validation interne uniquement (mission §56). */}
+              {/* Jamais présenté comme "signé" — validation interne uniquement (mission §47). */}
               {approval.status === "PENDING" && canValidate && approval.reviewerId === actorId ? (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     disabled={isPending}
@@ -455,6 +474,44 @@ function ApprovalsPanel({
                   >
                     Demander des modifications
                   </button>
+                  {rejectingId === approval.id ? (
+                    <>
+                      <input
+                        aria-label="Raison du rejet"
+                        value={rejectReason}
+                        onChange={(event) => setRejectReason(event.target.value)}
+                        placeholder="Raison du rejet (obligatoire)"
+                        className="rounded border border-red-300 px-2 py-1 text-xs"
+                      />
+                      <button
+                        type="button"
+                        disabled={isPending || rejectReason.trim().length === 0}
+                        onClick={async () => {
+                          setIsPending(true);
+                          const result = await rejectApprovalAction(tenderId, approval.id, rejectReason);
+                          setIsPending(false);
+                          setError(result.error);
+                          if (!result.error) {
+                            setRejectingId(undefined);
+                            setRejectReason("");
+                            router.refresh();
+                          }
+                        }}
+                        className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-800 hover:bg-red-100 disabled:opacity-50"
+                      >
+                        Confirmer le rejet
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => setRejectingId(approval.id)}
+                      className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-800 hover:bg-red-100 disabled:opacity-50"
+                    >
+                      Rejeter
+                    </button>
+                  )}
                 </div>
               ) : null}
             </li>

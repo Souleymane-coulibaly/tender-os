@@ -14,8 +14,8 @@ export const TENDER_COLLABORATIVE_ROLES = [
 
 export const TASK_STATUSES = ["TODO", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "DONE", "CANCELLED"] as const;
 export const TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
-export const COMMENT_ENTITY_TYPES = ["TENDER", "TASK", "CHECKLIST_ITEM"] as const;
-export const APPROVAL_ENTITY_TYPES = ["TASK", "CHECKLIST_ITEM"] as const;
+export const COMMENT_ENTITY_TYPES = ["TENDER", "TASK", "CHECKLIST_ITEM", "LOT"] as const;
+export const APPROVAL_ENTITY_TYPES = ["TASK", "CHECKLIST_ITEM", "TECHNICAL_MEMO_SECTION_REVISION", "PRICING_SCHEDULE_VERSION", "RESPONSE_PACKAGE_VERSION"] as const;
 
 export const AddTenderParticipantBodySchema = z.object({
   userId: z.string().uuid(),
@@ -104,6 +104,20 @@ export const ReviewApprovalBodySchema = z.object({
   comment: z.string().max(2000).optional(),
 });
 export type ReviewApprovalBody = z.infer<typeof ReviewApprovalBodySchema>;
+
+/** Mission §34 — raison OBLIGATOIRE pour un rejet (jamais un refus muet), contrairement à
+ *  `ReviewApprovalBodySchema` (approve/changes-requested) où le commentaire reste optionnel. */
+export const RejectApprovalBodySchema = z.object({
+  reason: z.string().min(1).max(2000),
+});
+export type RejectApprovalBody = z.infer<typeof RejectApprovalBodySchema>;
+
+/** V2 Sprint 18 (mission §65 "Filtrer : Pending/Approved/Rejected/Tender/Client"). */
+export const MyApprovalsQuerySchema = z.object({
+  status: z.enum(["PENDING", "APPROVED", "CHANGES_REQUESTED", "REJECTED", "CANCELLED"]).optional(),
+  clientAccountId: z.string().uuid().optional(),
+});
+export type MyApprovalsQuery = z.infer<typeof MyApprovalsQuerySchema>;
 
 export const ActivityQuerySchema = z.object({
   cursor: z.string().uuid().optional(),

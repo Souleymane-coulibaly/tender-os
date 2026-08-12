@@ -60,4 +60,19 @@ describe("Comment", () => {
 
     expect(() => comment.softDelete(new Date())).toThrow(CommentDeletedError);
   });
+
+  it("supports the V2 Sprint 18 LOT entity type (mission §7)", () => {
+    const comment = Comment.create({
+      id: "comment-1",
+      organizationId: "org-1",
+      tenderId: "tender-1",
+      entityType: CommentEntityType.Lot,
+      entityId: "lot-1",
+      authorId: "user-1",
+      body: "Question sur le lot 2.",
+      occurredAt,
+    });
+
+    expect(comment.entityType).toBe(CommentEntityType.Lot);
+  });
 });

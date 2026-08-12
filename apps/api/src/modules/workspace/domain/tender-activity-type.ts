@@ -16,5 +16,10 @@ export const TenderActivityType = {
   ApprovalRequested: "APPROVAL_REQUESTED",
   ApprovalApproved: "APPROVAL_APPROVED",
   ApprovalChangesRequested: "APPROVAL_CHANGES_REQUESTED",
+  /** V2 Sprint 18 (mission §27/§34) — second statut terminal, distinct de ChangesRequested. */
+  ApprovalRejected: "APPROVAL_REJECTED",
+  /** V2 Sprint 18 (mission §22 "package validé") — écrit par `response-package` via son propre
+   *  `TenderActivityWriter` local (jamais un import du module `workspace`, voir ce port). */
+  ResponsePackageValidated: "RESPONSE_PACKAGE_VALIDATED",
 } as const;
 export type TenderActivityType = (typeof TenderActivityType)[keyof typeof TenderActivityType];

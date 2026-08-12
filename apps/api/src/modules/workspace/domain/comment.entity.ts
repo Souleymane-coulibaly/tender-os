@@ -3,11 +3,16 @@ import { CommentDeletedError } from "./errors";
 /** V2 Sprint 7 §19 — enum FERMÉ, jamais DOCUMENT ce sprint (réduction de périmètre assumée, voir
  *  plan). Chaque valeur doit avoir un résolveur dédié côté application (`comment-entity-resolver.ts`)
  *  vérifiant que `entityId` appartient bien au `tenderId`/`organizationId` du commentaire — jamais
- *  un `findUnique({id})` nu (mission §20). */
+ *  un `findUnique({id})` nu (mission §20). V2 Sprint 18 (mission §7) — `LOT` ajouté (même module,
+ *  résolveur trivial). TechnicalMemo section / Pricing version / ResponsePackage restent hors
+ *  périmètre ce sprint (mission §7 les cite comme "exemples", pas une liste exhaustive) : chacun
+ *  exigerait un résolveur cross-module dédié dans un module dont le modèle d'accès n'est pas
+ *  directement adressable par id depuis Workspace — différé, voir rapport final. */
 export const CommentEntityType = {
   Tender: "TENDER",
   Task: "TASK",
   ChecklistItem: "CHECKLIST_ITEM",
+  Lot: "LOT",
 } as const;
 export type CommentEntityType = (typeof CommentEntityType)[keyof typeof CommentEntityType];
 

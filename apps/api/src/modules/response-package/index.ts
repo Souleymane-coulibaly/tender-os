@@ -12,3 +12,10 @@ export { ResponsePackageStatus } from "./domain/enums";
 // lecture seule, mission §85/§86), même motif que ci-dessus pour `dashboard`.
 export { GetResponsePackageForPublicApiUseCase } from "./application/use-cases/get-response-package-for-public-api.use-case";
 export type { GetResponsePackageForPublicApiQuery, ResponsePackagePublicSummary } from "./application/use-cases/get-response-package-for-public-api.use-case";
+
+// V2 Sprint 18 — réexporté UNIQUEMENT pour `workspace` (validation d'une cible ApprovalRequest
+// RESPONSE_PACKAGE_VERSION : appartenance au Tender + statut VALIDATED requis), même motif que
+// ci-dessus.
+export { GetVersionTenderRefForApprovalUseCase } from "./application/use-cases/get-version-tender-ref-for-approval.use-case";
+export type { ResponsePackageVersionTenderRef } from "./application/use-cases/get-version-tender-ref-for-approval.use-case";
+export { ResponsePackageVersionStatus } from "./domain/enums";

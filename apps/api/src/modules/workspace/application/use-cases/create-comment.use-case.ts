@@ -4,7 +4,15 @@ import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
-import { assertHasTenderPermission, CHECKLIST_ITEM_REPOSITORY, GetTenderUseCase, TenderPermission, type ChecklistItemRepository } from "../../../tenders";
+import {
+  assertHasTenderPermission,
+  CHECKLIST_ITEM_REPOSITORY,
+  GetTenderUseCase,
+  TENDER_LOT_REPOSITORY,
+  TenderPermission,
+  type ChecklistItemRepository,
+  type TenderLotRepository,
+} from "../../../tenders";
 import { OUTBOX_WRITER, type OutboxEventInput, type OutboxWriter } from "../../../outbox";
 import { Comment, type CommentEntityType } from "../../domain/comment.entity";
 import { Mention } from "../../domain/mention.entity";
@@ -47,6 +55,7 @@ export class CreateCommentUseCase {
     @Inject(COMMENT_REPOSITORY) private readonly commentRepository: CommentRepository,
     @Inject(TASK_REPOSITORY) private readonly taskRepository: TaskRepository,
     @Inject(CHECKLIST_ITEM_REPOSITORY) private readonly checklistItemRepository: ChecklistItemRepository,
+    @Inject(TENDER_LOT_REPOSITORY) private readonly lotRepository: TenderLotRepository,
     @Inject(TENDER_PARTICIPANT_REPOSITORY) private readonly participantRepository: TenderParticipantRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
@@ -69,7 +78,7 @@ export class CreateCommentUseCase {
     });
 
     await assertCommentEntityBelongsToTender(
-      { checklistItemRepository: this.checklistItemRepository, taskRepository: this.taskRepository },
+      { checklistItemRepository: this.checklistItemRepository, taskRepository: this.taskRepository, lotRepository: this.lotRepository },
       { organizationId: command.organizationId, tenderId: command.tenderId, entityType: command.entityType, entityId: command.entityId },
     );
 

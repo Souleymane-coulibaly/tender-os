@@ -1,19 +1,35 @@
-import { ApprovalRequestAlreadyReviewedError } from "./errors";
+import { ApprovalRequestAlreadyReviewedError, ApprovalRejectionReasonRequiredError } from "./errors";
 
-/** V2 Sprint 7 §26-30 — scope volontairement restreint (document/livrable/export gardent leurs
- *  propres mécanismes, `FinalApproval`/`DeliverableReview`, jamais dupliqués). */
+/** V2 Sprint 7 §26-30 — scope initialement restreint à TASK/CHECKLIST_ITEM (document/livrable/
+ *  export gardaient leurs propres mécanismes, `FinalApproval`/`DeliverableReview`, jamais
+ *  dupliqués). V2 Sprint 18 (mission §24-31, décision AskUserQuestion) — étendu à trois cibles
+ *  immuables supplémentaires plutôt que de retrofiter `FinalApproval` (couplé à `ExportJob`/
+ *  `ValidationRun`, un pipeline Tender-only déjà écarté par Sprint 14 lui-même) ou de créer un
+ *  second mécanisme d'approbation :
+ *    - TECHNICAL_MEMO_SECTION_REVISION : cible une `TechnicalMemoSectionRevision` précise (déjà
+ *      immuable par construction dès sa création — chaque régénération/édition crée une NOUVELLE
+ *      révision, jamais une mutation, donc "version précise" est gratuit ici) ;
+ *    - PRICING_SCHEDULE_VERSION / RESPONSE_PACKAGE_VERSION : ciblent l'id d'une version qui doit
+ *      déjà être VALIDATED (immuable) au moment de la demande — vérifié par l'appelant
+ *      (`RequestApprovalUseCase`), jamais ici (le domaine ne fait pas d'I/O). */
 export const ApprovalEntityType = {
   Task: "TASK",
   ChecklistItem: "CHECKLIST_ITEM",
+  TechnicalMemoSectionRevision: "TECHNICAL_MEMO_SECTION_REVISION",
+  PricingScheduleVersion: "PRICING_SCHEDULE_VERSION",
+  ResponsePackageVersion: "RESPONSE_PACKAGE_VERSION",
 } as const;
 export type ApprovalEntityType = (typeof ApprovalEntityType)[keyof typeof ApprovalEntityType];
 
-/** V2 Sprint 7 §27 — vocabulaire CHANGES_REQUESTED, jamais REJECTED (mission : "adapter au
- *  vocabulaire métier"). */
+/** V2 Sprint 7 §27 — vocabulaire CHANGES_REQUESTED ("à corriger"), jamais REJECTED à l'origine.
+ *  V2 Sprint 18 (mission §27/§34, décision AskUserQuestion) — REJECTED ajouté comme second statut
+ *  terminal, distinct : un refus définitif avec raison obligatoire, jamais confondu avec "à
+ *  corriger". Additif pour tous les entityType (Task/ChecklistItem inclus), jamais cassant. */
 export const ApprovalStatus = {
   Pending: "PENDING",
   Approved: "APPROVED",
   ChangesRequested: "CHANGES_REQUESTED",
+  Rejected: "REJECTED",
   Cancelled: "CANCELLED",
 } as const;
 export type ApprovalStatus = (typeof ApprovalStatus)[keyof typeof ApprovalStatus];
@@ -90,6 +106,20 @@ export class ApprovalRequest {
     this.assertPending();
     this.props.status = ApprovalStatus.ChangesRequested;
     if (reviewComment !== undefined) this.props.comment = reviewComment;
+    this.props.reviewedAt = occurredAt;
+  }
+
+  /** V2 Sprint 18 (mission §34 "rejeter doit permettre une raison") — raison OBLIGATOIRE,
+   *  contrairement à `approve`/`requestChanges` où le commentaire reste optionnel : un refus
+   *  définitif sans justification laisserait le demandeur sans recours (même motif que
+   *  `GoNoGoDecision.justification` obligatoire pour NO_GO). */
+  reject(reason: string, occurredAt: Date): void {
+    this.assertPending();
+    if (!reason.trim()) {
+      throw new ApprovalRejectionReasonRequiredError();
+    }
+    this.props.status = ApprovalStatus.Rejected;
+    this.props.comment = reason;
     this.props.reviewedAt = occurredAt;
   }
 

@@ -21,6 +21,10 @@ describe("OutboxPublisherWorker", () => {
   });
 
   it("mission Sprint 1 correctif audit Codex P1-001 — starts a real timer on init and ticks the use case periodically", async () => {
+    // Correctif audit Sprint 18 — `OUTBOX_WORKER_ENABLED=false` est désormais le défaut vitest
+    // (voir vitest.config.ts) pour éviter la contention entre workers de fichiers concurrents ;
+    // ce test vérifie explicitement le comportement quand il est activé, donc l'override localement.
+    process.env.OUTBOX_WORKER_ENABLED = "true";
     process.env.OUTBOX_POLL_INTERVAL_MS = "1000";
     const execute = vi.fn(async () => EMPTY_RESULT);
     const worker = new OutboxPublisherWorker(fakeUseCase(execute));
@@ -38,6 +42,7 @@ describe("OutboxPublisherWorker", () => {
   });
 
   it("stops ticking once destroyed — no further calls after OnModuleDestroy", async () => {
+    process.env.OUTBOX_WORKER_ENABLED = "true";
     process.env.OUTBOX_POLL_INTERVAL_MS = "1000";
     const execute = vi.fn(async () => EMPTY_RESULT);
     const worker = new OutboxPublisherWorker(fakeUseCase(execute));

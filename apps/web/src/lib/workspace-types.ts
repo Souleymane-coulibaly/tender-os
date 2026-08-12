@@ -2,9 +2,13 @@ export type TenderCollaborativeRole = "TENDER_MANAGER" | "ADMINISTRATIVE_RESPONS
 
 export type TaskStatus = "TODO" | "IN_PROGRESS" | "BLOCKED" | "IN_REVIEW" | "DONE" | "CANCELLED";
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
-export type CommentEntityType = "TENDER" | "TASK" | "CHECKLIST_ITEM";
-export type ApprovalEntityType = "TASK" | "CHECKLIST_ITEM";
-export type ApprovalStatus = "PENDING" | "APPROVED" | "CHANGES_REQUESTED" | "CANCELLED";
+export type CommentEntityType = "TENDER" | "TASK" | "CHECKLIST_ITEM" | "LOT";
+/** V2 Sprint 18 (mission §24-31) — les trois cibles documentaires ciblent une VERSION déjà
+ *  immuable (une révision de section mémoire technique, ou une version Pricing/ResponsePackage déjà
+ *  VALIDATED), jamais "latest". */
+export type ApprovalEntityType = "TASK" | "CHECKLIST_ITEM" | "TECHNICAL_MEMO_SECTION_REVISION" | "PRICING_SCHEDULE_VERSION" | "RESPONSE_PACKAGE_VERSION";
+/** V2 Sprint 18 (mission §27/§34) — REJECTED ajouté, distinct de CHANGES_REQUESTED. */
+export type ApprovalStatus = "PENDING" | "APPROVED" | "CHANGES_REQUESTED" | "REJECTED" | "CANCELLED";
 
 export type TenderParticipant = {
   id: string;
@@ -110,5 +114,14 @@ export const APPROVAL_STATUS_LABELS: Record<ApprovalStatus, string> = {
   PENDING: "En attente de validation",
   APPROVED: "Validé",
   CHANGES_REQUESTED: "Modifications demandées",
+  REJECTED: "Rejeté",
   CANCELLED: "Annulée",
+};
+
+export const APPROVAL_ENTITY_TYPE_LABELS: Record<ApprovalEntityType, string> = {
+  TASK: "Tâche",
+  CHECKLIST_ITEM: "Élément de checklist",
+  TECHNICAL_MEMO_SECTION_REVISION: "Section de mémoire technique",
+  PRICING_SCHEDULE_VERSION: "Chiffrage",
+  RESPONSE_PACKAGE_VERSION: "Dossier de réponse",
 };

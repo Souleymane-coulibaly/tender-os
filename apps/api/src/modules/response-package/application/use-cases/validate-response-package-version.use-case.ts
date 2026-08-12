@@ -10,6 +10,7 @@ import { ResponsePackageAccessService } from "../services/response-package-acces
 import { ATOMIC_TRANSACTION_RUNNER, type AtomicTransactionRunner } from "../ports/atomic-transaction-runner";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { PACKAGE_ITEM_REPOSITORY, type PackageItemRepository } from "../ports/package-item.repository";
+import { TENDER_ACTIVITY_WRITER, type TenderActivityWriter } from "../ports/tender-activity-writer";
 import { RESPONSE_PACKAGE_REPOSITORY, type ResponsePackageRepository } from "../ports/response-package.repository";
 import { RESPONSE_PACKAGE_VERSION_REPOSITORY, type ResponsePackageVersionRepository } from "../ports/response-package-version.repository";
 
@@ -38,6 +39,7 @@ export class ValidateResponsePackageVersionUseCase {
     @Inject(RESPONSE_PACKAGE_VERSION_REPOSITORY) private readonly versionRepository: ResponsePackageVersionRepository,
     @Inject(PACKAGE_ITEM_REPOSITORY) private readonly itemRepository: PackageItemRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
+    @Inject(TENDER_ACTIVITY_WRITER) private readonly tenderActivityWriter: TenderActivityWriter,
     @Inject(ATOMIC_TRANSACTION_RUNNER) private readonly atomicTransactionRunner: AtomicTransactionRunner,
     @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -85,6 +87,19 @@ export class ValidateResponsePackageVersionUseCase {
         requestId: command.requestId,
         metadata: { responsePackageId: pkg.id, versionNumber: version.versionNumber, requiredApplicableTotal: completeness.requiredApplicableTotal },
       });
+
+      // V2 Sprint 18 (mission §22) — projection de lecture utilisateur, même transaction que la
+      // mutation métier (même discipline que `workspace/tender-activity-recorder.service.ts`, mais
+      // via un writer local à ce module, jamais un import cross-module de `workspace`).
+      await this.tenderActivityWriter.record({
+        organizationId: command.organizationId,
+        tenderId: pkg.tenderId,
+        actorId: command.actorId,
+        type: "RESPONSE_PACKAGE_VALIDATED",
+        summary: `Dossier de réponse validé (version ${version.versionNumber}).`,
+        metadata: { responsePackageId: pkg.id, responsePackageVersionId: version.id },
+      });
+
       // V2 Sprint 16 (Integration Hub) — mission §135 scénario A : ferme la boucle
       // événement -> Outbox -> webhook pour ce moment métier précis, dans la MÊME transaction que
       // la mutation (mission §91 "jamais avant commit métier"). Jamais un second moteur

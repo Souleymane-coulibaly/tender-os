@@ -1,4 +1,4 @@
-import { loadChecklistItem, type ChecklistItemRepository } from "../../../tenders";
+import { assertLotBelongsToTender, loadChecklistItem, type ChecklistItemRepository, type TenderLotRepository } from "../../../tenders";
 import { CommentEntityType } from "../../domain/comment.entity";
 import { InvalidCommentEntityError } from "../../domain/errors";
 import type { TaskRepository } from "../ports/task.repository";
@@ -9,7 +9,7 @@ import { loadTask } from "../use-cases/update-task.use-case";
  *  `entityType`, jamais une résolution générique non gouvernée (mission §19 "éviter un
  *  polymorphisme non sécurisé"). */
 export async function assertCommentEntityBelongsToTender(
-  repositories: { checklistItemRepository: ChecklistItemRepository; taskRepository: TaskRepository },
+  repositories: { checklistItemRepository: ChecklistItemRepository; taskRepository: TaskRepository; lotRepository: TenderLotRepository },
   input: { organizationId: string; tenderId: string; entityType: CommentEntityType; entityId: string },
 ): Promise<void> {
   switch (input.entityType) {
@@ -23,6 +23,13 @@ export async function assertCommentEntityBelongsToTender(
       return;
     case CommentEntityType.ChecklistItem:
       await loadChecklistItem(repositories.checklistItemRepository, { organizationId: input.organizationId, tenderId: input.tenderId, itemId: input.entityId });
+      return;
+    case CommentEntityType.Lot:
+      try {
+        await assertLotBelongsToTender(repositories.lotRepository, { organizationId: input.organizationId, tenderId: input.tenderId, lotId: input.entityId });
+      } catch {
+        throw new InvalidCommentEntityError();
+      }
       return;
   }
 }

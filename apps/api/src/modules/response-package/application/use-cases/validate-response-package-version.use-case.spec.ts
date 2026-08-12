@@ -12,6 +12,7 @@ import {
   InMemoryPackageItemRepository,
   InMemoryResponsePackageVersionRepository,
   InMemoryResponsePackageRepository,
+  InMemoryTenderActivityWriter,
 } from "../../test-support/fakes";
 import type { ResponsePackageAccessService } from "../services/response-package-access.service";
 import { ValidateResponsePackageVersionUseCase } from "./validate-response-package-version.use-case";
@@ -45,6 +46,7 @@ describe("ValidateResponsePackageVersionUseCase — mission §42/§44/§97", () 
       versionRepository,
       itemRepository,
       auditLogWriter,
+      new InMemoryTenderActivityWriter(),
       new FakeAtomicTransactionRunner(),
       new InMemoryOutboxWriter(),
       clock,

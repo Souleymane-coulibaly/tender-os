@@ -45,9 +45,9 @@ export class PrismaCommentRepository implements CommentRepository {
     return record ? toDomain(record) : null;
   }
 
-  async listByEntity(input: { organizationId: string; entityType: CommentEntityType; entityId: string }): Promise<Comment[]> {
+  async listByEntity(input: { organizationId: string; tenderId: string; entityType: CommentEntityType; entityId: string }): Promise<Comment[]> {
     const records = await this.prisma.currentClient().comment.findMany({
-      where: { organizationId: input.organizationId, entityType: input.entityType, entityId: input.entityId },
+      where: { organizationId: input.organizationId, tenderId: input.tenderId, entityType: input.entityType, entityId: input.entityId },
       orderBy: { createdAt: "asc" },
     });
     return records.map(toDomain);

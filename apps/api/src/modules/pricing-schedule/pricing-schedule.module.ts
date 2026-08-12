@@ -19,6 +19,7 @@ import { GeneratePricingScheduleFinalFileUseCase } from "./application/use-cases
 import { GetBpuDqeCoherenceUseCase } from "./application/use-cases/get-bpu-dqe-coherence.use-case";
 import { GetPricingScheduleControlsUseCase } from "./application/use-cases/get-pricing-schedule-controls.use-case";
 import { GetPricingScheduleUseCase } from "./application/use-cases/get-pricing-schedule.use-case";
+import { GetVersionTenderRefForApprovalUseCase } from "./application/use-cases/get-version-tender-ref-for-approval.use-case";
 import { ListFinalFilesForPackageUseCase } from "./application/use-cases/list-final-files-for-package.use-case";
 import { ListPricingSchedulesUseCase } from "./application/use-cases/list-pricing-schedules.use-case";
 import { SetPricingScheduleLineCommentUseCase } from "./application/use-cases/set-pricing-schedule-line-comment.use-case";
@@ -60,6 +61,7 @@ import { TenderPricingSchedulesController } from "./interfaces/http/tender-prici
     GetBpuDqeCoherenceUseCase,
     ValidatePricingScheduleVersionUseCase,
     GeneratePricingScheduleFinalFileUseCase,
+    GetVersionTenderRefForApprovalUseCase,
 
     PricingScheduleAccessService,
     PricingScheduleLineEditGuard,
@@ -72,7 +74,8 @@ import { TenderPricingSchedulesController } from "./interfaces/http/tender-prici
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
   ],
   // Sprint 14 — exporte UNIQUEMENT le port en lecture seule pour `response-package` (même motif
-  // que `AdministrativeDossierModule.exports`), jamais l'ensemble du module.
-  exports: [ListFinalFilesForPackageUseCase],
+  // que `AdministrativeDossierModule.exports`), jamais l'ensemble du module. Sprint 18 — même motif
+  // pour `workspace` (validation d'une cible ApprovalRequest PRICING_SCHEDULE_VERSION).
+  exports: [ListFinalFilesForPackageUseCase, GetVersionTenderRefForApprovalUseCase],
 })
 export class PricingScheduleModule {}

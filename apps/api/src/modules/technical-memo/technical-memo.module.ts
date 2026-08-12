@@ -21,6 +21,7 @@ import { CreateTechnicalMemoUseCase } from "./application/use-cases/create-techn
 import { EditTechnicalMemoSectionUseCase } from "./application/use-cases/edit-technical-memo-section.use-case";
 import { ExportTechnicalMemoUseCase } from "./application/use-cases/export-technical-memo.use-case";
 import { GenerateTechnicalMemoSectionUseCase } from "./application/use-cases/generate-technical-memo-section.use-case";
+import { GetSectionRevisionTenderRefForApprovalUseCase } from "./application/use-cases/get-section-revision-tender-ref-for-approval.use-case";
 import { GetTechnicalMemoCoverageUseCase } from "./application/use-cases/get-technical-memo-coverage.use-case";
 import { GetTechnicalMemoUseCase } from "./application/use-cases/get-technical-memo.use-case";
 import { ListTechnicalMemosUseCase } from "./application/use-cases/list-technical-memos.use-case";
@@ -78,6 +79,7 @@ import { TenderTechnicalMemosController } from "./interfaces/http/tender-technic
     ValidateTechnicalMemoSectionUseCase,
     EditTechnicalMemoSectionUseCase,
     ExportTechnicalMemoUseCase,
+    GetSectionRevisionTenderRefForApprovalUseCase,
 
     TechnicalMemoAccessService,
     TechnicalMemoSectionContextAssembler,
@@ -91,7 +93,8 @@ import { TenderTechnicalMemosController } from "./interfaces/http/tender-technic
     { provide: TECHNICAL_MEMO_AI_CONFIG, useValue: loadTechnicalMemoAiConfig() },
   ],
   // Sprint 14 — exporte UNIQUEMENT le port en lecture seule pour `response-package` (même motif
-  // que `AdministrativeDossierModule.exports`), jamais l'ensemble du module.
-  exports: [ListValidatedTechnicalMemosForPackageUseCase],
+  // que `AdministrativeDossierModule.exports`), jamais l'ensemble du module. Sprint 18 — même motif
+  // pour `workspace` (validation d'une cible ApprovalRequest TECHNICAL_MEMO_SECTION_REVISION).
+  exports: [ListValidatedTechnicalMemosForPackageUseCase, GetSectionRevisionTenderRefForApprovalUseCase],
 })
 export class TechnicalMemoModule {}

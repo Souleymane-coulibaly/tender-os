@@ -13,6 +13,9 @@ export type DashboardKpis = {
   packagesReady: number;
   needingAttention: number;
   overdueTasks: number;
+  /** V2 Sprint 18 (mission §66-68) — demandes de validation où l'utilisateur courant est
+   *  l'approbateur désigné, tous Tenders confondus. */
+  pendingApprovals: number;
 };
 
 export type DashboardPipelineStage = { status: TenderStatus; count: number };

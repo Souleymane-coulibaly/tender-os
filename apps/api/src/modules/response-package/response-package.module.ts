@@ -14,6 +14,7 @@ import { PACKAGE_ARTIFACT_REPOSITORY } from "./application/ports/package-artifac
 import { PACKAGE_ITEM_REPOSITORY } from "./application/ports/package-item.repository";
 import { RESPONSE_PACKAGE_VERSION_REPOSITORY } from "./application/ports/response-package-version.repository";
 import { RESPONSE_PACKAGE_REPOSITORY } from "./application/ports/response-package.repository";
+import { TENDER_ACTIVITY_WRITER } from "./application/ports/tender-activity-writer";
 import { ZIP_ARCHIVE_PORT } from "./application/ports/zip-archive.port";
 import { PackageItemEditGuard } from "./application/services/package-item-edit-guard.service";
 import { ResponsePackageAccessService } from "./application/services/response-package-access.service";
@@ -26,6 +27,7 @@ import { GetPackageCompletenessUseCase } from "./application/use-cases/get-packa
 import { GetResponsePackageUseCase } from "./application/use-cases/get-response-package.use-case";
 import { GetResponsePackagePortfolioSummaryForDashboardUseCase } from "./application/use-cases/get-response-package-portfolio-summary-for-dashboard.use-case";
 import { GetResponsePackageForPublicApiUseCase } from "./application/use-cases/get-response-package-for-public-api.use-case";
+import { GetVersionTenderRefForApprovalUseCase } from "./application/use-cases/get-version-tender-ref-for-approval.use-case";
 import { ListResponsePackagesUseCase } from "./application/use-cases/list-response-packages.use-case";
 import { SelectPackageItemDocumentUseCase } from "./application/use-cases/select-package-item-document.use-case";
 import { ValidateResponsePackageVersionUseCase } from "./application/use-cases/validate-response-package-version.use-case";
@@ -35,6 +37,7 @@ import { PrismaPackageArtifactRepository } from "./infrastructure/prisma-package
 import { PrismaPackageItemRepository } from "./infrastructure/prisma-package-item.repository";
 import { PrismaResponsePackageVersionRepository } from "./infrastructure/prisma-response-package-version.repository";
 import { PrismaResponsePackageRepository } from "./infrastructure/prisma-response-package.repository";
+import { PrismaTenderActivityWriter } from "./infrastructure/prisma-tender-activity.writer";
 import { JszipArchiveAdapter } from "./infrastructure/zip/jszip-archive.adapter";
 import { PackageArtifactsController } from "./interfaces/http/package-artifacts.controller";
 import { ResponsePackagesController } from "./interfaces/http/response-packages.controller";
@@ -69,6 +72,7 @@ import { TenderResponsePackagesController } from "./interfaces/http/tender-respo
     DownloadResponsePackageArtifactUseCase,
     GetResponsePackagePortfolioSummaryForDashboardUseCase,
     GetResponsePackageForPublicApiUseCase,
+    GetVersionTenderRefForApprovalUseCase,
 
     ResponsePackageAccessService,
     PackageItemEditGuard,
@@ -78,10 +82,12 @@ import { TenderResponsePackagesController } from "./interfaces/http/tender-respo
     { provide: PACKAGE_ITEM_REPOSITORY, useClass: PrismaPackageItemRepository },
     { provide: PACKAGE_ARTIFACT_REPOSITORY, useClass: PrismaPackageArtifactRepository },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
+    { provide: TENDER_ACTIVITY_WRITER, useClass: PrismaTenderActivityWriter },
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
     { provide: ZIP_ARCHIVE_PORT, useClass: JszipArchiveAdapter },
   ],
-  // V2 Sprint 15/16 — réexportés pour `dashboard`/`integrations` (voir index.ts).
-  exports: [GetResponsePackagePortfolioSummaryForDashboardUseCase, GetResponsePackageForPublicApiUseCase],
+  // V2 Sprint 15/16 — réexportés pour `dashboard`/`integrations` (voir index.ts). V2 Sprint 18 —
+  // même motif pour `workspace` (validation d'une cible ApprovalRequest RESPONSE_PACKAGE_VERSION).
+  exports: [GetResponsePackagePortfolioSummaryForDashboardUseCase, GetResponsePackageForPublicApiUseCase, GetVersionTenderRefForApprovalUseCase],
 })
 export class ResponsePackageModule {}

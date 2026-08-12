@@ -1,11 +1,11 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { GetCurrentUserUseCase } from "../../../identity";
+import { EMAIL_PROVIDER, type EmailProvider } from "../../../notifications";
 import { EMAIL_ALERT_STALE_CLAIM_THRESHOLD_MS, EmailFrequency } from "../../domain/enums";
 import type { ExternalTender } from "../../domain/external-tender.entity";
 import type { SavedSearchMatch } from "../../domain/saved-search-match.entity";
 import { buildDailyDigestEmail, buildImmediateMatchEmail, type EmailAlertItem } from "../services/email-alert-templates";
-import { EMAIL_PROVIDER, type EmailProvider } from "../ports/email-provider";
 import { EXTERNAL_TENDER_REPOSITORY, type ExternalTenderRepository } from "../ports/external-tender.repository";
 import { SAVED_SEARCH_REPOSITORY, type SavedSearchRepository } from "../ports/saved-search.repository";
 import { SAVED_SEARCH_MATCH_REPOSITORY, type SavedSearchMatchRepository } from "../ports/saved-search-match.repository";

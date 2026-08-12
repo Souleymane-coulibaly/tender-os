@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApprovalEntityType, ApprovalRequest, ApprovalStatus } from "./approval-request.entity";
-import { ApprovalRequestAlreadyReviewedError } from "./errors";
+import { ApprovalRejectionReasonRequiredError, ApprovalRequestAlreadyReviewedError } from "./errors";
 
 describe("ApprovalRequest", () => {
   const occurredAt = new Date("2026-01-01T00:00:00.000Z");
@@ -59,6 +59,49 @@ describe("ApprovalRequest", () => {
 
     expect(approval.status).toBe(ApprovalStatus.Cancelled);
     expect(() => approval.approve(undefined, new Date())).toThrow(ApprovalRequestAlreadyReviewedError);
+  });
+
+  it("BLOQUANT — mission §27/§34: reject() transitions to REJECTED, distinct from CHANGES_REQUESTED, and requires a non-empty reason", () => {
+    const approval = create();
+    const reviewedAt = new Date("2026-01-02T00:00:00.000Z");
+
+    approval.reject("Ne respecte pas le CCTP.", reviewedAt);
+
+    expect(approval.status).toBe(ApprovalStatus.Rejected);
+    expect(approval.status).not.toBe(ApprovalStatus.ChangesRequested);
+    expect(approval.comment).toBe("Ne respecte pas le CCTP.");
+    expect(approval.reviewedAt).toBe(reviewedAt);
+  });
+
+  it("reject() throws ApprovalRejectionReasonRequiredError on an empty/whitespace-only reason", () => {
+    const approval = create();
+
+    expect(() => approval.reject("", new Date())).toThrow(ApprovalRejectionReasonRequiredError);
+    expect(() => approval.reject("   ", new Date())).toThrow(ApprovalRejectionReasonRequiredError);
+  });
+
+  it("reject() after an already-decided request throws ApprovalRequestAlreadyReviewedError (mission §48 applies to REJECTED too)", () => {
+    const approval = create();
+    approval.approve(undefined, new Date("2026-01-02T00:00:00.000Z"));
+
+    expect(() => approval.reject("Trop tard.", new Date())).toThrow(ApprovalRequestAlreadyReviewedError);
+  });
+
+  it("supports the three new V2 Sprint 18 entity types (TECHNICAL_MEMO_SECTION_REVISION/PRICING_SCHEDULE_VERSION/RESPONSE_PACKAGE_VERSION)", () => {
+    for (const entityType of [ApprovalEntityType.TechnicalMemoSectionRevision, ApprovalEntityType.PricingScheduleVersion, ApprovalEntityType.ResponsePackageVersion]) {
+      const approval = ApprovalRequest.create({
+        id: "approval-1",
+        organizationId: "org-1",
+        tenderId: "tender-1",
+        entityType,
+        entityId: "target-1",
+        requestedBy: "user-1",
+        reviewerId: "user-2",
+        occurredAt,
+      });
+      expect(approval.entityType).toBe(entityType);
+      expect(approval.status).toBe(ApprovalStatus.Pending);
+    }
   });
 
   it("keeps the original comment when the review omits one", () => {

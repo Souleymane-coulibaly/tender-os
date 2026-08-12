@@ -36,7 +36,7 @@ export class ListCommentsUseCase {
 
     const comments =
       query.entityType !== undefined && query.entityId !== undefined
-        ? await this.commentRepository.listByEntity({ organizationId: query.organizationId, entityType: query.entityType, entityId: query.entityId })
+        ? await this.commentRepository.listByEntity({ organizationId: query.organizationId, tenderId: query.tenderId, entityType: query.entityType, entityId: query.entityId })
         : await this.commentRepository.listByTender({ organizationId: query.organizationId, tenderId: query.tenderId });
 
     return Promise.all(

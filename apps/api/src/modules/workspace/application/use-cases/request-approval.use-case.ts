@@ -5,12 +5,13 @@ import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { MEMBERSHIP_REPOSITORY, type MembershipRepository } from "../../../memberships";
-import { assertHasTenderPermission, CHECKLIST_ITEM_REPOSITORY, GetTenderUseCase, loadChecklistItem, TenderPermission, type ChecklistItemRepository } from "../../../tenders";
+import { assertHasTenderPermission, CHECKLIST_ITEM_REPOSITORY, GetTenderUseCase, TenderPermission, type ChecklistItemRepository } from "../../../tenders";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { ApprovalRequest, type ApprovalEntityType } from "../../domain/approval-request.entity";
 import { TenderActivityType } from "../../domain/tender-activity-type";
 import { ApprovalAutoValidationForbiddenError, ApprovalReviewerNotAuthorizedError } from "../../domain/errors";
 import { assertWorkspaceAccess } from "../policies/workspace-authorization.policy";
+import { ApprovalTargetResolver, requiredValidatePermissionForApprovalEntityType } from "../services/approval-target-resolver";
 import { isActiveTenderParticipant } from "../services/participant-eligibility";
 import { ATOMIC_TRANSACTION_RUNNER, type AtomicTransactionRunner } from "../ports/atomic-transaction-runner";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
@@ -18,7 +19,6 @@ import { APPROVAL_REQUEST_REPOSITORY, type ApprovalRequestRepository } from "../
 import { TASK_REPOSITORY, type TaskRepository } from "../ports/task.repository";
 import { TENDER_PARTICIPANT_REPOSITORY, type TenderParticipantRepository } from "../ports/tender-participant.repository";
 import { TenderActivityRecorderService } from "../services/tender-activity-recorder.service";
-import { loadTask } from "./update-task.use-case";
 import { toApprovalRequestSummary, type ApprovalRequestSummary } from "../dtos";
 
 export type RequestApprovalCommand = Readonly<{
@@ -52,6 +52,7 @@ export class RequestApprovalUseCase {
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
     private readonly activityRecorder: TenderActivityRecorderService,
+    private readonly approvalTargetResolver: ApprovalTargetResolver,
   ) {}
 
   async execute(command: RequestApprovalCommand): Promise<ApprovalRequestSummary> {
@@ -64,11 +65,12 @@ export class RequestApprovalUseCase {
       permission: ClientPermission.ManageWorkspace,
     });
 
-    if (command.entityType === "TASK") {
-      await loadTask(this.taskRepository, { organizationId: command.organizationId, tenderId: command.tenderId, taskId: command.entityId });
-    } else {
-      await loadChecklistItem(this.checklistItemRepository, { organizationId: command.organizationId, tenderId: command.tenderId, itemId: command.entityId });
-    }
+    // V2 Sprint 18 — un résolveur par entityType (mission §26), y compris la vérification
+    // d'immuabilité pour les trois cibles documentaires (mission §25 "point critique").
+    await this.approvalTargetResolver.assertRequestable(
+      { taskRepository: this.taskRepository, checklistItemRepository: this.checklistItemRepository },
+      { organizationId: command.organizationId, tenderId: command.tenderId, entityType: command.entityType, entityId: command.entityId },
+    );
 
     if (command.reviewerId === command.actorId) {
       throw new ApprovalAutoValidationForbiddenError();
@@ -93,7 +95,7 @@ export class RequestApprovalUseCase {
         clientAccountId: tender.clientAccountId,
         actorId: command.reviewerId,
         actorRole: reviewerMembership.role,
-        permission: ClientPermission.ValidateWorkspace,
+        permission: requiredValidatePermissionForApprovalEntityType(command.entityType),
       });
     } catch {
       throw new ApprovalReviewerNotAuthorizedError();

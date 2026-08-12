@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { appApiFetch } from "../../../../../../lib/app-api-client";
+import { appApiFetch, getCurrentMembershipRole, getCurrentUserId } from "../../../../../../lib/app-api-client";
 import type { TenderProfile } from "../../../../../../lib/tenders-types";
 import { fetchResponsePackages } from "../../../../response-package-actions";
 import type { ResponsePackage } from "../../../../../../lib/response-package-types";
+import { fetchParticipants, fetchWorkspaceMembers } from "../../../../workspace-actions";
+import type { TenderParticipant } from "../../../../../../lib/workspace-types";
 import { ApiErrorState } from "../../../api-error-state";
 import { ResponsePackageSection } from "./response-package-section";
 
@@ -13,10 +15,25 @@ export default async function TenderResponsePackagePage({ params }: { params: Pr
 
   let packages: ResponsePackage[];
   let lots: { id: string; lotNumber: string; title: string }[];
+  let participants: TenderParticipant[];
+  let members: { userId: string; email: string; displayName: string }[];
+  let actorRole: string | undefined;
+  let actorId: string | undefined;
   try {
-    const [packageList, profile] = await Promise.all([fetchResponsePackages(tenderId), appApiFetch<TenderProfile>(`/api/v1/tenders/${tenderId}/profile`)]);
+    const [packageList, profile, participantList, memberList, role, userId] = await Promise.all([
+      fetchResponsePackages(tenderId),
+      appApiFetch<TenderProfile>(`/api/v1/tenders/${tenderId}/profile`),
+      fetchParticipants(tenderId),
+      fetchWorkspaceMembers(tenderId),
+      getCurrentMembershipRole(),
+      getCurrentUserId(),
+    ]);
     packages = packageList;
     lots = profile.lots.map((lot) => ({ id: lot.id, lotNumber: lot.lotNumber, title: lot.title }));
+    participants = participantList;
+    members = memberList;
+    actorRole = role;
+    actorId = userId;
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
@@ -31,7 +48,15 @@ export default async function TenderResponsePackagePage({ params }: { params: Pr
           Une pièce facultative absente ne bloque jamais le dossier.
         </p>
       </div>
-      <ResponsePackageSection tenderId={tenderId} initialPackages={packages} lots={lots} />
+      <ResponsePackageSection
+        tenderId={tenderId}
+        initialPackages={packages}
+        lots={lots}
+        participants={participants}
+        members={members}
+        actorRole={actorRole}
+        actorId={actorId}
+      />
     </div>
   );
 }

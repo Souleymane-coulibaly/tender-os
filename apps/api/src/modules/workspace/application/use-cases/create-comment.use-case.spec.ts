@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GetTenderUseCase } from "../../../tenders";
-import type { ChecklistItemRepository } from "../../../tenders";
+import type { ChecklistItemRepository, TenderLotRepository } from "../../../tenders";
 import { CommentEntityType } from "../../domain/comment.entity";
 import { InvalidMentionTargetError } from "../../domain/errors";
 import { TenderCollaborativeRole, TenderParticipant } from "../../domain/tender-participant.entity";
@@ -48,6 +48,7 @@ describe("CreateCommentUseCase", () => {
       commentRepository,
       taskRepository,
       {} as unknown as ChecklistItemRepository,
+      {} as unknown as TenderLotRepository,
       participantRepository,
       new InMemoryAuditLogWriter(),
       new FakeOutboxWriter() as never,

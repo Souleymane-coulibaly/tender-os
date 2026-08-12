@@ -56,6 +56,24 @@ export class PrismaApprovalRequestRepository implements ApprovalRequestRepositor
     return records.map(toDomain);
   }
 
+  async listByReviewer(input: {
+    organizationId: string;
+    reviewerId: string;
+    restrictToClientAccountIds?: readonly string[] | undefined;
+    status?: string | undefined;
+  }): Promise<ApprovalRequest[]> {
+    const records = await this.prisma.currentClient().approvalRequest.findMany({
+      where: {
+        organizationId: input.organizationId,
+        reviewerId: input.reviewerId,
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.restrictToClientAccountIds !== undefined ? { tender: { clientAccountId: { in: [...input.restrictToClientAccountIds] } } } : {}),
+      },
+      orderBy: { requestedAt: "desc" },
+    });
+    return records.map(toDomain);
+  }
+
   async save(approval: ApprovalRequest): Promise<void> {
     const data = toPersistence(approval);
     await this.prisma.currentClient().approvalRequest.upsert({ where: { id: data.id }, create: data, update: data });

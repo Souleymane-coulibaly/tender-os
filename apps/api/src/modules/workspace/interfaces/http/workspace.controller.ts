@@ -18,7 +18,7 @@ import { EditCommentUseCase } from "../../application/use-cases/edit-comment.use
 import { DeleteCommentUseCase } from "../../application/use-cases/delete-comment.use-case";
 import { ListCommentsUseCase } from "../../application/use-cases/list-comments.use-case";
 import { RequestApprovalUseCase } from "../../application/use-cases/request-approval.use-case";
-import { ApproveApprovalUseCase, RequestApprovalChangesUseCase } from "../../application/use-cases/review-approval.use-case";
+import { ApproveApprovalUseCase, RejectApprovalUseCase, RequestApprovalChangesUseCase } from "../../application/use-cases/review-approval.use-case";
 import { ListApprovalsUseCase } from "../../application/use-cases/list-approvals.use-case";
 import { GetTenderActivityUseCase } from "../../application/use-cases/get-tender-activity.use-case";
 import { ListWorkspaceMembersUseCase } from "../../application/use-cases/list-workspace-members.use-case";
@@ -36,6 +36,7 @@ import {
   IdParamSchema,
   ListCommentsQuerySchema,
   ListTasksQuerySchema,
+  RejectApprovalBodySchema,
   RequestApprovalBodySchema,
   ReviewApprovalBodySchema,
   UpdateTaskBodySchema,
@@ -49,6 +50,7 @@ import {
   type EditCommentBody,
   type ListCommentsQuery,
   type ListTasksQuery,
+  type RejectApprovalBody,
   type RequestApprovalBody,
   type ReviewApprovalBody,
   type UpdateTaskBody,
@@ -81,6 +83,7 @@ export class WorkspaceController {
     private readonly requestApprovalUseCase: RequestApprovalUseCase,
     private readonly approveApprovalUseCase: ApproveApprovalUseCase,
     private readonly requestApprovalChangesUseCase: RequestApprovalChangesUseCase,
+    private readonly rejectApprovalUseCase: RejectApprovalUseCase,
     private readonly listApprovalsUseCase: ListApprovalsUseCase,
     private readonly getTenderActivityUseCase: GetTenderActivityUseCase,
     private readonly listWorkspaceMembersUseCase: ListWorkspaceMembersUseCase,
@@ -347,6 +350,19 @@ export class WorkspaceController {
     @Req() request: RequestWithId,
   ) {
     return this.requestApprovalChangesUseCase.execute({ organizationId: membership.organizationId, tenderId, approvalId, actorId: actor.userId, actorRole: membership.role, ...body, requestId: request.id });
+  }
+
+  @Post(":tenderId/approvals/:approvalId/reject")
+  @HttpCode(HttpStatus.OK)
+  async rejectApproval(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Param("approvalId", new ZodValidationPipe(IdParamSchema)) approvalId: string,
+    @Body(new ZodValidationPipe(RejectApprovalBodySchema)) body: RejectApprovalBody,
+    @Req() request: RequestWithId,
+  ) {
+    return this.rejectApprovalUseCase.execute({ organizationId: membership.organizationId, tenderId, approvalId, actorId: actor.userId, actorRole: membership.role, ...body, requestId: request.id });
   }
 
   // ---- Activity ----

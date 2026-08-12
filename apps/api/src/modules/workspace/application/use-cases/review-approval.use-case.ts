@@ -7,6 +7,7 @@ import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { TenderActivityType } from "../../domain/tender-activity-type";
 import { ApprovalRequestNotFoundError, ApprovalReviewerNotAuthorizedError } from "../../domain/errors";
 import { assertWorkspaceAccess } from "../policies/workspace-authorization.policy";
+import { requiredValidatePermissionForApprovalEntityType } from "../services/approval-target-resolver";
 import { ATOMIC_TRANSACTION_RUNNER, type AtomicTransactionRunner } from "../ports/atomic-transaction-runner";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { APPROVAL_REQUEST_REPOSITORY, type ApprovalRequestRepository } from "../ports/approval-request.repository";
@@ -20,6 +21,18 @@ export type ReviewApprovalCommand = Readonly<{
   actorId: string;
   actorRole: string;
   comment?: string | undefined;
+  requestId?: string | undefined;
+}>;
+
+/** V2 Sprint 18 (mission §34) — `reason` OBLIGATOIRE, contrairement à `ReviewApprovalCommand.comment`
+ *  (approve/changes-requested) : un rejet définitif exige toujours une justification. */
+export type RejectApprovalCommand = Readonly<{
+  organizationId: string;
+  tenderId: string;
+  approvalId: string;
+  actorId: string;
+  actorRole: string;
+  reason: string;
   requestId?: string | undefined;
 }>;
 
@@ -50,18 +63,34 @@ export class ApproveApprovalUseCase {
   ) {}
 
   async execute(command: ReviewApprovalCommand): Promise<ApprovalRequestSummary> {
-    await assertWorkspaceAccess(this.getTenderUseCase, this.assertClientAccessUseCase, {
+    // V2 Sprint 18 — base minimale (lecture) d'abord ; la permission Validate* PRÉCISE dépend de
+    // `preliminary.entityType`, connu seulement après le chargement ci-dessous (mission §26/§31).
+    const tender = await assertWorkspaceAccess(this.getTenderUseCase, this.assertClientAccessUseCase, {
       organizationId: command.organizationId,
       tenderId: command.tenderId,
       actorId: command.actorId,
       actorRole: command.actorRole,
-      permission: ClientPermission.ValidateWorkspace,
+      permission: ClientPermission.ReadWorkspace,
     });
 
     // Vérification d'autorisation rapide, hors verrou (le reviewerId ne change jamais une fois la
     // demande créée — aucun TOCTOU possible sur cette seule lecture).
     const preliminary = await loadApproval(this.approvalRepository, { organizationId: command.organizationId, tenderId: command.tenderId, approvalId: command.approvalId });
     if (preliminary.reviewerId !== command.actorId) {
+      throw new ApprovalReviewerNotAuthorizedError();
+    }
+
+    // V2 Sprint 18 (mission §82/§83) — revérifie l'autorité EN DIRECT (jamais mise en cache depuis
+    // la création de la demande) : un ClientAccess/rôle révoqué entre-temps refuse l'approbation.
+    try {
+      await this.assertClientAccessUseCase.execute({
+        organizationId: command.organizationId,
+        clientAccountId: tender.clientAccountId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        permission: requiredValidatePermissionForApprovalEntityType(preliminary.entityType),
+      });
+    } catch {
       throw new ApprovalReviewerNotAuthorizedError();
     }
 
@@ -102,7 +131,7 @@ export class ApproveApprovalUseCase {
             eventType: "ApprovalApproved",
             aggregateType: "ApprovalRequest",
             aggregateId: approval.id,
-            payload: { tenderId: command.tenderId, entityType: approval.entityType, entityId: approval.entityId },
+            payload: { tenderId: command.tenderId, entityType: approval.entityType, entityId: approval.entityId, requestedBy: approval.requestedBy },
             occurredAt,
           },
         ],
@@ -129,16 +158,28 @@ export class RequestApprovalChangesUseCase {
   ) {}
 
   async execute(command: ReviewApprovalCommand): Promise<ApprovalRequestSummary> {
-    await assertWorkspaceAccess(this.getTenderUseCase, this.assertClientAccessUseCase, {
+    const tender = await assertWorkspaceAccess(this.getTenderUseCase, this.assertClientAccessUseCase, {
       organizationId: command.organizationId,
       tenderId: command.tenderId,
       actorId: command.actorId,
       actorRole: command.actorRole,
-      permission: ClientPermission.ValidateWorkspace,
+      permission: ClientPermission.ReadWorkspace,
     });
 
     const preliminary = await loadApproval(this.approvalRepository, { organizationId: command.organizationId, tenderId: command.tenderId, approvalId: command.approvalId });
     if (preliminary.reviewerId !== command.actorId) {
+      throw new ApprovalReviewerNotAuthorizedError();
+    }
+
+    try {
+      await this.assertClientAccessUseCase.execute({
+        organizationId: command.organizationId,
+        clientAccountId: tender.clientAccountId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        permission: requiredValidatePermissionForApprovalEntityType(preliminary.entityType),
+      });
+    } catch {
       throw new ApprovalReviewerNotAuthorizedError();
     }
 
@@ -177,7 +218,96 @@ export class RequestApprovalChangesUseCase {
             eventType: "ApprovalChangesRequested",
             aggregateType: "ApprovalRequest",
             aggregateId: approval.id,
-            payload: { tenderId: command.tenderId, entityType: approval.entityType, entityId: approval.entityId },
+            payload: { tenderId: command.tenderId, entityType: approval.entityType, entityId: approval.entityId, requestedBy: approval.requestedBy },
+            occurredAt,
+          },
+        ],
+      });
+
+      return approval;
+    });
+
+    return toApprovalRequestSummary(approval);
+  }
+}
+
+/** V2 Sprint 18 (mission §27/§34, décision AskUserQuestion) — second statut terminal, distinct de
+ *  `CHANGES_REQUESTED` : un refus définitif avec raison obligatoire (portée par le domaine,
+ *  `ApprovalRequest.reject`). Même discipline d'autorisation/concurrence que
+ *  `ApproveApprovalUseCase`/`RequestApprovalChangesUseCase` ci-dessus. */
+@Injectable()
+export class RejectApprovalUseCase {
+  constructor(
+    @Inject(APPROVAL_REQUEST_REPOSITORY) private readonly approvalRepository: ApprovalRequestRepository,
+    @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
+    @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(ATOMIC_TRANSACTION_RUNNER) private readonly atomicTransactionRunner: AtomicTransactionRunner,
+    private readonly getTenderUseCase: GetTenderUseCase,
+    private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
+    private readonly activityRecorder: TenderActivityRecorderService,
+  ) {}
+
+  async execute(command: RejectApprovalCommand): Promise<ApprovalRequestSummary> {
+    const tender = await assertWorkspaceAccess(this.getTenderUseCase, this.assertClientAccessUseCase, {
+      organizationId: command.organizationId,
+      tenderId: command.tenderId,
+      actorId: command.actorId,
+      actorRole: command.actorRole,
+      permission: ClientPermission.ReadWorkspace,
+    });
+
+    const preliminary = await loadApproval(this.approvalRepository, { organizationId: command.organizationId, tenderId: command.tenderId, approvalId: command.approvalId });
+    if (preliminary.reviewerId !== command.actorId) {
+      throw new ApprovalReviewerNotAuthorizedError();
+    }
+
+    try {
+      await this.assertClientAccessUseCase.execute({
+        organizationId: command.organizationId,
+        clientAccountId: tender.clientAccountId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        permission: requiredValidatePermissionForApprovalEntityType(preliminary.entityType),
+      });
+    } catch {
+      throw new ApprovalReviewerNotAuthorizedError();
+    }
+
+    const approval = await this.atomicTransactionRunner.run(async () => {
+      const occurredAt = this.clock.now();
+      const approval = await this.approvalRepository.reviewLocked(
+        { organizationId: command.organizationId, tenderId: command.tenderId, approvalId: command.approvalId },
+        (a) => a.reject(command.reason, occurredAt),
+      );
+
+      await this.auditLogWriter.record({
+        organizationId: command.organizationId,
+        actorId: command.actorId,
+        action: "workspace.approval_rejected",
+        resourceType: "approval_request",
+        resourceId: approval.id,
+        requestId: command.requestId,
+        metadata: { tenderId: command.tenderId, entityType: approval.entityType, entityId: approval.entityId },
+      });
+
+      await this.activityRecorder.record({
+        organizationId: command.organizationId,
+        tenderId: command.tenderId,
+        actorId: command.actorId,
+        type: TenderActivityType.ApprovalRejected,
+        summary: `Demande de validation rejetée (${approval.entityType.toLowerCase()}).`,
+        metadata: { approvalId: approval.id },
+      });
+
+      await this.outboxWriter.write({
+        organizationId: command.organizationId,
+        events: [
+          {
+            eventType: "ApprovalRejected",
+            aggregateType: "ApprovalRequest",
+            aggregateId: approval.id,
+            payload: { tenderId: command.tenderId, entityType: approval.entityType, entityId: approval.entityId, requestedBy: approval.requestedBy },
             occurredAt,
           },
         ],

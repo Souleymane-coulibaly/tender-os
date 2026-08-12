@@ -4,6 +4,9 @@ import { DocumentsModule } from "../documents";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
 import { OutboxWriterModule } from "../outbox";
+import { PricingScheduleModule } from "../pricing-schedule";
+import { ResponsePackageModule } from "../response-package";
+import { TechnicalMemoModule } from "../technical-memo";
 import { TendersModule } from "../tenders";
 
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
@@ -15,6 +18,7 @@ import { TASK_REPOSITORY } from "./application/ports/task.repository";
 import { TENDER_ACTIVITY_REPOSITORY } from "./application/ports/tender-activity.repository";
 import { TENDER_PARTICIPANT_REPOSITORY } from "./application/ports/tender-participant.repository";
 
+import { ApprovalTargetResolver } from "./application/services/approval-target-resolver";
 import { TenderActivityRecorderService } from "./application/services/tender-activity-recorder.service";
 
 import { AddTenderParticipantUseCase } from "./application/use-cases/add-tender-participant.use-case";
@@ -32,10 +36,11 @@ import { EditCommentUseCase } from "./application/use-cases/edit-comment.use-cas
 import { DeleteCommentUseCase } from "./application/use-cases/delete-comment.use-case";
 import { ListCommentsUseCase } from "./application/use-cases/list-comments.use-case";
 import { RequestApprovalUseCase } from "./application/use-cases/request-approval.use-case";
-import { ApproveApprovalUseCase, RequestApprovalChangesUseCase } from "./application/use-cases/review-approval.use-case";
+import { ApproveApprovalUseCase, RejectApprovalUseCase, RequestApprovalChangesUseCase } from "./application/use-cases/review-approval.use-case";
 import { ListApprovalsUseCase } from "./application/use-cases/list-approvals.use-case";
 import { GetTenderActivityUseCase } from "./application/use-cases/get-tender-activity.use-case";
 import { GetMyTasksUseCase } from "./application/use-cases/get-my-tasks.use-case";
+import { ListMyApprovalsUseCase } from "./application/use-cases/list-my-approvals.use-case";
 import { ListWorkspaceMembersUseCase } from "./application/use-cases/list-workspace-members.use-case";
 import { ListRecentActivityForDashboardUseCase } from "./application/use-cases/list-recent-activity-for-dashboard.use-case";
 
@@ -60,10 +65,25 @@ import { MyTasksController } from "./interfaces/http/me-tasks.controller";
  * jamais importé par `tenders`.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, TendersModule, DocumentsModule, OutboxWriterModule],
+  imports: [
+    IdentityModule,
+    MembershipsModule,
+    ClientPortfolioModule,
+    TendersModule,
+    DocumentsModule,
+    OutboxWriterModule,
+    // V2 Sprint 18 — importés UNIQUEMENT pour leurs ports de lecture seule réexportés
+    // (`GetSectionRevisionTenderRefForApprovalUseCase`/`GetVersionTenderRefForApprovalUseCase`),
+    // même motif que `response-package` important `TechnicalMemoModule`/`PricingScheduleModule`
+    // au Sprint 14 — jamais un second accès direct aux repositories de ces modules.
+    TechnicalMemoModule,
+    PricingScheduleModule,
+    ResponsePackageModule,
+  ],
   controllers: [WorkspaceController, MyTasksController],
   providers: [
     TenderActivityRecorderService,
+    ApprovalTargetResolver,
 
     AddTenderParticipantUseCase,
     ChangeTenderParticipantRoleUseCase,
@@ -85,10 +105,12 @@ import { MyTasksController } from "./interfaces/http/me-tasks.controller";
     RequestApprovalUseCase,
     ApproveApprovalUseCase,
     RequestApprovalChangesUseCase,
+    RejectApprovalUseCase,
     ListApprovalsUseCase,
 
     GetTenderActivityUseCase,
     GetMyTasksUseCase,
+    ListMyApprovalsUseCase,
     ListWorkspaceMembersUseCase,
     ListRecentActivityForDashboardUseCase,
 
@@ -102,6 +124,6 @@ import { MyTasksController } from "./interfaces/http/me-tasks.controller";
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
   ],
   // V2 Sprint 15 — réexportés pour `dashboard` (voir index.ts). Premier export de ce module.
-  exports: [GetMyTasksUseCase, ListRecentActivityForDashboardUseCase],
+  exports: [GetMyTasksUseCase, ListRecentActivityForDashboardUseCase, ListMyApprovalsUseCase],
 })
 export class WorkspaceModule {}

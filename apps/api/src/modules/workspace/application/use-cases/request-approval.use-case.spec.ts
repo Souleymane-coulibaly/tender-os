@@ -17,6 +17,7 @@ import {
   SequentialIdGenerator,
   FakeOutboxWriter,
 } from "../../test-support/fakes";
+import { ApprovalTargetResolver } from "../services/approval-target-resolver";
 import { TenderActivityRecorderService } from "../services/tender-activity-recorder.service";
 import { RequestApprovalUseCase } from "./request-approval.use-case";
 
@@ -62,6 +63,10 @@ describe("RequestApprovalUseCase", () => {
       getTenderUseCase as unknown as GetTenderUseCase,
       assertClientAccessUseCase as never,
       activityRecorder,
+      // Les 3 dépendances cross-module ne sont jamais invoquées pour TASK/CHECKLIST_ITEM (seules
+      // cibles exercées par ces tests) — même motif que `{} as unknown as ChecklistItemRepository`
+      // ci-dessus.
+      new ApprovalTargetResolver(undefined as never, undefined as never, undefined as never),
     );
   });
 

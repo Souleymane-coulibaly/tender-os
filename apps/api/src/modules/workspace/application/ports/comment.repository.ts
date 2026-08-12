@@ -3,7 +3,10 @@ import type { Mention } from "../../domain/mention.entity";
 
 export interface CommentRepository {
   findById(input: { organizationId: string; commentId: string }): Promise<Comment | null>;
-  listByEntity(input: { organizationId: string; entityType: CommentEntityType; entityId: string }): Promise<Comment[]>;
+  /** Correctif audit — `tenderId` est un filtre obligatoire, jamais seulement `entityType`+`entityId` :
+   *  sans lui, un acteur autorisé sur le Tender A pouvait lire les commentaires d'une entité d'un
+   *  AUTRE Tender/client de la même organisation en devinant/connaissant son UUID. */
+  listByEntity(input: { organizationId: string; tenderId: string; entityType: CommentEntityType; entityId: string }): Promise<Comment[]>;
   listByTender(input: { organizationId: string; tenderId: string }): Promise<Comment[]>;
   /** V2 Sprint 7 §47 — écrit le commentaire ET ses mentions dans UNE SEULE transaction Postgres
    *  (jamais l'un sans l'autre). Seul point d'écriture pour la CRÉATION d'un commentaire. */

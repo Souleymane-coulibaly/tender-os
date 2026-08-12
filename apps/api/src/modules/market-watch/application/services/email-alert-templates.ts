@@ -1,4 +1,4 @@
-import type { EmailMessage } from "../ports/email-provider";
+import type { EmailMessage } from "../../../notifications";
 
 /** Mission §77/§78/§79 — le titre/l'acheteur d'un marché externe est un CONTENU NON FIABLE
  *  (provenant d'une source tierce, jamais assaini à la collecte). Échappement HTML minimal mais

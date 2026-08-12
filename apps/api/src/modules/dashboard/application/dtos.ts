@@ -13,6 +13,9 @@ export type DashboardKpisDto = Readonly<{
   packagesReady: number;
   needingAttention: number;
   overdueTasks: number;
+  /** V2 Sprint 18 (mission §66-68) — demandes de validation où l'utilisateur courant est
+   *  l'approbateur désigné (`ListMyApprovalsUseCase`, `status: PENDING`), tous Tenders confondus. */
+  pendingApprovals: number;
 }>;
 
 export type DashboardPipelineStageDto = Readonly<{ status: TenderStatus; count: number }>;
@@ -79,7 +82,7 @@ export type DashboardOverviewDto = Readonly<{
 export const EMPTY_DASHBOARD_OVERVIEW: (generatedAt: string, scope: DashboardOverviewDto["scope"], periodDays: number) => DashboardOverviewDto = (generatedAt, scope, periodDays) => ({
   generatedAt,
   scope,
-  kpis: { activeTenders: 0, deadlinesNext7Days: 0, overdueTenders: 0, readyToSubmit: 0, packagesReady: 0, needingAttention: 0, overdueTasks: 0 },
+  kpis: { activeTenders: 0, deadlinesNext7Days: 0, overdueTenders: 0, readyToSubmit: 0, packagesReady: 0, needingAttention: 0, overdueTasks: 0, pendingApprovals: 0 },
   pipeline: [],
   deadlines: [],
   attentionItems: [],

@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: "/app/ai-configuration/models", label: "Configuration IA" },
   { href: "/app/integrations/api-keys", label: "Intégrations" },
   { href: "/app/market-watch", label: "Veille" },
+  { href: "/app/validations", label: "Mes validations" },
 ];
 
 export default async function AppLayout({ children }: { children: ReactNode }) {

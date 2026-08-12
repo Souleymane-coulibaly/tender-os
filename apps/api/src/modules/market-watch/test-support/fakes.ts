@@ -1,7 +1,7 @@
 import type { Clock } from "../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../shared-kernel/id-generator";
 import type { OutboxEventInput, OutboxWriter } from "../../outbox";
-import type { EmailMessage, EmailProvider } from "../application/ports/email-provider";
+import type { EmailMessage, EmailProvider } from "../../notifications";
 import type { CollectedTender, MarketSourceConnector, MarketSourceSearchCriteria, MarketSourceSearchResult } from "../application/ports/market-source-connector";
 import type { ExternalTenderListFilter, ExternalTenderPage, ExternalTenderRepository } from "../application/ports/external-tender.repository";
 import type { SavedSearchRepository } from "../application/ports/saved-search.repository";

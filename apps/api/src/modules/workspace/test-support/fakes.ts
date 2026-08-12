@@ -109,8 +109,10 @@ export class InMemoryCommentRepository implements CommentRepository {
     return this.comments.find((c) => c.id === input.commentId && c.organizationId === input.organizationId) ?? null;
   }
 
-  async listByEntity(input: { organizationId: string; entityType: string; entityId: string }): Promise<Comment[]> {
-    return this.comments.filter((c) => c.organizationId === input.organizationId && c.entityType === input.entityType && c.entityId === input.entityId);
+  async listByEntity(input: { organizationId: string; tenderId: string; entityType: string; entityId: string }): Promise<Comment[]> {
+    return this.comments.filter(
+      (c) => c.organizationId === input.organizationId && c.tenderId === input.tenderId && c.entityType === input.entityType && c.entityId === input.entityId,
+    );
   }
 
   async listByTender(input: { organizationId: string; tenderId: string }): Promise<Comment[]> {
@@ -153,6 +155,10 @@ export class InMemoryApprovalRequestRepository implements ApprovalRequestReposit
 
   async listByTender(input: { organizationId: string; tenderId: string; status?: string | undefined }): Promise<ApprovalRequest[]> {
     return this.approvals.filter((a) => a.organizationId === input.organizationId && a.tenderId === input.tenderId && (!input.status || a.status === input.status));
+  }
+
+  async listByReviewer(input: { organizationId: string; reviewerId: string; restrictToClientAccountIds?: readonly string[] | undefined; status?: string | undefined }): Promise<ApprovalRequest[]> {
+    return this.approvals.filter((a) => a.organizationId === input.organizationId && a.reviewerId === input.reviewerId && (!input.status || a.status === input.status));
   }
 
   async save(approval: ApprovalRequest): Promise<void> {
