@@ -91,6 +91,16 @@ describe("Integration Hub (integrations) — real HTTP + PostgreSQL (NestJS)", (
         { id: orgBId, name: "Integrations Org B HTTP", slug: `integrations-org-b-http-${orgBId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
       ],
     });
+    // V2 Sprint 22 (billing, étape 22A, correctif audit Codex P1-01) — API Keys/Webhooks sont
+    // désormais des fonctionnalités Enterprise (mission §16 "ne pas casser techniquement
+    // l'Integration Hub" pour Enterprise) : ce test exerce le module Sprint 16 lui-même, jamais le
+    // gating par plan, donc les deux organisations reçoivent un abonnement Enterprise ACTIVE.
+    await prisma.organizationSubscription.createMany({
+      data: [
+        { id: randomUUID(), organizationId: orgAId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL", updatedAt: new Date() },
+        { id: randomUUID(), organizationId: orgBId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL", updatedAt: new Date() },
+      ],
+    });
 
     const ownerA = await registerAndLogin(`integrations-owner-a-${randomUUID()}@smoke.test`);
     const ownerB = await registerAndLogin(`integrations-owner-b-${randomUUID()}@smoke.test`);
@@ -120,6 +130,7 @@ describe("Integration Hub (integrations) — real HTTP + PostgreSQL (NestJS)", (
     await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
     await app.close();
     await prisma.$disconnect();

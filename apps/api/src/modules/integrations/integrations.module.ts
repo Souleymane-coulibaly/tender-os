@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ThrottlerModule } from "@nestjs/throttler";
+import { BillingModule } from "../billing";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
@@ -49,6 +50,9 @@ import { WebhooksController } from "./interfaces/http/webhooks.controller";
     TendersModule,
     ResponsePackageModule,
     IntegrationEventConsumersModule,
+    // V2 Sprint 22 (billing, étape 22A, correctif audit Codex P1-01) — API Keys (PUBLIC_API) et
+    // Webhooks (WEBHOOKS) sont désormais des fonctionnalités différenciantes gatées par plan.
+    BillingModule,
     // Mission §63/§64/§65 — Public API rate-limited, par clé (voir ApiKeyThrottlerGuard). 100
     // requêtes/minute par défaut, décision d'implémentation documentée dans le rapport Sprint 16.
     ThrottlerModule.forRoot([{ name: "public-api", ttl: 60_000, limit: 100 }]),

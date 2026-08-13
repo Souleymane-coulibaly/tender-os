@@ -22,6 +22,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   TENDER_NOT_FOUND: HttpStatus.NOT_FOUND,
   RESPONSE_PACKAGE_NOT_FOUND: HttpStatus.NOT_FOUND,
   CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,
+
+  // V2 Sprint 22 (billing, étape 22A, correctif audit Codex P1-01).
+  ENTITLEMENT_FEATURE_NOT_AVAILABLE: HttpStatus.FORBIDDEN,
 };
 
 @Catch(DomainError)

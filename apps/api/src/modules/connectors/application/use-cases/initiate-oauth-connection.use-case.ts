@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { assertEntitlementFeature, ENTITLEMENT_SERVICE, EntitlementFeature, type EntitlementService } from "../../../billing";
 import { assertHasConnectorPermission, ConnectorPermission } from "../../domain/connector-permission";
 import type { ConnectorProvider } from "../../domain/enums";
 import { ExternalConnectionAlreadyExistsError } from "../../domain/errors";
@@ -25,6 +26,12 @@ export type InitiateOAuthConnectionResult = Readonly<{ authorizationUrl: string 
  * (mission §77 "ConnectionCreated" doit pouvoir être audité même si l'utilisateur n'achève jamais
  * le consentement provider) plutôt qu'à l'issue du callback — le callback (`HandleOAuthCallback
  * UseCase`) ne fait qu'`activate()` cette ligne existante, jamais n'en crée une nouvelle.
+ *
+ * Correctif audit Codex 22A (P1-01) — les connecteurs externes (Microsoft 365/Google Workspace,
+ * Sprint 19) correspondent à AUTOMATION_CONNECTORS dans le catalogue commercial (Enterprise
+ * uniquement, mission Sprint 22 §16). Gaté ici, jamais au niveau du callback OAuth
+ * (`HandleOAuthCallbackUseCase`) : une connexion déjà initiée doit pouvoir être activée même si le
+ * plan a changé entre-temps (le callback n'est jamais un second point de décision commerciale).
  */
 @Injectable()
 export class InitiateOAuthConnectionUseCase {
@@ -33,11 +40,13 @@ export class InitiateOAuthConnectionUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
     private readonly flowStarter: OAuthFlowStarterService,
   ) {}
 
   async execute(command: InitiateOAuthConnectionCommand): Promise<InitiateOAuthConnectionResult> {
     assertHasConnectorPermission(command.actorRole, ConnectorPermission.Manage);
+    await assertEntitlementFeature(this.entitlementService, command.organizationId, EntitlementFeature.AutomationConnectors);
 
     const existing = await this.connectionRepository.findActiveByOrganizationAndProvider({ organizationId: command.organizationId, provider: command.provider });
     if (existing) {

@@ -28,6 +28,7 @@ describe("RequestApprovalUseCase", () => {
   let membershipRepository: { findByOrganizationAndUser: ReturnType<typeof vi.fn> };
   let getTenderUseCase: { execute: ReturnType<typeof vi.fn> };
   let assertClientAccessUseCase: { execute: ReturnType<typeof vi.fn> };
+  let entitlementService: { canUseFeature: ReturnType<typeof vi.fn>; getEffectivePlanTier: ReturnType<typeof vi.fn>; canOperateOnTender: ReturnType<typeof vi.fn>; getEffectiveLimit: ReturnType<typeof vi.fn> };
   let useCase: RequestApprovalUseCase;
 
   beforeEach(async () => {
@@ -48,6 +49,7 @@ describe("RequestApprovalUseCase", () => {
     };
 
     const activityRecorder = new TenderActivityRecorderService(new InMemoryTenderActivityRepository(), new FixedClock(), new SequentialIdGenerator());
+    entitlementService = { canUseFeature: vi.fn(async () => true), getEffectivePlanTier: vi.fn(), canOperateOnTender: vi.fn(), getEffectiveLimit: vi.fn() };
 
     useCase = new RequestApprovalUseCase(
       approvalRepository,
@@ -60,6 +62,7 @@ describe("RequestApprovalUseCase", () => {
       new FixedClock(),
       new SequentialIdGenerator(),
       new FakeAtomicTransactionRunner(),
+      entitlementService as never,
       getTenderUseCase as unknown as GetTenderUseCase,
       assertClientAccessUseCase as never,
       activityRecorder,
@@ -103,6 +106,15 @@ describe("RequestApprovalUseCase", () => {
         reviewerId: "not-a-participant",
       }),
     ).rejects.toBeInstanceOf(ApprovalReviewerNotAuthorizedError);
+  });
+
+  it("correctif audit Codex 22A (P1-01) — refuses when the organization's plan does not include APPROVAL_WORKFLOWS (e.g. Starter)", async () => {
+    const { EntitlementFeatureNotAvailableError } = await import("../../../billing");
+    entitlementService.canUseFeature = vi.fn(async () => false);
+
+    await expect(
+      useCase.execute({ organizationId: "org-1", tenderId: "tender-1", actorId: "user-1", actorRole: "BID_MANAGER", entityType: ApprovalEntityType.Task, entityId: "task-1", reviewerId: "reviewer-1" }),
+    ).rejects.toBeInstanceOf(EntitlementFeatureNotAvailableError);
   });
 
   it("rejects a reviewer who is a participant but whose client role lacks ValidateWorkspace (e.g. CONTRIBUTOR)", async () => {

@@ -142,6 +142,15 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
         { id: orgBId, name: "Workspace Org B HTTP", slug: `workspace-org-b-http-${orgBId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
       ],
     });
+    // V2 Sprint 22 (billing, étape 22A, correctif audit Codex P1-01) — les circuits de validation
+    // (APPROVAL_WORKFLOWS) sont désormais Business/Enterprise uniquement : ce test exerce le
+    // module Sprint 18 (Approvals) lui-même, jamais le gating par plan.
+    await prisma.organizationSubscription.createMany({
+      data: [
+        { id: randomUUID(), organizationId: orgAId, planTier: "BUSINESS", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL", updatedAt: new Date() },
+        { id: randomUUID(), organizationId: orgBId, planTier: "BUSINESS", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL", updatedAt: new Date() },
+      ],
+    });
 
     const ownerA = await registerAndLogin(`workspace-owner-a-${randomUUID()}@smoke.test`);
     const ownerB = await registerAndLogin(`workspace-owner-b-${randomUUID()}@smoke.test`);
@@ -181,6 +190,7 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
     await app.close();
     await prisma.$disconnect();

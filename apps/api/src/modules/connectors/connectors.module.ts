@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { BillingModule } from "../billing";
 import { DocumentsModule } from "../documents";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
@@ -49,7 +50,9 @@ import { ConnectorsOAuthCallbackController } from "./interfaces/http/connectors-
  * ce module ne produit aucun événement Outbox ce sprint (aucune sync automatique, décision validée).
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, DocumentsModule],
+  // V2 Sprint 22 (billing, étape 22A, correctif audit Codex P1-01) — AUTOMATION_CONNECTORS gaté
+  // par plan (Enterprise uniquement).
+  imports: [IdentityModule, MembershipsModule, TendersModule, DocumentsModule, BillingModule],
   controllers: [ConnectorsController, ConnectorsOAuthCallbackController],
   providers: [
     InitiateOAuthConnectionUseCase,

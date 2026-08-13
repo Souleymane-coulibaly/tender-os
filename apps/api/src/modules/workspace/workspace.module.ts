@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { BillingModule } from "../billing";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { DocumentsModule } from "../documents";
 import { IdentityModule } from "../identity";
@@ -79,6 +80,9 @@ import { MyTasksController } from "./interfaces/http/me-tasks.controller";
     TechnicalMemoModule,
     PricingScheduleModule,
     ResponsePackageModule,
+    // V2 Sprint 22 (billing, étape 22A, correctif audit Codex P1-01) — APPROVAL_WORKFLOWS gaté par
+    // plan (Business/Enterprise) sur `RequestApprovalUseCase`.
+    BillingModule,
   ],
   controllers: [WorkspaceController, MyTasksController],
   providers: [

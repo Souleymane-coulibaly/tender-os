@@ -34,6 +34,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,
   CLIENT_ACCOUNT_ARCHIVED: HttpStatus.CONFLICT,
   CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
+
+  // V2 Sprint 22 (billing, étape 22A, correctif audit Codex P1-01).
+  ENTITLEMENT_FEATURE_NOT_AVAILABLE: HttpStatus.FORBIDDEN,
 };
 
 @Catch(DomainError)

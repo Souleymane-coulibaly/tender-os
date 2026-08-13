@@ -1,0 +1,121 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { PrismaService } from "../../../shared-kernel/prisma.service";
+import { BillingInterval } from "../domain/billing-interval";
+import { EntitlementFeature } from "../domain/entitlement-feature";
+import { EntitlementOverride } from "../domain/entitlement-override.aggregate";
+import { OrganizationSubscription } from "../domain/organization-subscription.aggregate";
+import { PassPurchase } from "../domain/pass-purchase.aggregate";
+import { PlanSource } from "../domain/plan-source";
+import { PlanTier } from "../domain/plan-tier";
+import { QuotaType, UNLIMITED } from "../domain/quota-type";
+import { PrismaEntitlementOverrideRepository } from "./prisma-entitlement-override.repository";
+import { PrismaOrganizationSubscriptionRepository } from "./prisma-organization-subscription.repository";
+import { PrismaPassPurchaseRepository } from "./prisma-pass-purchase.repository";
+
+/**
+ * V2 Sprint 22 (billing, étape 22A, correctif audit Codex — après application de la migration
+ * `20260813090000_v2_sprint22_billing_plans_entitlements`) — preuve PostgreSQL réelle du
+ * compare-and-set de `consumeForTender` et de la contrainte unique `externalReference`, jamais
+ * démontrable avec de simples fakes en mémoire. Même discipline que
+ * `generation-invariants.integration.spec.ts` (Sprint 21).
+ */
+describe("billing module — invariantes critiques (PostgreSQL réel)", () => {
+  const prisma = new PrismaService();
+  const subscriptionRepository = new PrismaOrganizationSubscriptionRepository(prisma);
+  const passPurchaseRepository = new PrismaPassPurchaseRepository(prisma);
+  const overrideRepository = new PrismaEntitlementOverrideRepository(prisma);
+
+  const organizationId = randomUUID();
+  const now = new Date("2026-08-13T10:00:00Z");
+
+  beforeAll(async () => {
+    await prisma.$connect();
+    await prisma.organization.create({
+      data: { id: organizationId, name: "Billing Integration Test Org", slug: `billing-integration-org-${organizationId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
+    });
+  });
+
+  afterAll(async () => {
+    await prisma.entitlementOverride.deleteMany({ where: { organizationId } });
+    await prisma.organizationPassPurchase.deleteMany({ where: { organizationId } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId } });
+    await prisma.organization.deleteMany({ where: { id: organizationId } });
+    await prisma.$disconnect();
+  });
+
+  it("OrganizationSubscription.save upserts the SAME row on a second call, never a second subscription for the org (real @unique constraint)", async () => {
+    await subscriptionRepository.save(
+      OrganizationSubscription.create({ id: randomUUID(), organizationId, planTier: PlanTier.Starter, billingInterval: BillingInterval.Monthly, source: PlanSource.Manual, occurredAt: now }),
+    );
+    const first = await subscriptionRepository.findByOrganizationId(organizationId);
+    expect(first?.planTier).toBe(PlanTier.Starter);
+
+    first!.changePlan({ planTier: PlanTier.Business, billingInterval: BillingInterval.Monthly, occurredAt: now });
+    await subscriptionRepository.save(first!);
+
+    const second = await subscriptionRepository.findByOrganizationId(organizationId);
+    expect(second?.id).toBe(first!.id);
+    expect(second?.planTier).toBe(PlanTier.Business);
+  });
+
+  it("mission §41 — a real Postgres UNIQUE constraint on externalReference turns a duplicate insert into a conflict, never a silent second row", async () => {
+    const externalReference = `cs_test_${randomUUID()}`;
+    const purchase = PassPurchase.create({ id: randomUUID(), organizationId, externalReference, priceCents: 9900, currency: "EUR", occurredAt: now });
+    await passPurchaseRepository.create(purchase);
+
+    const duplicate = PassPurchase.create({ id: randomUUID(), organizationId, externalReference, priceCents: 9900, currency: "EUR", occurredAt: now });
+    await expect(passPurchaseRepository.create(duplicate)).rejects.toThrow();
+
+    const existing = await passPurchaseRepository.findByExternalReference(externalReference);
+    expect(existing?.id).toBe(purchase.id);
+  });
+
+  it("BLOQUANT (réaudit — concurrence réelle) — two truly simultaneous consumeForTender calls for two different tenders: exactly one succeeds against real Postgres", async () => {
+    const externalReference = `cs_test_${randomUUID()}`;
+    const purchase = PassPurchase.create({ id: randomUUID(), organizationId, externalReference, priceCents: 9900, currency: "EUR", occurredAt: now });
+    await passPurchaseRepository.create(purchase);
+
+    const tenderA = randomUUID();
+    const tenderB = randomUUID();
+
+    const [resultA, resultB] = await Promise.all([
+      passPurchaseRepository.consumeForTender({ organizationId, passPurchaseId: purchase.id, tenderId: tenderA, occurredAt: now }),
+      passPurchaseRepository.consumeForTender({ organizationId, passPurchaseId: purchase.id, tenderId: tenderB, occurredAt: now }),
+    ]);
+
+    const appliedCount = [resultA.applied, resultB.applied].filter(Boolean).length;
+    expect(appliedCount).toBe(1);
+
+    const final = await passPurchaseRepository.findById(organizationId, purchase.id);
+    expect([tenderA, tenderB]).toContain(final?.consumedTenderId);
+  });
+
+  it("EntitlementOverride round-trips a feature override through real Postgres, including the UNLIMITED quota sentinel", async () => {
+    const featureOverride = EntitlementOverride.create({
+      id: randomUUID(),
+      organizationId,
+      feature: EntitlementFeature.PublicApi,
+      featureEnabled: true,
+      reason: "Integration test",
+      createdByPlatformAdministratorId: randomUUID(),
+      occurredAt: now,
+    });
+    await overrideRepository.save(featureOverride);
+    const activeFeature = await overrideRepository.findActiveFeatureOverride(organizationId, EntitlementFeature.PublicApi, now);
+    expect(activeFeature?.featureEnabled).toBe(true);
+
+    const quotaOverride = EntitlementOverride.create({
+      id: randomUUID(),
+      organizationId,
+      quota: QuotaType.UsersMax,
+      quotaLimit: UNLIMITED,
+      reason: "Integration test",
+      createdByPlatformAdministratorId: randomUUID(),
+      occurredAt: now,
+    });
+    await overrideRepository.save(quotaOverride);
+    const activeQuota = await overrideRepository.findActiveQuotaOverride(organizationId, QuotaType.UsersMax, now);
+    expect(activeQuota?.quotaLimit).toBe(UNLIMITED);
+  });
+});

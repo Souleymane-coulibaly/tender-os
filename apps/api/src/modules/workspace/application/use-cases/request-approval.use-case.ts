@@ -3,6 +3,7 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
+import { assertEntitlementFeature, ENTITLEMENT_SERVICE, EntitlementFeature, type EntitlementService } from "../../../billing";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { MEMBERSHIP_REPOSITORY, type MembershipRepository } from "../../../memberships";
 import { assertHasTenderPermission, CHECKLIST_ITEM_REPOSITORY, GetTenderUseCase, TenderPermission, type ChecklistItemRepository } from "../../../tenders";
@@ -35,7 +36,11 @@ export type RequestApprovalCommand = Readonly<{
 
 /** V2 Sprint 7 §26-30 — le reviewer doit être un `TenderParticipant` actif ET disposer de
  *  `ClientPermission.ValidateWorkspace` (mission §29, jamais un simple CONTRIBUTOR) ; auto-
- *  validation interdite par défaut (mission §30). */
+ *  validation interdite par défaut (mission §30).
+ *
+ *  Correctif audit Codex 22A (P1-01) — les circuits de validation (APPROVAL_WORKFLOWS) sont une
+ *  fonctionnalité différenciante (Business/Enterprise, mission Sprint 22 §9), gatée après RBAC et
+ *  avant toute écriture. */
 @Injectable()
 export class RequestApprovalUseCase {
   constructor(
@@ -49,6 +54,7 @@ export class RequestApprovalUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     @Inject(ATOMIC_TRANSACTION_RUNNER) private readonly atomicTransactionRunner: AtomicTransactionRunner,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
     private readonly activityRecorder: TenderActivityRecorderService,
@@ -57,6 +63,7 @@ export class RequestApprovalUseCase {
 
   async execute(command: RequestApprovalCommand): Promise<ApprovalRequestSummary> {
     assertHasTenderPermission(command.actorRole, TenderPermission.ManageWorkspace);
+    await assertEntitlementFeature(this.entitlementService, command.organizationId, EntitlementFeature.ApprovalWorkflows, { tenderId: command.tenderId });
     const tender = await assertWorkspaceAccess(this.getTenderUseCase, this.assertClientAccessUseCase, {
       organizationId: command.organizationId,
       tenderId: command.tenderId,

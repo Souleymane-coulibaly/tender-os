@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { assertEntitlementFeature, ENTITLEMENT_SERVICE, EntitlementFeature, type EntitlementService } from "../../../billing";
 import { GetClientAccountUseCase } from "../../../client-portfolio";
 import { WebhookSubscription } from "../../domain/webhook-subscription.entity";
 import { isGovernedWebhookEventType } from "../../domain/event-catalog";
@@ -26,7 +27,11 @@ export type CreateWebhookSubscriptionResult = Readonly<{ subscription: WebhookSu
 
 /** Mission §20/§21/§27/§30/§31 — URL revérifiée SSRF-safe à la création (mission §31, revérifiée
  *  à nouveau à CHAQUE livraison, voir infrastructure/deliver-webhook.ts), events limités au
- *  catalogue gouverné, secret généré ici et retourné UNE SEULE FOIS (même motif que la clé API). */
+ *  catalogue gouverné, secret généré ici et retourné UNE SEULE FOIS (même motif que la clé API).
+ *
+ *  Correctif audit Codex 22A (P1-01) — WEBHOOKS est une fonctionnalité différenciante (Enterprise
+ *  uniquement, mission Sprint 22 §19/§20), gatée après RBAC et avant toute écriture, même motif que
+ *  `CreateApiKeyUseCase`. */
 @Injectable()
 export class CreateWebhookSubscriptionUseCase {
   constructor(
@@ -34,11 +39,13 @@ export class CreateWebhookSubscriptionUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
     private readonly getClientAccountUseCase: GetClientAccountUseCase,
   ) {}
 
   async execute(command: CreateWebhookSubscriptionCommand): Promise<CreateWebhookSubscriptionResult> {
     assertHasIntegrationPermission(command.actorRole, IntegrationPermission.WebhooksManage);
+    await assertEntitlementFeature(this.entitlementService, command.organizationId, EntitlementFeature.Webhooks);
 
     assertSafeWebhookEndpointUrl(command.endpointUrl, { requireHttps: process.env.NODE_ENV === "production", allowPrivateNetworks: process.env.WEBHOOK_ALLOW_PRIVATE_NETWORKS === "true" });
 

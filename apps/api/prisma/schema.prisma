@@ -117,6 +117,13 @@ model Organization {
   promptTemplates      PromptTemplate[]
   opportunities        Opportunity[]
 
+  /// V2 Sprint 22 (billing) — au plus un abonnement courant par organisation (STARTER/BUSINESS/
+  /// ENTERPRISE) ; l'historique des changements de plan vit dans AuditLog, jamais une table à part
+  /// (voir billing/domain/organization-subscription.aggregate.ts).
+  subscription         OrganizationSubscription?
+  passPurchases        OrganizationPassPurchase[]
+  entitlementOverrides EntitlementOverride[]
+
   @@map("organizations")
 }
 
@@ -7437,4 +7444,123 @@ model Notification {
   @@index([organizationId, userId, readAt])
   @@index([organizationId, userId, createdAt])
   @@map("notifications")
+}
+
+/// V2 Sprint 22 (billing, étape 22A) — au plus une ligne par organisation : l'état COURANT de
+/// l'abonnement récurrent, jamais un historique (mission §72 "Plans & Entitlements"). Ne couvre
+/// jamais PASS (OrganizationPassPurchase, table dédiée ci-dessous — mission §5/§20 : "ne jamais
+/// implémenter Pass comme un faux abonnement") ni CONSEIL (sur devis, hors catalogue SaaS, mission
+/// §12). Les transitions (PlanAssigned/PlanChanged/SubscriptionCanceled) sont tracées dans AuditLog,
+/// jamais dans une table d'historique séparée ici (CLAUDE.md "ne jamais créer de complexité inutile").
+model OrganizationSubscription {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @unique @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  /// STARTER | BUSINESS | ENTERPRISE (voir billing/domain/plan-tier.ts — catalogue figé en code,
+  /// jamais une table éditable ce sprint, mission §20).
+  planTier        String @map("plan_tier") @db.VarChar(30)
+  /// MONTHLY | YEARLY (billing/domain/billing-interval.ts).
+  billingInterval String @map("billing_interval") @db.VarChar(20)
+  /// ACTIVE | CANCELED | PAST_DUE (billing/domain/subscription-status.ts).
+  status          String @db.VarChar(30)
+  /// STRIPE | MANUAL | GRANTED — mission §49 : pilotes/démos assignés par Platform Admin sans
+  /// paiement Stripe réel doivent rester représentables.
+  source          String @db.VarChar(20)
+
+  /// Renseignés uniquement quand source = STRIPE (22C) ; jamais requis au niveau schéma (MANUAL/
+  /// GRANTED n'en ont pas).
+  stripeCustomerId     String? @map("stripe_customer_id") @db.VarChar(120)
+  stripeSubscriptionId String? @unique @map("stripe_subscription_id") @db.VarChar(120)
+
+  currentPeriodStart DateTime? @map("current_period_start")
+  currentPeriodEnd   DateTime? @map("current_period_end")
+  canceledAt         DateTime? @map("canceled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([planTier, status])
+  @@map("organization_subscriptions")
+}
+
+/// V2 Sprint 22 (billing, étape 22A) — une ligne PAR ACHAT (jamais un solde mutable unique, mission
+/// §36 "historique des achats Pass" + §6 "traçable"). Sert à la fois de ledger d'achat et d'état de
+/// consommation : contrairement aux crédits AO d'abonnement (pool numérique fongible, ledger dédié
+/// en 22B), un Pass est une unité individuellement identifiable liée à au plus un Tender pour
+/// toujours (mission §7 "reste attaché" / "jamais recrédité à la suppression du Tender").
+model OrganizationPassPurchase {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  /// AVAILABLE | CONSUMED (billing/domain/pass-purchase-status.ts). Jamais de statut EXPIRED en
+  /// colonne : la politique de durée commerciale n'est pas tranchée (mission §10) — voir
+  /// `expiresAt`, calculé à la lecture uniquement, même motif que `OrganizationMembership.expiresAt`
+  /// ("aucun job planifié ne fait transiter le statut").
+  status String @db.VarChar(20)
+
+  /// Idempotence webhook Stripe (mission §41, livré en 22C) — référence externe unique (ex. id de
+  /// Checkout Session). Portée dès 22A pour que `RecordPassPurchaseUseCase` soit idempotent par
+  /// construction avant même que Stripe ne l'appelle.
+  externalReference String @unique @map("external_reference") @db.VarChar(160)
+  priceCents        Int    @map("price_cents")
+  currency          String @default("EUR") @db.Char(3)
+
+  purchasedAt DateTime  @default(now()) @map("purchased_at")
+  /// Toujours NULL par défaut ce sprint (voir billing/domain/plan-catalog.ts,
+  /// PASS_EXPIRATION_POLICY) — colonne prête pour une politique future sans redistribuer `30 days`
+  /// dans le code (mission §10).
+  expiresAt   DateTime? @map("expires_at")
+
+  /// Référence scalaire simple vers Tender.id, jamais de relation Prisma formelle — même motif que
+  /// `AuditLog.resourceId` / `ExternalTenderPromotion` : découplage volontaire entre `billing` et
+  /// `tenders`, aucune colonne ajoutée côté Tender.
+  consumedTenderId String?   @map("consumed_tender_id") @db.Uuid
+  consumedAt       DateTime? @map("consumed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, status])
+  @@index([consumedTenderId])
+  @@map("organization_pass_purchases")
+}
+
+/// V2 Sprint 22 (billing, étape 22A, correctif audit Codex P1-02) — dérogation Platform-Admin-only,
+/// organisation-scopée. Cible EXACTEMENT une feature (`feature`+`featureEnabled`) OU un quota
+/// (`quota`+`quotaLimitValue`/`quotaUnlimited`), jamais les deux (contrainte applicative, voir
+/// `EntitlementOverride.create` — pas de CHECK SQL pour rester cohérent avec le reste du schéma qui
+/// délègue ces invariants au Domain). Au plus un override ACTIF par cible à la fois : un nouvel
+/// override supersède (révoque) l'ancien — voir `CreateEntitlementOverrideUseCase`. L'expiration est
+/// calculée à la lecture (`expiresAt`, jamais un job planifié), même motif que
+/// `OrganizationPassPurchase.expiresAt`.
+model EntitlementOverride {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  /// EntitlementFeature (billing/domain/entitlement-feature.ts) — mutuellement exclusif avec `quota`.
+  feature        String?  @db.VarChar(60)
+  featureEnabled Boolean? @map("feature_enabled")
+
+  /// QuotaType (billing/domain/quota-type.ts) — mutuellement exclusif avec `feature`.
+  quota           String?  @db.VarChar(60)
+  quotaLimitValue Int?     @map("quota_limit_value")
+  /// Miroir de la sentinelle `UNLIMITED` (billing/domain/quota-type.ts) — `quotaLimitValue` reste
+  /// NULL quand `quotaUnlimited = true`.
+  quotaUnlimited  Boolean? @map("quota_unlimited")
+
+  reason                           String
+  createdByPlatformAdministratorId String    @map("created_by_platform_administrator_id") @db.Uuid
+  expiresAt                        DateTime? @map("expires_at")
+  revokedAt                        DateTime? @map("revoked_at")
+  revokedByPlatformAdministratorId String?   @map("revoked_by_platform_administrator_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, feature])
+  @@index([organizationId, quota])
+  @@map("entitlement_overrides")
 }

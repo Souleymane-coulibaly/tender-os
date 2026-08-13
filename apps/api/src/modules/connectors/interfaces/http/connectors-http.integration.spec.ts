@@ -151,6 +151,15 @@ describe("Connecteurs (connectors) — real HTTP + PostgreSQL (NestJS)", () => {
         { id: orgBId, name: "Org B Connectors", slug: `org-b-connectors-${orgBId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
       ],
     });
+    // V2 Sprint 22 (billing, étape 22A, correctif audit Codex P1-01) — les connecteurs externes
+    // sont désormais AUTOMATION_CONNECTORS (Enterprise uniquement) : ce test exerce le module
+    // Sprint 19 lui-même, jamais le gating par plan.
+    await prisma.organizationSubscription.createMany({
+      data: [
+        { id: randomUUID(), organizationId: orgAId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL", updatedAt: new Date() },
+        { id: randomUUID(), organizationId: orgBId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL", updatedAt: new Date() },
+      ],
+    });
     await addMembership({ organizationId: orgAId, userId: ownerAUserId, role: OrganizationRole.Owner });
     await addMembership({ organizationId: orgAId, userId: karimUserId, role: OrganizationRole.Contributor });
     await addMembership({ organizationId: orgBId, userId: ownerBUserId, role: OrganizationRole.Owner });
@@ -170,6 +179,7 @@ describe("Connecteurs (connectors) — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });

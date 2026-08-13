@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { assertEntitlementFeature, ENTITLEMENT_SERVICE, EntitlementFeature, type EntitlementService } from "../../../billing";
 import { GetClientAccountUseCase } from "../../../client-portfolio";
 import { ApiKey } from "../../domain/api-key.entity";
 import { isApiKeyScope, type ApiKeyScope } from "../../domain/enums";
@@ -25,7 +26,15 @@ export type CreateApiKeyResult = Readonly<{ apiKey: ApiKey; fullKey: string }>;
 
 /** Mission §10/§11/§14/§16/§17 — la clé brute (`fullKey`) n'est retournée QU'ICI, jamais
  *  persistée, jamais rejournalisée. Scopes et restriction client validés AVANT toute écriture
- *  (mission §18 : jamais un `clientAccountId` d'une autre organisation accepté silencieusement). */
+ *  (mission §18 : jamais un `clientAccountId` d'une autre organisation accepté silencieusement).
+ *
+ *  Correctif audit Codex 22A (P1-01) — l'API publique (PUBLIC_API) est une fonctionnalité
+ *  différenciante du catalogue commercial (Enterprise uniquement, mission Sprint 22 §16/§18) :
+ *  `assertEntitlementFeature` s'exécute APRÈS le RBAC (mission §23 "Entitlement AND RBAC", jamais
+ *  l'un à la place de l'autre) mais AVANT toute écriture, pour qu'un Starter/Business avec RBAC
+ *  suffisant ne puisse plus créer de clé API par appel direct (mission §16 "ne pas casser
+ *  techniquement l'Integration Hub" : les clés Enterprise déjà émises restent inchangées, seule la
+ *  CRÉATION est gatée). */
 @Injectable()
 export class CreateApiKeyUseCase {
   constructor(
@@ -33,11 +42,13 @@ export class CreateApiKeyUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
     private readonly getClientAccountUseCase: GetClientAccountUseCase,
   ) {}
 
   async execute(command: CreateApiKeyCommand): Promise<CreateApiKeyResult> {
     assertHasIntegrationPermission(command.actorRole, IntegrationPermission.ApiKeysManage);
+    await assertEntitlementFeature(this.entitlementService, command.organizationId, EntitlementFeature.PublicApi);
 
     const scopes: ApiKeyScope[] = [];
     for (const scope of command.scopes) {

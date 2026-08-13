@@ -13,6 +13,11 @@ export const PlatformCapability = {
   UsersRead: "platform:users:read",
   AuditLogsRead: "platform:audit-logs:read",
   MetricsRead: "platform:metrics:read",
+  // V2 Sprint 22 (billing, étape 22A, correctif audit Codex P1-02) — dérogations d'entitlement.
+  // SUPPORT reste lecture seule (même principe que le reste de la matrice), seuls ADMIN/OWNER
+  // peuvent créer/révoquer (mission §32 "POINT BLOQUANT" : jamais un Organization Admin/Owner).
+  EntitlementOverridesRead: "platform:entitlement-overrides:read",
+  EntitlementOverridesManage: "platform:entitlement-overrides:manage",
 } as const;
 
 export type PlatformCapability = (typeof PlatformCapability)[keyof typeof PlatformCapability];
@@ -25,6 +30,7 @@ export const ROLE_CAPABILITIES: Record<PlatformRole, readonly PlatformCapability
     PlatformCapability.UsersRead,
     PlatformCapability.AuditLogsRead,
     PlatformCapability.MetricsRead,
+    PlatformCapability.EntitlementOverridesRead,
   ],
 };
 

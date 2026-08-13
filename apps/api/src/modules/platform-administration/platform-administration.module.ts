@@ -39,5 +39,13 @@ import { PlatformAdminController } from "./interfaces/http/platform-admin.contro
     PrismaPlatformDeadLetterEvents,
     { provide: PLATFORM_DEAD_LETTER_EVENT_READER, useExisting: PrismaPlatformDeadLetterEvents },
   ],
+  // V2 Sprint 22 (billing, étape 22A, correctif audit Codex P1-02) — réexporté pour que `billing`
+  // puisse protéger ses propres endpoints d'overrides d'entitlement par le MÊME mécanisme Platform
+  // Admin, jamais une seconde implémentation dupliquée (même motif que `AuthenticatedGuard` réexporté
+  // par `identity`). `PLATFORM_ADMINISTRATOR_REPOSITORY` doit être réexporté AUSSI : Nest résout les
+  // dépendances d'un provider réutilisé (`PlatformAccessGuard`) via le graphe du module CONSOMMATEUR
+  // (`BillingModule`), pas uniquement celui d'origine — exporter le seul guard sans sa propre
+  // dépendance échoue au bootstrap ("Nest can't resolve dependencies of the PlatformAccessGuard").
+  exports: [PlatformAccessGuard, PLATFORM_ADMINISTRATOR_REPOSITORY],
 })
 export class PlatformAdministrationModule {}

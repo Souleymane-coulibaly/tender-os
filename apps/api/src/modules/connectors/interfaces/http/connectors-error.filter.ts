@@ -59,6 +59,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   FILE_TOO_LARGE: HttpStatus.UNPROCESSABLE_ENTITY,
   UNSUPPORTED_FILE_TYPE: HttpStatus.UNPROCESSABLE_ENTITY,
   INVALID_FILENAME: HttpStatus.UNPROCESSABLE_ENTITY,
+
+  // V2 Sprint 22 (billing, étape 22A, correctif audit Codex P1-01).
+  ENTITLEMENT_FEATURE_NOT_AVAILABLE: HttpStatus.FORBIDDEN,
 };
 
 @Catch(DomainError)
