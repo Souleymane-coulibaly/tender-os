@@ -4,6 +4,7 @@ import { ExternalConnectionClientNotAllowedError, ExternalConnectionNotFoundErro
 import type { RemoteContainer, RemoteFolderListing } from "../ports/connector-provider-adapter";
 import { CONNECTOR_PROVIDER_ADAPTERS, type ConnectorProviderAdapterMap } from "../ports/connector-provider-adapter";
 import { EXTERNAL_CONNECTION_REPOSITORY, type ExternalConnectionRepository } from "../ports/external-connection.repository";
+import { callWithReactiveReauth } from "../services/call-with-reactive-reauth";
 import { EnsureFreshAccessTokenService } from "../services/ensure-fresh-access-token.service";
 import { getAdapter } from "../services/get-adapter";
 
@@ -48,12 +49,17 @@ export class BrowseRemoteFolderUseCase {
       throw new ExternalConnectionClientNotAllowedError();
     }
 
-    const accessToken = await this.ensureFreshAccessToken.execute(connection);
     const adapter = getAdapter(this.adapters, connection.provider);
 
-    if (query.containerId === undefined) {
-      return { containers: await adapter.listContainers(accessToken) };
-    }
-    return { listing: await adapter.listFolderChildren(accessToken, { containerId: query.containerId, folderId: query.folderId }) };
+    return callWithReactiveReauth({
+      connection,
+      ensureFreshAccessToken: this.ensureFreshAccessToken,
+      operation: async (accessToken) => {
+        if (query.containerId === undefined) {
+          return { containers: await adapter.listContainers(accessToken) };
+        }
+        return { listing: await adapter.listFolderChildren(accessToken, { containerId: query.containerId, folderId: query.folderId }) };
+      },
+    });
   }
 }

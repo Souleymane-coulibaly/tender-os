@@ -9,6 +9,7 @@ import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer
 import { CALENDAR_SYNCED_EVENT_REPOSITORY, type CalendarSyncedEventRepository } from "../ports/calendar-synced-event.repository";
 import { CONNECTOR_PROVIDER_ADAPTERS, type ConnectorProviderAdapterMap } from "../ports/connector-provider-adapter";
 import { EXTERNAL_CONNECTION_REPOSITORY, type ExternalConnectionRepository } from "../ports/external-connection.repository";
+import { callWithReactiveReauth } from "../services/call-with-reactive-reauth";
 import { EnsureFreshAccessTokenService } from "../services/ensure-fresh-access-token.service";
 import { getAdapter } from "../services/get-adapter";
 
@@ -66,14 +67,18 @@ export class CreateCalendarEventForTenderUseCase {
     const startAt = new Date(tender.submissionDeadline);
     const timezone = tender.submissionDeadlineTimezone ?? DEFAULT_TIMEZONE;
 
-    const accessToken = await this.ensureFreshAccessToken.execute(connection);
     const adapter = getAdapter(this.adapters, connection.provider);
-    const created = await adapter.createCalendarEvent(accessToken, {
-      title: `TenderOS — Échéance : ${tender.title}`,
-      description: `Date limite de remise pour l'appel d'offres « ${tender.title} » (réf. ${tender.reference ?? tender.id}).`,
-      startAt,
-      endAt: new Date(startAt.getTime() + DEFAULT_EVENT_DURATION_MS),
-      timezone,
+    const created = await callWithReactiveReauth({
+      connection,
+      ensureFreshAccessToken: this.ensureFreshAccessToken,
+      operation: (accessToken) =>
+        adapter.createCalendarEvent(accessToken, {
+          title: `TenderOS — Échéance : ${tender.title}`,
+          description: `Date limite de remise pour l'appel d'offres « ${tender.title} » (réf. ${tender.reference ?? tender.id}).`,
+          startAt,
+          endAt: new Date(startAt.getTime() + DEFAULT_EVENT_DURATION_MS),
+          timezone,
+        }),
     });
 
     const occurredAt = this.clock.now();

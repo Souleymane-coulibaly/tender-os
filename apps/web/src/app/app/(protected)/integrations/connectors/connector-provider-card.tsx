@@ -10,6 +10,7 @@ import {
   importRemoteFileAction,
   initiateConnectionAction,
   reauthorizeConnectionAction,
+  testConnectionAction,
   type DocumentPickerOption,
   type TenderPickerOption,
 } from "../../../connectors-actions";
@@ -251,6 +252,7 @@ export function ConnectorProviderCard({
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [testMessage, setTestMessage] = useState<string | undefined>();
 
   async function handleConnect(reauthorize: boolean) {
     setIsPending(true);
@@ -272,6 +274,21 @@ export function ConnectorProviderCard({
     setIsPending(false);
     setError(result.error);
     if (!result.error) router.refresh();
+  }
+
+  async function handleTestConnection() {
+    if (!connection) return;
+    setIsPending(true);
+    setTestMessage(undefined);
+    const result = await testConnectionAction(connection.id);
+    setIsPending(false);
+    if (result.error) {
+      setTestMessage(result.error);
+      return;
+    }
+    const status = result.connection?.status;
+    setTestMessage(status === "ACTIVE" ? "Connexion opérationnelle." : `Résultat : ${status ? CONNECTION_STATUS_LABELS[status] : "inconnu"}.`);
+    router.refresh();
   }
 
   return (
@@ -315,16 +332,22 @@ export function ConnectorProviderCard({
             ) : null}
           </dl>
 
-          {canManage ? (
-            <div className="flex flex-wrap gap-2">
-              {connection.status === "REAUTH_REQUIRED" ? (
+          {canManage || canUse ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {connection.status === "REAUTH_REQUIRED" && canManage ? (
                 <button type="button" disabled={isPending} onClick={() => handleConnect(true)} className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 hover:bg-amber-100 disabled:opacity-50">
                   Reconnecter
                 </button>
               ) : null}
-              <button type="button" disabled={isPending} onClick={handleDisconnect} className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-800 hover:bg-red-100 disabled:opacity-50">
-                Déconnecter
+              <button type="button" disabled={isPending} onClick={handleTestConnection} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50">
+                Tester la connexion
               </button>
+              {canManage ? (
+                <button type="button" disabled={isPending} onClick={handleDisconnect} className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-800 hover:bg-red-100 disabled:opacity-50">
+                  Déconnecter
+                </button>
+              ) : null}
+              {testMessage ? <span className="text-xs text-neutral-600">{testMessage}</span> : null}
             </div>
           ) : null}
 

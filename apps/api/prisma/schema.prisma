@@ -6971,8 +6971,10 @@ model ExternalConnection {
   revokedAt   DateTime? @map("revoked_at")
   revokedBy   String?   @map("revoked_by") @db.Uuid
 
-  syncConfigurations   SyncConfiguration[]
-  calendarSyncedEvents CalendarSyncedEvent[]
+  syncConfigurations        SyncConfiguration[]
+  calendarSyncedEvents      CalendarSyncedEvent[]
+  externalFileImportRecords ExternalFileImportRecord[]
+  externalFileExportRecords ExternalFileExportRecord[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -7063,6 +7065,91 @@ model CalendarSyncedEvent {
   @@unique([id, organizationId])
   @@index([organizationId, tenderId])
   @@map("calendar_synced_events")
+}
+
+/// V2 Sprint 20 (mission §26, POINT MAJEUR) — dernier import réussi pour un fichier distant précis
+/// (déduplication par checksum SHA-256 du contenu, jamais par eTag provider qui n'est pas toujours
+/// disponible sur le contenu téléchargé) : un import automatique/retenté du même fichier distant,
+/// contenu strictement identique, réutilise `documentId`/`documentVersionId` au lieu de créer une
+/// seconde DocumentVersion. `targetDocumentId` fait partie de la clé de recherche (import comme
+/// nouveau document vs. ajout de version à un document ciblé explicitement = deux traces séparées).
+/// Correctif audit Codex P1-001 — le mécanisme PRINCIPAL anti-doublon est le verrou consultatif
+/// applicatif (`ExternalFileImportRecordRepository.withLock`, `pg_advisory_xact_lock`), jamais cette
+/// contrainte seule. Deux index UNIQUE partiels (migration `..._idempotence_unique_constraints`,
+/// non représentables dans le DSL Prisma) garantissent en DÉFENSE EN PROFONDEUR au plus une ligne
+/// par (connectionId, remoteContainerId, remoteFileId, targetDocumentId) — `target_document_id
+/// IS NULL` et `IS NOT NULL` séparément, Postgres traitant NULL comme distinct dans une contrainte
+/// UNIQUE classique (même motif que `external_connections_org_provider_active_uidx`, Sprint 19).
+model ExternalFileImportRecord {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  connectionId   String             @map("connection_id") @db.Uuid
+  connection     ExternalConnection @relation(fields: [connectionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  remoteContainerId String  @map("remote_container_id") @db.VarChar(300)
+  remoteFileId      String  @map("remote_file_id") @db.VarChar(300)
+  targetDocumentId  String? @map("target_document_id") @db.Uuid
+
+  contentChecksum String @map("content_checksum") @db.VarChar(64)
+
+  /// PENDING | SUCCEEDED (correctif audit Codex P1-002) — PENDING = réservation posée sous verrou
+  /// COURT, avant le traitement lent (création Document) ; `documentId`/`documentVersionId`
+  /// inconnus tant que PENDING.
+  status String @default("PENDING") @db.VarChar(20)
+
+  documentId        String? @map("document_id") @db.Uuid
+  documentVersionId String? @map("document_version_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, connectionId, remoteContainerId, remoteFileId, targetDocumentId])
+  @@map("external_file_import_records")
+}
+
+/// V2 Sprint 20 (mission §27, POINT MAJEUR) — dernier export réussi vers une destination précise
+/// (DocumentVersion + connexion + container + dossier + nom de fichier) : un export retenté sur la
+/// MÊME cible exacte (ex. après un timeout réseau côté TenderOS alors que l'upload provider a en
+/// réalité réussi) réutilise le `remoteFileId` déjà obtenu, jamais un second upload créant une
+/// copie distante non maîtrisée.
+/// Correctif audit Codex P1-001 — verrou consultatif applicatif comme mécanisme principal
+/// (`ExternalFileExportRecordRepository.withLock`), contrainte UNIQUE en défense en profondeur sur
+/// (connectionId, documentId, documentVersionId, remoteContainerId, remoteFolderId, filename) —
+/// toutes colonnes NOT NULL ici, pas besoin d'index partiel (migration
+/// `..._idempotence_unique_constraints`).
+/// Correctif audit Codex P1-002 — `status` PENDING = réservation posée sous verrou COURT, AVANT
+/// l'appel provider (`adapter.uploadFile`, potentiellement lent) : le verrou consultatif Postgres
+/// n'est plus jamais tenu pendant un appel réseau externe (voir `ExportDocumentVersionUseCase`).
+/// Les champs `remoteFile*` sont inconnus tant que PENDING.
+model ExternalFileExportRecord {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  connectionId   String             @map("connection_id") @db.Uuid
+  connection     ExternalConnection @relation(fields: [connectionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  documentId        String @map("document_id") @db.Uuid
+  documentVersionId String @map("document_version_id") @db.Uuid
+
+  remoteContainerId String @map("remote_container_id") @db.VarChar(300)
+  remoteFolderId    String @map("remote_folder_id") @db.VarChar(300)
+  filename          String @db.VarChar(255)
+
+  status String @default("PENDING") @db.VarChar(20)
+
+  /// Instantané complet du `RemoteFile` d'origine (mission §27) — permet de répondre à une
+  /// relecture idempotente sans second appel provider. Inconnus tant que `status = PENDING`.
+  remoteFileId         String?   @map("remote_file_id") @db.VarChar(300)
+  remoteFileMimeType   String?   @map("remote_file_mime_type") @db.VarChar(160)
+  remoteFileSizeBytes  Int?      @map("remote_file_size_bytes")
+  remoteFileModifiedAt DateTime? @map("remote_file_modified_at")
+  remoteFileETag       String?   @map("remote_file_etag") @db.VarChar(300)
+  remoteFileWebUrl     String?   @map("remote_file_web_url") @db.VarChar(2000)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, connectionId, documentVersionId, remoteContainerId, remoteFolderId, filename])
+  @@map("external_file_export_records")
 }
 
 /// V2 Sprint 17 (Veille & détection des marchés) — marché externe collecté et normalisé

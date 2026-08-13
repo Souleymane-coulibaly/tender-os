@@ -358,6 +358,227 @@ describe("Connecteurs (connectors) — real HTTP + PostgreSQL (NestJS)", () => {
     fakeMicrosoft.shouldFailRefresh = false;
   });
 
+  it("mission §26 (POINT MAJEUR) — importing the SAME remote file twice with IDENTICAL content reuses the same Document, never a duplicate", async () => {
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    const connectionId = await connectMicrosoft({ token: tokenOwnerA, organizationId: orgAId, name: "Import idempotence" });
+
+    const remoteFileId = `remote-file-${randomUUID()}`;
+    fakeMicrosoft.downloadedContent.set(remoteFileId, { buffer: Buffer.from("contenu identique retenté"), mimeType: "application/pdf", filename: "cctp.pdf" });
+    const importOnce = async (): Promise<{ id: string; currentVersion: { id: string } }> => {
+      const res = await fetch(`${baseUrl}/api/v1/connectors/${connectionId}/import`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ containerId: "fake-container", fileId: remoteFileId, mimeType: "application/pdf", clientAccountId, tenderId }),
+      });
+      expect(res.status).toBe(201);
+      return (await res.json()) as { id: string; currentVersion: { id: string } };
+    };
+
+    const first = await importOnce();
+    const second = await importOnce();
+
+    expect(second.id).toBe(first.id);
+    expect(second.currentVersion.id).toBe(first.currentVersion.id);
+    const versions = await prisma.documentVersion.findMany({ where: { organizationId: orgAId, documentId: first.id } });
+    expect(versions).toHaveLength(1);
+
+    // Un contenu réellement MODIFIÉ côté provider (même remoteFileId) reste une nouvelle version
+    // légitime, jamais bloqué par la garde d'idempotence.
+    fakeMicrosoft.downloadedContent.set(remoteFileId, { buffer: Buffer.from("contenu modifié côté SharePoint"), mimeType: "application/pdf", filename: "cctp.pdf" });
+    const third = await importOnce();
+    expect(third.id).toBe(first.id);
+    expect(third.currentVersion.id).not.toBe(first.currentVersion.id);
+    const versionsAfterChange = await prisma.documentVersion.findMany({ where: { organizationId: orgAId, documentId: first.id } });
+    expect(versionsAfterChange).toHaveLength(2);
+  });
+
+  it("mission §27 (POINT MAJEUR) — exporting the SAME DocumentVersion to the SAME destination twice reuses the same remote file, never a duplicate upload", async () => {
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    const connectionId = await connectMicrosoft({ token: tokenOwnerA, organizationId: orgAId, name: "Export idempotence" });
+    const { documentId, documentVersionId } = await uploadDocument({ token: tokenOwnerA, organizationId: orgAId, filename: "memoire-idempotence.pdf" });
+    await attachDocumentToTender({ token: tokenOwnerA, organizationId: orgAId, documentId, tenderId });
+
+    const exportOnce = async (): Promise<{ id: string }> => {
+      const res = await fetch(`${baseUrl}/api/v1/connectors/${connectionId}/export`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ containerId: "fake-container", folderId: "fake-folder", documentId, versionId: documentVersionId, clientAccountId }),
+      });
+      expect(res.status).toBe(201);
+      return (await res.json()) as { id: string };
+    };
+
+    const uploadsBefore = fakeMicrosoft.uploadedFiles.length;
+    const first = await exportOnce();
+    expect(fakeMicrosoft.uploadedFiles).toHaveLength(uploadsBefore + 1);
+
+    const second = await exportOnce();
+    expect(second.id).toBe(first.id);
+    // Toujours un seul upload distant après le second appel — jamais une seconde copie créée par
+    // la relecture idempotente.
+    expect(fakeMicrosoft.uploadedFiles).toHaveLength(uploadsBefore + 1);
+  });
+
+  it("BLOQUANT (concurrence, correctif audit Codex P1-001) — mission §26/§95: two TRULY SIMULTANEOUS imports of the SAME remote file never create two Documents", async () => {
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    const connectionId = await connectMicrosoft({ token: tokenOwnerA, organizationId: orgAId, name: "Import concurrency" });
+
+    const remoteFileId = `remote-file-${randomUUID()}`;
+    fakeMicrosoft.downloadedContent.set(remoteFileId, { buffer: Buffer.from("contenu importé simultanément"), mimeType: "application/pdf", filename: "concurrent.pdf" });
+
+    const importOnce = async (): Promise<{ id: string; currentVersion: { id: string } }> => {
+      const res = await fetch(`${baseUrl}/api/v1/connectors/${connectionId}/import`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ containerId: "fake-container", fileId: remoteFileId, mimeType: "application/pdf", clientAccountId, tenderId }),
+      });
+      expect(res.status).toBe(201);
+      return (await res.json()) as { id: string; currentVersion: { id: string } };
+    };
+
+    // Promise.all — les deux requêtes HTTP réelles partent EN MÊME TEMPS, jamais séquentiellement
+    // (contrairement au test d'idempotence ci-dessus, qui attend la première avant de lancer la
+    // seconde et ne peut donc pas prouver l'absence de race).
+    const [a, b] = await Promise.all([importOnce(), importOnce()]);
+
+    expect(a.id).toBe(b.id);
+    expect(a.currentVersion.id).toBe(b.currentVersion.id);
+    const versions = await prisma.documentVersion.findMany({ where: { organizationId: orgAId, documentId: a.id } });
+    expect(versions).toHaveLength(1);
+    const records = await prisma.externalFileImportRecord.findMany({ where: { organizationId: orgAId, connectionId, remoteFileId } });
+    expect(records).toHaveLength(1);
+  });
+
+  it("BLOQUANT (concurrence, correctif audit Codex P1-001) — mission §27/§95: two TRULY SIMULTANEOUS exports to the SAME destination never upload twice", async () => {
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    const connectionId = await connectMicrosoft({ token: tokenOwnerA, organizationId: orgAId, name: "Export concurrency" });
+    const { documentId, documentVersionId } = await uploadDocument({ token: tokenOwnerA, organizationId: orgAId, filename: "export-concurrency.pdf" });
+    await attachDocumentToTender({ token: tokenOwnerA, organizationId: orgAId, documentId, tenderId });
+
+    const exportOnce = async (): Promise<{ id: string }> => {
+      const res = await fetch(`${baseUrl}/api/v1/connectors/${connectionId}/export`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ containerId: "fake-container", folderId: "fake-folder", documentId, versionId: documentVersionId, clientAccountId }),
+      });
+      expect(res.status).toBe(201);
+      return (await res.json()) as { id: string };
+    };
+
+    const uploadsBefore = fakeMicrosoft.uploadedFiles.length;
+    const [a, b] = await Promise.all([exportOnce(), exportOnce()]);
+
+    expect(a.id).toBe(b.id);
+    expect(fakeMicrosoft.uploadedFiles).toHaveLength(uploadsBefore + 1);
+    const records = await prisma.externalFileExportRecord.findMany({ where: { organizationId: orgAId, connectionId, documentId, documentVersionId } });
+    expect(records).toHaveLength(1);
+  });
+
+  it(
+    "BLOQUANT (correctif audit Codex P1-002) — a provider upload SLOWER than Prisma's old 5s default interactive-transaction timeout still succeeds, and a concurrent export during that window waits for it instead of uploading twice",
+    async () => {
+      const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+      const connectionId = await connectMicrosoft({ token: tokenOwnerA, organizationId: orgAId, name: "Slow export" });
+      const { documentId, documentVersionId } = await uploadDocument({ token: tokenOwnerA, organizationId: orgAId, filename: "slow-export.pdf" });
+      await attachDocumentToTender({ token: tokenOwnerA, organizationId: orgAId, documentId, tenderId });
+
+      // > 5000ms — l'ancien défaut Prisma pour une transaction interactive (`$transaction`) : avant
+      // le correctif P1-002, le verrou d'idempotence tenait cette transaction ouverte PENDANT
+      // l'upload, ce qui aurait fait échouer/annuler silencieusement l'écriture de la trace ici.
+      fakeMicrosoft.uploadDelayMs = 6_000;
+
+      const exportOnce = async (): Promise<{ status: number; id?: string | undefined }> => {
+        const res = await fetch(`${baseUrl}/api/v1/connectors/${connectionId}/export`, {
+          method: "POST",
+          headers: authHeaders(tokenOwnerA, orgAId),
+          body: JSON.stringify({ containerId: "fake-container", folderId: "fake-folder", documentId, versionId: documentVersionId, clientAccountId }),
+        });
+        const body = (await res.json()) as { id?: string };
+        return { status: res.status, id: body.id };
+      };
+
+      const uploadsBefore = fakeMicrosoft.uploadedFiles.length;
+      // La seconde requête part PENDANT que la première est encore en plein upload (6s) — sans le
+      // correctif, elle passerait `findByDestination` (aucune trace encore écrite, verrou tenu par
+      // la première requête MAIS l'upload lent aurait déjà fait expirer/annuler cette transaction) et
+      // uploaderait une seconde fois.
+      const [first, second] = await Promise.all([exportOnce(), exportOnce()]);
+      fakeMicrosoft.uploadDelayMs = 0;
+
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(201);
+      expect(second.id).toBe(first.id);
+      expect(fakeMicrosoft.uploadedFiles).toHaveLength(uploadsBefore + 1);
+      const records = await prisma.externalFileExportRecord.findMany({ where: { organizationId: orgAId, connectionId, documentId, documentVersionId } });
+      expect(records).toHaveLength(1);
+      expect(records[0]!.status).toBe("SUCCEEDED");
+    },
+    20_000,
+  );
+
+  it("BLOQUANT (correctif audit Codex P1-003) — the provider creates the remote file but the response is LOST before TenderOS reads it: a retry never uploads a second copy, it is blocked pending manual reconciliation", async () => {
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    const connectionId = await connectMicrosoft({ token: tokenOwnerA, organizationId: orgAId, name: "Ambiguous export failure" });
+    const { documentId, documentVersionId } = await uploadDocument({ token: tokenOwnerA, organizationId: orgAId, filename: "ambiguous-export.pdf" });
+    await attachDocumentToTender({ token: tokenOwnerA, organizationId: orgAId, documentId, tenderId });
+
+    // Simule EXACTEMENT le scénario mission §27 : le fake adapter pousse le fichier dans
+    // `uploadedFiles` (le provider "a créé le fichier"), PUIS lève une erreur ambiguë (réponse
+    // jamais reçue côté TenderOS) — jamais un simple échec "safe to retry".
+    fakeMicrosoft.shouldFailUploadAmbiguously = true;
+    const uploadsBefore = fakeMicrosoft.uploadedFiles.length;
+
+    const exportOnce = async (): Promise<{ status: number; code?: string | undefined }> => {
+      const res = await fetch(`${baseUrl}/api/v1/connectors/${connectionId}/export`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ containerId: "fake-container", folderId: "fake-folder", documentId, versionId: documentVersionId, clientAccountId }),
+      });
+      const body = (await res.json()) as { error?: { code: string } };
+      return { status: res.status, code: body.error?.code };
+    };
+
+    const first = await exportOnce();
+    expect(first.status).toBe(504); // TIMEOUT -> Gateway Timeout, le vrai échec de CET essai.
+    expect(fakeMicrosoft.uploadedFiles).toHaveLength(uploadsBefore + 1); // le "provider" a bien créé le fichier.
+
+    const stuck = await prisma.externalFileExportRecord.findFirst({ where: { organizationId: orgAId, connectionId, documentId, documentVersionId } });
+    expect(stuck?.status).toBe("NEEDS_RECONCILIATION");
+
+    fakeMicrosoft.shouldFailUploadAmbiguously = false;
+
+    // Retry — jamais un second upload silencieux : bloqué tant que personne n'a vérifié/résolu.
+    const retry = await exportOnce();
+    expect(retry.status).toBe(409);
+    expect(retry.code).toBe("EXTERNAL_FILE_EXPORT_NEEDS_RECONCILIATION");
+    expect(fakeMicrosoft.uploadedFiles).toHaveLength(uploadsBefore + 1); // toujours un seul upload.
+  });
+
+  it("mission §6/§78 — test connection: a healthy connection returns ACTIVE and records lastSuccessfulSyncAt, without performing any import/export", async () => {
+    const connectionId = await connectMicrosoft({ token: tokenOwnerA, organizationId: orgAId, name: "Health check happy path" });
+    const uploadsBefore = fakeMicrosoft.uploadedFiles.length;
+
+    const testRes = await fetch(`${baseUrl}/api/v1/connectors/${connectionId}/test`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(testRes.status).toBe(200);
+    const body = (await testRes.json()) as { status: string; lastSuccessfulSyncAt?: string };
+    expect(body.status).toBe("ACTIVE");
+    expect(body.lastSuccessfulSyncAt).toBeDefined();
+    expect(fakeMicrosoft.uploadedFiles).toHaveLength(uploadsBefore);
+  });
+
+  it("mission §6/§9 — test connection: a definitively failed refresh surfaces REAUTH_REQUIRED via the health check, never a 5xx", async () => {
+    const connectionId = await connectMicrosoft({ token: tokenOwnerA, organizationId: orgAId, name: "Health check reauth" });
+    await prisma.externalConnection.update({ where: { id: connectionId }, data: { expiresAt: new Date(Date.now() - 60_000) } });
+    fakeMicrosoft.shouldFailRefresh = true;
+
+    const testRes = await fetch(`${baseUrl}/api/v1/connectors/${connectionId}/test`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(testRes.status).toBe(200);
+    const body = (await testRes.json()) as { status: string };
+    expect(body.status).toBe("REAUTH_REQUIRED");
+
+    fakeMicrosoft.shouldFailRefresh = false;
+  });
+
   it("mission §69: reauthorize an existing REAUTH_REQUIRED connection reuses the SAME row, never a duplicate", async () => {
     const connectionId = await connectMicrosoft({ token: tokenOwnerA, organizationId: orgAId, name: "Reauth flow" });
     await prisma.externalConnection.update({ where: { id: connectionId }, data: { status: "REAUTH_REQUIRED" } });

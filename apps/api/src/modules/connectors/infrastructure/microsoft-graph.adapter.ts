@@ -1,15 +1,16 @@
 import { Injectable } from "@nestjs/common";
 import { z } from "zod";
 import { getRequiredEnv } from "../../../shared-kernel/env";
-import { ConnectorProvider } from "../domain/enums";
-import { RemoteProviderError, RemoteProviderRateLimitedError } from "../domain/errors";
+import { ConnectorProvider, ProviderErrorCode } from "../domain/enums";
+import { RemoteProviderError } from "../domain/errors";
 import type { ConnectorProviderAdapter, DownloadedFile, OAuthAccountInfo, OAuthTokenResult, RemoteContainer, RemoteFile, RemoteFolderListing } from "../application/ports/connector-provider-adapter";
+import { callProviderBinary, callProviderJson } from "./provider-http-client";
 
 const AUTHORIZE_URL = "https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize";
 const TOKEN_URL = "https://login.microsoftonline.com/organizations/oauth2/v2.0/token";
 const GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0";
-const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_SIMPLE_UPLOAD_BYTES = 20 * 1024 * 1024;
+const PROVIDER_LABEL = "Microsoft Graph";
 
 /** Mission §13 — least privilege : uniquement ce que Sprint 19 utilise réellement (SharePoint,
  *  OneDrive, Calendar). Jamais `Mail.*`/`Chat.*` (Outlook/Teams différés, mission §22/§26). */
@@ -40,14 +41,13 @@ const DriveItemSchema = z.object({
   webUrl: z.string().optional(),
 });
 
-/** Correctif audit — l'access token Microsoft (endpoint v2.0) est lui-même un JWT contenant `tid`
- *  (tenant id), pas seulement l'id_token OpenID (qu'on ne demande pas — aucun scope `openid` dans
+/** L'access token Microsoft (endpoint v2.0) est lui-même un JWT contenant `tid` (tenant id), pas
+ *  seulement l'id_token OpenID (qu'on ne demande pas — aucun scope `openid` dans
  *  `MICROSOFT_SCOPES`, mission §13 least privilege). Décoder l'access token déjà reçu évite
  *  d'ajouter un scope supplémentaire uniquement pour ce champ d'affichage (mission §15). Le token
  *  vient directement de la réponse HTTPS de Microsoft (canal déjà authentifié côté serveur) — un
  *  décodage sans vérification de signature est acceptable ici uniquement pour lire `tid` à titre
- *  d'affichage, jamais pour une décision d'autorisation.
- */
+ *  d'affichage, jamais pour une décision d'autorisation. */
 function decodeTenantIdFromJwt(token: string): string | undefined {
   try {
     const payload = token.split(".")[1];
@@ -60,31 +60,13 @@ function decodeTenantIdFromJwt(token: string): string | undefined {
   }
 }
 
-async function fetchJson<T>(url: string, schema: z.ZodType<T>, init: RequestInit): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    if (response.status === 429) {
-      throw new RemoteProviderRateLimitedError();
-    }
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      throw new RemoteProviderError(`Microsoft Graph request failed (${response.status}): ${body.slice(0, 300)}`);
-    }
-    const json: unknown = await response.json();
-    return schema.parse(json);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 /**
- * Mission §14 — couche Microsoft Graph unique. `listContainers` retourne le OneDrive de
+ * Mission §14/§53 — couche Microsoft Graph unique. `listContainers` retourne le OneDrive de
  * l'utilisateur connecté + les bibliothèques SharePoint accessibles (mission §16/§18 — minimum
  * "lister les sites, sélectionner une bibliothèque"), toutes deux modélisées comme des "drives"
  * Graph, jamais deux chemins de code distincts pour SharePoint vs OneDrive côté navigation/download/
- * upload (même API Graph sous-jacente).
+ * upload (même API Graph sous-jacente). Tous les appels passent par `provider-http-client.ts`
+ * (mission §21 — jamais un retry "maison" propre à cet adapter).
  */
 @Injectable()
 export class MicrosoftGraphAdapter implements ConnectorProviderAdapter {
@@ -121,7 +103,7 @@ export class MicrosoftGraphAdapter implements ConnectorProviderAdapter {
       code_verifier: input.codeVerifier,
       scope: MICROSOFT_SCOPES.join(" "),
     });
-    const parsed = await fetchJson(TOKEN_URL, TokenResponseSchema, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+    const parsed = await callProviderJson(TOKEN_URL, TokenResponseSchema, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body }, PROVIDER_LABEL);
     return { accessToken: parsed.access_token, refreshToken: parsed.refresh_token, expiresInSeconds: parsed.expires_in, scopes: parsed.scope?.split(" ") ?? MICROSOFT_SCOPES };
   }
 
@@ -133,12 +115,12 @@ export class MicrosoftGraphAdapter implements ConnectorProviderAdapter {
       refresh_token: refreshToken,
       scope: MICROSOFT_SCOPES.join(" "),
     });
-    const parsed = await fetchJson(TOKEN_URL, TokenResponseSchema, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+    const parsed = await callProviderJson(TOKEN_URL, TokenResponseSchema, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body }, PROVIDER_LABEL);
     return { accessToken: parsed.access_token, refreshToken: parsed.refresh_token, expiresInSeconds: parsed.expires_in, scopes: parsed.scope?.split(" ") ?? MICROSOFT_SCOPES };
   }
 
   async fetchAccountInfo(accessToken: string): Promise<OAuthAccountInfo> {
-    const me = await fetchJson(`${GRAPH_BASE_URL}/me`, MeResponseSchema, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const me = await callProviderJson(`${GRAPH_BASE_URL}/me`, MeResponseSchema, { headers: { Authorization: `Bearer ${accessToken}` } }, PROVIDER_LABEL);
     return { externalAccountId: me.id, externalAccountLabel: me.mail ?? me.userPrincipalName, externalTenantId: decodeTenantIdFromJwt(accessToken) };
   }
 
@@ -157,16 +139,16 @@ export class MicrosoftGraphAdapter implements ConnectorProviderAdapter {
 
     const containers: RemoteContainer[] = [];
     try {
-      const oneDrive = await fetchJson(`${GRAPH_BASE_URL}/me/drive`, OneDriveSchema, { headers });
+      const oneDrive = await callProviderJson(`${GRAPH_BASE_URL}/me/drive`, OneDriveSchema, { headers }, PROVIDER_LABEL);
       containers.push({ id: oneDrive.id, name: oneDrive.name ?? "OneDrive", kind: "ONEDRIVE" });
     } catch {
       // OneDrive peut être absent pour ce compte — jamais bloquant pour le reste (mission §80).
     }
     try {
-      const sites = await fetchJson(`${GRAPH_BASE_URL}/sites?search=*`, SitesSchema, { headers });
+      const sites = await callProviderJson(`${GRAPH_BASE_URL}/sites?search=*`, SitesSchema, { headers }, PROVIDER_LABEL);
       for (const site of sites.value) {
         const drivesSchema = z.object({ value: z.array(z.object({ id: z.string(), name: z.string().optional() })) });
-        const drives = await fetchJson(`${GRAPH_BASE_URL}/sites/${site.id}/drives`, drivesSchema, { headers });
+        const drives = await callProviderJson(`${GRAPH_BASE_URL}/sites/${site.id}/drives`, drivesSchema, { headers }, PROVIDER_LABEL);
         for (const drive of drives.value) {
           containers.push({ id: drive.id, name: `${site.displayName ?? site.name ?? "Site"} — ${drive.name ?? "Documents"}`, kind: "SHAREPOINT_LIBRARY" });
         }
@@ -181,7 +163,7 @@ export class MicrosoftGraphAdapter implements ConnectorProviderAdapter {
     const path = input.folderId ? `items/${input.folderId}` : "root";
     const url = `${GRAPH_BASE_URL}/drives/${input.containerId}/${path}/children`;
     const schema = z.object({ value: z.array(DriveItemSchema) });
-    const result = await fetchJson(url, schema, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const result = await callProviderJson(url, schema, { headers: { Authorization: `Bearer ${accessToken}` } }, PROVIDER_LABEL);
 
     const folders = result.value.filter((item) => item.folder !== undefined).map((item) => ({ id: item.id, name: item.name }));
     const files = result.value
@@ -200,32 +182,32 @@ export class MicrosoftGraphAdapter implements ConnectorProviderAdapter {
 
   async downloadFile(accessToken: string, input: { containerId: string; fileId: string; mimeType: string }): Promise<DownloadedFile> {
     const metaUrl = `${GRAPH_BASE_URL}/drives/${input.containerId}/items/${input.fileId}`;
-    const meta = await fetchJson(metaUrl, DriveItemSchema, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const meta = await callProviderJson(metaUrl, DriveItemSchema, { headers: { Authorization: `Bearer ${accessToken}` } }, PROVIDER_LABEL);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    try {
-      const response = await fetch(`${GRAPH_BASE_URL}/drives/${input.containerId}/items/${input.fileId}/content`, { headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal });
-      if (!response.ok) {
-        throw new RemoteProviderError(`Microsoft Graph download failed (${response.status}).`);
-      }
-      const arrayBuffer = await response.arrayBuffer();
-      return { buffer: Buffer.from(arrayBuffer), mimeType: meta.file?.mimeType ?? "application/octet-stream", filename: meta.name };
-    } finally {
-      clearTimeout(timeout);
-    }
+    const buffer = await callProviderBinary(`${GRAPH_BASE_URL}/drives/${input.containerId}/items/${input.fileId}/content`, { headers: { Authorization: `Bearer ${accessToken}` } }, PROVIDER_LABEL);
+    return { buffer, mimeType: meta.file?.mimeType ?? "application/octet-stream", filename: meta.name };
   }
 
   async uploadFile(accessToken: string, input: { containerId: string; folderId: string; filename: string; content: Buffer; mimeType: string }): Promise<RemoteFile> {
     if (input.content.byteLength > MAX_SIMPLE_UPLOAD_BYTES) {
-      throw new RemoteProviderError("File exceeds the 20MB simple-upload limit — chunked upload sessions are not implemented this sprint (mission §43, documented limitation).");
+      throw new RemoteProviderError({
+        providerErrorCode: ProviderErrorCode.InvalidRequest,
+        retryable: false,
+        technicalDetail: "File exceeds the 20MB simple-upload limit — chunked upload sessions are not implemented this sprint (mission §43, documented limitation).",
+      });
     }
     const url = `${GRAPH_BASE_URL}/drives/${input.containerId}/items/${input.folderId}:/${encodeURIComponent(input.filename)}:/content`;
-    const item = await fetchJson(url, DriveItemSchema, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": input.mimeType },
-      body: input.content,
-    });
+    // Correctif audit Codex (P1-004) — jamais de retry interne du client HTTP sur un échec ambigu :
+    // un PUT de création de fichier n'est pas idempotent, une seconde tentative automatique ici
+    // pourrait dupliquer AVANT même que la réservation applicative (`NEEDS_RECONCILIATION`) ne
+    // puisse réagir.
+    const item = await callProviderJson(
+      url,
+      DriveItemSchema,
+      { method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": input.mimeType }, body: input.content },
+      PROVIDER_LABEL,
+      { retryAmbiguous: false },
+    );
     return {
       id: item.id,
       name: item.name,
@@ -239,16 +221,24 @@ export class MicrosoftGraphAdapter implements ConnectorProviderAdapter {
 
   async createCalendarEvent(accessToken: string, input: { title: string; description: string; startAt: Date; endAt: Date; timezone: string }): Promise<{ externalEventId: string }> {
     const schema = z.object({ id: z.string() });
-    const created = await fetchJson(`${GRAPH_BASE_URL}/me/events`, schema, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        subject: input.title,
-        body: { contentType: "text", content: input.description },
-        start: { dateTime: input.startAt.toISOString(), timeZone: input.timezone },
-        end: { dateTime: input.endAt.toISOString(), timeZone: input.timezone },
-      }),
-    });
+    // Correctif audit Codex (P1-004) — même motif que `uploadFile` : un POST de création
+    // d'événement n'est pas idempotent, jamais de retry interne sur un échec ambigu.
+    const created = await callProviderJson(
+      `${GRAPH_BASE_URL}/me/events`,
+      schema,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject: input.title,
+          body: { contentType: "text", content: input.description },
+          start: { dateTime: input.startAt.toISOString(), timeZone: input.timezone },
+          end: { dateTime: input.endAt.toISOString(), timeZone: input.timezone },
+        }),
+      },
+      PROVIDER_LABEL,
+      { retryAmbiguous: false },
+    );
     return { externalEventId: created.id };
   }
 }

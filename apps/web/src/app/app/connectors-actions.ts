@@ -71,6 +71,20 @@ export async function reauthorizeConnectionAction(connectionId: string): Promise
   }
 }
 
+/** Mission §6/§78 — vérifie qu'une connexion est réellement exploitable (appel provider léger),
+ *  sans effectuer d'import/export. Renvoie toujours le `ExternalConnectionSummary` à jour (jamais
+ *  seulement un booléen) — le backend a déjà persisté REAUTH_REQUIRED/l'erreur sanitisée le cas
+ *  échéant, l'UI n'a qu'à réafficher l'état retourné. */
+export async function testConnectionAction(connectionId: string): Promise<{ error?: string; connection?: ExternalConnectionSummary }> {
+  try {
+    const connection = await appApiFetch<ExternalConnectionSummary>(`/api/v1/connectors/${connectionId}/test`, { method: "POST" });
+    revalidatePath("/app/integrations/connectors");
+    return { connection };
+  } catch (error) {
+    return { error: describeConnectorsActionError(error) };
+  }
+}
+
 export async function disconnectConnectionAction(connectionId: string): Promise<{ error?: string }> {
   try {
     await appApiFetch(`/api/v1/connectors/${connectionId}`, { method: "DELETE" });

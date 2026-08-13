@@ -1,4 +1,5 @@
 import { DomainError } from "../../../shared-kernel/domain-error";
+import type { ProviderErrorCode } from "./enums";
 
 export class ExternalConnectionNotFoundError extends DomainError {
   readonly code = "EXTERNAL_CONNECTION_NOT_FOUND";
@@ -61,6 +62,30 @@ export class SyncConfigurationNotFoundError extends DomainError {
   }
 }
 
+/** Correctif audit Codex (P1-002) — un autre appel est déjà en train de traiter EXACTEMENT la même
+ *  clé d'idempotence (import ou export) et n'a pas terminé dans la fenêtre d'attente bornée. Jamais
+ *  levée dans le cas normal (séquentiel ou même concurrent typique, où l'attente suffit) — seulement
+ *  si le traitement en cours dépasse le budget d'attente. Le client peut retenter. */
+export class ExternalFileOperationInProgressError extends DomainError {
+  readonly code = "EXTERNAL_FILE_OPERATION_IN_PROGRESS";
+  constructor() {
+    super("Another operation is already in progress for this exact file/destination — try again shortly.");
+  }
+}
+
+/** Correctif audit Codex (P1-003) — un export précédent a échoué APRÈS que la requête ait
+ *  potentiellement atteint le provider (timeout/connexion perdue, jamais un statut HTTP reçu
+ *  positivement en échec) : TenderOS ne sait pas si un fichier distant a réellement été créé.
+ *  Bloque volontairement tout nouvel essai automatique vers cette MÊME destination — jamais un
+ *  second upload silencieux qui risquerait de dupliquer un fichier déjà créé côté provider. Une
+ *  résolution manuelle (vérification côté SharePoint/Drive) est nécessaire avant de réessayer. */
+export class ExternalFileExportNeedsReconciliationError extends DomainError {
+  readonly code = "EXTERNAL_FILE_EXPORT_NEEDS_RECONCILIATION";
+  constructor() {
+    super("A previous export to this exact destination failed ambiguously — the remote file may already exist. Manual verification is required before retrying.");
+  }
+}
+
 /** Mission §42 — jamais "latest" résolu tardivement : la cible doit être une DocumentVersion
  *  précise, déjà existante, au moment de l'export. */
 export class ExportTargetNotFoundError extends DomainError {
@@ -78,18 +103,46 @@ export class UnsupportedRemoteFileTypeError extends DomainError {
   }
 }
 
+/** Mission §84/§101 — le message est TOUJOURS un texte générique gouverné par
+ *  `providerErrorCode`, jamais le corps brut de la réponse provider (qui peut contenir des détails
+ *  internes au provider non destinés à l'utilisateur final) ni un statut HTTP transmis tel quel.
+ *  Le détail technique réel (statut HTTP, extrait de réponse tronqué) est capturé séparément dans
+ *  `technicalDetail`, jamais sérialisé dans la réponse HTTP TenderOS (mission §12/§71) — réservé au
+ *  logging technique serveur uniquement (mission §70, jamais AuditLog — mission §75). */
+const PROVIDER_ERROR_MESSAGES: Record<ProviderErrorCode, string> = {
+  AUTH_ERROR: "The connection to the external provider is no longer valid — reconnect it.",
+  PERMISSION_DENIED: "The external provider refused this operation (insufficient permissions on the remote account).",
+  NOT_FOUND: "The requested file or folder no longer exists on the external provider.",
+  CONFLICT: "The external provider reported a conflict for this operation.",
+  RATE_LIMITED: "The external provider is rate-limiting requests — try again shortly.",
+  TIMEOUT: "The external provider did not respond in time.",
+  PROVIDER_UNAVAILABLE: "The external provider is temporarily unavailable.",
+  INVALID_REQUEST: "The external provider rejected this request as invalid.",
+  UNKNOWN: "The external provider returned an unexpected error.",
+};
+
 export class RemoteProviderError extends DomainError {
   readonly code = "REMOTE_PROVIDER_ERROR";
-  constructor(message: string) {
-    super(message);
-  }
-}
+  readonly providerErrorCode: ProviderErrorCode;
+  readonly retryable: boolean;
+  readonly retryAfterSeconds: number | undefined;
+  /** Diagnostic serveur uniquement — jamais exposé dans une réponse HTTP (mission §84/§101). */
+  readonly technicalDetail: string | undefined;
+  /** Correctif audit Codex (P1-003) — `true` uniquement quand TenderOS n'a JAMAIS reçu de réponse
+   *  HTTP du provider (timeout, connexion perdue) : dans ce cas, l'opération a PEUT-ÊTRE réussi côté
+   *  provider malgré l'échec local — jamais une simple erreur "safe to retry". `false` (défaut) pour
+   *  toute erreur dérivée d'un VRAI statut HTTP reçu (4xx/5xx) : le provider a positivement répondu
+   *  que l'opération n'a pas abouti, un retry est alors sûr. Distinction posée dans
+   *  `provider-http-client.ts`, jamais devinée ailleurs. */
+  readonly isAmbiguousOutcome: boolean;
 
-/** Mission §58/§59 — épuisement des tentatives face à un throttling persistant du provider. */
-export class RemoteProviderRateLimitedError extends DomainError {
-  readonly code = "REMOTE_PROVIDER_RATE_LIMITED";
-  constructor() {
-    super("The external provider is rate-limiting requests — try again shortly.");
+  constructor(input: { providerErrorCode: ProviderErrorCode; retryable: boolean; retryAfterSeconds?: number | undefined; technicalDetail?: string | undefined; isAmbiguousOutcome?: boolean | undefined }) {
+    super(PROVIDER_ERROR_MESSAGES[input.providerErrorCode]);
+    this.providerErrorCode = input.providerErrorCode;
+    this.retryable = input.retryable;
+    this.retryAfterSeconds = input.retryAfterSeconds;
+    this.technicalDetail = input.technicalDetail;
+    this.isAmbiguousOutcome = input.isAmbiguousOutcome ?? false;
   }
 }
 

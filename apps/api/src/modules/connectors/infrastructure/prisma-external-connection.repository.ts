@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type { ExternalConnection as ExternalConnectionRecord } from "@prisma/client";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
 import { ConnectionStatus, type ConnectorProvider } from "../domain/enums";
+import { ExternalConnectionNotFoundError } from "../domain/errors";
 import { ExternalConnection } from "../domain/external-connection.entity";
 import type { ExternalConnectionRepository } from "../application/ports/external-connection.repository";
 
@@ -81,5 +82,40 @@ export class PrismaExternalConnectionRepository implements ExternalConnectionRep
   async save(connection: ExternalConnection): Promise<void> {
     const data = toPersistence(connection);
     await this.prisma.currentClient().externalConnection.upsert({ where: { id: data.id }, create: data, update: data });
+  }
+
+  /** Mission §11/§95 — verrou consultatif Postgres transactionnel scopé à `connectionId`, même
+   *  motif que `analysis`/`chat`/`dce`/`document-generation`/`extraction`
+   *  (`pg_advisory_xact_lock(hashtext(...))`). La connexion est RELUE à l'intérieur du verrou (pas
+   *  la référence passée par l'appelant) afin qu'un appelant qui attendait le verrou voie l'état
+   *  déjà rafraîchi par un appelant concurrent, jamais une image obsolète.
+   *
+   *  IMPORTANT : `fn` ne doit JAMAIS laisser son exception s'échapper du callback passé à
+   *  `prisma.$transaction()` — Prisma annule (rollback) toute la transaction dès que ce callback
+   *  lève, ce qui effacerait silencieusement la mutation qu'on vient pourtant de persister (ex.
+   *  passage en REAUTH_REQUIRED après un échec de refresh). L'erreur métier de `fn` est donc
+   *  capturée, la mutation persistée et committée normalement, puis l'erreur seulement RE-levée une
+   *  fois la transaction terminée. */
+  async withLock<T>(input: { organizationId: string; connectionId: string }, fn: (connection: ExternalConnection) => Promise<T>): Promise<T> {
+    let outcome: { ok: true; value: T } | { ok: false; error: unknown } | undefined;
+
+    await this.prisma.withTransaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.connectionId}))`;
+      const record = await tx.externalConnection.findFirst({ where: { id: input.connectionId, organizationId: input.organizationId } });
+      if (!record) throw new ExternalConnectionNotFoundError();
+      const connection = toDomain(record);
+      try {
+        outcome = { ok: true, value: await fn(connection) };
+      } catch (error) {
+        outcome = { ok: false, error };
+      }
+      const data = toPersistence(connection);
+      await tx.externalConnection.update({ where: { id: data.id }, data });
+    });
+
+    if (outcome === undefined || !outcome.ok) {
+      throw outcome === undefined ? new ExternalConnectionNotFoundError() : outcome.error;
+    }
+    return outcome.value;
   }
 }

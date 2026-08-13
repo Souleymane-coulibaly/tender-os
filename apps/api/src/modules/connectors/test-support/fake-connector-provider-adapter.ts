@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { ConnectorProvider } from "../domain/enums";
-import { UnsupportedRemoteFileTypeError } from "../domain/errors";
+import { ProviderErrorCode, type ConnectorProvider } from "../domain/enums";
+import { RemoteProviderError, UnsupportedRemoteFileTypeError } from "../domain/errors";
 import type { ConnectorProviderAdapter, DownloadedFile, OAuthAccountInfo, OAuthTokenResult, RemoteContainer, RemoteFile, RemoteFolderListing } from "../application/ports/connector-provider-adapter";
 
 /**
@@ -18,6 +18,15 @@ export class FakeConnectorProviderAdapter implements ConnectorProviderAdapter {
   readonly createdEvents: { title: string; description: string; startAt: Date; endAt: Date }[] = [];
   revokedTokens: string[] = [];
   shouldFailRefresh = false;
+  /** Correctif audit Codex (P1-002) — permet de simuler un upload provider LENT (au-delà de
+   *  l'ancien défaut Prisma de 5s pour une transaction interactive) dans un test dédié, sans jamais
+   *  affecter les autres tests (0 par défaut). */
+  uploadDelayMs = 0;
+  /** Correctif audit Codex (P1-003) — permet de simuler le scénario "le provider a réellement créé
+   *  le fichier distant, mais TenderOS n'a jamais reçu la réponse" (timeout/connexion perdue) : le
+   *  fichier est bien poussé dans `uploadedFiles` (comme un vrai provider l'aurait fait), PUIS
+   *  l'appel lève une `RemoteProviderError` ambiguë — jamais une simple erreur "safe to retry". */
+  shouldFailUploadAmbiguously = false;
 
   constructor(readonly provider: ConnectorProvider) {}
 
@@ -66,7 +75,13 @@ export class FakeConnectorProviderAdapter implements ConnectorProviderAdapter {
   }
 
   async uploadFile(_accessToken: string, input: { containerId: string; folderId: string; filename: string; content: Buffer; mimeType: string }): Promise<RemoteFile> {
+    if (this.uploadDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, this.uploadDelayMs));
+    }
     this.uploadedFiles.push(input);
+    if (this.shouldFailUploadAmbiguously) {
+      throw new RemoteProviderError({ providerErrorCode: ProviderErrorCode.Timeout, retryable: true, isAmbiguousOutcome: true, technicalDetail: "FakeConnectorProviderAdapter: simulated lost response after the provider actually created the file." });
+    }
     return Promise.resolve({ id: randomUUID(), name: input.filename, mimeType: input.mimeType, sizeBytes: input.content.byteLength, modifiedAt: new Date() });
   }
 

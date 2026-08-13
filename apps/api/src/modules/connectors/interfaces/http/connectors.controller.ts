@@ -11,6 +11,7 @@ import { ImportRemoteFileUseCase } from "../../application/use-cases/import-remo
 import { InitiateOAuthConnectionUseCase } from "../../application/use-cases/initiate-oauth-connection.use-case";
 import { InitiateReauthorizationUseCase } from "../../application/use-cases/initiate-reauthorization.use-case";
 import { ListExternalConnectionsUseCase } from "../../application/use-cases/list-external-connections.use-case";
+import { TestConnectionUseCase } from "../../application/use-cases/test-connection.use-case";
 import { ConnectorsErrorFilter } from "./connectors-error.filter";
 import {
   BrowseFolderQuerySchema,
@@ -45,6 +46,7 @@ export class ConnectorsController {
     private readonly importRemoteFileUseCase: ImportRemoteFileUseCase,
     private readonly exportDocumentVersionUseCase: ExportDocumentVersionUseCase,
     private readonly createCalendarEventForTenderUseCase: CreateCalendarEventForTenderUseCase,
+    private readonly testConnectionUseCase: TestConnectionUseCase,
   ) {}
 
   @Get()
@@ -117,6 +119,12 @@ export class ConnectorsController {
       clientAccountId: body.clientAccountId,
       filename: body.filename,
     });
+  }
+
+  @Post(":id/test")
+  @HttpCode(HttpStatus.OK)
+  async testConnection(@CurrentActor() actor: AuthenticatedActor, @CurrentMembershipContext() membership: MembershipContext, @Param("id", new ZodValidationPipe(IdParamSchema)) connectionId: string) {
+    return this.testConnectionUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, connectionId });
   }
 
   @Post(":id/calendar-events")

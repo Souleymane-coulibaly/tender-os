@@ -1,18 +1,54 @@
 import type { CalendarSyncedEvent } from "../domain/calendar-synced-event.entity";
 import type { ConnectorProvider } from "../domain/enums";
 import type { ExternalConnection } from "../domain/external-connection.entity";
+import type { ExternalFileExportRecord } from "../domain/external-file-export-record.entity";
+import type { ExternalFileImportRecord } from "../domain/external-file-import-record.entity";
 import type { OAuthFlowState } from "../domain/oauth-flow-state.entity";
 import type { SyncConfiguration } from "../domain/sync-configuration.entity";
 import { ConnectionStatus } from "../domain/enums";
+import { ExternalConnectionNotFoundError } from "../domain/errors";
 import type { AuditLogWriter, ConnectorAuditLogEntry } from "../application/ports/audit-log-writer";
 import type { CalendarSyncedEventRepository } from "../application/ports/calendar-synced-event.repository";
 import type { CredentialCipher } from "../application/ports/credential-cipher";
 import type { ExternalConnectionRepository } from "../application/ports/external-connection.repository";
+import type { ExternalFileExportRecordRepository } from "../application/ports/external-file-export-record.repository";
+import type { ExternalFileImportRecordRepository } from "../application/ports/external-file-import-record.repository";
 import type { OAuthFlowStateRepository } from "../application/ports/oauth-flow-state.repository";
 import type { SyncConfigurationRepository } from "../application/ports/sync-configuration.repository";
 
+/** Mutex par clé (mirroir `pg_advisory_xact_lock` des implémentations Prisma) — nécessaire pour que
+ *  les tests de concurrence exercent réellement une exclusion mutuelle sur un `Promise.all` de deux
+ *  appels simultanés, plutôt que de dépendre par accident de l'ordre d'exécution du micro-task
+ *  queue. Partagé par les fakes `ExternalConnection`/`ExternalFileImportRecord`/
+ *  `ExternalFileExportRecord` — chacun garde sa propre `Map` (jamais un verrou partagé entre eux). */
+function createKeyedMutex() {
+  const locks = new Map<string, Promise<unknown>>();
+  return async function withKeyLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const previous = locks.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    locks.set(
+      key,
+      previous.then(() => held),
+    );
+    await previous;
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  };
+}
+
 export class InMemoryExternalConnectionRepository implements ExternalConnectionRepository {
   readonly connections: ExternalConnection[] = [];
+  /** Mutex par connexion (mirroir `pg_advisory_xact_lock` de l'implémentation Prisma) — nécessaire
+   *  pour que les tests de concurrence (mission §95) exercent réellement une exclusion mutuelle sur
+   *  un `Promise.all` de deux appels simultanés, plutôt que de dépendre par accident de l'ordre
+   *  d'exécution du micro-task queue. */
+  private readonly locks = new Map<string, Promise<unknown>>();
 
   async findById(input: { organizationId: string; connectionId: string }): Promise<ExternalConnection | null> {
     return this.connections.find((c) => c.id === input.connectionId && c.organizationId === input.organizationId) ?? null;
@@ -31,6 +67,30 @@ export class InMemoryExternalConnectionRepository implements ExternalConnectionR
     const index = this.connections.findIndex((c) => c.id === connection.id);
     if (index === -1) this.connections.push(connection);
     else this.connections[index] = connection;
+  }
+
+  async withLock<T>(input: { organizationId: string; connectionId: string }, fn: (connection: ExternalConnection) => Promise<T>): Promise<T> {
+    const previous = this.locks.get(input.connectionId) ?? Promise.resolve();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.locks.set(
+      input.connectionId,
+      previous.then(() => held),
+    );
+    await previous;
+    try {
+      const connection = await this.findById(input);
+      if (!connection) throw new ExternalConnectionNotFoundError();
+      try {
+        return await fn(connection);
+      } finally {
+        await this.save(connection);
+      }
+    } finally {
+      release();
+    }
   }
 }
 
@@ -90,6 +150,76 @@ export class InMemoryCalendarSyncedEventRepository implements CalendarSyncedEven
     const index = this.events.findIndex((e) => e.id === event.id);
     if (index === -1) this.events.push(event);
     else this.events[index] = event;
+  }
+}
+
+export class InMemoryExternalFileImportRecordRepository implements ExternalFileImportRecordRepository {
+  readonly records: ExternalFileImportRecord[] = [];
+  private readonly withKeyLock = createKeyedMutex();
+
+  async findByRemoteFile(input: { organizationId: string; connectionId: string; remoteContainerId: string; remoteFileId: string; targetDocumentId?: string | undefined }): Promise<ExternalFileImportRecord | null> {
+    return (
+      this.records.find(
+        (r) =>
+          r.organizationId === input.organizationId &&
+          r.connectionId === input.connectionId &&
+          r.remoteContainerId === input.remoteContainerId &&
+          r.remoteFileId === input.remoteFileId &&
+          r.targetDocumentId === input.targetDocumentId,
+      ) ?? null
+    );
+  }
+
+  async save(record: ExternalFileImportRecord): Promise<void> {
+    const index = this.records.findIndex((r) => r.id === record.id);
+    if (index === -1) this.records.push(record);
+    else this.records[index] = record;
+  }
+
+  async delete(id: string): Promise<void> {
+    const index = this.records.findIndex((r) => r.id === id);
+    if (index !== -1) this.records.splice(index, 1);
+  }
+
+  async withLock<T>(key: { connectionId: string; remoteContainerId: string; remoteFileId: string; targetDocumentId?: string | undefined }, fn: () => Promise<T>): Promise<T> {
+    const lockKey = `${key.connectionId}:${key.remoteContainerId}:${key.remoteFileId}:${key.targetDocumentId ?? "NEW"}`;
+    return this.withKeyLock(lockKey, fn);
+  }
+}
+
+export class InMemoryExternalFileExportRecordRepository implements ExternalFileExportRecordRepository {
+  readonly records: ExternalFileExportRecord[] = [];
+  private readonly withKeyLock = createKeyedMutex();
+
+  async findByDestination(input: { organizationId: string; connectionId: string; documentId: string; documentVersionId: string; remoteContainerId: string; remoteFolderId: string; filename: string }): Promise<ExternalFileExportRecord | null> {
+    return (
+      this.records.find(
+        (r) =>
+          r.organizationId === input.organizationId &&
+          r.connectionId === input.connectionId &&
+          r.documentId === input.documentId &&
+          r.documentVersionId === input.documentVersionId &&
+          r.remoteContainerId === input.remoteContainerId &&
+          r.remoteFolderId === input.remoteFolderId &&
+          r.filename === input.filename,
+      ) ?? null
+    );
+  }
+
+  async save(record: ExternalFileExportRecord): Promise<void> {
+    const index = this.records.findIndex((r) => r.id === record.id);
+    if (index === -1) this.records.push(record);
+    else this.records[index] = record;
+  }
+
+  async delete(id: string): Promise<void> {
+    const index = this.records.findIndex((r) => r.id === id);
+    if (index !== -1) this.records.splice(index, 1);
+  }
+
+  async withLock<T>(key: { connectionId: string; documentId: string; documentVersionId: string; remoteContainerId: string; remoteFolderId: string; filename: string }, fn: () => Promise<T>): Promise<T> {
+    const lockKey = `${key.connectionId}:${key.documentId}:${key.documentVersionId}:${key.remoteContainerId}:${key.remoteFolderId}:${key.filename}`;
+    return this.withKeyLock(lockKey, fn);
   }
 }
 

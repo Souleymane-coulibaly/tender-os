@@ -23,3 +23,19 @@ export const SyncDirection = {
   ExportOnly: "EXPORT_ONLY",
 } as const;
 export type SyncDirection = (typeof SyncDirection)[keyof typeof SyncDirection];
+
+/** V2 Sprint 20 — mission §13, modèle commun d'erreur provider. Microsoft ET Google traduisent
+ *  leurs codes HTTP/erreurs spécifiques vers ce catalogue unique — jamais un statut HTTP brut
+ *  propagé tel quel côté application (`infrastructure/provider-http-client.ts`). */
+export const ProviderErrorCode = {
+  AuthError: "AUTH_ERROR",
+  PermissionDenied: "PERMISSION_DENIED",
+  NotFound: "NOT_FOUND",
+  Conflict: "CONFLICT",
+  RateLimited: "RATE_LIMITED",
+  Timeout: "TIMEOUT",
+  ProviderUnavailable: "PROVIDER_UNAVAILABLE",
+  InvalidRequest: "INVALID_REQUEST",
+  Unknown: "UNKNOWN",
+} as const;
+export type ProviderErrorCode = (typeof ProviderErrorCode)[keyof typeof ProviderErrorCode];

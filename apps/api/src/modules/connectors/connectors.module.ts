@@ -8,6 +8,8 @@ import { CALENDAR_SYNCED_EVENT_REPOSITORY } from "./application/ports/calendar-s
 import { CONNECTOR_PROVIDER_ADAPTERS, type ConnectorProviderAdapter, type ConnectorProviderAdapterMap } from "./application/ports/connector-provider-adapter";
 import { CREDENTIAL_CIPHER } from "./application/ports/credential-cipher";
 import { EXTERNAL_CONNECTION_REPOSITORY } from "./application/ports/external-connection.repository";
+import { EXTERNAL_FILE_EXPORT_RECORD_REPOSITORY } from "./application/ports/external-file-export-record.repository";
+import { EXTERNAL_FILE_IMPORT_RECORD_REPOSITORY } from "./application/ports/external-file-import-record.repository";
 import { OAUTH_FLOW_STATE_REPOSITORY } from "./application/ports/oauth-flow-state.repository";
 import { SYNC_CONFIGURATION_REPOSITORY } from "./application/ports/sync-configuration.repository";
 import { BrowseRemoteFolderUseCase } from "./application/use-cases/browse-remote-folder.use-case";
@@ -19,6 +21,7 @@ import { InitiateOAuthConnectionUseCase } from "./application/use-cases/initiate
 import { InitiateReauthorizationUseCase } from "./application/use-cases/initiate-reauthorization.use-case";
 import { HandleOAuthCallbackUseCase } from "./application/use-cases/handle-oauth-callback.use-case";
 import { ListExternalConnectionsUseCase } from "./application/use-cases/list-external-connections.use-case";
+import { TestConnectionUseCase } from "./application/use-cases/test-connection.use-case";
 import { EnsureFreshAccessTokenService } from "./application/services/ensure-fresh-access-token.service";
 import { OAuthFlowStarterService } from "./application/services/oauth-flow-starter.service";
 import { ConnectorProvider } from "./domain/enums";
@@ -28,6 +31,8 @@ import { MicrosoftGraphAdapter } from "./infrastructure/microsoft-graph.adapter"
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
 import { PrismaCalendarSyncedEventRepository } from "./infrastructure/prisma-calendar-synced-event.repository";
 import { PrismaExternalConnectionRepository } from "./infrastructure/prisma-external-connection.repository";
+import { PrismaExternalFileExportRecordRepository } from "./infrastructure/prisma-external-file-export-record.repository";
+import { PrismaExternalFileImportRecordRepository } from "./infrastructure/prisma-external-file-import-record.repository";
 import { PrismaOAuthFlowStateRepository } from "./infrastructure/prisma-oauth-flow-state.repository";
 import { PrismaSyncConfigurationRepository } from "./infrastructure/prisma-sync-configuration.repository";
 import { ConnectorsController } from "./interfaces/http/connectors.controller";
@@ -56,6 +61,7 @@ import { ConnectorsOAuthCallbackController } from "./interfaces/http/connectors-
     ImportRemoteFileUseCase,
     ExportDocumentVersionUseCase,
     CreateCalendarEventForTenderUseCase,
+    TestConnectionUseCase,
     OAuthFlowStarterService,
     EnsureFreshAccessTokenService,
 
@@ -63,6 +69,8 @@ import { ConnectorsOAuthCallbackController } from "./interfaces/http/connectors-
     { provide: OAUTH_FLOW_STATE_REPOSITORY, useClass: PrismaOAuthFlowStateRepository },
     { provide: SYNC_CONFIGURATION_REPOSITORY, useClass: PrismaSyncConfigurationRepository },
     { provide: CALENDAR_SYNCED_EVENT_REPOSITORY, useClass: PrismaCalendarSyncedEventRepository },
+    { provide: EXTERNAL_FILE_IMPORT_RECORD_REPOSITORY, useClass: PrismaExternalFileImportRecordRepository },
+    { provide: EXTERNAL_FILE_EXPORT_RECORD_REPOSITORY, useClass: PrismaExternalFileExportRecordRepository },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
     { provide: CREDENTIAL_CIPHER, useClass: AesGcmCredentialCipher },
     {
