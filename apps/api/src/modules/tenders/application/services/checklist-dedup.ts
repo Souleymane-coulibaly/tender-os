@@ -1,5 +1,4 @@
-import type { ChecklistItemRepository } from "../ports/checklist-item.repository";
-import type { ChecklistItemType, ChecklistSubjectType } from "../../domain/checklist-item.entity";
+import type { ChecklistItem, ChecklistItemType, ChecklistSubjectType } from "../../domain/checklist-item.entity";
 
 const AUTO_MERGE_THRESHOLD = 0.92;
 const POSSIBLE_DUPLICATE_THRESHOLD = 0.75;
@@ -41,12 +40,17 @@ function titleSimilarity(a: string, b: string): number {
  * - `0.75-0.92` -> suggestion créée normalement, mais taguée `possibleDuplicateOfItemId` pour hint UI.
  * - `< 0.75` -> aucune relation, création normale.
  */
-export async function findChecklistDedupMatch(
-  checklistRepository: ChecklistItemRepository,
-  input: { organizationId: string; tenderId: string; type: ChecklistItemType; lotId?: string | undefined; subjectType: ChecklistSubjectType; title: string },
-): Promise<ChecklistDedupResult> {
-  const existingItems = await checklistRepository.listByTender({ organizationId: input.organizationId, tenderId: input.tenderId });
-
+/** Sprint 21 (hardening) — mission §26 (N+1) : opère désormais sur une liste DÉJÀ chargée par
+ *  l'appelant, jamais une nouvelle lecture par appel. `reconcile-checklist-with-new-analysis.use-
+ *  case.ts` appelait cette fonction une fois par suggestion proposée (N appels = N requêtes
+ *  `listByTender` identiques) alors qu'il avait déjà chargé exactement cette même liste juste
+ *  avant sa boucle. `create-checklist-item.use-case.ts` (un seul appel, jamais en boucle) charge
+ *  la liste lui-même juste après avoir acquis `lockTenderForDedup` — la lecture doit rester APRÈS
+ *  le verrou pour ne jamais lire un état obsolète (voir son propre commentaire). */
+export function findChecklistDedupMatch(
+  existingItems: readonly ChecklistItem[],
+  input: { type: ChecklistItemType; lotId?: string | undefined; subjectType: ChecklistSubjectType; title: string },
+): ChecklistDedupResult {
   let best: { itemId: string; similarity: number } | undefined;
   for (const item of existingItems) {
     if (item.type !== input.type || item.subjectType !== input.subjectType || item.lotId !== input.lotId) continue;

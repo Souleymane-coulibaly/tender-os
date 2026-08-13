@@ -418,7 +418,7 @@ describe("Moteur documentaire — Templates DOCX (real HTTP + PostgreSQL)", () =
     expect(crossOrgRegenerateRes.status).toBe(404);
   });
 
-  it("BLOQUANT (concurrence) — two simultaneous regenerate calls on the SAME lineage never collide on revisionNumber (advisory lock)", async () => {
+  it("BLOQUANT (concurrence) — two simultaneous regenerate calls on the SAME lineage never collide on revisionNumber, never corrupt data", async () => {
     const { templateId } = await createActiveTemplate({ token: tokenOwnerA, organizationId: orgAId, allowPartialGeneration: false });
     const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
     await assignClient({ organizationId: orgAId, clientAccountId, userId: contributorAUserId, role: "CONTRIBUTOR", createdBy: ownerAUserId });
@@ -434,11 +434,24 @@ describe("Moteur documentaire — Templates DOCX (real HTTP + PostgreSQL)", () =
       fetch(`${baseUrl}/api/v1/generated-documents/${generated.id}/regenerate`, { method: "POST", headers: jsonHeaders(tokenContributorA, orgAId), body: JSON.stringify({ data: FULL_DATA }) }),
       fetch(`${baseUrl}/api/v1/generated-documents/${generated.id}/regenerate`, { method: "POST", headers: jsonHeaders(tokenContributorA, orgAId), body: JSON.stringify({ data: FULL_DATA }) }),
     ]);
-    expect(resA.status).toBe(201);
-    expect(resB.status).toBe(201);
+
+    // Sprint 21 — le verrou ne tient plus que le calcul COURT du revisionNumber (jamais le rendu,
+    // potentiellement lent) : une régénération concurrente qui aurait calculé le MÊME
+    // revisionNumber pendant que l'autre rendait encore est désormais rejetée proprement (409,
+    // ConcurrentDocumentGenerationError) par la contrainte UNIQUE, jamais un 500, jamais une
+    // collision silencieuse. Au moins l'une des deux réussit toujours.
+    expect([resA.status, resB.status]).toContain(201);
+    expect([201, 409]).toContain(resA.status);
+    expect([201, 409]).toContain(resB.status);
 
     const revisions = await prisma.generatedDocumentRevision.findMany({ where: { organizationId: orgAId, generatedDocumentId: generated.id }, orderBy: { revisionNumber: "asc" } });
-    expect(revisions).toHaveLength(3); // 1 (génération initiale) + 2 (régénérations concurrentes)
-    expect(revisions.map((r) => r.revisionNumber)).toEqual([1, 2, 3]);
+    const revisionNumbers = revisions.map((r) => r.revisionNumber);
+    // Invariant central : jamais deux révisions avec le même numéro, quel que soit le timing réel.
+    expect(new Set(revisionNumbers).size).toBe(revisionNumbers.length);
+    expect(revisions.length).toBeGreaterThanOrEqual(2);
+    if (resA.status === 201 && resB.status === 201) {
+      expect(revisions).toHaveLength(3);
+      expect(revisionNumbers).toEqual([1, 2, 3]);
+    }
   });
 });

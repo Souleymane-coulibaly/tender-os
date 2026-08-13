@@ -213,7 +213,7 @@ describe("Chiffrage (pricing-schedule) — real HTTP + PostgreSQL (NestJS)", () 
     expect(finalFile.documentId).not.toBe(bpu.documentId);
   });
 
-  it("mass assignment — organizationId/clientAccountId/status/currentVersionId are always server-resolved, never accepted from the client body", async () => {
+  it("mass assignment — organizationId/clientAccountId/status/currentVersionId are never accepted from the client body (Sprint 21 hardening — .strict() rejects the request, same convention as every other module)", async () => {
     const { tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
     const bpu = await importBpuDocument({ tenderId, token: tokenOwnerA, organizationId: orgAId });
     const foreignOrgUser = await registerAndLogin(`chiffrage-foreign-${randomUUID()}@smoke.test`);
@@ -231,8 +231,15 @@ describe("Chiffrage (pricing-schedule) — real HTTP + PostgreSQL (NestJS)", () 
         currentVersionNumber: 999,
       }),
     });
-    expect(createRes.status).toBe(201);
-    const schedule = (await createRes.json()) as { organizationId: string; tenderId: string; status: string; currentVersionId?: string; currentVersionNumber: number };
+    expect(createRes.status).toBe(400);
+
+    const legitimateRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/pricing-schedules`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ sourceDocumentId: bpu.documentId }),
+    });
+    expect(legitimateRes.status).toBe(201);
+    const schedule = (await legitimateRes.json()) as { organizationId: string; tenderId: string; status: string; currentVersionId?: string; currentVersionNumber: number };
     expect(schedule.organizationId).toBe(orgAId);
     expect(schedule.tenderId).toBe(tenderId);
     expect(schedule.status).toBe("DRAFT");

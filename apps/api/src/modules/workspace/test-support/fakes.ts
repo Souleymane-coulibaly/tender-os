@@ -141,6 +141,10 @@ export class InMemoryMentionRepository implements MentionRepository {
     return this.mentions.filter((m) => m.organizationId === input.organizationId && m.commentId === input.commentId);
   }
 
+  async listByComments(input: { organizationId: string; commentIds: readonly string[] }): Promise<Mention[]> {
+    return this.mentions.filter((m) => m.organizationId === input.organizationId && input.commentIds.includes(m.commentId));
+  }
+
   async create(mention: Mention): Promise<void> {
     this.mentions.push(mention);
   }

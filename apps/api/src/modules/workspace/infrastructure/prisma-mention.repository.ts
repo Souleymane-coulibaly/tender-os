@@ -28,6 +28,15 @@ export class PrismaMentionRepository implements MentionRepository {
     return records.map(toDomain);
   }
 
+  async listByComments(input: { organizationId: string; commentIds: readonly string[] }): Promise<Mention[]> {
+    if (input.commentIds.length === 0) return [];
+    const records = await this.prisma.currentClient().mention.findMany({
+      where: { organizationId: input.organizationId, commentId: { in: [...input.commentIds] } },
+      orderBy: { createdAt: "asc" },
+    });
+    return records.map(toDomain);
+  }
+
   async create(mention: Mention): Promise<void> {
     await this.prisma.currentClient().mention.create({
       data: { id: mention.id, organizationId: mention.organizationId, commentId: mention.commentId, mentionedUserId: mention.mentionedUserId },

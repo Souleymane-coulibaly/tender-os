@@ -359,4 +359,38 @@ describe("PrismaAnalysisJobRepository (PostgreSQL)", () => {
       await expect(prisma.analysisAttempt.create({ data: { id: randomUUID(), ...attemptData } })).rejects.toThrow();
     });
   });
+
+  describe("findStaleProcessingCandidates (Sprint 21 hardening — mission PARTIE F)", () => {
+    async function seedProcessingJob(updatedAt: Date): Promise<string> {
+      const { jobId } = await seedQueuedJob();
+      const reservation = await repository.reserveForProcessing({ organizationId, jobId, occurredAt: new Date() });
+      if (reservation.kind !== "reserved") throw new Error("expected reservation to succeed");
+      // Recule directement l'horloge de la ligne en base — simule un job réservé il y a longtemps,
+      // jamais atteignable via l'aggregate (`reserve()` fixe toujours `updatedAt` à "maintenant").
+      await prisma.analysisJob.update({ where: { id: jobId }, data: { updatedAt } });
+      return jobId;
+    }
+
+    it("returns only PROCESSING jobs older than the threshold, never a recent or non-PROCESSING one", async () => {
+      const staleJobId = await seedProcessingJob(new Date(Date.now() - 20 * 60 * 1000));
+      const recentJobId = await seedProcessingJob(new Date());
+      const { jobId: queuedJobId } = await seedQueuedJob();
+
+      const candidates = await repository.findStaleProcessingCandidates({ olderThan: new Date(Date.now() - 10 * 60 * 1000), limit: 50 });
+      const candidateIds = candidates.map((c) => c.jobId);
+
+      expect(candidateIds).toContain(staleJobId);
+      expect(candidateIds).not.toContain(recentJobId);
+      expect(candidateIds).not.toContain(queuedJobId);
+    });
+
+    it("never returns a job belonging to another organization mixed in with the caller's own", async () => {
+      const staleJobId = await seedProcessingJob(new Date(Date.now() - 20 * 60 * 1000));
+
+      const candidates = await repository.findStaleProcessingCandidates({ olderThan: new Date(Date.now() - 10 * 60 * 1000), limit: 50 });
+      const match = candidates.find((c) => c.jobId === staleJobId);
+
+      expect(match?.organizationId).toBe(organizationId);
+    });
+  });
 });

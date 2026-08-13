@@ -32,12 +32,14 @@ import { ListTenderAnalysisSummaryRevisionsUseCase } from "./application/use-cas
 import { ListTenderRisksUseCase } from "./application/use-cases/list-tender-risks.use-case";
 import { MapAnalysisFindingsToAiSuggestionsUseCase } from "./application/use-cases/map-analysis-findings-to-ai-suggestions.use-case";
 import { ProcessAnalysisJobUseCase } from "./application/use-cases/process-analysis-job.use-case";
+import { ReclaimStaleAnalysisJobsUseCase } from "./application/use-cases/reclaim-stale-analysis-jobs.use-case";
 import { ReviseTenderAnalysisSummaryUseCase } from "./application/use-cases/revise-tender-analysis-summary.use-case";
 import { RetryAnalysisUseCase } from "./application/use-cases/retry-analysis.use-case";
 import { StartDocumentAnalysisUseCase } from "./application/use-cases/start-document-analysis.use-case";
 import { StartTenderAnalysisUseCase } from "./application/use-cases/start-tender-analysis.use-case";
 
 import { ANALYSIS_CONFIG, loadAnalysisConfig } from "./infrastructure/analysis-config";
+import { AnalysisJobStaleRecoveryWorker } from "./infrastructure/analysis-job-stale-recovery.worker";
 import { DefaultAIProviderRegistry } from "./infrastructure/ai-provider.registry";
 import { BusinessAnalysisContentResolver } from "./infrastructure/business-analysis-content-resolver";
 import { InProcessAnalysisDispatcher } from "./infrastructure/in-process-analysis.dispatcher";
@@ -73,6 +75,8 @@ import { AnalysisController } from "./interfaces/http/analysis.controller";
     MapAnalysisFindingsToAiSuggestionsUseCase,
     ReviseTenderAnalysisSummaryUseCase,
     ListTenderAnalysisSummaryRevisionsUseCase,
+    ReclaimStaleAnalysisJobsUseCase,
+    AnalysisJobStaleRecoveryWorker,
 
     { provide: ANALYSIS_JOB_REPOSITORY, useClass: PrismaAnalysisJobRepository },
     { provide: ANALYSIS_ATTEMPT_REPOSITORY, useClass: PrismaAnalysisAttemptRepository },

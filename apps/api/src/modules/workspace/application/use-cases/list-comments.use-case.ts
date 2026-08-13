@@ -39,11 +39,16 @@ export class ListCommentsUseCase {
         ? await this.commentRepository.listByEntity({ organizationId: query.organizationId, tenderId: query.tenderId, entityType: query.entityType, entityId: query.entityId })
         : await this.commentRepository.listByTender({ organizationId: query.organizationId, tenderId: query.tenderId });
 
-    return Promise.all(
-      comments.map(async (comment) => {
-        const mentions = await this.mentionRepository.listByComment({ organizationId: query.organizationId, commentId: comment.id });
-        return toCommentSummary(comment, mentions);
-      }),
-    );
+    // Sprint 21 (hardening) — mission §26 (N+1) : une seule requête groupée plutôt qu'une requête
+    // par commentaire, jamais le mode de comptage naïf O(N).
+    const mentions = await this.mentionRepository.listByComments({ organizationId: query.organizationId, commentIds: comments.map((comment) => comment.id) });
+    const mentionsByCommentId = new Map<string, typeof mentions>();
+    for (const mention of mentions) {
+      const existing = mentionsByCommentId.get(mention.commentId);
+      if (existing) existing.push(mention);
+      else mentionsByCommentId.set(mention.commentId, [mention]);
+    }
+
+    return comments.map((comment) => toCommentSummary(comment, mentionsByCommentId.get(comment.id) ?? []));
   }
 }

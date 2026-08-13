@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
+import { ThrottlerModule } from "@nestjs/throttler";
 import { getRequiredEnv } from "../../shared-kernel/env";
 import { ACCESS_TOKEN_SERVICE } from "./application/ports/access-token.service";
 import { PASSWORD_HASHER } from "./application/ports/password-hasher";
@@ -17,12 +18,18 @@ import { PrismaUserRepository } from "./infrastructure/prisma-user.repository";
 import { ScryptPasswordHasher } from "./infrastructure/scrypt-password-hasher";
 import { AuthController } from "./interfaces/http/auth.controller";
 import { AuthenticatedGuard } from "./interfaces/http/authenticated.guard";
+import { AuthThrottlerGuard } from "./interfaces/http/auth-throttler.guard";
 
 @Module({
   imports: [
     JwtModule.register({
       secret: getRequiredEnv("AUTH_SECRET"),
     }),
+    // Sprint 21 (hardening) — mission §23, brute-force/credential-stuffing sur /auth/login et
+    // énumération de comptes sur /auth/register (aucune limite n'existait). Volontairement local à
+    // ce module (jamais un rate limit global unique, mission §38) — même motif que le throttler
+    // "public-api" de IntegrationsModule, chaque module possède son propre stockage/config isolés.
+    ThrottlerModule.forRoot([{ name: "auth", ttl: 60_000, limit: 10 }]),
   ],
   controllers: [AuthController],
   providers: [
@@ -33,6 +40,7 @@ import { AuthenticatedGuard } from "./interfaces/http/authenticated.guard";
     ListUsersUseCase,
     CountUsersByStatusUseCase,
     AuthenticatedGuard,
+    AuthThrottlerGuard,
     { provide: USER_REPOSITORY, useClass: PrismaUserRepository },
     { provide: SESSION_REPOSITORY, useClass: PrismaSessionRepository },
     { provide: PASSWORD_HASHER, useClass: ScryptPasswordHasher },

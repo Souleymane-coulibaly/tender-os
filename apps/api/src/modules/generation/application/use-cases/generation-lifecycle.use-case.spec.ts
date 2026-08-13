@@ -17,6 +17,7 @@ import { InMemoryTenderRepository } from "../../../tenders/test-support/fakes";
 import { GenerationOutputMode } from "../../domain/generation-output-mode";
 import { GenerationStatus } from "../../domain/generation-status";
 import { GenerationTaskType } from "../../domain/generation-task-type";
+import type { GenerationConfig } from "../../infrastructure/generation-config";
 import { PromptTemplate } from "../../domain/prompt-template.aggregate";
 import { PromptVersion } from "../../domain/prompt-version.entity";
 import {
@@ -33,6 +34,7 @@ const ORG = "org-1";
 const CLIENT = "client-1";
 const TENDER = "tender-1";
 const NOW = new Date("2026-08-01T10:00:00.000Z");
+const CONFIG: GenerationConfig = { aiModel: "gpt-4o-mini", aiTimeoutMs: 60_000, aiMaxRetries: 2, aiRetryDelayMs: 0, modelRates: {} };
 
 class RecordingDispatcher {
   readonly dispatched: { generationId: string }[] = [];
@@ -87,7 +89,7 @@ function buildHarness() {
     clock,
     idGenerator,
   );
-  const retry = new RetryGenerationUseCase(generationRepository, assertClientAccessUseCase, dispatcher, clock);
+  const retry = new RetryGenerationUseCase(generationRepository, assertClientAccessUseCase, dispatcher, clock, CONFIG);
   const regenerate = new RegenerateGenerationUseCase(
     generationRepository,
     promptVersionRepository,
@@ -245,6 +247,32 @@ describe("Generation lifecycle (launch/retry/regenerate/cancel/edit/validate)", 
     expect(retried.id).toBe(launched.id);
     expect(retried.version).toBe(1);
     expect(retried.status).toBe(GenerationStatus.Pending);
+  });
+
+  it("BLOQUANT (mission Sprint 21 hardening) — refuses to retry once the attempt cap (1 + aiMaxRetries) is reached, never an unlimited retry loop", async () => {
+    const launched = await h.launch.execute({
+      organizationId: ORG,
+      actorId: "user-owner",
+      actorRole: "OWNER",
+      tenderId: TENDER,
+      taskType: GenerationTaskType.ExecutiveSummary,
+    });
+    const generation = await h.generationRepository.findById({ organizationId: ORG, generationId: launched.id });
+    // CONFIG.aiMaxRetries = 2 → 3 tentatives autorisées au total. Simule les 2 premiers retries
+    // directement sur l'agrégat (jamais via HTTP répété, pour ne pas dépendre d'un dispatcher réel).
+    generation!.reserve();
+    generation!.markFailed({ errorCode: "X", errorMessage: "boom" }, NOW); // attemptCount = 1
+    await h.generationRepository.save(generation!);
+    await h.retry.execute({ organizationId: ORG, actorId: "user-owner", actorRole: "OWNER", generationId: launched.id });
+    generation!.reserve();
+    generation!.markFailed({ errorCode: "X", errorMessage: "boom" }, NOW); // attemptCount = 2
+    await h.generationRepository.save(generation!);
+    await h.retry.execute({ organizationId: ORG, actorId: "user-owner", actorRole: "OWNER", generationId: launched.id });
+    generation!.reserve();
+    generation!.markFailed({ errorCode: "X", errorMessage: "boom" }, NOW); // attemptCount = 3 (cap reached)
+    await h.generationRepository.save(generation!);
+
+    await expect(h.retry.execute({ organizationId: ORG, actorId: "user-owner", actorRole: "OWNER", generationId: launched.id })).rejects.toThrow();
   });
 
   it("regenerate creates a NEW version under the same root, never overwrites the original row", async () => {

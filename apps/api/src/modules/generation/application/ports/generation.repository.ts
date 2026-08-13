@@ -79,6 +79,20 @@ export interface GenerationRepository {
     occurredAt: Date;
     outcome: FinalizeGenerationOutcome;
   }): Promise<{ applied: boolean }>;
+
+  /** Sprint 21 (hardening) — mission PARTIE F : simple lecture (jamais verrouillée) des candidats
+   *  GENERATING dont `updatedAt` dépasse le seuil — cross-organisation, consommée uniquement par
+   *  `ReclaimStaleGenerationsUseCase`, qui revérifie l'état via `findById` avant de muter. */
+  findStaleGeneratingCandidates(input: { olderThan: Date; limit: number }): Promise<readonly { organizationId: string; generationId: string }[]>;
+
+  /** Correctif (réaudit externe post-Sprint 21) — compare-and-set, même motif que
+   *  `finalizeGeneration` : `ReclaimStaleGenerationsUseCase` lisait la génération puis la mutait via
+   *  `save()` (écriture inconditionnelle par id seul) — si le worker réel finalisait la génération
+   *  (GENERATED/FAILED) DANS LA FENÊTRE entre cette lecture et cette écriture, la reprise stale
+   *  écrasait silencieusement un résultat déjà acquis en le repassant à PENDING. `attemptCount`
+   *  DOIT correspondre à la valeur lue par l'appelant — sinon `applied: false` sans rien modifier,
+   *  jamais un état plus récent silencieusement perdu. */
+  reclaimStaleGenerating(input: { organizationId: string; generationId: string; expectedAttemptCount: number }): Promise<{ applied: boolean }>;
 }
 
 export const GENERATION_REPOSITORY = Symbol("GENERATION_REPOSITORY");

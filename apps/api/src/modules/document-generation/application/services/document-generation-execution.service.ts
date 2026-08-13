@@ -17,7 +17,6 @@ import { GeneratedDocumentRevision } from "../../domain/generated-document-revis
 import { DocxMergeError, NoActiveDocumentTemplateVersionError, RequiredFieldsMissingError } from "../../domain/errors";
 import { DOCX_MERGE_ENGINE, type DocxMergeEngine } from "../ports/docx-merge-engine";
 import { DOCUMENT_TEMPLATE_REPOSITORY, type DocumentTemplateRepository } from "../ports/document-template.repository";
-import { GENERATED_DOCUMENT_REPOSITORY, type GeneratedDocumentRepository } from "../ports/generated-document.repository";
 import { formatDataSnapshot } from "./field-value-formatter";
 
 const GENERATED_DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -46,12 +45,20 @@ export type RunGenerationInput = Readonly<{
  * (mission "templateVersionId figé au lancement, jamais template.currentVersion résolu
  * implicitement plus tard") et fige le `dataSnapshot` fourni par l'appelant — un futur changement
  * des entités sources ne peut jamais altérer une révision déjà créée.
+ *
+ * Sprint 21 (hardening) — `run()` est désormais une fonction PURE côté persistance de la révision :
+ * elle calcule/rend l'artefact (storage read + fusion DOCX + `createDocumentWithFirstVersionUseCase`,
+ * qui persiste l'ARTEFACT lui-même) et retourne la `GeneratedDocumentRevision` déjà construite dans
+ * son état final (COMPLETED/FAILED), mais n'écrit plus JAMAIS la ligne `GeneratedDocumentRevision`
+ * elle-même — c'est desormais la responsabilité de l'appelant (`GenerateDocumentUseCase`/
+ * `RegenerateDocumentUseCase`), dans une transaction courte, APRÈS ce rendu (jamais pendant). Ceci
+ * permet à `run()` de s'exécuter entièrement HORS transaction Postgres, sans jamais tenir une
+ * connexion/transaction ouverte pendant l'appel storage (même classe de correctif que Sprint 20).
  */
 @Injectable()
 export class DocumentGenerationExecutionService {
   constructor(
     @Inject(DOCUMENT_TEMPLATE_REPOSITORY) private readonly templateRepository: DocumentTemplateRepository,
-    @Inject(GENERATED_DOCUMENT_REPOSITORY) private readonly generatedDocumentRepository: GeneratedDocumentRepository,
     @Inject(DOCX_MERGE_ENGINE) private readonly mergeEngine: DocxMergeEngine,
     @Inject(DOCUMENT_VERSION_REPOSITORY) private readonly documentVersionRepository: DocumentVersionRepository,
     @Inject(STORAGE_PROVIDER) private readonly storageProvider: StorageProvider,
@@ -129,7 +136,6 @@ export class DocumentGenerationExecutionService {
         occurredAt,
       });
 
-      await this.generatedDocumentRepository.createRevision(revision);
       return revision;
     } catch (error) {
       if (createdArtifactDocumentId) {
@@ -156,7 +162,6 @@ export class DocumentGenerationExecutionService {
         createdBy: input.actorId,
         occurredAt,
       });
-      await this.generatedDocumentRepository.createRevision(revision);
       return revision;
     }
   }

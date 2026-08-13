@@ -18,6 +18,7 @@ const STATUS_BY_CODE: Record<string, number> = {
   REQUIRED_FIELDS_MISSING: HttpStatus.UNPROCESSABLE_ENTITY,
   ARTIFACT_NOT_READY: HttpStatus.CONFLICT,
   DOCX_MERGE_FAILED: HttpStatus.UNPROCESSABLE_ENTITY,
+  CONCURRENT_DOCUMENT_GENERATION: HttpStatus.CONFLICT,
 
   // Erreurs cross-module réelles (mêmes conventions que chat/workspace/knowledge-base) — jamais
   // révéler l'existence d'une ressource inaccessible, même 404 anti-énumération.

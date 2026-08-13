@@ -48,26 +48,39 @@ export class ListAiSuggestionsUseCase {
     return accessible.map(toAiSuggestionSummary);
   }
 
+  /** Sprint 21 (hardening) — mission §26 (N+1) : `assertCanAccessTarget` (impl. réelle,
+   *  `TendersAiSuggestionTargetAccessPolicy`) résout uniquement `parentTenderId`/`parentLotId`
+   *  (jamais `entityType`/`entityId` — voir son propre code, qui ne les lit jamais), via 1-2 vraies
+   *  requêtes DB (`GetTenderUseCase` + `AssertClientAccessUseCase`, et `GetTenderLotUseCase` si un
+   *  lot est renseigné). Une liste de N suggestions partageant le même Tender (le cas courant —
+   *  toutes les suggestions d'une analyse) déclenchait N vérifications identiques. Mémoïsé par la
+   *  paire `(parentTenderId, parentLotId)` — une seule vérification par paire DISTINCTE, jamais par
+   *  suggestion. */
   private async filterAccessible(records: AiSuggestionRecord[], query: ListAiSuggestionsQuery): Promise<AiSuggestionRecord[]> {
-    const checks = await Promise.all(
-      records.map(async (record) => {
-        try {
-          await this.targetAccessPolicy.assertCanAccessTarget({
-            organizationId: query.organizationId,
-            actorId: query.actorId,
-            actorRole: query.actorRole,
-            entityType: record.entityType,
-            entityId: record.entityId ?? undefined,
-            parentTenderId: record.parentTenderId,
-            parentLotId: record.parentLotId ?? undefined,
-          });
-          return true;
-        } catch {
-          return false;
-        }
-      }),
-    );
+    const accessByTargetKey = new Map<string, Promise<boolean>>();
 
+    const isAccessible = (record: AiSuggestionRecord): Promise<boolean> => {
+      const key = `${record.parentTenderId}::${record.parentLotId ?? ""}`;
+      const existing = accessByTargetKey.get(key);
+      if (existing) return existing;
+
+      const check = this.targetAccessPolicy
+        .assertCanAccessTarget({
+          organizationId: query.organizationId,
+          actorId: query.actorId,
+          actorRole: query.actorRole,
+          entityType: record.entityType,
+          entityId: record.entityId ?? undefined,
+          parentTenderId: record.parentTenderId,
+          parentLotId: record.parentLotId ?? undefined,
+        })
+        .then(() => true)
+        .catch(() => false);
+      accessByTargetKey.set(key, check);
+      return check;
+    };
+
+    const checks = await Promise.all(records.map(isAccessible));
     return records.filter((_, index) => checks[index]);
   }
 }

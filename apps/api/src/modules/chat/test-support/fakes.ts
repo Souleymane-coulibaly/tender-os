@@ -112,6 +112,14 @@ export class InMemoryMessageRepository implements MessageRepository {
     // le verrou consultatif Postgres réel, prouvé par `prisma-message.repository.integration.spec.ts`.
   }
 
+  async findStalePendingCandidates(input: { olderThan: Date; limit: number }): Promise<readonly { organizationId: string; messageId: string }[]> {
+    return this.messages
+      .filter((m) => m.status === MessageStatus.Pending && m.createdAt < input.olderThan)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .slice(0, input.limit)
+      .map((m) => ({ organizationId: m.organizationId, messageId: m.id }));
+  }
+
   async countBillableAssistantMessagesForTenderSince(input: { organizationId: string; tenderId: string; since: Date }): Promise<number> {
     return this.messages.filter((m) => {
       if (m.organizationId !== input.organizationId || m.role !== MessageRole.Assistant || m.createdAt < input.since) return false;

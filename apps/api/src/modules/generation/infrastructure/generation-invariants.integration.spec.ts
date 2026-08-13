@@ -294,4 +294,55 @@ describe("Generation module — invariantes critiques (PostgreSQL réel)", () =>
     const stillGenerating = await generationRepository.findById({ organizationId, generationId: generation.id });
     expect(stillGenerating!.status).toBe(GenerationStatus.Generating);
   });
+
+  it("BLOQUANT (réaudit externe post-Sprint 21) — reclaimStaleGenerating is a real compare-and-set: it never overwrites a generation the real worker already finalized (real Postgres, real race)", async () => {
+    const v1 = draftVersion(1);
+    await promptVersionRepository.create(v1);
+    v1.activate(now);
+    await promptVersionRepository.activateAtomically(v1);
+
+    const generation = Generation.create({
+      id: randomUUID(),
+      organizationId,
+      clientAccountId,
+      tenderId,
+      taskType: GenerationTaskType.ExecutiveSummary,
+      rootGenerationId: randomUUID(),
+      version: 1,
+      promptTemplateId,
+      promptVersionId: v1.id,
+      promptVersionNumber: v1.version,
+      createdBy: randomUUID(),
+      occurredAt: now,
+    });
+    await generationRepository.create(generation);
+
+    const reservation = await generationRepository.reserveForGenerating({ organizationId, generationId: generation.id, occurredAt: now });
+    expect(reservation.kind).toBe("reserved");
+    const reservedAttemptCount = reservation.kind === "reserved" ? reservation.generation.attemptCount : -1;
+
+    // Le worker réel finalise la génération AVANT que la reprise stale ne tente d'écrire —
+    // reproduit la fenêtre exacte que le compare-and-set doit fermer.
+    const finalized = await generationRepository.finalizeGeneration({
+      organizationId,
+      generationId: generation.id,
+      expectedAttemptCount: reservedAttemptCount,
+      occurredAt: now,
+      outcome: { kind: "generated", modelProvider: "OPENAI", modelKey: "gpt-4o", fallbackLevel: 0, latencyMs: 100 },
+    });
+    expect(finalized.applied).toBe(true);
+
+    // La reprise stale utilise le MÊME attemptCount qu'elle aurait lu AVANT la finalisation
+    // ci-dessus (elle ne le sait pas encore) — c'est précisément ce que compare-and-set doit
+    // refuser, jamais un résultat déjà acquis silencieusement écrasé.
+    const reclaimResult = await generationRepository.reclaimStaleGenerating({
+      organizationId,
+      generationId: generation.id,
+      expectedAttemptCount: reservedAttemptCount,
+    });
+    expect(reclaimResult.applied).toBe(false);
+
+    const stillGenerated = await generationRepository.findById({ organizationId, generationId: generation.id });
+    expect(stillGenerated!.status).toBe(GenerationStatus.Generated);
+  });
 });

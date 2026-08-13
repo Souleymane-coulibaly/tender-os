@@ -4,6 +4,7 @@ import type { OutboxEventInput, OutboxWriter } from "../../outbox";
 import type { EmailMessage, EmailProvider } from "../../notifications";
 import type { CollectedTender, MarketSourceConnector, MarketSourceSearchCriteria, MarketSourceSearchResult } from "../application/ports/market-source-connector";
 import type { ExternalTenderListFilter, ExternalTenderPage, ExternalTenderRepository } from "../application/ports/external-tender.repository";
+import type { MarketSourceSyncLeaseRepository } from "../application/ports/market-source-sync-lease.repository";
 import type { SavedSearchRepository } from "../application/ports/saved-search.repository";
 import type { SavedSearchMatchRepository } from "../application/ports/saved-search-match.repository";
 import type { ExternalTender } from "../domain/external-tender.entity";
@@ -114,6 +115,20 @@ export class InMemorySavedSearchRepository implements SavedSearchRepository {
   }
   async listDistinctOrganizationIdsWithActiveSearches(): Promise<string[]> {
     return [...new Set(this.searches.filter((s) => s.isActive).map((s) => s.organizationId))];
+  }
+}
+
+export class InMemoryMarketSourceSyncLeaseRepository implements MarketSourceSyncLeaseRepository {
+  private readonly lockedUntilByKey = new Map<string, Date>();
+
+  async tryClaim(input: { organizationId: string; source: string; now: Date; leaseDurationMs: number }): Promise<boolean> {
+    const key = `${input.organizationId}::${input.source}`;
+    const existing = this.lockedUntilByKey.get(key);
+    if (existing && existing >= input.now) {
+      return false;
+    }
+    this.lockedUntilByKey.set(key, new Date(input.now.getTime() + input.leaseDurationMs));
+    return true;
   }
 }
 

@@ -150,6 +150,7 @@ export type DeleteMilestoneCommand = Readonly<{
 export class DeleteMilestoneUseCase {
   constructor(
     @Inject(MILESTONE_REPOSITORY) private readonly milestoneRepository: MilestoneRepository,
+    @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
   ) {}
@@ -159,7 +160,7 @@ export class DeleteMilestoneUseCase {
 
     await assertTenderMutationAllowed(this.tenderRepository, this.assertClientAccessUseCase, command);
 
-    await loadMilestone(this.milestoneRepository, {
+    const milestone = await loadMilestone(this.milestoneRepository, {
       organizationId: command.organizationId,
       tenderId: command.tenderId,
       milestoneId: command.milestoneId,
@@ -169,6 +170,19 @@ export class DeleteMilestoneUseCase {
       organizationId: command.organizationId,
       tenderId: command.tenderId,
       milestoneId: command.milestoneId,
+    });
+
+    // Sprint 21 (hardening) — mission §78 (traçabilité des suppressions) : cette suppression était
+    // jusqu'ici la SEULE action du cycle de vie Milestone sans trace d'audit (sa sœur
+    // `UpdateMilestoneUseCase` en écrit une juste au-dessus). Écrit APRÈS la suppression effective —
+    // même discipline que le reste du module (jamais une trace pour une action qui n'a pas abouti).
+    await this.auditLogWriter.record({
+      organizationId: command.organizationId,
+      actorId: command.actorId,
+      action: "tender.milestone_deleted",
+      resourceType: "tender_milestone",
+      resourceId: milestone.id,
+      metadata: { tenderId: command.tenderId },
     });
   }
 }

@@ -40,6 +40,15 @@ export interface MessageRepository {
    *  gratuit ne doit jamais consommer le quota, ni pendant qu'il est PENDING ni après résolution).
    */
   countBillableAssistantMessagesForTenderSince(input: { organizationId: string; tenderId: string; since: Date }): Promise<number>;
+
+  /** Sprint 21 (hardening) — mission PARTIE F : un message ASSISTANT PENDING créé quand le process
+   *  crashe avant `SendMessageUseCase.execute()`'s finalize (appel provider interrompu) bloque
+   *  DÉFINITIVEMENT sa conversation (`findPendingByConversation` la retrouve pour toujours), sans
+   *  aucun mécanisme de reprise existant jusqu'ici. Une seule tentative sans retry automatique
+   *  (mission décision §1 — "synchrone, un seul aller-retour") : `createdAt` reste un signal fiable
+   *  de fraîcheur (une ligne PENDING n'est jamais réutilisée pour une seconde tentative, contrairement
+   *  à AnalysisJob/Generation), pas besoin d'une colonne `updatedAt` dédiée. */
+  findStalePendingCandidates(input: { olderThan: Date; limit: number }): Promise<readonly { organizationId: string; messageId: string }[]>;
 }
 
 export const MESSAGE_REPOSITORY = Symbol("MESSAGE_REPOSITORY");

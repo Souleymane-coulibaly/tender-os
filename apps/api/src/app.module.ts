@@ -42,6 +42,7 @@ import { TendersModule } from "./modules/tenders/tenders.module";
 import { ValidationModule } from "./modules/validation";
 import { WorkspaceModule } from "./modules/workspace/workspace.module";
 import { DatabaseModule } from "./shared-kernel/database.module";
+import { MetricsModule } from "./shared-kernel/metrics/metrics.module";
 import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
 
 @Module({
@@ -61,6 +62,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
       handlers: [...INTEGRATION_OUTBOX_HANDLERS, ...NOTIFICATION_OUTBOX_HANDLERS],
     }),
     HealthModule,
+    MetricsModule,
     IdentityModule,
     OrganizationsModule,
     MembershipsModule,

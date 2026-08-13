@@ -1,7 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
+import { GENERATION_CONFIG, type GenerationConfig } from "../../infrastructure/generation-config";
 import { GenerationNotFoundError } from "../../domain/errors";
+import { assertGenerationIsRetryable } from "../policies/generation-retry.policy";
 import { toGenerationSummary, type GenerationSummary } from "../dtos";
 import { GENERATION_DISPATCHER, type GenerationDispatcher } from "../ports/generation-dispatcher";
 import { GENERATION_REPOSITORY, type GenerationRepository } from "../ports/generation.repository";
@@ -23,6 +25,7 @@ export class RetryGenerationUseCase {
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
     @Inject(GENERATION_DISPATCHER) private readonly dispatcher: GenerationDispatcher,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(GENERATION_CONFIG) private readonly config: GenerationConfig,
   ) {}
 
   async execute(command: RetryGenerationCommand): Promise<GenerationSummary> {
@@ -42,6 +45,7 @@ export class RetryGenerationUseCase {
       permission: ClientPermission.ManageGeneration,
     });
 
+    assertGenerationIsRetryable(generation, this.config.aiMaxRetries);
     generation.resetForRetry();
     await this.generationRepository.save(generation);
 

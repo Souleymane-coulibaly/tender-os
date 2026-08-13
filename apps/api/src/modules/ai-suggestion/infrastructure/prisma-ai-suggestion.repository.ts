@@ -6,6 +6,11 @@ import { AiSuggestionStatus } from "../domain/ai-suggestion-status";
 import type { AiSuggestionRecord, AiSuggestionRepository, CreateAiSuggestionInput, PrismaTx } from "../application/ports/ai-suggestion.repository";
 import { toAiSuggestionRecord } from "./ai-suggestion.persistence-mapper";
 
+/** Sprint 21 (hardening) — mission §29/§30 : `list` accepte `organizationId` seul (aucun filtre
+ *  requis) sans aucune borne — le cas le plus à risque de cette tranche (une collection réellement
+ *  cross-tender, pas juste "un Tender"). Même motif que `PrismaTaskRepository`. */
+const MAX_AI_SUGGESTIONS_PER_QUERY = 1000;
+
 @Injectable()
 export class PrismaAiSuggestionRepository implements AiSuggestionRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -62,6 +67,7 @@ export class PrismaAiSuggestionRepository implements AiSuggestionRepository {
         ...(input.status ? { status: input.status } : {}),
       },
       orderBy: { createdAt: "desc" },
+      take: MAX_AI_SUGGESTIONS_PER_QUERY,
     });
 
     return rows.map(toAiSuggestionRecord);

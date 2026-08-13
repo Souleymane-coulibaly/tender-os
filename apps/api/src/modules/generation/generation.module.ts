@@ -26,12 +26,14 @@ import { ListGenerationVersionsUseCase } from "./application/use-cases/list-gene
 import { ListPromptTemplatesUseCase } from "./application/use-cases/list-prompt-templates.use-case";
 import { ListTenderGenerationsUseCase } from "./application/use-cases/list-tender-generations.use-case";
 import { ProcessGenerationUseCase } from "./application/use-cases/process-generation.use-case";
+import { ReclaimStaleGenerationsUseCase } from "./application/use-cases/reclaim-stale-generations.use-case";
 import { RegenerateGenerationUseCase } from "./application/use-cases/regenerate-generation.use-case";
 import { RejectGenerationUseCase } from "./application/use-cases/reject-generation.use-case";
 import { RetryGenerationUseCase } from "./application/use-cases/retry-generation.use-case";
 import { ValidateGenerationUseCase } from "./application/use-cases/validate-generation.use-case";
 import { GenerationContextBuilder } from "./application/services/generation-context-builder";
 import { GENERATION_CONFIG, loadGenerationConfig } from "./infrastructure/generation-config";
+import { GenerationStaleRecoveryWorker } from "./infrastructure/generation-stale-recovery.worker";
 import { InProcessGenerationDispatcher } from "./infrastructure/in-process-generation.dispatcher";
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
 import { PrismaGenerationRepository } from "./infrastructure/prisma-generation.repository";
@@ -78,6 +80,8 @@ import { PromptTemplatesController } from "./interfaces/http/prompt-templates.co
     ListGenerationVersionsUseCase,
     ListTenderGenerationsUseCase,
     CompareGenerationVersionsUseCase,
+    ReclaimStaleGenerationsUseCase,
+    GenerationStaleRecoveryWorker,
 
     GenerationContextBuilder,
 

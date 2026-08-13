@@ -4,6 +4,7 @@ import { GetCurrentUserUseCase } from "../../application/use-cases/get-current-u
 import { LogoutUserUseCase } from "../../application/use-cases/logout-user.use-case";
 import { RegisterUserUseCase } from "../../application/use-cases/register-user.use-case";
 import { AuthenticatedGuard, type AuthenticatedActor } from "./authenticated.guard";
+import { AuthThrottlerGuard } from "./auth-throttler.guard";
 import { CurrentActor } from "./current-actor.decorator";
 import { IdentityErrorFilter } from "./identity-error.filter";
 import { presentAuthentication, presentUser, type AuthenticationResponse, type UserResponse } from "./presenters";
@@ -22,6 +23,7 @@ export class AuthController {
 
   @Post("register")
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(AuthThrottlerGuard)
   async register(
     @Body(new ZodValidationPipe(RegisterBodySchema)) body: RegisterBody,
   ): Promise<UserResponse> {
@@ -32,6 +34,7 @@ export class AuthController {
 
   @Post("login")
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthThrottlerGuard)
   async login(
     @Body(new ZodValidationPipe(LoginBodySchema)) body: LoginBody,
   ): Promise<AuthenticationResponse> {

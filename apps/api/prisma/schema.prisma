@@ -239,6 +239,10 @@ model AuditLog {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([organizationId, createdAt])
+  /// Sprint 21 (hardening) — mission §27 : la requête plateforme-admin cross-org (`GET
+  /// admin/audit-logs`, tri par `createdAt` sans filtre `organizationId`) ne peut pas être servie
+  /// par l'index composite ci-dessus (préfixe `organizationId` obligatoire pour Postgres).
+  @@index([createdAt])
   @@map("audit_logs")
 }
 
@@ -2999,6 +3003,12 @@ model Generation {
   /// sans jamais fabriquer un rôle. Toujours renseigné à la création, jamais un rôle par défaut.
   createdByRole String?   @map("created_by_role") @db.VarChar(30)
   createdAt     DateTime  @default(now()) @map("created_at")
+  /// Sprint 21 (hardening) — mission PARTIE F : géré nativement par Prisma (`@updatedAt`, jamais
+  /// écrit explicitement par le domaine) — seul signal disponible pour détecter une génération
+  /// restée GENERATING au-delà d'un seuil (crash process avant `finalizeGeneration`), même motif
+  /// qu'AnalysisJob.updatedAt. Absent jusqu'ici (contrairement à AnalysisJob) — ajouté seulement
+  /// maintenant, sur besoin réel, jamais spéculativement.
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
   completedAt   DateTime? @map("completed_at")
 
   validatedBy String?   @map("validated_by") @db.Uuid
@@ -4996,6 +5006,10 @@ model DeadLetterEvent {
   @@unique([id, organizationId])
   @@unique([outboxEventId])
   @@index([organizationId, movedAt])
+  /// Sprint 21 (hardening) — mission §27/PARTIE F : même raison que `AuditLog.createdAt`
+  /// ci-dessus — `GET admin/outbox/dead-letters` sans filtre `organizationId` (vue plateforme
+  /// cross-tenant) trie par `movedAt` seul, hors du préfixe de l'index composite existant.
+  @@index([movedAt])
   @@map("dead_letter_events")
 }
 
@@ -7353,6 +7367,22 @@ model SavedSearchMatch {
   @@index([organizationId, externalTenderId])
   @@index([organizationId, emailStatus])
   @@map("saved_search_matches")
+}
+
+/// Sprint 21 (hardening) — mission PARTIE F : `MarketSourceSyncWorker` était le SEUL worker parmi 5
+/// sans claim/lock par ligne (Outbox/Webhook/Email utilisent tous `SELECT...FOR UPDATE SKIP
+/// LOCKED`). Le risque réel n'est pas la corruption de données (`SavedSearchMatch` a déjà une
+/// contrainte unique (savedSearchId, externalTenderId) qui protège contre le double-traitement),
+/// mais le travail dupliqué (appels provider redondants) en déploiement multi-instance. Bail à
+/// expiration (`lockedUntil`) plutôt qu'une libération explicite — même motif que
+/// `OutboxEvent.availableAt`/`WebhookDelivery.startedAt`.
+model MarketSourceSyncLease {
+  organizationId String   @map("organization_id") @db.Uuid
+  source         String   @db.VarChar(40)
+  lockedUntil    DateTime @map("locked_until")
+
+  @@id([organizationId, source])
+  @@map("market_source_sync_leases")
 }
 
 /// V2 Sprint 17 — trace de promotion ExternalTender -> Opportunity (mission §56 "prévenir

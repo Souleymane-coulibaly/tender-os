@@ -10,6 +10,7 @@ import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
 import { EXTERNAL_TENDER_REPOSITORY } from "./application/ports/external-tender.repository";
 import { EXTERNAL_TENDER_PROMOTION_REPOSITORY } from "./application/ports/external-tender-promotion.repository";
 import { MARKET_SOURCE_CONNECTORS } from "./application/ports/market-source-connector";
+import { MARKET_SOURCE_SYNC_LEASE_REPOSITORY } from "./application/ports/market-source-sync-lease.repository";
 import { SAVED_SEARCH_REPOSITORY } from "./application/ports/saved-search.repository";
 import { SAVED_SEARCH_MATCH_REPOSITORY } from "./application/ports/saved-search-match.repository";
 import { CreateSavedSearchUseCase } from "./application/use-cases/create-saved-search.use-case";
@@ -31,6 +32,7 @@ import { PrismaAtomicTransactionRunner } from "./infrastructure/prisma-atomic-tr
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
 import { PrismaExternalTenderRepository } from "./infrastructure/prisma-external-tender.repository";
 import { PrismaExternalTenderPromotionRepository } from "./infrastructure/prisma-external-tender-promotion.repository";
+import { PrismaMarketSourceSyncLeaseRepository } from "./infrastructure/prisma-market-source-sync-lease.repository";
 import { PrismaSavedSearchRepository } from "./infrastructure/prisma-saved-search.repository";
 import { PrismaSavedSearchMatchRepository } from "./infrastructure/prisma-saved-search-match.repository";
 import { ExternalTendersController } from "./interfaces/http/external-tenders.controller";
@@ -71,6 +73,7 @@ import { SavedSearchesController } from "./interfaces/http/saved-searches.contro
     { provide: SAVED_SEARCH_REPOSITORY, useClass: PrismaSavedSearchRepository },
     { provide: SAVED_SEARCH_MATCH_REPOSITORY, useClass: PrismaSavedSearchMatchRepository },
     { provide: EXTERNAL_TENDER_PROMOTION_REPOSITORY, useClass: PrismaExternalTenderPromotionRepository },
+    { provide: MARKET_SOURCE_SYNC_LEASE_REPOSITORY, useClass: PrismaMarketSourceSyncLeaseRepository },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
   ],

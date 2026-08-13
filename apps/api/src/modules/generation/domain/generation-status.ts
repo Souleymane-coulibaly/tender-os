@@ -24,7 +24,15 @@ export type GenerationStatus = (typeof GenerationStatus)[keyof typeof Generation
  *  → CANCELLED autorise une annulation explicite. Aucun état terminal ne rouvre autrement. */
 export const ALLOWED_GENERATION_TRANSITIONS: Record<GenerationStatus, readonly GenerationStatus[]> = {
   [GenerationStatus.Pending]: [GenerationStatus.Generating, GenerationStatus.Cancelled],
-  [GenerationStatus.Generating]: [GenerationStatus.Generated, GenerationStatus.Failed, GenerationStatus.Cancelled],
+  [GenerationStatus.Generating]: [
+    GenerationStatus.Generated,
+    GenerationStatus.Failed,
+    GenerationStatus.Cancelled,
+    // Sprint 21 (hardening) — mission PARTIE F : reprise automatique d'une génération restée
+    // GENERATING au-delà d'un seuil (crash process avant `finalizeGeneration`), même motif que
+    // AnalysisStatus.Processing → Queued. Voir `Generation.reclaimStale()`.
+    GenerationStatus.Pending,
+  ],
   [GenerationStatus.Failed]: [GenerationStatus.Pending],
   [GenerationStatus.Generated]: [],
   [GenerationStatus.Cancelled]: [],

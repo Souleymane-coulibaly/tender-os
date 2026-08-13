@@ -311,15 +311,22 @@ describe("Dossier de réponse (response-package) — real HTTP + PostgreSQL (Nes
     expect(updated.status).toBe("READY");
   });
 
-  it("mass assignment — organizationId/clientAccountId/status/currentVersionId are always server-resolved, never accepted from the client body", async () => {
+  it("mass assignment — organizationId/clientAccountId/status/currentVersionId are never accepted from the client body (Sprint 21 hardening — .strict() rejects the request, same convention as every other module)", async () => {
     const { tenderId } = await createClientTenderAndLot({ organizationId: orgAId, userId: ownerAUserId });
     const createRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/response-packages`, {
       method: "POST",
       headers: authHeaders(tokenOwnerA, orgAId),
       body: JSON.stringify({ organizationId: orgBId, clientAccountId: randomUUID(), status: "VALIDATED", currentVersionId: randomUUID(), currentVersionNumber: 999 }),
     });
-    expect(createRes.status).toBe(201);
-    const pkg = (await createRes.json()) as { organizationId: string; tenderId: string; status: string; currentVersionId?: string; currentVersionNumber: number };
+    expect(createRes.status).toBe(400);
+
+    const legitimateRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/response-packages`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({}),
+    });
+    expect(legitimateRes.status).toBe(201);
+    const pkg = (await legitimateRes.json()) as { organizationId: string; tenderId: string; status: string; currentVersionId?: string; currentVersionNumber: number };
     expect(pkg.organizationId).toBe(orgAId);
     expect(pkg.tenderId).toBe(tenderId);
     expect(pkg.status).toBe("DRAFT");

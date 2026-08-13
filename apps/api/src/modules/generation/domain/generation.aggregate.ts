@@ -221,6 +221,13 @@ export class Generation {
     this.props.completedAt = occurredAt;
   }
 
+  /** Sprint 21 (hardening) — mission PARTIE F : reprise d'une génération restée GENERATING au-delà
+   *  d'un seuil, déclenchée automatiquement par `ReclaimStaleGenerationsUseCase`, jamais par un
+   *  acteur HTTP. `attemptCount` n'est PAS réinitialisé — la tentative interrompue reste comptée. */
+  reclaimStale(): void {
+    this.transitionTo(GenerationStatus.Pending);
+  }
+
   /** Seule transition sortante de FAILED — jamais automatique, toujours déclenchée par
    *  `RetryGenerationUseCase`. Même ligne, même version, un nouvel `attemptCount` à la prochaine
    *  réservation — jamais une nouvelle ligne (voir `RegenerateGenerationUseCase` pour la création

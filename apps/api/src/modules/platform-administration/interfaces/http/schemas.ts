@@ -31,6 +31,16 @@ export const ListAuditLogsQuerySchema = z
 
 export type ListAuditLogsQuery = z.infer<typeof ListAuditLogsQuerySchema>;
 
+export const ListDeadLetterEventsQuerySchema = z
+  .object({
+    cursor: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(25),
+    organizationId: z.string().uuid().optional(),
+  })
+  .strict();
+
+export type ListDeadLetterEventsQuery = z.infer<typeof ListDeadLetterEventsQuerySchema>;
+
 export const SuspendOrganizationBodySchema = z
   .object({
     reason: z.string().trim().min(1).max(500).optional(),

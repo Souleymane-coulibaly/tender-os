@@ -92,9 +92,7 @@ export class ReconcileChecklistWithNewAnalysisUseCase {
 
     for (const suggestion of proposedChecklistSuggestions) {
       const proposal = suggestion.proposedValue as { title: string; type?: string };
-      const dedupMatch = await findChecklistDedupMatch(this.checklistRepository, {
-        organizationId: command.organizationId,
-        tenderId: command.tenderId,
+      const dedupMatch = findChecklistDedupMatch(existingItems, {
         type: (proposal.type as ChecklistItemType) ?? ChecklistItemType.Other,
         subjectType: ChecklistSubjectType.Candidate,
         title: proposal.title,

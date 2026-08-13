@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../shared-kernel/clock";
+import { workerJobsFailed, workerJobsTotal } from "../../../shared-kernel/metrics/metrics";
 import { WEBHOOK_DELIVERY_REPOSITORY, type WebhookDeliveryRepository } from "../application/ports/webhook-delivery.repository";
 import { WebhookDeliveryStatus } from "../domain/enums";
 import { DeliverWebhookService } from "./deliver-webhook.service";
@@ -73,6 +74,11 @@ export class WebhookDeliveryWorker implements OnModuleInit, OnModuleDestroy {
         }
       }
       this.logger.log(`Webhook delivery tick: claimed=${claimed.length} succeeded=${succeeded} failed=${failed}`);
+      if (succeeded > 0) workerJobsTotal.inc({ worker: "webhook_delivery", outcome: "succeeded" }, succeeded);
+      if (failed > 0) {
+        workerJobsTotal.inc({ worker: "webhook_delivery", outcome: "failed" }, failed);
+        workerJobsFailed.inc({ worker: "webhook_delivery" }, failed);
+      }
     } catch (error) {
       this.logger.error("Webhook delivery worker tick failed unexpectedly.", error instanceof Error ? error.stack : String(error));
     } finally {

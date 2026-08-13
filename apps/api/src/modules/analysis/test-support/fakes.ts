@@ -408,6 +408,14 @@ export class InMemoryAnalysisJobRepository implements AnalysisJobRepository {
     await this.save(job);
     return result;
   }
+
+  async findStaleProcessingCandidates(input: { olderThan: Date; limit: number }): Promise<readonly { organizationId: string; jobId: string }[]> {
+    return [...this.byId.values()]
+      .filter((job) => job.status === AnalysisStatus.Processing && job.updatedAt < input.olderThan)
+      .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime())
+      .slice(0, input.limit)
+      .map((job) => ({ organizationId: job.organizationId, jobId: job.id }));
+  }
 }
 
 export class InMemoryAnalysisAttemptRepository implements AnalysisAttemptRepository {

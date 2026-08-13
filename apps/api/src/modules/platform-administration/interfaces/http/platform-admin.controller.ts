@@ -17,6 +17,7 @@ import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe
 import { GetPlatformMetricsUseCase } from "../../application/use-cases/get-platform-metrics.use-case";
 import { GetPlatformOrganizationUseCase } from "../../application/use-cases/get-platform-organization.use-case";
 import { ListPlatformAuditLogsUseCase } from "../../application/use-cases/list-platform-audit-logs.use-case";
+import { ListPlatformDeadLetterEventsUseCase } from "../../application/use-cases/list-platform-dead-letter-events.use-case";
 import { ListPlatformOrganizationsUseCase } from "../../application/use-cases/list-platform-organizations.use-case";
 import { ListPlatformUsersUseCase } from "../../application/use-cases/list-platform-users.use-case";
 import { ReactivatePlatformOrganizationUseCase } from "../../application/use-cases/reactivate-platform-organization.use-case";
@@ -28,22 +29,26 @@ import { PlatformAdministrationErrorFilter } from "./platform-administration-err
 import {
   presentPage,
   presentPlatformAuditLog,
+  presentPlatformDeadLetterEvent,
   presentPlatformMetrics,
   presentPlatformOrganization,
   presentPlatformUser,
   type PageResponse,
   type PlatformAuditLogResponse,
+  type PlatformDeadLetterEventResponse,
   type PlatformMetricsResponse,
   type PlatformOrganizationResponse,
   type PlatformUserResponse,
 } from "./presenters";
 import {
   ListAuditLogsQuerySchema,
+  ListDeadLetterEventsQuerySchema,
   ListOrganizationsQuerySchema,
   ListUsersQuerySchema,
   OrganizationIdParamSchema,
   SuspendOrganizationBodySchema,
   type ListAuditLogsQuery,
+  type ListDeadLetterEventsQuery,
   type ListOrganizationsQuery,
   type ListUsersQuery,
   type SuspendOrganizationBody,
@@ -61,6 +66,7 @@ export class PlatformAdminController {
     private readonly listPlatformUsersUseCase: ListPlatformUsersUseCase,
     private readonly listPlatformAuditLogsUseCase: ListPlatformAuditLogsUseCase,
     private readonly getPlatformMetricsUseCase: GetPlatformMetricsUseCase,
+    private readonly listPlatformDeadLetterEventsUseCase: ListPlatformDeadLetterEventsUseCase,
   ) {}
 
   @Get("organizations")
@@ -168,5 +174,24 @@ export class PlatformAdminController {
     const result = await this.getPlatformMetricsUseCase.execute({ actorRole: platformContext.role });
 
     return presentPlatformMetrics(result);
+  }
+
+  /** Sprint 21 (hardening) — mission PARTIE F/PARTIE Q : diagnostiquer un backlog Outbox
+   *  (`GET admin/metrics` donne déjà le COMPTE via `/metrics` Prometheus, mission §57 —
+   *  cet endpoint donne le DÉTAIL nécessaire à une investigation d'incident). */
+  @Get("outbox/dead-letters")
+  @HttpCode(HttpStatus.OK)
+  async listDeadLetterEvents(
+    @CurrentPlatformContext() platformContext: PlatformContext,
+    @Query(new ZodValidationPipe(ListDeadLetterEventsQuerySchema)) query: ListDeadLetterEventsQuery,
+  ): Promise<PageResponse<PlatformDeadLetterEventResponse>> {
+    const result = await this.listPlatformDeadLetterEventsUseCase.execute({
+      actorRole: platformContext.role,
+      cursor: query.cursor,
+      limit: query.limit,
+      organizationId: query.organizationId,
+    });
+
+    return presentPage(result.items.map(presentPlatformDeadLetterEvent), result.nextCursor);
   }
 }

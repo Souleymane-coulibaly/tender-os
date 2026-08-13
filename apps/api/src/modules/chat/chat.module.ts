@@ -12,6 +12,7 @@ import { CreateConversationUseCase } from "./application/use-cases/create-conver
 import { GetConversationUseCase } from "./application/use-cases/get-conversation.use-case";
 import { ListConversationsUseCase } from "./application/use-cases/list-conversations.use-case";
 import { ListMessagesUseCase } from "./application/use-cases/list-messages.use-case";
+import { ReclaimStalePendingMessagesUseCase } from "./application/use-cases/reclaim-stale-pending-messages.use-case";
 import { SendMessageUseCase } from "./application/use-cases/send-message.use-case";
 import { ATOMIC_TRANSACTION_RUNNER } from "./application/ports/atomic-transaction-runner";
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
@@ -19,6 +20,7 @@ import { CONVERSATION_REPOSITORY } from "./application/ports/conversation.reposi
 import { DCE_CHUNK_SEARCH_PROVIDER } from "./application/ports/dce-chunk-search-provider";
 import { MESSAGE_REPOSITORY } from "./application/ports/message.repository";
 import { ChatContextAssembler } from "./application/services/chat-context-assembler";
+import { ChatStalePendingRecoveryWorker } from "./infrastructure/chat-stale-pending-recovery.worker";
 import { CHAT_CONFIG, loadChatConfig } from "./infrastructure/chat-config";
 import { PrismaAtomicTransactionRunner } from "./infrastructure/prisma-atomic-transaction-runner";
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
@@ -47,6 +49,8 @@ import { ChatController } from "./interfaces/http/chat.controller";
     ArchiveConversationUseCase,
     ListMessagesUseCase,
     SendMessageUseCase,
+    ReclaimStalePendingMessagesUseCase,
+    ChatStalePendingRecoveryWorker,
 
     ChatContextAssembler,
 

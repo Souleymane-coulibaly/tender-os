@@ -254,4 +254,14 @@ export class PrismaAnalysisJobRepository implements AnalysisJobRepository {
       return result;
     }, SHORT_TX_OPTIONS);
   }
+
+  async findStaleProcessingCandidates(input: { olderThan: Date; limit: number }): Promise<readonly { organizationId: string; jobId: string }[]> {
+    const records = await this.prisma.analysisJob.findMany({
+      where: { status: AnalysisStatus.Processing, updatedAt: { lt: input.olderThan } },
+      select: { id: true, organizationId: true },
+      orderBy: { updatedAt: "asc" },
+      take: input.limit,
+    });
+    return records.map((record) => ({ organizationId: record.organizationId, jobId: record.id }));
+  }
 }

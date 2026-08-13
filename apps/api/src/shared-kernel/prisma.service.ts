@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { PrismaClient, type Prisma } from "@prisma/client";
+import { dbQueryDurationSeconds } from "./metrics/metrics";
 import { TransactionalContext } from "./transactional-context";
 
 /**
@@ -7,8 +8,21 @@ import { TransactionalContext } from "./transactional-context";
  * Aucun autre composant n'instancie PrismaClient directement.
  */
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService extends PrismaClient<{ log: [{ emit: "event"; level: "query" }] }> implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
+
+  /** Sprint 21 (hardening) — mission §57 (db_query_duration). Le mécanisme d'événements Prisma
+   *  (`log: [{emit:"event", level:"query"}]` + `$on("query", ...)`) est DISTINCT du système
+   *  d'extension (`$extends`) responsable du bug Proxy déjà rencontré sur `currentClient()`
+   *  (voir sa propre note plus bas) — un simple émetteur d'événements, jamais un Proxy. Seule la
+   *  DURÉE est observée, jamais le texte SQL ni les paramètres (mission §19 — aucune donnée
+   *  potentiellement sensible dans une métrique). */
+  constructor() {
+    super({ log: [{ emit: "event", level: "query" }] });
+    this.$on("query", (event) => {
+      dbQueryDurationSeconds.observe(event.duration / 1000);
+    });
+  }
 
   /** V2 Sprint 4 (audit Codex P1-001, round 4) — retourne la transaction ambiante active
    *  (`TransactionalContext`) si présente, sinon ce client lui-même. Seuls les repositories qui

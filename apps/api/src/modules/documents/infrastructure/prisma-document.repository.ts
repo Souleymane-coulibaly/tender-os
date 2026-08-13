@@ -12,6 +12,10 @@ function isUniqueConstraintViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 
+/** Sprint 21 (hardening) — mission §29/§30 : `listByTenderId` n'imposait aucune borne (contrairement
+ *  à `list`, déjà paginé par curseur). Même motif que `PrismaTaskRepository`/`PrismaCommentRepository`. */
+const MAX_TENDER_DOCUMENTS_PER_QUERY = 1000;
+
 @Injectable()
 export class PrismaDocumentRepository implements DocumentRepository {
   private readonly mapper = new DocumentPersistenceMapper();
@@ -86,6 +90,7 @@ export class PrismaDocumentRepository implements DocumentRepository {
         deletedAt: null,
         tenderAssociations: { some: { tenderId: input.tenderId, organizationId: input.organizationId } },
       },
+      take: MAX_TENDER_DOCUMENTS_PER_QUERY,
     });
     return records.map((record: DocumentRecord) => this.mapper.toDomain(record));
   }

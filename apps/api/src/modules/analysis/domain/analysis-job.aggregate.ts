@@ -174,6 +174,16 @@ export class AnalysisJob {
     this.transitionTo(AnalysisStatus.Cancelled, occurredAt);
   }
 
+  /** Sprint 21 (hardening) — mission PARTIE F : reprise d'un job resté PROCESSING au-delà d'un
+   *  seuil (crash process avant `finalizeAttempt`), déclenchée automatiquement par
+   *  `ReclaimStaleAnalysisJobsUseCase`, jamais par un acteur HTTP. Distincte de `resetForRetry`
+   *  (source FAILED, requiert un `triggeredByRole` humain) : ici la source est PROCESSING, aucun
+   *  acteur n'est impliqué. `attemptCount` n'est PAS réinitialisé — la tentative interrompue reste
+   *  comptée, la prochaine `reserve()` incrémentera normalement. */
+  reclaimStale(occurredAt: Date): void {
+    this.transitionTo(AnalysisStatus.Queued, occurredAt);
+  }
+
   /** Seule transition sortante de FAILED (mission §"reprise après erreur") — jamais automatique,
    *  toujours déclenchée par `RetryAnalysisUseCase`. Cible toujours QUEUED : la même version, le
    *  même job, un nouvel `attemptCount` à la prochaine réservation — jamais une nouvelle ligne

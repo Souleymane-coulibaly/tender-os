@@ -202,4 +202,38 @@ describe("PrismaMessageRepository (PostgreSQL réel)", () => {
       expect(actualPersistedCount).toBe(cap);
     }, 30000);
   });
+
+  describe("findStalePendingCandidates (Sprint 21 hardening — mission PARTIE F)", () => {
+    async function seedPendingMessage(conversationId: string, createdAt: Date): Promise<string> {
+      const message = Message.createPendingAssistantMessage({ id: randomUUID(), organizationId, conversationId, occurredAt: createdAt });
+      await messageRepository.save(message);
+      await prisma.message.update({ where: { id: message.id }, data: { createdAt } });
+      return message.id;
+    }
+
+    it("returns only PENDING messages older than the threshold, never a recent or resolved one", async () => {
+      const conversationId = await createConversation(tenderId);
+      const staleId = await seedPendingMessage(conversationId, new Date(Date.now() - 10 * 60 * 1000));
+      const recentConversationId = await createConversation(tenderId);
+      const recentId = await seedPendingMessage(recentConversationId, new Date());
+      const resolvedConversationId = await createConversation(tenderId);
+      await seedAssistantMessage({ conversationId: resolvedConversationId, createdAt: new Date(Date.now() - 10 * 60 * 1000), status: "COMPLETED" });
+
+      const candidates = await messageRepository.findStalePendingCandidates({ olderThan: new Date(Date.now() - 5 * 60 * 1000), limit: 50 });
+      const candidateIds = candidates.map((c) => c.messageId);
+
+      expect(candidateIds).toContain(staleId);
+      expect(candidateIds).not.toContain(recentId);
+    });
+
+    it("never returns a candidate belonging to another organization mixed in with the caller's own", async () => {
+      const conversationId = await createConversation(tenderId);
+      const staleId = await seedPendingMessage(conversationId, new Date(Date.now() - 10 * 60 * 1000));
+
+      const candidates = await messageRepository.findStalePendingCandidates({ olderThan: new Date(Date.now() - 5 * 60 * 1000), limit: 50 });
+      const match = candidates.find((c) => c.messageId === staleId);
+
+      expect(match?.organizationId).toBe(organizationId);
+    });
+  });
 });

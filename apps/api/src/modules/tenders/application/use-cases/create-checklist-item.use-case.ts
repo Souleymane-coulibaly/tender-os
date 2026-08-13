@@ -122,9 +122,8 @@ export class CreateChecklistItemUseCase {
       // verrou sérialise cette séquence lire-puis-écrire par Tender (voir le port pour le détail).
       await this.checklistRepository.lockTenderForDedup({ organizationId: command.organizationId, tenderId: command.tenderId });
 
-      const dedupMatch = await findChecklistDedupMatch(this.checklistRepository, {
-        organizationId: command.organizationId,
-        tenderId: command.tenderId,
+      const existingItems = await this.checklistRepository.listByTender({ organizationId: command.organizationId, tenderId: command.tenderId });
+      const dedupMatch = findChecklistDedupMatch(existingItems, {
         type: command.type ?? ("OTHER" as ChecklistItemType),
         lotId: command.lotId,
         subjectType: command.subjectType ?? ("CANDIDATE" as ChecklistSubjectType),

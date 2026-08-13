@@ -7,7 +7,6 @@ import { DocumentTemplateVersion } from "../../domain/document-template-version.
 import { GeneratedDocumentRevisionStatus } from "../../domain/generated-document-revision-status";
 import type { DocxMergeEngine } from "../ports/docx-merge-engine";
 import type { DocumentTemplateRepository } from "../ports/document-template.repository";
-import type { GeneratedDocumentRepository } from "../ports/generated-document.repository";
 import { DocumentGenerationExecutionService } from "./document-generation-execution.service";
 
 function buildActiveVersion(): DocumentTemplateVersion {
@@ -30,52 +29,36 @@ function buildActiveVersion(): DocumentTemplateVersion {
 }
 
 /**
- * Correctif audit Codex P2 — preuve que l'artefact `Document` créé avec succès juste avant qu'une
- * étape ultérieure (ici `createRevision`) échoue est bien compensé (purgé), jamais laissé orphelin
- * et non tracé. Testé en isolation (fakes) car reproduire cet ordonnancement précis via une vraie
- * transaction Postgres nécessiterait une injection de faute non disponible dans ce dépôt.
+ * Sprint 21 (hardening) — `run()` est désormais une fonction PURE côté persistance de la révision :
+ * elle ne l'écrit plus jamais elle-même (voir le commentaire de la classe). La compensation d'un
+ * artefact orphelin (ancien correctif audit Codex P2) est relocalisée au niveau des appelants
+ * (`GenerateDocumentUseCase`/`RegenerateDocumentUseCase`, voir leurs specs dédiées) puisque c'est
+ * désormais LEUR persistance finale qui peut échouer après que `run()` ait déjà créé l'artefact.
  */
-describe("DocumentGenerationExecutionService — compensation d'un artefact orphelin (correctif audit Codex P2)", () => {
-  it("purges the just-created artifact Document when createRevision fails right after artifact creation, and persists a FAILED revision with no artifact reference", async () => {
+describe("DocumentGenerationExecutionService", () => {
+  it("never persists the revision itself — returns a COMPLETED revision referencing the created artifact, without calling any repository write", async () => {
     const activeVersion = buildActiveVersion();
 
     const templateRepository: Pick<DocumentTemplateRepository, "findActiveVersion"> = {
       findActiveVersion: vi.fn().mockResolvedValue(activeVersion),
     };
-
-    const createRevision = vi.fn();
-    let callCount = 0;
-    createRevision.mockImplementation(async () => {
-      callCount += 1;
-      if (callCount === 1) {
-        throw new Error("simulated DB failure right after the artifact was committed");
-      }
-    });
-    const generatedDocumentRepository: Pick<GeneratedDocumentRepository, "createRevision"> = { createRevision };
-
     const mergeEngine: Pick<DocxMergeEngine, "render"> = { render: vi.fn().mockReturnValue(Buffer.from("fake-docx-bytes")) };
-
     const documentVersionRepository: Pick<DocumentVersionRepository, "findById"> = {
       findById: vi.fn().mockResolvedValue({ storageKey: "org-1/source-doc-1/source-version-1.docx" }),
     };
-
     const storageProvider: Pick<StorageProvider, "openReadStream"> = {
       openReadStream: vi.fn().mockResolvedValue(Readable.from([Buffer.from("template-bytes")])),
     };
-
     const createDocumentWithFirstVersionUseCase: Pick<CreateDocumentWithFirstVersionUseCase, "execute"> = {
       execute: vi.fn().mockResolvedValue({ id: "artifact-document-1", currentVersion: { id: "artifact-version-1" } }),
     };
-
-    const purgeJustCreatedDocument = vi.fn().mockResolvedValue(undefined);
+    const purgeJustCreatedDocument = vi.fn();
     const internalDocumentCleanupService: Pick<InternalDocumentCleanupService, "purgeJustCreatedDocument"> = { purgeJustCreatedDocument };
-
     const clock: Clock = { now: () => new Date("2026-08-05T00:00:00Z") };
     const idGenerator: IdGenerator = { generate: () => "revision-1" };
 
     const service = new DocumentGenerationExecutionService(
       templateRepository as DocumentTemplateRepository,
-      generatedDocumentRepository as GeneratedDocumentRepository,
       mergeEngine as DocxMergeEngine,
       documentVersionRepository as DocumentVersionRepository,
       storageProvider as StorageProvider,
@@ -96,17 +79,11 @@ describe("DocumentGenerationExecutionService — compensation d'un artefact orph
       documentTitle: "Document de test",
     });
 
-    // L'artefact CRÉÉ AVEC SUCCÈS a bien été purgé — jamais un Document orphelin non référencé.
-    expect(purgeJustCreatedDocument).toHaveBeenCalledTimes(1);
-    expect(purgeJustCreatedDocument).toHaveBeenCalledWith({ organizationId: "org-1", documentId: "artifact-document-1" });
-
-    // La révision persistée est FAILED, sans référence à l'artefact purgé (il n'existe plus).
-    expect(revision.status).toBe(GeneratedDocumentRevisionStatus.Failed);
-    expect(revision.artifactDocumentId).toBeUndefined();
-    expect(revision.artifactDocumentVersionId).toBeUndefined();
-
-    // La révision FAILED a bien été persistée (deuxième appel à createRevision, après l'échec du premier).
-    expect(createRevision).toHaveBeenCalledTimes(2);
+    expect(revision.status).toBe(GeneratedDocumentRevisionStatus.Completed);
+    expect(revision.artifactDocumentId).toBe("artifact-document-1");
+    expect(revision.artifactDocumentVersionId).toBe("artifact-version-1");
+    // Jamais purgé sur le chemin de succès — l'artefact reste rattaché à la révision retournée.
+    expect(purgeJustCreatedDocument).not.toHaveBeenCalled();
   });
 
   it("never calls purgeJustCreatedDocument when the failure happens BEFORE any artifact was created", async () => {
@@ -115,7 +92,6 @@ describe("DocumentGenerationExecutionService — compensation d'un artefact orph
     const templateRepository: Pick<DocumentTemplateRepository, "findActiveVersion"> = {
       findActiveVersion: vi.fn().mockResolvedValue(activeVersion),
     };
-    const generatedDocumentRepository: Pick<GeneratedDocumentRepository, "createRevision"> = { createRevision: vi.fn().mockResolvedValue(undefined) };
     const mergeEngine: Pick<DocxMergeEngine, "render"> = { render: vi.fn() };
     // Le fichier source du template est introuvable — échec AVANT toute création d'artefact.
     const documentVersionRepository: Pick<DocumentVersionRepository, "findById"> = { findById: vi.fn().mockResolvedValue(null) };
@@ -128,7 +104,6 @@ describe("DocumentGenerationExecutionService — compensation d'un artefact orph
 
     const service = new DocumentGenerationExecutionService(
       templateRepository as DocumentTemplateRepository,
-      generatedDocumentRepository as GeneratedDocumentRepository,
       mergeEngine as DocxMergeEngine,
       documentVersionRepository as DocumentVersionRepository,
       storageProvider as StorageProvider,

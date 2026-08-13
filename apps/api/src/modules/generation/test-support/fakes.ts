@@ -4,6 +4,7 @@ import type { AIProvider, AIProviderRegistry, AIProviderRequest, AIProviderResul
 import { AssertClientAccessUseCase } from "../../client-portfolio";
 import { InMemoryClientAssignmentRepository } from "../../client-portfolio/test-support/fakes";
 import type { AuditLogWriter, GenerationAuditLogEntry } from "../application/ports/audit-log-writer";
+import type { GenerationDispatchInput, GenerationDispatcher } from "../application/ports/generation-dispatcher";
 import type {
   FinalizeGenerationOutcome,
   GenerationListResult,
@@ -45,6 +46,13 @@ export class SequentialIdGenerator implements IdGenerator {
   generate(): string {
     this.counter += 1;
     return `id-${this.counter}`;
+  }
+}
+
+export class RecordingGenerationDispatcher implements GenerationDispatcher {
+  readonly dispatched: GenerationDispatchInput[] = [];
+  dispatch(input: GenerationDispatchInput): void {
+    this.dispatched.push(input);
   }
 }
 
@@ -150,6 +158,10 @@ export class InMemoryPromptVersionRepository implements PromptVersionRepository 
 
 export class InMemoryGenerationRepository implements GenerationRepository {
   private readonly byId = new Map<string, Generation>();
+  /** Sprint 21 (hardening) — mirroring the DB-managed `updatedAt` column (Prisma `@updatedAt`,
+   *  never modeled on the domain aggregate itself), maintained only for
+   *  `findStaleGeneratingCandidates` tests. */
+  private readonly updatedAtById = new Map<string, Date>();
 
   async findById(input: { organizationId: string; generationId: string }): Promise<Generation | null> {
     const generation = this.byId.get(input.generationId);
@@ -197,10 +209,12 @@ export class InMemoryGenerationRepository implements GenerationRepository {
 
   async create(generation: Generation): Promise<void> {
     this.byId.set(generation.id, generation);
+    this.updatedAtById.set(generation.id, new Date());
   }
 
   async save(generation: Generation): Promise<void> {
     this.byId.set(generation.id, generation);
+    this.updatedAtById.set(generation.id, new Date());
   }
 
   async reserveForGenerating(input: { organizationId: string; generationId: string; occurredAt: Date }): Promise<GenerationReservationOutcome> {
@@ -210,6 +224,7 @@ export class InMemoryGenerationRepository implements GenerationRepository {
     }
     generation.reserve();
     this.byId.set(generation.id, generation);
+    this.updatedAtById.set(generation.id, input.occurredAt);
     return { kind: "reserved", generation };
   }
 
@@ -230,6 +245,26 @@ export class InMemoryGenerationRepository implements GenerationRepository {
       generation.markFailed(input.outcome, input.occurredAt);
     }
     this.byId.set(generation.id, generation);
+    this.updatedAtById.set(generation.id, input.occurredAt);
+    return { applied: true };
+  }
+
+  async findStaleGeneratingCandidates(input: { olderThan: Date; limit: number }): Promise<readonly { organizationId: string; generationId: string }[]> {
+    return [...this.byId.values()]
+      .filter((g) => g.status === GenerationStatus.Generating && (this.updatedAtById.get(g.id) ?? new Date(0)) < input.olderThan)
+      .sort((a, b) => (this.updatedAtById.get(a.id) ?? new Date(0)).getTime() - (this.updatedAtById.get(b.id) ?? new Date(0)).getTime())
+      .slice(0, input.limit)
+      .map((g) => ({ organizationId: g.organizationId, generationId: g.id }));
+  }
+
+  async reclaimStaleGenerating(input: { organizationId: string; generationId: string; expectedAttemptCount: number }): Promise<{ applied: boolean }> {
+    const generation = await this.findById(input);
+    if (!generation || generation.status !== GenerationStatus.Generating || generation.attemptCount !== input.expectedAttemptCount) {
+      return { applied: false };
+    }
+    generation.reclaimStale();
+    this.byId.set(generation.id, generation);
+    this.updatedAtById.set(generation.id, new Date());
     return { applied: true };
   }
 }

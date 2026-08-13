@@ -29,6 +29,7 @@ describe("UpdateMilestoneUseCase / MarkMilestoneDoneUseCase / DeleteMilestoneUse
   let updateUseCase: UpdateMilestoneUseCase;
   let markDoneUseCase: MarkMilestoneDoneUseCase;
   let deleteUseCase: DeleteMilestoneUseCase;
+  let deleteAuditLogWriter: InMemoryAuditLogWriter;
 
   beforeEach(async () => {
     milestoneRepository = new InMemoryMilestoneRepository();
@@ -49,8 +50,10 @@ describe("UpdateMilestoneUseCase / MarkMilestoneDoneUseCase / DeleteMilestoneUse
       tenderRepository,
       clientPortfolio.assertClientAccessUseCase,
     );
+    deleteAuditLogWriter = new InMemoryAuditLogWriter();
     deleteUseCase = new DeleteMilestoneUseCase(
       milestoneRepository,
+      deleteAuditLogWriter,
       tenderRepository,
       clientPortfolio.assertClientAccessUseCase,
     );
@@ -219,6 +222,25 @@ describe("UpdateMilestoneUseCase / MarkMilestoneDoneUseCase / DeleteMilestoneUse
       await expect(
         milestoneRepository.findById({ organizationId: "org-1", tenderId: "tender-1", milestoneId: "milestone-1" }),
       ).resolves.toBeNull();
+    });
+
+    it("Sprint 21 (hardening) — records an audit log entry, the one gap its sibling UpdateMilestoneUseCase did not have", async () => {
+      await deleteUseCase.execute({
+        organizationId: "org-1",
+        tenderId: "tender-1",
+        milestoneId: "milestone-1",
+        actorId: "user-1",
+        actorRole: "BID_MANAGER",
+      });
+
+      expect(deleteAuditLogWriter.entries).toHaveLength(1);
+      expect(deleteAuditLogWriter.entries[0]).toMatchObject({
+        organizationId: "org-1",
+        actorId: "user-1",
+        action: "tender.milestone_deleted",
+        resourceType: "tender_milestone",
+        resourceId: "milestone-1",
+      });
     });
 
     it("correction P0 — refuses a MEMBER-tier actor with no assignment on the tender's client, even with tender:update", async () => {

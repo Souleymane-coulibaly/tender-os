@@ -125,6 +125,13 @@ export interface AnalysisJobRepository {
    *  `AnalysisNotFoundError` si absent ou hors organisation), appelle `fn` qui le mute en place,
    *  puis persiste le résultat dans la même transaction avant de retourner. */
   runExclusiveForJob<T>(input: { organizationId: string; jobId: string; fn: (job: AnalysisJob) => Promise<T> }): Promise<T>;
+
+  /** Sprint 21 (hardening) — mission PARTIE F : simple lecture (jamais verrouillée) des candidats
+   *  PROCESSING dont `updatedAt` dépasse le seuil — cross-organisation, consommée uniquement par
+   *  `ReclaimStaleAnalysisJobsUseCase`. La reprise elle-même reste sous `runExclusiveForJob`
+   *  (revérifie l'état sous verrou avant de muter — jamais de confiance aveugle en ce résultat,
+   *  potentiellement déjà obsolète au moment où il est consommé). */
+  findStaleProcessingCandidates(input: { olderThan: Date; limit: number }): Promise<readonly { organizationId: string; jobId: string }[]>;
 }
 
 export const ANALYSIS_JOB_REPOSITORY = Symbol("ANALYSIS_JOB_REPOSITORY");

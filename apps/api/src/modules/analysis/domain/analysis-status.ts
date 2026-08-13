@@ -32,6 +32,11 @@ export const ALLOWED_ANALYSIS_TRANSITIONS: Record<AnalysisStatus, readonly Analy
     AnalysisStatus.PartiallySucceeded,
     AnalysisStatus.Failed,
     AnalysisStatus.Cancelled,
+    // Sprint 21 (hardening) — mission PARTIE F : un job resté PROCESSING au-delà d'un seuil (crash
+    // process en plein appel provider, jamais suivi de finalizeAttempt) doit pouvoir être repris
+    // automatiquement, jamais bloqué indéfiniment en attente d'un retry manuel. Voir
+    // `AnalysisJob.reclaimStale()` / `ReclaimStaleAnalysisJobsUseCase`.
+    AnalysisStatus.Queued,
   ],
   [AnalysisStatus.Failed]: [AnalysisStatus.Queued],
   [AnalysisStatus.Succeeded]: [],

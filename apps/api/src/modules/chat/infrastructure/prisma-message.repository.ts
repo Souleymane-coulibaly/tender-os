@@ -176,4 +176,14 @@ export class PrismaMessageRepository implements MessageRepository {
     });
     return records.map(citationToDomain);
   }
+
+  async findStalePendingCandidates(input: { olderThan: Date; limit: number }): Promise<readonly { organizationId: string; messageId: string }[]> {
+    const records = await this.prisma.currentClient().message.findMany({
+      where: { status: MessageStatus.Pending, createdAt: { lt: input.olderThan } },
+      select: { id: true, organizationId: true },
+      orderBy: { createdAt: "asc" },
+      take: input.limit,
+    });
+    return records.map((record) => ({ organizationId: record.organizationId, messageId: record.id }));
+  }
 }

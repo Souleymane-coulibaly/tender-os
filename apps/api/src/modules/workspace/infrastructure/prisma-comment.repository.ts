@@ -34,6 +34,9 @@ function toPersistence(comment: Comment) {
   };
 }
 
+/** Sprint 21 (hardening) — mission §29/§30, même motif que `PrismaTaskRepository`. */
+const MAX_COMMENTS_PER_QUERY = 1000;
+
 @Injectable()
 export class PrismaCommentRepository implements CommentRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -49,6 +52,7 @@ export class PrismaCommentRepository implements CommentRepository {
     const records = await this.prisma.currentClient().comment.findMany({
       where: { organizationId: input.organizationId, tenderId: input.tenderId, entityType: input.entityType, entityId: input.entityId },
       orderBy: { createdAt: "asc" },
+      take: MAX_COMMENTS_PER_QUERY,
     });
     return records.map(toDomain);
   }
@@ -57,6 +61,7 @@ export class PrismaCommentRepository implements CommentRepository {
     const records = await this.prisma.currentClient().comment.findMany({
       where: { organizationId: input.organizationId, tenderId: input.tenderId },
       orderBy: { createdAt: "asc" },
+      take: MAX_COMMENTS_PER_QUERY,
     });
     return records.map(toDomain);
   }

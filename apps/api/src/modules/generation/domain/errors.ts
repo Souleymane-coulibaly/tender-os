@@ -63,6 +63,17 @@ export class GenerationNotRetryableError extends DomainError {
   }
 }
 
+/** Sprint 21 (hardening) — mission §"pas de retry illimité sur une génération coûteuse", même motif
+ *  qu'`AnalysisRetryLimitExceededError`. Sans cette borne, `RetryGenerationUseCase` n'avait
+ *  strictement aucune limite : un utilisateur pouvait relancer une génération en échec permanent
+ *  indéfiniment, jamais gratuit (chaque tentative est un appel provider réel). */
+export class GenerationRetryLimitExceededError extends DomainError {
+  readonly code = "GENERATION_RETRY_LIMIT_EXCEEDED";
+  constructor(input: { maxAttempts: number }) {
+    super(`Generation has already been attempted ${input.maxAttempts} time(s); no further retry is allowed.`);
+  }
+}
+
 export class GenerationNotCancellableError extends DomainError {
   readonly code = "GENERATION_NOT_CANCELLABLE";
   constructor() {

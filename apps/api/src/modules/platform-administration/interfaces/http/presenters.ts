@@ -1,5 +1,6 @@
 import type { UserSummary } from "../../../identity";
 import type { PlatformAuditLogRecord } from "../../application/ports/platform-audit-log.port";
+import type { PlatformDeadLetterEventRecord } from "../../application/ports/platform-dead-letter-event.port";
 import type { PlatformOrganizationView } from "../../application/use-cases/list-platform-organizations.use-case";
 import type { GetPlatformMetricsResult } from "../../application/use-cases/get-platform-metrics.use-case";
 
@@ -56,6 +57,12 @@ export function presentPlatformUser(user: UserSummary): PlatformUserResponse {
 export type PlatformAuditLogResponse = PlatformAuditLogRecord;
 
 export function presentPlatformAuditLog(entry: PlatformAuditLogRecord): PlatformAuditLogResponse {
+  return entry;
+}
+
+export type PlatformDeadLetterEventResponse = PlatformDeadLetterEventRecord;
+
+export function presentPlatformDeadLetterEvent(entry: PlatformDeadLetterEventRecord): PlatformDeadLetterEventResponse {
   return entry;
 }
 

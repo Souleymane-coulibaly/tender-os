@@ -185,4 +185,27 @@ export class PrismaGenerationRepository implements GenerationRepository {
 
     return { applied: result.count > 0 };
   }
+
+  async findStaleGeneratingCandidates(input: { olderThan: Date; limit: number }): Promise<readonly { organizationId: string; generationId: string }[]> {
+    const records = await this.prisma.generation.findMany({
+      where: { status: GenerationStatus.Generating, updatedAt: { lt: input.olderThan } },
+      select: { id: true, organizationId: true },
+      orderBy: { updatedAt: "asc" },
+      take: input.limit,
+    });
+    return records.map((record) => ({ organizationId: record.organizationId, generationId: record.id }));
+  }
+
+  async reclaimStaleGenerating(input: { organizationId: string; generationId: string; expectedAttemptCount: number }): Promise<{ applied: boolean }> {
+    const result = await this.prisma.generation.updateMany({
+      where: {
+        id: input.generationId,
+        organizationId: input.organizationId,
+        status: GenerationStatus.Generating,
+        attemptCount: input.expectedAttemptCount,
+      },
+      data: { status: GenerationStatus.Pending },
+    });
+    return { applied: result.count > 0 };
+  }
 }

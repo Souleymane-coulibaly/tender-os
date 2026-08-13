@@ -1,5 +1,7 @@
 import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { workerJobsFailed, workerJobsTotal } from "../../../shared-kernel/metrics/metrics";
 import { MARKET_SOURCE_CONNECTORS, type MarketSourceConnector } from "../application/ports/market-source-connector";
+import { MARKET_SOURCE_SYNC_LEASE_REPOSITORY, type MarketSourceSyncLeaseRepository } from "../application/ports/market-source-sync-lease.repository";
 import { SAVED_SEARCH_REPOSITORY, type SavedSearchRepository } from "../application/ports/saved-search.repository";
 import { SyncMarketSourceUseCase } from "../application/use-cases/sync-market-source.use-case";
 
@@ -19,6 +21,7 @@ export class MarketSourceSyncWorker implements OnModuleInit, OnModuleDestroy {
   constructor(
     @Inject(MARKET_SOURCE_CONNECTORS) private readonly connectors: MarketSourceConnector[],
     @Inject(SAVED_SEARCH_REPOSITORY) private readonly savedSearchRepository: SavedSearchRepository,
+    @Inject(MARKET_SOURCE_SYNC_LEASE_REPOSITORY) private readonly leaseRepository: MarketSourceSyncLeaseRepository,
     private readonly syncMarketSourceUseCase: SyncMarketSourceUseCase,
   ) {}
 
@@ -54,14 +57,31 @@ export class MarketSourceSyncWorker implements OnModuleInit, OnModuleDestroy {
     try {
       const organizationIds = await this.savedSearchRepository.listDistinctOrganizationIdsWithActiveSearches();
       const batchSize = this.readPositiveIntEnv("MARKET_SOURCE_SYNC_BATCH_SIZE", 100);
+      // Sprint 21 (hardening) — mission PARTIE F : seul worker parmi 5 sans claim/lock. La donnée
+      // est déjà protégée contre la corruption (contrainte unique sur SavedSearchMatch), mais un
+      // déploiement multi-instance sans bail dupliquerait le travail (appels provider redondants).
+      // Jamais de libération explicite (voir le port) : le bail doit seulement couvrir la durée
+      // MAXIMALE plausible d'UNE synchronisation (jamais l'intervalle de poll, bien plus long) —
+      // une fois expiré, n'importe quelle instance (y compris celle qui vient de terminer) peut
+      // re-synchroniser normalement à son prochain tick planifié.
+      const leaseDurationMs = this.readPositiveIntEnv("MARKET_SOURCE_SYNC_LEASE_DURATION_MS", 10 * 60 * 1000);
 
       for (const organizationId of organizationIds) {
         for (const connector of this.connectors) {
+          const now = new Date();
+          const claimed = await this.leaseRepository.tryClaim({ organizationId, source: connector.source, now, leaseDurationMs });
+          if (!claimed) {
+            this.logger.debug(`Skipping market source sync (source=${connector.source}, org=${organizationId}): lease already held by another instance.`);
+            continue;
+          }
           try {
             await this.syncMarketSourceUseCase.execute({ organizationId, connector, batchSize });
+            workerJobsTotal.inc({ worker: "market_source_sync", outcome: "succeeded" });
           } catch (error) {
             // Mission §62 — une source en échec n'empêche jamais les autres de continuer.
             this.logger.warn(`Market source sync failed (source=${connector.source}, org=${organizationId}): ${error instanceof Error ? error.message : String(error)}`);
+            workerJobsTotal.inc({ worker: "market_source_sync", outcome: "failed" });
+            workerJobsFailed.inc({ worker: "market_source_sync" });
           }
         }
       }

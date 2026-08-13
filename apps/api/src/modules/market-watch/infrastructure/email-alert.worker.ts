@@ -1,4 +1,5 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { workerJobsFailed, workerJobsTotal } from "../../../shared-kernel/metrics/metrics";
 import { SendPendingEmailAlertsUseCase } from "../application/use-cases/send-pending-email-alerts.use-case";
 
 /** Mission §66/§67 — worker RÉEL, même motif que les autres (Sprint 1/16/17). Jamais dans la
@@ -42,7 +43,12 @@ export class EmailAlertWorker implements OnModuleInit, OnModuleDestroy {
     try {
       const batchSize = this.readPositiveIntEnv("EMAIL_ALERT_BATCH_SIZE", 100);
       const baseUrl = process.env.APP_BASE_URL ?? "http://localhost:3000";
-      await this.sendPendingEmailAlertsUseCase.execute({ batchSize, baseUrl });
+      const result = await this.sendPendingEmailAlertsUseCase.execute({ batchSize, baseUrl });
+      if (result.sent > 0) workerJobsTotal.inc({ worker: "email_alert", outcome: "succeeded" }, result.sent);
+      if (result.failed > 0) {
+        workerJobsTotal.inc({ worker: "email_alert", outcome: "failed" }, result.failed);
+        workerJobsFailed.inc({ worker: "email_alert" }, result.failed);
+      }
     } catch (error) {
       this.logger.error("Email alert worker tick failed unexpectedly.", error instanceof Error ? error.stack : String(error));
     } finally {

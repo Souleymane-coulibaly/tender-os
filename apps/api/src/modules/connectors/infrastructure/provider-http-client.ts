@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { integrationRequestsFailed } from "../../../shared-kernel/metrics/metrics";
 import { ProviderErrorCode } from "../domain/enums";
 import { RemoteProviderError } from "../domain/errors";
 
@@ -71,6 +72,18 @@ function backoffDelayMs(attempt: number, retryAfterSeconds: number | undefined):
  * dupliqué la requête avant de rendre la main.
  */
 export async function callProviderJson<T>(url: string, schema: z.ZodType<T>, init: RequestInit, providerLabel: string, options: { retryAmbiguous?: boolean } = {}): Promise<T> {
+  try {
+    return await attemptCallProviderJson(url, schema, init, providerLabel, options);
+  } catch (error) {
+    // Sprint 21 (hardening) — mission §57 (integration_requests_failed) : un seul point
+    // d'incrémentation englobant TOUTES les tentatives/retries de cet appel logique, jamais un
+    // compteur par tentative interne (fausserait le signal "combien d'appels métier ont échoué").
+    integrationRequestsFailed.inc({ provider: providerLabel });
+    throw error;
+  }
+}
+
+async function attemptCallProviderJson<T>(url: string, schema: z.ZodType<T>, init: RequestInit, providerLabel: string, options: { retryAmbiguous?: boolean } = {}): Promise<T> {
   const retryAmbiguous = options.retryAmbiguous ?? true;
   let lastError: RemoteProviderError | undefined;
 
@@ -138,6 +151,15 @@ export async function callProviderJson<T>(url: string, schema: z.ZodType<T>, ini
  *  binaire (contenu de fichier) plutôt qu'une réponse JSON. Voir son commentaire pour
  *  `retryAmbiguous` (correctif audit Codex P1-004). */
 export async function callProviderBinary(url: string, init: RequestInit, providerLabel: string, options: { retryAmbiguous?: boolean } = {}): Promise<Buffer> {
+  try {
+    return await attemptCallProviderBinary(url, init, providerLabel, options);
+  } catch (error) {
+    integrationRequestsFailed.inc({ provider: providerLabel });
+    throw error;
+  }
+}
+
+async function attemptCallProviderBinary(url: string, init: RequestInit, providerLabel: string, options: { retryAmbiguous?: boolean } = {}): Promise<Buffer> {
   const retryAmbiguous = options.retryAmbiguous ?? true;
   let lastError: RemoteProviderError | undefined;
 

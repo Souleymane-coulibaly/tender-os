@@ -3,6 +3,7 @@ import type { AuthenticatedActor } from "../../../identity";
 import type { GetPlatformMetricsUseCase } from "../../application/use-cases/get-platform-metrics.use-case";
 import type { GetPlatformOrganizationUseCase } from "../../application/use-cases/get-platform-organization.use-case";
 import type { ListPlatformAuditLogsUseCase } from "../../application/use-cases/list-platform-audit-logs.use-case";
+import type { ListPlatformDeadLetterEventsUseCase } from "../../application/use-cases/list-platform-dead-letter-events.use-case";
 import type { ListPlatformOrganizationsUseCase } from "../../application/use-cases/list-platform-organizations.use-case";
 import type { ListPlatformUsersUseCase } from "../../application/use-cases/list-platform-users.use-case";
 import type { ReactivatePlatformOrganizationUseCase } from "../../application/use-cases/reactivate-platform-organization.use-case";
@@ -51,6 +52,9 @@ function createController() {
   const getPlatformMetricsUseCase = {
     execute: vi.fn().mockResolvedValue({ organizationsByStatus: {}, usersByStatus: {}, platformAdministratorsByRole: {} }),
   } as unknown as GetPlatformMetricsUseCase;
+  const listPlatformDeadLetterEventsUseCase = {
+    execute: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+  } as unknown as ListPlatformDeadLetterEventsUseCase;
 
   const controller = new PlatformAdminController(
     listPlatformOrganizationsUseCase,
@@ -60,6 +64,7 @@ function createController() {
     listPlatformUsersUseCase,
     listPlatformAuditLogsUseCase,
     getPlatformMetricsUseCase,
+    listPlatformDeadLetterEventsUseCase,
   );
 
   return {
@@ -69,6 +74,7 @@ function createController() {
     suspendPlatformOrganizationUseCase,
     reactivatePlatformOrganizationUseCase,
     listPlatformUsersUseCase,
+    listPlatformDeadLetterEventsUseCase,
   };
 }
 
@@ -147,6 +153,19 @@ describe("PlatformAdminController", () => {
       cursor: undefined,
       limit: 25,
       status: "SUSPENDED",
+    });
+  });
+
+  it("listDeadLetterEvents delegates with the resolved platform role and optional organizationId filter", async () => {
+    const { controller, listPlatformDeadLetterEventsUseCase } = createController();
+
+    await controller.listDeadLetterEvents(PLATFORM_CONTEXT, { limit: 25, organizationId: "org-1" });
+
+    expect(listPlatformDeadLetterEventsUseCase.execute).toHaveBeenCalledWith({
+      actorRole: PlatformRole.Owner,
+      cursor: undefined,
+      limit: 25,
+      organizationId: "org-1",
     });
   });
 });

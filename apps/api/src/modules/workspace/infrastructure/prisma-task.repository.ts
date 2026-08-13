@@ -66,6 +66,13 @@ function toWhereFilters(filters: TaskListFilters): Prisma.TaskWhereInput {
   return where;
 }
 
+/** Sprint 21 (hardening) — mission §29/§30 : ni `listByTender` ni `listByAssignee` n'imposaient
+ *  jusqu'ici de borne — une requête `findMany` littéralement illimitée pour un Tender/utilisateur
+ *  avec un volume anormal de tâches. Borne fixe (pas un paramètre client) : aucune UI de pagination
+ *  n'existe pour ces listes aujourd'hui (mission §31 — "ne pas migrer toute l'app par principe"),
+ *  ce filet de sécurité suffit tant qu'un besoin réel de pagination complète ne se manifeste pas. */
+const MAX_TASKS_PER_QUERY = 1000;
+
 @Injectable()
 export class PrismaTaskRepository implements TaskRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -81,6 +88,7 @@ export class PrismaTaskRepository implements TaskRepository {
     const records = await this.prisma.currentClient().task.findMany({
       where: { organizationId: input.organizationId, tenderId: input.tenderId, ...toWhereFilters(input) },
       orderBy: { createdAt: "desc" },
+      take: MAX_TASKS_PER_QUERY,
     });
     return records.map(toDomain);
   }
@@ -94,6 +102,7 @@ export class PrismaTaskRepository implements TaskRepository {
         ...(input.restrictToClientAccountIds !== undefined ? { tender: { clientAccountId: { in: [...input.restrictToClientAccountIds] } } } : {}),
       },
       orderBy: { dueDate: "asc" },
+      take: MAX_TASKS_PER_QUERY,
     });
     return records.map(toDomain);
   }

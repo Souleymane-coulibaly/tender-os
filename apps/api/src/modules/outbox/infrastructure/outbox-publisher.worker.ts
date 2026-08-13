@@ -1,4 +1,5 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { workerJobsFailed, workerJobsTotal } from "../../../shared-kernel/metrics/metrics";
 import { PublishPendingOutboxEventsUseCase } from "../application/use-cases/publish-pending-outbox-events.use-case";
 
 /**
@@ -58,6 +59,12 @@ export class OutboxPublisherWorker implements OnModuleInit, OnModuleDestroy {
       if (result.claimed > 0) {
         this.logger.log(`Outbox tick: claimed=${result.claimed} published=${result.published} failed=${result.failed} deadLettered=${result.deadLettered}`);
       }
+      if (result.published > 0) workerJobsTotal.inc({ worker: "outbox", outcome: "succeeded" }, result.published);
+      if (result.failed > 0) {
+        workerJobsTotal.inc({ worker: "outbox", outcome: "failed" }, result.failed);
+        workerJobsFailed.inc({ worker: "outbox" }, result.failed);
+      }
+      if (result.deadLettered > 0) workerJobsTotal.inc({ worker: "outbox", outcome: "dead_letter" }, result.deadLettered);
     } catch (error) {
       this.logger.error("Outbox worker tick failed unexpectedly.", error instanceof Error ? error.stack : String(error));
     } finally {

@@ -74,6 +74,19 @@ export class GeneratedDocumentRevisionNotFoundError extends DomainError {
   }
 }
 
+/** Sprint 21 (hardening) — correctif : le rendu (lecture storage + fusion DOCX + écriture de
+ *  l'artefact) a été déplacé HORS de toute transaction Postgres (jamais un appel storage tenu
+ *  pendant une transaction ouverte, même classe de correctif que Sprint 20 connecteurs). Le
+ *  `revisionNumber` est donc calculé sous verrou COURT avant le rendu, puis la révision est
+ *  persistée après — une régénération concurrente de la même lignée entre ces deux étapes est
+ *  rejetée ici par la contrainte UNIQUE `[generatedDocumentId, revisionNumber]`, jamais silencieuse. */
+export class ConcurrentDocumentGenerationError extends DomainError {
+  readonly code = "CONCURRENT_DOCUMENT_GENERATION";
+  constructor() {
+    super("Another generation for this document lineage completed concurrently — please retry.");
+  }
+}
+
 /** Mission §"jamais inventer une valeur manquante" — un champ requis est absent du snapshot ET le
  *  template n'autorise pas la génération partielle : bloquée AVANT tout appel au moteur de fusion. */
 export class RequiredFieldsMissingError extends DomainError {

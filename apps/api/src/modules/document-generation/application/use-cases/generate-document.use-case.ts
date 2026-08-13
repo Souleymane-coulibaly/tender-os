@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
+import { InternalDocumentCleanupService } from "../../../documents";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { assertHasTenderPermission, GetTenderUseCase, TenderPermission } from "../../../tenders";
 import { DocumentTemplateNotFoundError } from "../../domain/errors";
@@ -37,6 +38,20 @@ export type GenerateDocumentCommand = Readonly<{
  * sont figés EXPLICITEMENT ici, une seule fois — voir `DocumentGenerationExecutionService`. Une
  * génération techniquement FAILED reste un résultat légitime et persisté (jamais une exception qui
  * ferait disparaître la tentative), mirroring `ExportJob`.
+ *
+ * Sprint 21 (hardening, correctif régression classe Sprint 20) — `executionService.run()` (lecture
+ * storage + fusion DOCX + écriture de l'artefact, potentiellement lent) s'exécute désormais HORS de
+ * toute transaction Postgres : seule la persistance finale (GeneratedDocument + révision + audit +
+ * Outbox), rapide et DB-only, reste dans `atomicTransactionRunner.run`. Un appel storage tenu
+ * pendant une transaction ouverte risquait d'épuiser le pool de connexions sous charge — même
+ * classe de bug déjà corrigée dans les connecteurs Microsoft/Google (Sprint 20).
+ *
+ * Sprint 21 (hardening) — corollaire du déplacement ci-dessus : si la transaction courte de
+ * persistance finale échoue (ex. `ConcurrentDocumentGenerationError`), l'artefact `Document` déjà
+ * créé par `run()` juste avant serait orphelin (non référencé par aucune révision persistée) sans
+ * l'appel de compensation explicite ci-dessous — même filet de sécurité que l'ancien correctif
+ * Codex P2, relocalisé ici puisque la persistance de la révision n'a plus lieu à l'intérieur de
+ * `run()`.
  */
 @Injectable()
 export class GenerateDocumentUseCase {
@@ -51,6 +66,7 @@ export class GenerateDocumentUseCase {
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
     private readonly executionService: DocumentGenerationExecutionService,
+    private readonly internalDocumentCleanupService: InternalDocumentCleanupService,
   ) {}
 
   async execute(command: GenerateDocumentCommand): Promise<GeneratedDocumentSummary> {
@@ -80,47 +96,53 @@ export class GenerateDocumentUseCase {
       occurredAt,
     });
 
-    const revision = await this.atomicTransactionRunner.run(async () => {
-      await this.generatedDocumentRepository.create(generatedDocument);
-
-      const revision = await this.executionService.run({
-        organizationId: command.organizationId,
-        actorId: command.actorId,
-        actorRole: command.actorRole,
-        generatedDocumentId: generatedDocument.id,
-        documentTemplateId: command.documentTemplateId,
-        revisionNumber: 1,
-        data: command.data,
-        provenanceOverrides: command.provenanceOverrides,
-        documentTitle: generatedDocument.title,
-        requestId: command.requestId,
-      });
-
-      await this.auditLogWriter.record({
-        organizationId: command.organizationId,
-        actorId: command.actorId,
-        action: "document_generation.generated",
-        resourceType: "generated_document",
-        resourceId: generatedDocument.id,
-        requestId: command.requestId,
-        metadata: { tenderId: command.tenderId, documentTemplateId: command.documentTemplateId, revisionStatus: revision.status, missingFieldCount: revision.missingFields.length },
-      });
-
-      await this.outboxWriter.write({
-        organizationId: command.organizationId,
-        events: [
-          {
-            eventType: revision.status === "COMPLETED" ? "DocumentGenerationCompleted" : "DocumentGenerationFailed",
-            aggregateType: "GeneratedDocument",
-            aggregateId: generatedDocument.id,
-            payload: { tenderId: command.tenderId, revisionId: revision.id },
-            occurredAt,
-          },
-        ],
-      });
-
-      return revision;
+    const revision = await this.executionService.run({
+      organizationId: command.organizationId,
+      actorId: command.actorId,
+      actorRole: command.actorRole,
+      generatedDocumentId: generatedDocument.id,
+      documentTemplateId: command.documentTemplateId,
+      revisionNumber: 1,
+      data: command.data,
+      provenanceOverrides: command.provenanceOverrides,
+      documentTitle: generatedDocument.title,
+      requestId: command.requestId,
     });
+
+    try {
+      await this.atomicTransactionRunner.run(async () => {
+        await this.generatedDocumentRepository.create(generatedDocument);
+        await this.generatedDocumentRepository.createRevision(revision);
+
+        await this.auditLogWriter.record({
+          organizationId: command.organizationId,
+          actorId: command.actorId,
+          action: "document_generation.generated",
+          resourceType: "generated_document",
+          resourceId: generatedDocument.id,
+          requestId: command.requestId,
+          metadata: { tenderId: command.tenderId, documentTemplateId: command.documentTemplateId, revisionStatus: revision.status, missingFieldCount: revision.missingFields.length },
+        });
+
+        await this.outboxWriter.write({
+          organizationId: command.organizationId,
+          events: [
+            {
+              eventType: revision.status === "COMPLETED" ? "DocumentGenerationCompleted" : "DocumentGenerationFailed",
+              aggregateType: "GeneratedDocument",
+              aggregateId: generatedDocument.id,
+              payload: { tenderId: command.tenderId, revisionId: revision.id },
+              occurredAt,
+            },
+          ],
+        });
+      });
+    } catch (error) {
+      if (revision.artifactDocumentId) {
+        await this.internalDocumentCleanupService.purgeJustCreatedDocument({ organizationId: command.organizationId, documentId: revision.artifactDocumentId });
+      }
+      throw error;
+    }
 
     return toGeneratedDocumentSummary(generatedDocument, [revision]);
   }

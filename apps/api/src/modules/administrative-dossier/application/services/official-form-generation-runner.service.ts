@@ -118,6 +118,20 @@ export class OfficialFormGenerationRunner {
         requestId: input.requestId,
       });
 
+      // Sprint 21 (hardening) — correctif régression : `DocumentGenerationExecutionService.run()`
+      // ne persiste plus la révision lui-même depuis le correctif transaction-scope (voir
+      // `generate-document.use-case.ts`/`regenerate-document.use-case.ts`) — il ne fait plus que la
+      // calculer et la retourner, la persistance devient la responsabilité de CHAQUE appelant. Ce
+      // runner (Sprint 11B, un troisième appelant distinct des deux use cases document-generation)
+      // n'avait pas été mis à jour, laissant chaque révision calculée mais jamais écrite en base.
+      // Reste volontairement DANS la même transaction courte que le reste de cette méthode (jamais
+      // restructuré en 3 phases comme les deux autres appelants) : ce runner tient déjà un verrou de
+      // PORTÉE explicite (`lockGenerationScope`, correctif audit Codex P2) dont la sémantique
+      // bloquante — "la seconde génération concurrente attend puis ajoute la révision suivante,
+      // jamais un 409" — est le comportement testé et voulu ici, contrairement au nouveau
+      // verrou-court-puis-409 des deux autres appelants.
+      await this.generatedDocumentRepository.createRevision(revision);
+
       await this.auditLogWriter.record({
         organizationId: input.organizationId,
         actorType: "USER",

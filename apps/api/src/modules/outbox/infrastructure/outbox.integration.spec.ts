@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
 import type { OutboxEventHandler } from "../application/ports/outbox-event-handler";
 import { PublishPendingOutboxEventsUseCase } from "../application/use-cases/publish-pending-outbox-events.use-case";
+import { RecordEventProcessedByConsumerUseCase } from "../application/use-cases/record-event-processed-by-consumer.use-case";
 import { OutboxEventStatus } from "../domain/outbox-event-status";
 import { CompositeOutboxEventDispatcher } from "./composite-outbox-event-dispatcher";
 import { OutboxPublisherWorker } from "./outbox-publisher.worker";
@@ -33,6 +34,7 @@ describe("Outbox repositories (PostgreSQL réel)", () => {
   const prisma = new PrismaService();
   const outboxRepository = new PrismaOutboxEventRepository(prisma);
   const processedEventRepository = new PrismaProcessedEventRepository(prisma);
+  const recordEventProcessedByConsumerUseCase = new RecordEventProcessedByConsumerUseCase(processedEventRepository);
 
   const organizationId = randomUUID();
 
@@ -201,7 +203,7 @@ describe("Outbox repositories (PostgreSQL réel)", () => {
 
       const handled: string[] = [];
       const handler: OutboxEventHandler = { eventType: "TEST_EVENT", handle: async (event) => { handled.push(event.id); } };
-      const dispatcher = new CompositeOutboxEventDispatcher([handler]);
+      const dispatcher = new CompositeOutboxEventDispatcher([handler], recordEventProcessedByConsumerUseCase);
       const useCase = new PublishPendingOutboxEventsUseCase(outboxRepository, dispatcher, new SystemClock());
       const worker = new OutboxPublisherWorker(useCase);
 
@@ -218,7 +220,7 @@ describe("Outbox repositories (PostgreSQL réel)", () => {
         events: [{ eventType: "TEST_EVENT", aggregateType: "Test", aggregateId: randomUUID(), payload: {}, occurredAt: new Date() }],
       });
 
-      const dispatcher = new CompositeOutboxEventDispatcher([{ eventType: "TEST_EVENT", handle: async () => {} }]);
+      const dispatcher = new CompositeOutboxEventDispatcher([{ eventType: "TEST_EVENT", handle: async () => {} }], recordEventProcessedByConsumerUseCase);
       const firstWorker = new OutboxPublisherWorker(new PublishPendingOutboxEventsUseCase(outboxRepository, dispatcher, new SystemClock()));
       firstWorker.onModuleInit();
       firstWorker.onModuleDestroy();
@@ -241,7 +243,7 @@ describe("Outbox repositories (PostgreSQL réel)", () => {
         events: [{ eventType: "TYPE_WITHOUT_HANDLER", aggregateType: "Test", aggregateId: randomUUID(), payload: {}, occurredAt: new Date() }],
       });
 
-      const dispatcher = new CompositeOutboxEventDispatcher([]);
+      const dispatcher = new CompositeOutboxEventDispatcher([], recordEventProcessedByConsumerUseCase);
       const worker = new OutboxPublisherWorker(new PublishPendingOutboxEventsUseCase(outboxRepository, dispatcher, new SystemClock()));
 
       await worker.tick();
