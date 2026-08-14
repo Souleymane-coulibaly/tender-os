@@ -70,6 +70,39 @@ export class OrganizationSubscription {
     this.props = { ...this.props, planTier: input.planTier, billingInterval: input.billingInterval, updatedAt: input.occurredAt };
   }
 
+  /** Correctif audit Codex 22D (P1-01) — `AssignSubscriptionUseCase` appelait `changePlan()` sur une
+   *  ligne EXISTANTE, qui ne touche ni `source` ni les métadonnées Stripe : un webhook
+   *  `customer.subscription.updated` réel ne mettait alors JAMAIS à jour `currentPeriodStart/End`
+   *  sur un renouvellement, et une réassignation Platform Admin MANUAL/GRANTED sur une organisation
+   *  déjà STRIPE laissait `source` divergent (affichée STRIPE alors que réellement GRANTED/MANUAL).
+   *  `reassign` remplace TOUJOURS l'intégralité de ces champs — jamais un merge partiel — pour que
+   *  la ligne reflète exactement la dernière assignation reçue, quelle que soit sa provenance.
+   *  `stripeCustomerId`/`stripeSubscriptionId`/`currentPeriodStart`/`currentPeriodEnd` absents du
+   *  nouvel input (cas MANUAL/GRANTED) sont donc explicitement EFFACÉS, jamais conservés d'une
+   *  précédente période Stripe qui ne s'applique plus. */
+  reassign(input: {
+    planTier: SubscriptionPlanTier;
+    billingInterval: BillingInterval;
+    source: PlanSource;
+    stripeCustomerId?: string | undefined;
+    stripeSubscriptionId?: string | undefined;
+    currentPeriodStart?: Date | undefined;
+    currentPeriodEnd?: Date | undefined;
+    occurredAt: Date;
+  }): void {
+    this.props = {
+      ...this.props,
+      planTier: input.planTier,
+      billingInterval: input.billingInterval,
+      source: input.source,
+      stripeCustomerId: input.stripeCustomerId,
+      stripeSubscriptionId: input.stripeSubscriptionId,
+      currentPeriodStart: input.currentPeriodStart,
+      currentPeriodEnd: input.currentPeriodEnd,
+      updatedAt: input.occurredAt,
+    };
+  }
+
   markPastDue(occurredAt: Date): void {
     this.props = { ...this.props, status: SubscriptionStatus.PastDue, updatedAt: occurredAt };
   }

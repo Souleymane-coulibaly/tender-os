@@ -164,6 +164,14 @@ export class InMemoryDocumentVersionRepository implements DocumentVersionReposit
     const versions = await this.listByDocument(input);
     return versions.reduce((max, version) => Math.max(max, version.versionNumber), 0);
   }
+
+  async sumStorageBytesForOrganization(organizationId: string): Promise<number> {
+    let total = 0;
+    for (const version of this.versions.values()) {
+      if (version.organizationId === organizationId) total += version.sizeBytes;
+    }
+    return total;
+  }
 }
 
 /** Assemble un `InMemoryDocumentRepository` et un `InMemoryDocumentVersionRepository`

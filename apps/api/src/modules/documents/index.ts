@@ -68,3 +68,7 @@ export type { AttachDocumentToTenderCommand } from "./application/use-cases/atta
 // accepté silencieusement. Jamais une écriture depuis response-package, uniquement `.exists(...)`.
 export { DOCUMENT_TENDER_ASSOCIATION_REPOSITORY } from "./application/ports/document-tender-association.repository";
 export type { DocumentTenderAssociationRepository } from "./application/ports/document-tender-association.repository";
+
+// Réexporté en LECTURE SEULE pour Sprint 22 (module `billing`, étape 22D) — mesure d'usage
+// "stockage" organisation-wide (écran Abonnement & utilisation, Platform Admin, résumé Dashboard 22E).
+export { GetOrganizationStorageUsageUseCase } from "./application/use-cases/get-organization-storage-usage.use-case";

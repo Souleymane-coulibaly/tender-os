@@ -23,6 +23,11 @@ export const PlatformCapability = {
   // Admin ne peut pas modifier son propre solde").
   AoCreditsRead: "platform:ao-credits:read",
   AoCreditsManage: "platform:ao-credits:manage",
+  // V2 Sprint 22 (billing, étape 22D) — écran Platform Admin "Organisations → Abonnement & Usage".
+  // Même principe de moindre privilège : SUPPORT lecture seule, seuls ADMIN/OWNER assignent un
+  // plan MANUAL/GRANTED pour un pilote/une démo (mission §49).
+  SubscriptionsRead: "platform:subscriptions:read",
+  SubscriptionsManage: "platform:subscriptions:manage",
 } as const;
 
 export type PlatformCapability = (typeof PlatformCapability)[keyof typeof PlatformCapability];
@@ -37,6 +42,7 @@ export const ROLE_CAPABILITIES: Record<PlatformRole, readonly PlatformCapability
     PlatformCapability.MetricsRead,
     PlatformCapability.EntitlementOverridesRead,
     PlatformCapability.AoCreditsRead,
+    PlatformCapability.SubscriptionsRead,
   ],
 };
 

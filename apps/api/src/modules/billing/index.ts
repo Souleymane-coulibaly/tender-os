@@ -39,3 +39,8 @@ export type { ConsumeAoCreditCommand } from "./application/use-cases/consume-ao-
 export { GrantMonthlyAoCreditsUseCase } from "./application/use-cases/grant-monthly-ao-credits.use-case";
 export type { GrantMonthlyAoCreditsCommand } from "./application/use-cases/grant-monthly-ao-credits.use-case";
 export { GetAoCreditBalanceUseCase } from "./application/use-cases/get-ao-credit-balance.use-case";
+// V2 Sprint 22 (billing, étape 22D) — réexporté UNIQUEMENT pour `subscription-usage` (composition
+// cross-module Chat/Documents/Memberships qui ne peut pas vivre DANS `billing` sans créer un cycle
+// de modules Billing -> Chat -> Tenders -> Billing). Voir `subscription-usage.module.ts`.
+export { GetOrganizationSubscriptionUseCase } from "./application/use-cases/get-organization-subscription.use-case";
+export { BillingErrorFilter } from "./interfaces/http/billing-error.filter";

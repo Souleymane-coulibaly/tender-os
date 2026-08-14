@@ -20,6 +20,7 @@ import { CreateCustomerPortalSessionUseCase } from "./application/use-cases/crea
 import { CreateEntitlementOverrideUseCase } from "./application/use-cases/create-entitlement-override.use-case";
 import { GetAoCreditBalanceUseCase } from "./application/use-cases/get-ao-credit-balance.use-case";
 import { GetOrganizationEntitlementsUseCase } from "./application/use-cases/get-organization-entitlements.use-case";
+import { GetOrganizationSubscriptionUseCase } from "./application/use-cases/get-organization-subscription.use-case";
 import { GrantMonthlyAoCreditsUseCase } from "./application/use-cases/grant-monthly-ao-credits.use-case";
 import { HandleStripeWebhookUseCase } from "./application/use-cases/handle-stripe-webhook.use-case";
 import { ListAoCreditLedgerUseCase } from "./application/use-cases/list-ao-credit-ledger.use-case";
@@ -42,11 +43,12 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
 
 /**
  * V2 Sprint 22 (billing) — bounded context "Catalogue / Pass / Plans / Entitlements" (22A) +
- * "AO Credit Ledger / Rollover / Quotas" (22B) + "Stripe Payment + Subscriptions" (22C). Importe
+ * "AO Credit Ledger / Rollover / Quotas" (22B) + "Stripe Payment + Subscriptions" (22C) +
+ * "Subscription & Usage UI + Platform Admin" (22D, lecture propre — la composition avec les
+ * usages Chat IA/stockage/utilisateurs vit dans le module `subscription-usage`, jamais ici, pour
+ * éviter un cycle de modules Billing -> Chat -> Tenders -> Billing). Importe
  * `IdentityModule`/`MembershipsModule`/`PlatformAdministrationModule` UNIQUEMENT pour réutiliser
- * leurs guards/décorateurs sur ses propres contrôleurs — jamais l'inverse. Les intégrations
- * restantes (écran Platform Admin "Abonnement & Usage", planification réelle du grant mensuel via
- * `invoice.paid`) sont des étapes ultérieures (22D-22E).
+ * leurs guards/décorateurs sur ses propres contrôleurs — jamais l'inverse.
  */
 @Module({
   imports: [IdentityModule, MembershipsModule, PlatformAdministrationModule],
@@ -58,6 +60,7 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
     ConsumePassForTenderUseCase,
     ListPassPurchasesUseCase,
     GetOrganizationEntitlementsUseCase,
+    GetOrganizationSubscriptionUseCase,
     CreateEntitlementOverrideUseCase,
     RevokeEntitlementOverrideUseCase,
     ListEntitlementOverridesUseCase,
@@ -88,6 +91,7 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
     ConsumePassForTenderUseCase,
     ListPassPurchasesUseCase,
     GetOrganizationEntitlementsUseCase,
+    GetOrganizationSubscriptionUseCase,
     // V2 Sprint 22B — réexporté pour que `tenders` consomme la consommation d'AO au point de
     // choc unique identifié (CreateTenderUseCase, voir le rapport 22B).
     ConsumeAoCreditUseCase,

@@ -14,21 +14,33 @@ import type {
  * `STRIPE_WEBHOOK_SECRET` absents ne font jamais échouer le DÉMARRAGE (même discipline que
  * `METRICS_TOKEN`, Sprint 21) — seule une tentative réelle d'appel Stripe échoue explicitement,
  * jamais silencieusement.
+ *
+ * Correctif (étape 22D, régression réelle trouvée en amorçant le graphe Nest complet pour la
+ * première fois depuis 22C) — `stripe@22.5.0` valide `apiKey` DANS SON PROPRE constructeur
+ * (`new Stripe("")` lève immédiatement `Error: Neither apiKey nor config.authenticator provided`,
+ * contrairement à l'hypothèse du commentaire d'origine "rien n'appelle le réseau au démarrage").
+ * Construire `Stripe` au DÉMARRAGE de ce provider (constructeur de `StripeSdkClient`, appelé
+ * pendant l'instanciation du graphe Nest, jamais différée) faisait donc planter TOUT le démarrage
+ * de l'application dès que `STRIPE_SECRET_KEY` était absent. Le client Stripe est maintenant
+ * construit paresseusement (mémoïsé), au premier appel RÉEL d'une méthode de cette classe —
+ * jamais pendant l'instanciation DI.
  */
 @Injectable()
 export class StripeSdkClient implements StripeClient {
   private readonly logger = new Logger(StripeSdkClient.name);
-  private readonly stripe: Stripe;
+  private stripeInstance: Stripe | undefined;
 
-  constructor() {
-    // Une clé absente reste un Stripe client valide en mémoire (rien n'appelle le réseau au
-    // démarrage) — l'échec réel n'arrive qu'au premier appel HTTP, avec le message d'erreur
-    // explicite du SDK Stripe lui-même.
-    this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", { apiVersion: "2026-07-29.dahlia" });
+  // Méthode plate, jamais un accesseur `get` (leçon retenue de `PrismaService` — un `get` sur un
+  // provider Nest peut perdre la liaison `this` selon comment l'appelant y accède).
+  private stripeClient(): Stripe {
+    if (!this.stripeInstance) {
+      this.stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", { apiVersion: "2026-07-29.dahlia" });
+    }
+    return this.stripeInstance;
   }
 
   async createCheckoutSession(input: CreateStripeCheckoutSessionInput): Promise<StripeCheckoutSession> {
-    const session = await this.stripe.checkout.sessions.create({
+    const session = await this.stripeClient().checkout.sessions.create({
       mode: input.mode,
       line_items: [{ price: input.priceId, quantity: 1 }],
       success_url: input.successUrl,
@@ -45,7 +57,7 @@ export class StripeSdkClient implements StripeClient {
   }
 
   async createCustomerPortalSession(input: { stripeCustomerId: string; returnUrl: string }): Promise<{ url: string }> {
-    const session = await this.stripe.billingPortal.sessions.create({ customer: input.stripeCustomerId, return_url: input.returnUrl });
+    const session = await this.stripeClient().billingPortal.sessions.create({ customer: input.stripeCustomerId, return_url: input.returnUrl });
     return { url: session.url };
   }
 
@@ -61,7 +73,7 @@ export class StripeSdkClient implements StripeClient {
 
     let event: Stripe.Event;
     try {
-      event = this.stripe.webhooks.constructEvent(rawBody, signatureHeader, webhookSecret);
+      event = this.stripeClient().webhooks.constructEvent(rawBody, signatureHeader, webhookSecret);
     } catch {
       throw new StripeWebhookSignatureInvalidError();
     }

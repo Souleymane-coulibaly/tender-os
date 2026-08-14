@@ -41,6 +41,15 @@ export interface MessageRepository {
    */
   countBillableAssistantMessagesForTenderSince(input: { organizationId: string; tenderId: string; since: Date }): Promise<number>;
 
+  /** V2 Sprint 22 (billing, étape 22D) — mesure d'usage "Chat IA" affichée sur l'écran Abonnement &
+   *  utilisation (mission §44) et le résumé Dashboard (22E), JAMAIS le même compteur que
+   *  `countBillableAssistantMessagesForTenderSince` (garde-fou anti-abus par Tender, fenêtre
+   *  glissante 24h) : ici organisation-wide, depuis `since` fourni par l'appelant (billing calcule
+   *  le début du jour calendaire). Compte les mêmes statuts "facturables OU réservés" que la garde
+   *  anti-abus, pour la même raison (une réservation PENDING représente un appel provider sur le
+   *  point d'être déclenché). */
+  countAssistantMessagesForOrganizationSince(input: { organizationId: string; since: Date }): Promise<number>;
+
   /** Sprint 21 (hardening) — mission PARTIE F : un message ASSISTANT PENDING créé quand le process
    *  crashe avant `SendMessageUseCase.execute()`'s finalize (appel provider interrompu) bloque
    *  DÉFINITIVEMENT sa conversation (`findPendingByConversation` la retrouve pour toujours), sans

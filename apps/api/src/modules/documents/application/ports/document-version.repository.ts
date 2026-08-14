@@ -14,6 +14,13 @@ export interface DocumentVersionRepository {
    *  prochain numéro ; la contrainte unique (documentId, versionNumber) reste le véritable
    *  garde-fou de concurrence, cette lecture n'est qu'une aide au calcul optimiste. */
   getHighestVersionNumber(input: { organizationId: string; documentId: string }): Promise<number>;
+
+  /** V2 Sprint 22 (billing, étape 22D) — mesure d'usage "stockage" affichée sur l'écran Abonnement &
+   *  utilisation (mission §45) et Platform Admin. Somme `sizeBytes` de TOUTES les versions
+   *  existantes de l'organisation (jamais uniquement la version courante : une ancienne version
+   *  conservée occupe un espace de stockage réel, même motif que la politique de rétention mission
+   *  §11 "ne jamais supprimer automatiquement"). */
+  sumStorageBytesForOrganization(organizationId: string): Promise<number>;
 }
 
 export const DOCUMENT_VERSION_REPOSITORY = Symbol("DOCUMENT_VERSION_REPOSITORY");

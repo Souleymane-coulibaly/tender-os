@@ -94,4 +94,67 @@ describe("AssignSubscriptionUseCase", () => {
 
     expect(subscription.source).toBe(PlanSource.Granted);
   });
+
+  it("correctif audit Codex 22D (P1-01) — reassigning GRANTED on an existing STRIPE subscription actually flips source (and clears stale Stripe metadata), never silently keeps STRIPE", async () => {
+    await useCase.execute({
+      organizationId: ORG_A,
+      planTier: PlanTier.Business,
+      billingInterval: BillingInterval.Monthly,
+      source: PlanSource.Stripe,
+      stripeCustomerId: "cus_123",
+      stripeSubscriptionId: "sub_123",
+      currentPeriodStart: FIXED_NOW,
+      currentPeriodEnd: new Date(FIXED_NOW.getTime() + 30 * 24 * 60 * 60 * 1000),
+      actorId: "stripe-webhook",
+      occurredAt: FIXED_NOW,
+    });
+
+    const reassigned = await useCase.execute({
+      organizationId: ORG_A,
+      planTier: PlanTier.Business,
+      billingInterval: BillingInterval.Monthly,
+      source: PlanSource.Granted,
+      actorId: "platform-admin-1",
+      occurredAt: new Date(FIXED_NOW.getTime() + 1000),
+    });
+
+    expect(reassigned.source).toBe(PlanSource.Granted);
+    expect(reassigned.toProps().stripeCustomerId).toBeUndefined();
+    expect(reassigned.toProps().stripeSubscriptionId).toBeUndefined();
+    expect(reassigned.toProps().currentPeriodEnd).toBeUndefined();
+
+    const sourceChangedEntry = auditLog.entries.find((e) => e.action === "SubscriptionChanged");
+    expect(sourceChangedEntry?.metadata).toMatchObject({ fromSource: PlanSource.Stripe, toSource: PlanSource.Granted });
+  });
+
+  it("correctif audit Codex 22D (P1-01) — a real Stripe renewal (customer.subscription.updated) actually updates currentPeriodEnd on the existing row, never silently discarded", async () => {
+    await useCase.execute({
+      organizationId: ORG_A,
+      planTier: PlanTier.Starter,
+      billingInterval: BillingInterval.Monthly,
+      source: PlanSource.Stripe,
+      stripeCustomerId: "cus_123",
+      stripeSubscriptionId: "sub_123",
+      currentPeriodStart: FIXED_NOW,
+      currentPeriodEnd: new Date(FIXED_NOW.getTime() + 30 * 24 * 60 * 60 * 1000),
+      actorId: "stripe-webhook",
+      occurredAt: FIXED_NOW,
+    });
+
+    const renewedPeriodEnd = new Date(FIXED_NOW.getTime() + 60 * 24 * 60 * 60 * 1000);
+    const renewed = await useCase.execute({
+      organizationId: ORG_A,
+      planTier: PlanTier.Starter,
+      billingInterval: BillingInterval.Monthly,
+      source: PlanSource.Stripe,
+      stripeCustomerId: "cus_123",
+      stripeSubscriptionId: "sub_123",
+      currentPeriodStart: new Date(FIXED_NOW.getTime() + 30 * 24 * 60 * 60 * 1000),
+      currentPeriodEnd: renewedPeriodEnd,
+      actorId: "stripe-webhook",
+      occurredAt: new Date(FIXED_NOW.getTime() + 1000),
+    });
+
+    expect(renewed.toProps().currentPeriodEnd).toEqual(renewedPeriodEnd);
+  });
 });

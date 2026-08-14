@@ -128,6 +128,13 @@ export class InMemoryMessageRepository implements MessageRepository {
       return m.status === MessageStatus.Pending || m.status === MessageStatus.Completed || (m.status === MessageStatus.Failed && m.model !== undefined);
     }).length;
   }
+
+  async countAssistantMessagesForOrganizationSince(input: { organizationId: string; since: Date }): Promise<number> {
+    return this.messages.filter((m) => {
+      if (m.organizationId !== input.organizationId || m.role !== MessageRole.Assistant || m.createdAt < input.since) return false;
+      return m.status === MessageStatus.Pending || m.status === MessageStatus.Completed || (m.status === MessageStatus.Failed && m.model !== undefined);
+    }).length;
+  }
 }
 
 export class FakeDceChunkSearchProvider implements DceChunkSearchProvider {

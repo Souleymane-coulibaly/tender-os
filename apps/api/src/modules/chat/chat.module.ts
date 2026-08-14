@@ -8,6 +8,7 @@ import { OpportunityModule } from "../opportunity";
 import { OutboxWriterModule } from "../outbox";
 import { TendersModule } from "../tenders";
 import { ArchiveConversationUseCase } from "./application/use-cases/archive-conversation.use-case";
+import { CountTodayChatUsageForOrganizationUseCase } from "./application/use-cases/count-today-chat-usage-for-organization.use-case";
 import { CreateConversationUseCase } from "./application/use-cases/create-conversation.use-case";
 import { GetConversationUseCase } from "./application/use-cases/get-conversation.use-case";
 import { ListConversationsUseCase } from "./application/use-cases/list-conversations.use-case";
@@ -51,6 +52,7 @@ import { ChatController } from "./interfaces/http/chat.controller";
     SendMessageUseCase,
     ReclaimStalePendingMessagesUseCase,
     ChatStalePendingRecoveryWorker,
+    CountTodayChatUsageForOrganizationUseCase,
 
     ChatContextAssembler,
 
@@ -63,5 +65,10 @@ import { ChatController } from "./interfaces/http/chat.controller";
     // ANALYSIS_CONFIG/GENERATION_CONFIG.
     { provide: CHAT_CONFIG, useFactory: () => loadChatConfig() },
   ],
+  // V2 Sprint 22 (billing, étape 22D) — `CountTodayChatUsageForOrganizationUseCase` réexporté en
+  // LECTURE SEULE pour que `billing` mesure l'usage "Chat IA" organisation-wide (écran Abonnement &
+  // utilisation, Platform Admin, résumé Dashboard 22E) — même motif que les use cases "for-dashboard"
+  // déjà réexportés par Tenders/ResponsePackage/Opportunity/Workspace (Sprint 15).
+  exports: [CountTodayChatUsageForOrganizationUseCase],
 })
 export class ChatModule {}

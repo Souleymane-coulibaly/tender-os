@@ -16,6 +16,7 @@ import { DeleteDocumentUseCase } from "./application/use-cases/delete-document.u
 import { DetachDocumentFromTenderUseCase } from "./application/use-cases/detach-document-from-tender.use-case";
 import { DownloadDocumentVersionUseCase } from "./application/use-cases/download-document-version.use-case";
 import { GetDocumentUseCase } from "./application/use-cases/get-document.use-case";
+import { GetOrganizationStorageUsageUseCase } from "./application/use-cases/get-organization-storage-usage.use-case";
 import { ListDocumentVersionsUseCase } from "./application/use-cases/list-document-versions.use-case";
 import { ListOrganizationDocumentsUseCase } from "./application/use-cases/list-organization-documents.use-case";
 import { ListTenderDocumentsUseCase } from "./application/use-cases/list-tender-documents.use-case";
@@ -50,6 +51,7 @@ import { TenderDocumentsController } from "./interfaces/http/tender-documents.co
     AttachDocumentToTenderUseCase,
     DetachDocumentFromTenderUseCase,
     InternalDocumentCleanupService,
+    GetOrganizationStorageUsageUseCase,
 
     { provide: DOCUMENT_REPOSITORY, useClass: PrismaDocumentRepository },
     { provide: DOCUMENT_VERSION_REPOSITORY, useClass: PrismaDocumentVersionRepository },
@@ -87,6 +89,10 @@ import { TenderDocumentsController } from "./interfaces/http/tender-documents.co
     // RP-P1-01) — vérifier qu'un document sélectionné manuellement appartient bien au Tender du
     // dossier de réponse avant de l'y rattacher.
     DOCUMENT_TENDER_ASSOCIATION_REPOSITORY,
+    // Réexporté en LECTURE SEULE pour Sprint 22 (module `billing`, étape 22D) — mesure d'usage
+    // "stockage" organisation-wide (écran Abonnement & utilisation, Platform Admin, résumé
+    // Dashboard 22E).
+    GetOrganizationStorageUsageUseCase,
   ],
 })
 export class DocumentsModule {}

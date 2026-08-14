@@ -155,6 +155,17 @@ export class PrismaMessageRepository implements MessageRepository {
     });
   }
 
+  async countAssistantMessagesForOrganizationSince(input: { organizationId: string; since: Date }): Promise<number> {
+    return this.prisma.currentClient().message.count({
+      where: {
+        organizationId: input.organizationId,
+        role: MessageRole.Assistant,
+        createdAt: { gte: input.since },
+        OR: [{ status: MessageStatus.Pending }, { status: MessageStatus.Completed }, { status: MessageStatus.Failed, model: { not: null } }],
+      },
+    });
+  }
+
   async saveCitations(citations: readonly MessageCitation[]): Promise<void> {
     if (citations.length === 0) return;
     await this.prisma.currentClient().messageCitation.createMany({ data: citations.map(citationToPersistence) });

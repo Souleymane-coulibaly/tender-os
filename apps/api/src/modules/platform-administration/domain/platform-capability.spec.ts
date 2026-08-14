@@ -21,4 +21,13 @@ describe("roleHasCapability", () => {
       expect(roleHasCapability(role, PlatformCapability.MetricsRead)).toBe(true);
     }
   });
+
+  it("V2 Sprint 22D — grants every role read access to subscriptions, but only OWNER/ADMIN can manually assign a plan", () => {
+    for (const role of Object.values(PlatformRole)) {
+      expect(roleHasCapability(role, PlatformCapability.SubscriptionsRead)).toBe(true);
+    }
+    expect(roleHasCapability(PlatformRole.Owner, PlatformCapability.SubscriptionsManage)).toBe(true);
+    expect(roleHasCapability(PlatformRole.Admin, PlatformCapability.SubscriptionsManage)).toBe(true);
+    expect(roleHasCapability(PlatformRole.Support, PlatformCapability.SubscriptionsManage)).toBe(false);
+  });
 });

@@ -38,6 +38,7 @@ import { SignatureModule } from "./modules/signature";
 import { SubcontractorsModule, SubcontractorSubjectValidationBridgeModule } from "./modules/subcontractors";
 import { SubmissionModule } from "./modules/submission";
 import { SubmissionPackageModule } from "./modules/submission-package";
+import { SubscriptionUsageModule } from "./modules/subscription-usage/subscription-usage.module";
 import { TechnicalMemoModule } from "./modules/technical-memo";
 import { TendersModule } from "./modules/tenders/tenders.module";
 import { ValidationModule } from "./modules/validation";
@@ -108,6 +109,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     MarketWatchModule,
     ConnectorsModule,
     BillingModule,
+    SubscriptionUsageModule,
   ],
 })
 export class AppModule {}

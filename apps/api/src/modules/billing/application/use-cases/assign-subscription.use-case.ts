@@ -62,10 +62,24 @@ export class AssignSubscriptionUseCase {
     }
 
     const previousPlanTier = existing.planTier;
+    const previousSource = existing.source;
     const planChanged = previousPlanTier !== command.planTier;
     const intervalChanged = existing.billingInterval !== command.billingInterval;
+    const sourceChanged = previousSource !== command.source;
 
-    existing.changePlan({ planTier: command.planTier, billingInterval: command.billingInterval, occurredAt: command.occurredAt });
+    // Correctif audit Codex 22D (P1-01) — `reassign` remplace TOUJOURS source/métadonnées Stripe/
+    // périodes, jamais un `changePlan` qui les aurait silencieusement conservées d'une précédente
+    // assignation (voir le commentaire de l'agrégat).
+    existing.reassign({
+      planTier: command.planTier,
+      billingInterval: command.billingInterval,
+      source: command.source,
+      stripeCustomerId: command.stripeCustomerId,
+      stripeSubscriptionId: command.stripeSubscriptionId,
+      currentPeriodStart: command.currentPeriodStart,
+      currentPeriodEnd: command.currentPeriodEnd,
+      occurredAt: command.occurredAt,
+    });
     await this.subscriptionRepository.save(existing);
 
     if (planChanged) {
@@ -86,6 +100,18 @@ export class AssignSubscriptionUseCase {
         resourceType: "OrganizationSubscription",
         resourceId: existing.id,
         metadata: { toBillingInterval: command.billingInterval },
+      });
+    }
+    if (sourceChanged) {
+      // Mission §55 — `SubscriptionChanged`, distinct de `PlanChanged` (palier) : trace
+      // spécifiquement la provenance (STRIPE ↔ MANUAL ↔ GRANTED), jamais absorbée silencieusement.
+      await this.auditLogWriter.record({
+        organizationId: command.organizationId,
+        actorId: command.actorId,
+        action: "SubscriptionChanged",
+        resourceType: "OrganizationSubscription",
+        resourceId: existing.id,
+        metadata: { fromSource: previousSource, toSource: command.source },
       });
     }
 

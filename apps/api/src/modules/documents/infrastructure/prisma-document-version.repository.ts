@@ -82,4 +82,9 @@ export class PrismaDocumentVersionRepository implements DocumentVersionRepositor
     });
     return record?.versionNumber ?? 0;
   }
+
+  async sumStorageBytesForOrganization(organizationId: string): Promise<number> {
+    const result = await this.prisma.documentVersion.aggregate({ where: { organizationId }, _sum: { sizeBytes: true } });
+    return result._sum.sizeBytes ?? 0;
+  }
 }

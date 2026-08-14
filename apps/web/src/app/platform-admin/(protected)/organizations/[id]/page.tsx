@@ -3,6 +3,7 @@ import { platformApiFetch } from "../../../../../lib/platform-api-client";
 import type { PlatformOrganization } from "../../../../../lib/platform-admin-types";
 import { ApiErrorState } from "../../api-error-state";
 import { SuspendReactivateButton } from "./suspend-reactivate-button";
+import { OrganizationBillingSection } from "./organization-billing-section";
 
 export const metadata: Metadata = { title: "Organisation — Platform Admin — TenderOS" };
 
@@ -52,6 +53,8 @@ export default async function PlatformAdminOrganizationDetailPage({
           <dd className="text-sm">{new Date(organization.updatedAt).toLocaleString("fr-FR")}</dd>
         </div>
       </dl>
+
+      <OrganizationBillingSection organizationId={organization.id} />
     </div>
   );
 }
