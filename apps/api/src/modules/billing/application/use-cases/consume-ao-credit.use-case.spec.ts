@@ -1,0 +1,106 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { BillingInterval } from "../../domain/billing-interval";
+import { InsufficientAoCreditsError } from "../../domain/errors";
+import { OrganizationSubscription } from "../../domain/organization-subscription.aggregate";
+import { PassPurchase } from "../../domain/pass-purchase.aggregate";
+import { PassPurchaseStatus } from "../../domain/pass-purchase-status";
+import { PlanSource } from "../../domain/plan-source";
+import { PlanTier } from "../../domain/plan-tier";
+import {
+  FIXED_NOW,
+  InMemoryAoCreditLedgerRepository,
+  InMemoryAuditLogWriter,
+  InMemoryOrganizationSubscriptionRepository,
+  InMemoryPassPurchaseRepository,
+} from "../../test-support/fakes";
+import { ConsumeAoCreditUseCase } from "./consume-ao-credit.use-case";
+import { ConsumePassForTenderUseCase } from "./consume-pass-for-tender.use-case";
+
+const ORG_A = "org-a";
+const TENDER_1 = "tender-1";
+
+describe("ConsumeAoCreditUseCase", () => {
+  let subscriptions: InMemoryOrganizationSubscriptionRepository;
+  let passes: InMemoryPassPurchaseRepository;
+  let ledger: InMemoryAoCreditLedgerRepository;
+  let auditLog: InMemoryAuditLogWriter;
+  let useCase: ConsumeAoCreditUseCase;
+
+  beforeEach(() => {
+    subscriptions = new InMemoryOrganizationSubscriptionRepository();
+    passes = new InMemoryPassPurchaseRepository();
+    ledger = new InMemoryAoCreditLedgerRepository();
+    auditLog = new InMemoryAuditLogWriter();
+    const consumePassForTenderUseCase = new ConsumePassForTenderUseCase(passes, auditLog);
+    useCase = new ConsumeAoCreditUseCase(subscriptions, passes, ledger, auditLog, consumePassForTenderUseCase);
+  });
+
+  it("consumes 1 AO credit from the ledger when the organization has an active finite-quota subscription with balance", async () => {
+    await subscriptions.save(
+      OrganizationSubscription.create({ id: "sub-1", organizationId: ORG_A, planTier: PlanTier.Starter, billingInterval: BillingInterval.Monthly, source: PlanSource.Stripe, occurredAt: FIXED_NOW }),
+    );
+    await ledger.grant({ organizationId: ORG_A, period: "2026-08", nominalAmount: 2, rolloverCap: 6, occurredAt: FIXED_NOW });
+
+    await useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW });
+
+    expect(await ledger.getBalance(ORG_A)).toBe(1);
+    expect(auditLog.entries.some((e) => e.action === "AoCreditsConsumed")).toBe(true);
+  });
+
+  it("mission §16 — refuses when the ledger balance is 0 (blocks the caller, e.g. Tender creation)", async () => {
+    await subscriptions.save(
+      OrganizationSubscription.create({ id: "sub-1", organizationId: ORG_A, planTier: PlanTier.Starter, billingInterval: BillingInterval.Monthly, source: PlanSource.Stripe, occurredAt: FIXED_NOW }),
+    );
+
+    await expect(useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW })).rejects.toBeInstanceOf(InsufficientAoCreditsError);
+  });
+
+  it("mission §14 — Enterprise (unlimited) is never blocked and never touches the ledger", async () => {
+    await subscriptions.save(
+      OrganizationSubscription.create({ id: "sub-1", organizationId: ORG_A, planTier: PlanTier.Enterprise, billingInterval: BillingInterval.Monthly, source: PlanSource.Stripe, occurredAt: FIXED_NOW }),
+    );
+
+    await useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW });
+
+    expect(await ledger.getBalance(ORG_A)).toBe(0);
+    const page = await ledger.list(ORG_A, { limit: 10 });
+    expect(page.items).toHaveLength(0);
+  });
+
+  it("delegates to Pass consumption when there is no active subscription but an available Pass exists", async () => {
+    const pass = PassPurchase.create({ id: "pass-1", organizationId: ORG_A, externalReference: "cs_test_1", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+    await passes.create(pass);
+
+    await useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW });
+
+    const consumed = await passes.findById(ORG_A, "pass-1");
+    expect(consumed?.status).toBe(PassPurchaseStatus.Consumed);
+    expect(consumed?.consumedTenderId).toBe(TENDER_1);
+  });
+
+  it("refuses when there is no active subscription and no available Pass (mission — no free tier exists)", async () => {
+    await expect(useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW })).rejects.toBeInstanceOf(InsufficientAoCreditsError);
+  });
+
+  it("BLOQUANT — two concurrent consumption attempts against balance=1: exactly one succeeds, final balance is 0, never negative", async () => {
+    await subscriptions.save(
+      OrganizationSubscription.create({ id: "sub-1", organizationId: ORG_A, planTier: PlanTier.Starter, billingInterval: BillingInterval.Monthly, source: PlanSource.Stripe, occurredAt: FIXED_NOW }),
+    );
+    await ledger.grant({ organizationId: ORG_A, period: "2026-08", nominalAmount: 1, rolloverCap: 6, occurredAt: FIXED_NOW });
+
+    const results = await Promise.allSettled([
+      useCase.execute({ organizationId: ORG_A, tenderId: "tender-a", actorId: "user-1", occurredAt: FIXED_NOW }),
+      useCase.execute({ organizationId: ORG_A, tenderId: "tender-b", actorId: "user-2", occurredAt: FIXED_NOW }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(InsufficientAoCreditsError);
+
+    const finalBalance = await ledger.getBalance(ORG_A);
+    expect(finalBalance).toBe(0);
+    expect(finalBalance).toBeGreaterThanOrEqual(0);
+  });
+});

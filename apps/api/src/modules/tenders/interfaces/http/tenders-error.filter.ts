@@ -46,6 +46,11 @@ const STATUS_BY_CODE: Record<string, number> = {
   CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,
   CLIENT_ACCOUNT_ARCHIVED: HttpStatus.CONFLICT,
   CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
+
+  // V2 Sprint 22B (billing) — CreateTenderUseCase consomme désormais un crédit AO au point de choc
+  // unique identifié (mission §19, voir le rapport 22B) ; 402 (jamais 403) — un problème de
+  // solde/plan, pas d'autorisation RBAC.
+  INSUFFICIENT_AO_CREDITS: HttpStatus.PAYMENT_REQUIRED,
 };
 
 @Catch(DomainError)

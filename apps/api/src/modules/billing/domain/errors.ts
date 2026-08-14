@@ -116,3 +116,63 @@ export class EntitlementOverrideAlreadyRevokedError extends DomainError {
     super(`Entitlement override ${id} is already revoked`);
   }
 }
+
+/** V2 Sprint 22 (billing, étape 22B). Jetée par `ConsumeAoCreditUseCase` — jamais un succès
+ *  silencieux ni un solde négatif (mission §16 "concurrency requirement... final balance 0, never
+ *  negative"). Bloque la création du Tender qui l'a déclenchée (mission — le point de
+ *  consommation choisi, `CreateTenderUseCase`, doit échouer plutôt que créer un Tender non couvert). */
+export class InsufficientAoCreditsError extends DomainError {
+  readonly code = "INSUFFICIENT_AO_CREDITS";
+  constructor(organizationId: string) {
+    super(`Organization ${organizationId} has no AO credit remaining`);
+  }
+}
+
+export class InvalidAoCreditLedgerEntryError extends DomainError {
+  readonly code = "INVALID_AO_CREDIT_LEDGER_ENTRY";
+  constructor(reason: string) {
+    super(`Invalid AO credit ledger entry: ${reason}`);
+  }
+}
+
+export class AoCreditAdjustmentReasonRequiredError extends DomainError {
+  readonly code = "AO_CREDIT_ADJUSTMENT_REASON_REQUIRED";
+  constructor() {
+    super("A reason is required for a manual AO credit adjustment or reversal.");
+  }
+}
+
+/** Correctif audit Codex 22B (P1-02) — un ajustement Platform Admin qui ferait passer le solde
+ *  sous 0 est REFUSÉ, jamais silencieusement plafonné à 0 : la demande d'un Platform Admin
+ *  (`amount`) et ce qui est réellement appliqué ne doivent jamais diverger sur un ledger d'audit. */
+export class AoCreditAdjustmentWouldGoNegativeError extends DomainError {
+  readonly code = "AO_CREDIT_ADJUSTMENT_WOULD_GO_NEGATIVE";
+  constructor(organizationId: string, currentBalance: number, amount: number) {
+    super(`Adjusting organization ${organizationId}'s AO credit balance (${currentBalance}) by ${amount} would go negative`);
+  }
+}
+
+/** Le plan effectif n'utilise pas le ledger AO (Enterprise — quotas fair-use illimités, mission
+ *  §14) : jamais de grant mensuel numérique pour ce palier. */
+export class AoCreditGrantNotApplicableError extends DomainError {
+  readonly code = "AO_CREDIT_GRANT_NOT_APPLICABLE";
+  constructor(organizationId: string) {
+    super(`Organization ${organizationId}'s plan does not use the AO credit ledger (unlimited)`);
+  }
+}
+
+export class AoCreditLedgerEntryNotFoundError extends DomainError {
+  readonly code = "AO_CREDIT_LEDGER_ENTRY_NOT_FOUND";
+  constructor(id: string) {
+    super(`AO credit ledger entry ${id} not found`);
+  }
+}
+
+/** Mission §7 (Pass) appliqué par symétrie au ledger AO d'abonnement — une consommation déjà
+ *  reversée ne peut jamais l'être une seconde fois (jamais un double crédit). */
+export class AoCreditConsumptionAlreadyReversedError extends DomainError {
+  readonly code = "AO_CREDIT_CONSUMPTION_ALREADY_REVERSED";
+  constructor(tenderId: string) {
+    super(`The AO credit consumption for tender ${tenderId} has already been reversed`);
+  }
+}

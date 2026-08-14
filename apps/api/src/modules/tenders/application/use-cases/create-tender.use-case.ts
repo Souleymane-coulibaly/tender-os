@@ -3,6 +3,7 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
+import { ConsumeAoCreditUseCase } from "../../../billing";
 import { AssertClientAccessUseCase, ClientAccountArchivedError, ClientPermission, GetClientAccountUseCase } from "../../../client-portfolio";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { TenderPermission } from "../../domain/tender-permission";
@@ -14,6 +15,7 @@ import { TenderLanguage, parseTenderLanguage } from "../../domain/tender-languag
 import { TenderSource, parseTenderSource } from "../../domain/tender-source";
 import { BuyerNotFoundError } from "../../domain/errors";
 import { toTenderSummary, type TenderSummary } from "../dtos";
+import { ATOMIC_TRANSACTION_RUNNER, type AtomicTransactionRunner } from "../ports/atomic-transaction-runner";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { BUYER_REPOSITORY, type BuyerRepository } from "../ports/buyer.repository";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
@@ -78,8 +80,10 @@ export class CreateTenderUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
+    @Inject(ATOMIC_TRANSACTION_RUNNER) private readonly atomicTransactionRunner: AtomicTransactionRunner,
     private readonly getClientAccountUseCase: GetClientAccountUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
+    private readonly consumeAoCreditUseCase: ConsumeAoCreditUseCase,
   ) {}
 
   async execute(command: CreateTenderCommand): Promise<CreateTenderResult> {
@@ -165,28 +169,37 @@ export class CreateTenderUseCase {
       occurredAt,
     });
 
-    await this.tenderRepository.save(tender);
+    // V2 Sprint 22B (billing) — mission §19 : point de choc unique de consommation "AO traité"
+    // (voir le rapport 22B). La consommation du crédit AO et la création du Tender doivent réussir
+    // ou échouer ENSEMBLE (une seule transaction Postgres, `AtomicTransactionRunner`) — jamais un
+    // Tender créé sans crédit consommé, ni un crédit consommé sans Tender créé. La consommation
+    // s'exécute EN PREMIER dans la transaction : si le solde est insuffisant, rien n'est écrit.
+    await this.atomicTransactionRunner.run(async () => {
+      await this.consumeAoCreditUseCase.execute({ organizationId: command.organizationId, tenderId: tender.id.value, actorId: command.actorId, occurredAt });
 
-    await this.auditLogWriter.record({
-      organizationId: command.organizationId,
-      actorId: command.actorId,
-      action: "tender.created",
-      resourceType: "tender",
-      resourceId: tender.id.value,
-      requestId: command.requestId,
-    });
+      await this.tenderRepository.save(tender);
 
-    await this.outboxWriter.write({
-      organizationId: command.organizationId,
-      events: [
-        {
-          eventType: "TenderCreated",
-          aggregateType: "Tender",
-          aggregateId: tender.id.value,
-          payload: { tenderId: tender.id.value, clientAccountId: tender.clientAccountId },
-          occurredAt,
-        },
-      ],
+      await this.auditLogWriter.record({
+        organizationId: command.organizationId,
+        actorId: command.actorId,
+        action: "tender.created",
+        resourceType: "tender",
+        resourceId: tender.id.value,
+        requestId: command.requestId,
+      });
+
+      await this.outboxWriter.write({
+        organizationId: command.organizationId,
+        events: [
+          {
+            eventType: "TenderCreated",
+            aggregateType: "Tender",
+            aggregateId: tender.id.value,
+            payload: { tenderId: tender.id.value, clientAccountId: tender.clientAccountId },
+            occurredAt,
+          },
+        ],
+      });
     });
 
     return toTenderSummary(tender);

@@ -18,6 +18,11 @@ export const PlatformCapability = {
   // peuvent créer/révoquer (mission §32 "POINT BLOQUANT" : jamais un Organization Admin/Owner).
   EntitlementOverridesRead: "platform:entitlement-overrides:read",
   EntitlementOverridesManage: "platform:entitlement-overrides:manage",
+  // V2 Sprint 22 (billing, étape 22B) — ledger de crédits AO. Même principe de moindre privilège :
+  // SUPPORT lecture seule, seuls ADMIN/OWNER ajustent/reversent (mission §32/§48 : "Organization
+  // Admin ne peut pas modifier son propre solde").
+  AoCreditsRead: "platform:ao-credits:read",
+  AoCreditsManage: "platform:ao-credits:manage",
 } as const;
 
 export type PlatformCapability = (typeof PlatformCapability)[keyof typeof PlatformCapability];
@@ -31,6 +36,7 @@ export const ROLE_CAPABILITIES: Record<PlatformRole, readonly PlatformCapability
     PlatformCapability.AuditLogsRead,
     PlatformCapability.MetricsRead,
     PlatformCapability.EntitlementOverridesRead,
+    PlatformCapability.AoCreditsRead,
   ],
 };
 

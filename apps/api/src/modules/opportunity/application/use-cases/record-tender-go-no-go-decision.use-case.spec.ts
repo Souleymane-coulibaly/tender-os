@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { ConsumeAoCreditUseCase } from "../../../billing";
 import { ClientAccountNotFoundError } from "../../../client-portfolio";
 import { CreateTenderUseCase, GetTenderUseCase, TenderPermissionMissingError } from "../../../tenders";
-import { InMemoryBuyerRepository, InMemoryTenderRepository, createClientPortfolioTestFixture, DEFAULT_TEST_CLIENT_ACCOUNT_ID } from "../../../tenders/test-support/fakes";
+import { FakeAtomicTransactionRunner, InMemoryBuyerRepository, InMemoryTenderRepository, createClientPortfolioTestFixture, DEFAULT_TEST_CLIENT_ACCOUNT_ID } from "../../../tenders/test-support/fakes";
 import { GoNoGoAdminBypassJustificationRequiredError, GoNoGoDecisionJustificationRequiredError } from "../../domain/errors";
 import { FakeOutboxWriter, FixedClock, InMemoryAuditLogWriter, InMemoryGoNoGoDecisionRepository, InMemoryGoNoGoReportRepository, SequentialIdGenerator } from "../../test-support/fakes";
 import { RecordTenderGoNoGoDecisionUseCase } from "./record-tender-go-no-go-decision.use-case";
@@ -18,6 +19,7 @@ async function buildHarness() {
   const clock = new FixedClock();
   const clientPortfolio = await createClientPortfolioTestFixture(ORG);
 
+  const consumeAoCreditUseCase = { execute: vi.fn(async () => {}) } as unknown as ConsumeAoCreditUseCase;
   const createTenderUseCase = new CreateTenderUseCase(
     tenderRepository,
     buyerRepository,
@@ -25,8 +27,10 @@ async function buildHarness() {
     clock,
     new SequentialIdGenerator(),
     outboxWriter,
+    new FakeAtomicTransactionRunner(),
     clientPortfolio.getClientAccountUseCase,
     clientPortfolio.assertClientAccessUseCase,
+    consumeAoCreditUseCase,
   );
   const getTenderUseCase = new GetTenderUseCase(tenderRepository, clientPortfolio.assertClientAccessUseCase);
 

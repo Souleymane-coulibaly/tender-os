@@ -1,10 +1,14 @@
 import type { Clock } from "../../../shared-kernel/clock";
+import { AoCreditMovementType } from "../domain/ao-credit-movement-type";
+import { createAoCreditLedgerEntry, type AoCreditLedgerEntry } from "../domain/ao-credit-ledger-entry";
 import type { EntitlementFeature } from "../domain/entitlement-feature";
 import { EntitlementOverride } from "../domain/entitlement-override.aggregate";
+import { AoCreditAdjustmentWouldGoNegativeError, AoCreditConsumptionAlreadyReversedError, AoCreditLedgerEntryNotFoundError } from "../domain/errors";
 import { PassPurchaseStatus } from "../domain/pass-purchase-status";
 import type { QuotaType } from "../domain/quota-type";
 import type { OrganizationSubscription } from "../domain/organization-subscription.aggregate";
 import { PassPurchase } from "../domain/pass-purchase.aggregate";
+import type { AoCreditLedgerPage, AoCreditLedgerRepository } from "../application/ports/ao-credit-ledger.repository";
 import type { AuditLogWriter, BillingAuditLogEntry } from "../application/ports/audit-log-writer";
 import type { EntitlementOverridePage, EntitlementOverrideRepository } from "../application/ports/entitlement-override.repository";
 import type { OrganizationSubscriptionRepository } from "../application/ports/organization-subscription.repository";
@@ -124,6 +128,17 @@ export class InMemoryPassPurchaseRepository implements PassPurchaseRepository {
     return false;
   }
 
+  async findFirstAvailable(organizationId: string, now: Date): Promise<PassPurchase | null> {
+    const candidates = Array.from(this.byId.values())
+      .filter((p) => p.organizationId === organizationId && p.status === PassPurchaseStatus.Available)
+      .filter((p) => {
+        const expiresAt = p.expiresAt;
+        return expiresAt === undefined || expiresAt.getTime() > now.getTime();
+      })
+      .sort((a, b) => a.toProps().purchasedAt.getTime() - b.toProps().purchasedAt.getTime());
+    return candidates[0] ?? null;
+  }
+
   async list(organizationId: string, options: { cursor?: string | undefined; limit: number }): Promise<PassPurchasePage> {
     const all = Array.from(this.byId.values())
       .filter((p) => p.organizationId === organizationId)
@@ -180,5 +195,137 @@ export class InMemoryPassPurchaseRepository implements PassPurchaseRepository {
     });
     this.byId.set(updated.id, updated);
     return { applied: true, purchase: updated };
+  }
+}
+
+/** V2 Sprint 22 (billing, étape 22B) — même discipline de sections critiques SYNCHRONES que les
+ *  fakes ci-dessus (aucun `await` entre lecture et écriture du solde) : reproduit fidèlement le
+ *  compare-and-set réel de `PrismaAoCreditLedgerRepository.consume` sous `Promise.all` concurrent. */
+export class InMemoryAoCreditLedgerRepository implements AoCreditLedgerRepository {
+  private readonly balances = new Map<string, number>();
+  private readonly entries: AoCreditLedgerEntry[] = [];
+  private sequence = 0;
+
+  private nextId(): string {
+    this.sequence += 1;
+    return `ledger-entry-${this.sequence}`;
+  }
+
+  async getBalance(organizationId: string): Promise<number> {
+    return this.balances.get(organizationId) ?? 0;
+  }
+
+  async grant(input: { organizationId: string; period: string; nominalAmount: number; rolloverCap: number; occurredAt: Date }): Promise<{ entry: AoCreditLedgerEntry; alreadyApplied: boolean }> {
+    const existing = this.entries.find((e) => e.organizationId === input.organizationId && e.type === AoCreditMovementType.Grant && e.period === input.period);
+    if (existing) {
+      return { entry: existing, alreadyApplied: true };
+    }
+
+    const currentBalance = this.balances.get(input.organizationId) ?? 0;
+    const appliedAmount = Math.max(0, Math.min(input.nominalAmount, input.rolloverCap - currentBalance));
+    const balanceAfter = currentBalance + appliedAmount;
+
+    const entry = createAoCreditLedgerEntry({
+      id: this.nextId(),
+      organizationId: input.organizationId,
+      type: AoCreditMovementType.Grant,
+      amount: appliedAmount,
+      balanceAfter,
+      period: input.period,
+      occurredAt: input.occurredAt,
+    });
+    this.balances.set(input.organizationId, balanceAfter);
+    this.entries.push(entry);
+    return { entry, alreadyApplied: false };
+  }
+
+  async consume(input: { organizationId: string; tenderId: string; amount: number; occurredAt: Date }): Promise<{ applied: boolean; entry: AoCreditLedgerEntry | null }> {
+    // Section critique SYNCHRONE (voir le commentaire de classe) : lecture + décision + écriture
+    // sans `await` intercalé.
+    const currentBalance = this.balances.get(input.organizationId) ?? 0;
+    if (currentBalance < input.amount) {
+      return { applied: false, entry: null };
+    }
+
+    const balanceAfter = currentBalance - input.amount;
+    const entry = createAoCreditLedgerEntry({
+      id: this.nextId(),
+      organizationId: input.organizationId,
+      type: AoCreditMovementType.Consumption,
+      amount: -input.amount,
+      balanceAfter,
+      tenderId: input.tenderId,
+      occurredAt: input.occurredAt,
+    });
+    this.balances.set(input.organizationId, balanceAfter);
+    this.entries.push(entry);
+    return { applied: true, entry };
+  }
+
+  async adjust(input: { organizationId: string; amount: number; reason: string; actorPlatformAdministratorId: string; occurredAt: Date }): Promise<AoCreditLedgerEntry> {
+    const currentBalance = this.balances.get(input.organizationId) ?? 0;
+    const balanceAfter = currentBalance + input.amount;
+    if (balanceAfter < 0) {
+      throw new AoCreditAdjustmentWouldGoNegativeError(input.organizationId, currentBalance, input.amount);
+    }
+    const entry = createAoCreditLedgerEntry({
+      id: this.nextId(),
+      organizationId: input.organizationId,
+      type: AoCreditMovementType.ManualAdjustment,
+      amount: input.amount,
+      balanceAfter,
+      reason: input.reason,
+      actorPlatformAdministratorId: input.actorPlatformAdministratorId,
+      occurredAt: input.occurredAt,
+    });
+    this.balances.set(input.organizationId, balanceAfter);
+    this.entries.push(entry);
+    return entry;
+  }
+
+  async reverseConsumption(input: { organizationId: string; tenderId: string; reason: string; actorPlatformAdministratorId: string; occurredAt: Date }): Promise<AoCreditLedgerEntry> {
+    const consumption = this.entries.find((e) => e.organizationId === input.organizationId && e.type === AoCreditMovementType.Consumption && e.tenderId === input.tenderId);
+    if (!consumption) {
+      throw new AoCreditLedgerEntryNotFoundError(input.tenderId);
+    }
+    const alreadyReversed = this.entries.some((e) => e.organizationId === input.organizationId && e.type === AoCreditMovementType.Reversal && e.tenderId === input.tenderId);
+    if (alreadyReversed) {
+      throw new AoCreditConsumptionAlreadyReversedError(input.tenderId);
+    }
+
+    const currentBalance = this.balances.get(input.organizationId) ?? 0;
+    const amount = -consumption.amount;
+    const balanceAfter = currentBalance + amount;
+    const entry = createAoCreditLedgerEntry({
+      id: this.nextId(),
+      organizationId: input.organizationId,
+      type: AoCreditMovementType.Reversal,
+      amount,
+      balanceAfter,
+      tenderId: input.tenderId,
+      reason: input.reason,
+      actorPlatformAdministratorId: input.actorPlatformAdministratorId,
+      occurredAt: input.occurredAt,
+    });
+    this.balances.set(input.organizationId, balanceAfter);
+    this.entries.push(entry);
+    return entry;
+  }
+
+  async findConsumptionByTenderId(organizationId: string, tenderId: string): Promise<AoCreditLedgerEntry | null> {
+    return this.entries.find((e) => e.organizationId === organizationId && e.type === AoCreditMovementType.Consumption && e.tenderId === tenderId) ?? null;
+  }
+
+  async findGrantByPeriod(organizationId: string, period: string): Promise<AoCreditLedgerEntry | null> {
+    return this.entries.find((e) => e.organizationId === organizationId && e.type === AoCreditMovementType.Grant && e.period === period) ?? null;
+  }
+
+  async list(organizationId: string, options: { cursor?: string | undefined; limit: number }): Promise<AoCreditLedgerPage> {
+    const all = this.entries.filter((e) => e.organizationId === organizationId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id));
+    const startIndex = options.cursor ? all.findIndex((e) => e.id === options.cursor) + 1 : 0;
+    const page = all.slice(startIndex, startIndex + options.limit + 1);
+    const hasNextPage = page.length > options.limit;
+    const items = hasNextPage ? page.slice(0, options.limit) : page;
+    return { items, nextCursor: hasNextPage ? (items[items.length - 1]?.id ?? null) : null };
   }
 }

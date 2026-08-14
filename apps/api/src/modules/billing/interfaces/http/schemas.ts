@@ -34,3 +34,32 @@ export const ListEntitlementOverridesQuerySchema = z
   .strict();
 
 export type ListEntitlementOverridesQuery = z.infer<typeof ListEntitlementOverridesQuerySchema>;
+
+/** V2 Sprint 22 (billing, étape 22B) — mission §31 "+1/-1" : `amount` signé, jamais un solde final
+ *  imposé directement. `.strict()` — même motif anti mass-assignment que les overrides. */
+export const AdjustAoCreditsBodySchema = z
+  .object({
+    amount: z.number().int().refine((value) => value !== 0, { message: "amount must not be zero" }),
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+export type AdjustAoCreditsBody = z.infer<typeof AdjustAoCreditsBodySchema>;
+
+export const ReverseAoCreditConsumptionBodySchema = z
+  .object({
+    tenderId: z.string().uuid(),
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+export type ReverseAoCreditConsumptionBody = z.infer<typeof ReverseAoCreditConsumptionBodySchema>;
+
+export const ListAoCreditLedgerQuerySchema = z
+  .object({
+    cursor: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(50).optional().default(25),
+  })
+  .strict();
+
+export type ListAoCreditLedgerQuery = z.infer<typeof ListAoCreditLedgerQuerySchema>;

@@ -57,6 +57,14 @@ export class PrismaPassPurchaseRepository implements PassPurchaseRepository {
     return count > 0;
   }
 
+  async findFirstAvailable(organizationId: string, now: Date): Promise<PassPurchase | null> {
+    const row = await this.prisma.currentClient().organizationPassPurchase.findFirst({
+      where: { organizationId, status: "AVAILABLE", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      orderBy: { purchasedAt: "asc" },
+    });
+    return row ? toDomain(row) : null;
+  }
+
   async list(organizationId: string, options: { cursor?: string | undefined; limit: number }): Promise<PassPurchasePage> {
     const rows = await this.prisma.currentClient().organizationPassPurchase.findMany({
       where: { organizationId },

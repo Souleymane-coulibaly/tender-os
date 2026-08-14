@@ -120,9 +120,11 @@ model Organization {
   /// V2 Sprint 22 (billing) — au plus un abonnement courant par organisation (STARTER/BUSINESS/
   /// ENTERPRISE) ; l'historique des changements de plan vit dans AuditLog, jamais une table à part
   /// (voir billing/domain/organization-subscription.aggregate.ts).
-  subscription         OrganizationSubscription?
-  passPurchases        OrganizationPassPurchase[]
-  entitlementOverrides EntitlementOverride[]
+  subscription          OrganizationSubscription?
+  passPurchases         OrganizationPassPurchase[]
+  entitlementOverrides  EntitlementOverride[]
+  aoCreditBalance       OrganizationAoCreditBalance?
+  aoCreditLedgerEntries AoCreditLedgerEntry[]
 
   @@map("organizations")
 }
@@ -7563,4 +7565,60 @@ model EntitlementOverride {
   @@index([organizationId, feature])
   @@index([organizationId, quota])
   @@map("entitlement_overrides")
+}
+
+/// V2 Sprint 22 (billing, étape 22B) — solde COURANT mutable, une ligne par organisation.
+/// Existe UNIQUEMENT pour un compare-and-set atomique sous concurrence réelle (même motif que
+/// `OrganizationPassPurchase.consumeForTender`, Sprint 21/22A) — n'est JAMAIS l'autorité d'audit :
+/// `AoCreditLedgerEntry` (ci-dessous) reste la seule source de vérité historique, toujours écrite
+/// dans la MÊME transaction que toute mutation de ce solde (mission §16 "jamais un simple solde
+/// mutable seul").
+model OrganizationAoCreditBalance {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @unique @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  balance Int @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("organization_ao_credit_balances")
+}
+
+/// V2 Sprint 22 (billing, étape 22B) — append-only, un mouvement par ligne (mission §16), jamais
+/// mutée après création. `amount` est TOUJOURS le delta réellement appliqué (jamais le montant
+/// nominal demandé — un GRANT plafonné par le rollover cap enregistre le montant après
+/// plafonnement). `balanceAfter` est un instantané d'audit lisible sans recalcul.
+model AoCreditLedgerEntry {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  /// GRANT | CONSUMPTION | MANUAL_ADJUSTMENT | REVERSAL (billing/domain/ao-credit-movement-type.ts)
+  type   String @db.VarChar(30)
+  amount Int
+
+  /// Solde APRÈS ce mouvement — instantané, jamais recalculé à la lecture.
+  balanceAfter Int @map("balance_after")
+
+  /// GRANT uniquement — "YYYY-MM". Idempotence par (organizationId, period) via un index unique
+  /// PARTIEL (non représentable par `@@unique` en Prisma faute de clause WHERE — posé à la main
+  /// dans la migration, même motif que `ExternalTenderPromotion`, Sprint 17).
+  period String? @db.VarChar(7)
+
+  /// CONSUMPTION/REVERSAL — référence scalaire vers Tender.id, jamais une relation Prisma formelle
+  /// (même motif que `OrganizationPassPurchase.consumedTenderId`).
+  tenderId String? @map("tender_id") @db.Uuid
+
+  /// MANUAL_ADJUSTMENT/REVERSAL — obligatoire (mission §31/§35), Platform Admin uniquement.
+  reason                       String?
+  actorPlatformAdministratorId String? @map("actor_platform_administrator_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, type])
+  @@index([tenderId])
+  @@map("ao_credit_ledger_entries")
 }

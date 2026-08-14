@@ -13,6 +13,15 @@ export class PrismaAtomicTransactionRunner implements AtomicTransactionRunner {
   constructor(private readonly prisma: PrismaService) {}
 
   run<T>(fn: () => Promise<T>): Promise<T> {
+    // Correctif Sprint 22B — rejoint la transaction ambiante si un AUTRE AtomicTransactionRunner
+    // (d'un autre module) a déjà ouvert `fn` : sans cette vérification, un appel imbriqué ouvrait
+    // TOUJOURS une seconde transaction Postgres INDÉPENDANTE, prouvé responsable d'un doublon réel
+    // sous promotion Opportunity->Tender concurrente (voir `tenders/infrastructure/
+    // prisma-atomic-transaction-runner.ts`). Comportement inchangé pour tout appel racine.
+    const ambient = TransactionalContext.current();
+    if (ambient) {
+      return fn();
+    }
     return this.prisma.$transaction((tx) => TransactionalContext.run(tx, fn));
   }
 }

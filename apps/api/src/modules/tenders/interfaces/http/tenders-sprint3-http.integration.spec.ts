@@ -89,6 +89,14 @@ describe("Tenders — Sprint 3 (fiche Tender, acheteur, profil, restauration) �
         { id: otherOrgId, name: "Org Sprint 3 HTTP (autre)", slug: `org-sprint3-http-other-${otherOrgId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
       ],
     });
+    // V2 Sprint 22B (billing) — CreateTenderUseCase consomme désormais un crédit AO : ce test
+    // exerce le module Sprint 3 (Tenders) lui-même, jamais le gating par plan.
+    await prisma.organizationSubscription.createMany({
+      data: [
+        { id: randomUUID(), organizationId: orgId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL", updatedAt: new Date() },
+        { id: randomUUID(), organizationId: otherOrgId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL", updatedAt: new Date() },
+      ],
+    });
 
     const owner = await registerAndLogin(`http-s3-owner-${randomUUID()}@smoke.test`);
     const otherOwner = await registerAndLogin(`http-s3-other-owner-${randomUUID()}@smoke.test`);
@@ -127,6 +135,7 @@ describe("Tenders — Sprint 3 (fiche Tender, acheteur, profil, restauration) �
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgId, otherOrgId] } } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgId, otherOrgId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgId, otherOrgId] } } });
     await app.close();
   }, 30000);

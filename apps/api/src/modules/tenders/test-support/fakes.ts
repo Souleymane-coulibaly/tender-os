@@ -36,6 +36,7 @@ import type {
 import type { TenderLotRepository } from "../application/ports/tender-lot.repository";
 import type { BuyerRepository } from "../application/ports/buyer.repository";
 import type { TenderPage, TenderRepository } from "../application/ports/tender.repository";
+import type { AtomicTransactionRunner } from "../application/ports/atomic-transaction-runner";
 import { TenderStatus } from "../domain/tender-status";
 
 const OVERDUE_EXEMPT_STATUSES: readonly string[] = [
@@ -46,6 +47,17 @@ const OVERDUE_EXEMPT_STATUSES: readonly string[] = [
 ];
 
 export const FIXED_NOW = new Date("2026-07-26T14:00:00Z");
+
+/** V2 Sprint 22B (billing) — la garantie d'atomicité RÉELLE (rollback cross-table sous Postgres)
+ *  est prouvée par un test d'intégration dédié (voir billing/infrastructure), jamais par ce fake :
+ *  ici, l'ordre séquentiel du code (consommation AVANT sauvegarde dans `CreateTenderUseCase`)
+ *  suffit à garantir qu'un rejet de `ConsumeAoCreditUseCase` empêche déjà `tenderRepository.save`
+ *  d'être atteint, sans qu'aucune simulation de rollback ne soit nécessaire ici. */
+export class FakeAtomicTransactionRunner implements AtomicTransactionRunner {
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    return fn();
+  }
+}
 
 export class FixedClock implements Clock {
   constructor(private readonly value: Date = FIXED_NOW) {}

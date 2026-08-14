@@ -16,6 +16,10 @@ export interface PassPurchaseRepository {
    *  n'est jamais couvert par deux Pass à la fois, mission ne le prévoit pas). */
   findByTenderId(organizationId: string, tenderId: string): Promise<PassPurchase | null>;
   existsForOrganization(organizationId: string): Promise<boolean>;
+  /** V2 Sprint 22B — le premier Pass AVAILABLE (non expiré) de l'organisation, utilisé par
+   *  `ConsumeAoCreditUseCase` pour choisir quel Pass attacher à un nouveau Tender quand
+   *  l'organisation n'a aucun abonnement actif. `null` si aucun Pass utilisable. */
+  findFirstAvailable(organizationId: string, now: Date): Promise<PassPurchase | null>;
   list(organizationId: string, options: { cursor?: string | undefined; limit: number }): Promise<PassPurchasePage>;
   /** Insertion pure ; l'idempotence sur `externalReference` est gérée par l'appelant (contrainte
    *  unique en base, capturée via `PassPurchaseExternalReferenceConflictError`). */

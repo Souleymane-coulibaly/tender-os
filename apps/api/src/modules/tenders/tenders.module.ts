@@ -1,8 +1,10 @@
 import { Module } from "@nestjs/common";
+import { BillingModule } from "../billing";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
 import { OutboxWriterModule } from "../outbox";
+import { ATOMIC_TRANSACTION_RUNNER } from "./application/ports/atomic-transaction-runner";
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
 import { ALERT_REPOSITORY } from "./application/ports/alert.repository";
 import { AWARD_CRITERION_REPOSITORY } from "./application/ports/award-criterion.repository";
@@ -102,6 +104,7 @@ import { PrismaIlikeTenderSearchProvider } from "./infrastructure/prisma-ilike-t
 import { PrismaMilestoneRepository } from "./infrastructure/prisma-milestone.repository";
 import { PrismaRequestedDocumentRepository } from "./infrastructure/prisma-requested-document.repository";
 import { PrismaRiskRepository } from "./infrastructure/prisma-risk.repository";
+import { PrismaAtomicTransactionRunner } from "./infrastructure/prisma-atomic-transaction-runner";
 import { PrismaTenderLotRepository } from "./infrastructure/prisma-tender-lot.repository";
 import { PrismaTenderStatusHistoryRepository } from "./infrastructure/prisma-tender-status-history.repository";
 import { PrismaTenderRepository } from "./infrastructure/prisma-tender.repository";
@@ -110,7 +113,9 @@ import { TenderLotsController } from "./interfaces/http/tender-lots.controller";
 import { TendersController } from "./interfaces/http/tenders.controller";
 
 @Module({
-  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, OutboxWriterModule],
+  // V2 Sprint 22B (billing) — `CreateTenderUseCase` consomme un crédit AO au point de choc unique
+  // identifié (mission §19, voir le rapport 22B), jamais un second point de consommation.
+  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, OutboxWriterModule, BillingModule],
   controllers: [TendersController, TenderLotsController, BuyersController],
   providers: [
     CreateTenderUseCase,
@@ -192,6 +197,7 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     { provide: ALERT_REPOSITORY, useClass: PrismaAlertRepository },
     { provide: TENDER_STATUS_HISTORY_REPOSITORY, useClass: PrismaTenderStatusHistoryRepository },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
+    { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
   ],
   // GetTenderUseCase est réexporté uniquement pour que le module Documents puisse vérifier
   // qu'un Tender existe et appartient à l'organisation active avant une association — même

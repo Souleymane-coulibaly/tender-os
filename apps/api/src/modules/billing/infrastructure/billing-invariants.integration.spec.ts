@@ -9,6 +9,7 @@ import { PassPurchase } from "../domain/pass-purchase.aggregate";
 import { PlanSource } from "../domain/plan-source";
 import { PlanTier } from "../domain/plan-tier";
 import { QuotaType, UNLIMITED } from "../domain/quota-type";
+import { PrismaAoCreditLedgerRepository } from "./prisma-ao-credit-ledger.repository";
 import { PrismaEntitlementOverrideRepository } from "./prisma-entitlement-override.repository";
 import { PrismaOrganizationSubscriptionRepository } from "./prisma-organization-subscription.repository";
 import { PrismaPassPurchaseRepository } from "./prisma-pass-purchase.repository";
@@ -25,6 +26,7 @@ describe("billing module — invariantes critiques (PostgreSQL réel)", () => {
   const subscriptionRepository = new PrismaOrganizationSubscriptionRepository(prisma);
   const passPurchaseRepository = new PrismaPassPurchaseRepository(prisma);
   const overrideRepository = new PrismaEntitlementOverrideRepository(prisma);
+  const ledgerRepository = new PrismaAoCreditLedgerRepository(prisma);
 
   const organizationId = randomUUID();
   const now = new Date("2026-08-13T10:00:00Z");
@@ -37,6 +39,8 @@ describe("billing module — invariantes critiques (PostgreSQL réel)", () => {
   });
 
   afterAll(async () => {
+    await prisma.aoCreditLedgerEntry.deleteMany({ where: { organizationId } });
+    await prisma.organizationAoCreditBalance.deleteMany({ where: { organizationId } });
     await prisma.entitlementOverride.deleteMany({ where: { organizationId } });
     await prisma.organizationPassPurchase.deleteMany({ where: { organizationId } });
     await prisma.organizationSubscription.deleteMany({ where: { organizationId } });
@@ -117,5 +121,71 @@ describe("billing module — invariantes critiques (PostgreSQL réel)", () => {
     await overrideRepository.save(quotaOverride);
     const activeQuota = await overrideRepository.findActiveQuotaOverride(organizationId, QuotaType.UsersMax, now);
     expect(activeQuota?.quotaLimit).toBe(UNLIMITED);
+  });
+
+  describe("AO credit ledger (étape 22B)", () => {
+    it("grant is idempotent per (organizationId, period) against the real partial unique index", async () => {
+      const period = "2026-08";
+      const first = await ledgerRepository.grant({ organizationId, period, nominalAmount: 2, rolloverCap: 6, occurredAt: now });
+      const second = await ledgerRepository.grant({ organizationId, period, nominalAmount: 2, rolloverCap: 6, occurredAt: now });
+
+      expect(first.alreadyApplied).toBe(false);
+      expect(second.alreadyApplied).toBe(true);
+      expect(second.entry.id).toBe(first.entry.id);
+      expect(await ledgerRepository.getBalance(organizationId)).toBe(2);
+    });
+
+    it("BLOQUANT (mission §16 — concurrence réelle) — two truly simultaneous consume calls against balance=1: exactly one succeeds, final balance is 0, never negative", async () => {
+      await ledgerRepository.grant({ organizationId, period: "2026-09", nominalAmount: 1, rolloverCap: 6, occurredAt: now });
+      expect(await ledgerRepository.getBalance(organizationId)).toBe(3); // cumulative with the previous grant test (2 + 1)
+
+      // Ramène le solde à exactement 1 pour un test de concurrence net et lisible.
+      await ledgerRepository.consume({ organizationId, tenderId: randomUUID(), amount: 2, occurredAt: now });
+      expect(await ledgerRepository.getBalance(organizationId)).toBe(1);
+
+      const tenderA = randomUUID();
+      const tenderB = randomUUID();
+      const [resultA, resultB] = await Promise.all([
+        ledgerRepository.consume({ organizationId, tenderId: tenderA, amount: 1, occurredAt: now }),
+        ledgerRepository.consume({ organizationId, tenderId: tenderB, amount: 1, occurredAt: now }),
+      ]);
+
+      const appliedCount = [resultA.applied, resultB.applied].filter(Boolean).length;
+      expect(appliedCount).toBe(1);
+
+      const finalBalance = await ledgerRepository.getBalance(organizationId);
+      expect(finalBalance).toBe(0);
+      expect(finalBalance).toBeGreaterThanOrEqual(0);
+    });
+
+    it("BLOQUANT (correctif audit Codex 22B P1-01 — concurrence réelle) — two truly simultaneous reverseConsumption calls on the SAME tenderId: exactly one succeeds against real Postgres, balance credited only once", async () => {
+      await ledgerRepository.grant({ organizationId, period: "2026-10", nominalAmount: 2, rolloverCap: 60, occurredAt: now });
+      const tenderId = randomUUID();
+      await ledgerRepository.consume({ organizationId, tenderId, amount: 1, occurredAt: now });
+      const balanceBeforeReversal = await ledgerRepository.getBalance(organizationId);
+
+      const [resultA, resultB] = await Promise.allSettled([
+        ledgerRepository.reverseConsumption({ organizationId, tenderId, reason: "Attempt A", actorPlatformAdministratorId: randomUUID(), occurredAt: now }),
+        ledgerRepository.reverseConsumption({ organizationId, tenderId, reason: "Attempt B", actorPlatformAdministratorId: randomUUID(), occurredAt: now }),
+      ]);
+
+      const fulfilledCount = [resultA, resultB].filter((r) => r.status === "fulfilled").length;
+      expect(fulfilledCount).toBe(1);
+
+      // La transaction perdante doit avoir été intégralement annulée (y compris son incrément de
+      // solde) — jamais un double crédit malgré l'échec de son seul INSERT.
+      expect(await ledgerRepository.getBalance(organizationId)).toBe(balanceBeforeReversal + 1);
+    });
+
+    it("BLOQUANT (correctif audit Codex 22B P1-02) — an adjustment that would take the balance negative is refused against real Postgres, never silently clamped", async () => {
+      await ledgerRepository.grant({ organizationId, period: "2026-11", nominalAmount: 2, rolloverCap: 60, occurredAt: now });
+      const balanceBefore = await ledgerRepository.getBalance(organizationId);
+
+      await expect(
+        ledgerRepository.adjust({ organizationId, amount: -(balanceBefore + 100), reason: "Correction trop importante", actorPlatformAdministratorId: randomUUID(), occurredAt: now }),
+      ).rejects.toThrow();
+
+      expect(await ledgerRepository.getBalance(organizationId)).toBe(balanceBefore);
+    });
   });
 });

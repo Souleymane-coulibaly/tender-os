@@ -11,7 +11,9 @@ export type { PlanCatalogEntry } from "./domain/plan-catalog";
 export { SubscriptionStatus } from "./domain/subscription-status";
 export { PlanSource } from "./domain/plan-source";
 export { PassPurchaseStatus } from "./domain/pass-purchase-status";
-export { EntitlementFeatureNotAvailableError } from "./domain/errors";
+export { EntitlementFeatureNotAvailableError, InsufficientAoCreditsError } from "./domain/errors";
+export { AoCreditMovementType } from "./domain/ao-credit-movement-type";
+export type { AoCreditLedgerEntry } from "./domain/ao-credit-ledger-entry";
 
 export { ENTITLEMENT_SERVICE } from "./application/services/entitlement.service";
 export type { EntitlementService, EntitlementContext } from "./application/services/entitlement.service";
@@ -29,3 +31,11 @@ export type { ConsumePassForTenderCommand } from "./application/use-cases/consum
 export { ListPassPurchasesUseCase } from "./application/use-cases/list-pass-purchases.use-case";
 export { GetOrganizationEntitlementsUseCase } from "./application/use-cases/get-organization-entitlements.use-case";
 export type { OrganizationEntitlementsSnapshot } from "./application/use-cases/get-organization-entitlements.use-case";
+// V2 Sprint 22 (billing, étape 22B) — réexporté UNIQUEMENT pour `tenders` : point de choc unique
+// de consommation "AO traité" identifié en `CreateTenderUseCase` (voir le rapport 22B), jamais un
+// second point de consommation.
+export { ConsumeAoCreditUseCase } from "./application/use-cases/consume-ao-credit.use-case";
+export type { ConsumeAoCreditCommand } from "./application/use-cases/consume-ao-credit.use-case";
+export { GrantMonthlyAoCreditsUseCase } from "./application/use-cases/grant-monthly-ao-credits.use-case";
+export type { GrantMonthlyAoCreditsCommand } from "./application/use-cases/grant-monthly-ao-credits.use-case";
+export { GetAoCreditBalanceUseCase } from "./application/use-cases/get-ao-credit-balance.use-case";

@@ -1,7 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { ConsumeAoCreditUseCase } from "../../../billing";
 import { ClientAccountNotFoundError } from "../../../client-portfolio";
 import { CreateTenderUseCase, GetTenderUseCase } from "../../../tenders";
-import { InMemoryBuyerRepository, InMemoryTenderRepository, createClientPortfolioTestFixture, DEFAULT_TEST_CLIENT_ACCOUNT_ID } from "../../../tenders/test-support/fakes";
+import {
+  InMemoryBuyerRepository,
+  InMemoryTenderRepository,
+  createClientPortfolioTestFixture,
+  DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+  FakeAtomicTransactionRunner as FakeTendersAtomicTransactionRunner,
+} from "../../../tenders/test-support/fakes";
 import {
   GoNoGoAdminBypassJustificationRequiredError,
   OpportunityMissingClientAccountError,
@@ -37,6 +44,7 @@ async function buildHarness() {
   const clock = new FixedClock();
   const clientPortfolio = await createClientPortfolioTestFixture(ORG);
 
+  const consumeAoCreditUseCase = { execute: vi.fn(async () => {}) } as unknown as ConsumeAoCreditUseCase;
   const createTenderUseCase = new CreateTenderUseCase(
     tenderRepository,
     buyerRepository,
@@ -44,8 +52,10 @@ async function buildHarness() {
     clock,
     new SequentialIdGenerator(),
     outboxWriter,
+    new FakeTendersAtomicTransactionRunner(),
     clientPortfolio.getClientAccountUseCase,
     clientPortfolio.assertClientAccessUseCase,
+    consumeAoCreditUseCase,
   );
   const getTenderUseCase = new GetTenderUseCase(tenderRepository, clientPortfolio.assertClientAccessUseCase);
 
