@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { EmptyFileError, FileTooLargeError, UnsupportedFileTypeError } from "../../domain/errors";
 import { DocumentPermissionMissingError } from "../../domain/errors";
 import {
+  FakeOutboxWriter,
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryStorageProvider,
@@ -15,18 +16,21 @@ const MAX_SIZE = 10 * 1024 * 1024;
 describe("CreateDocumentWithFirstVersionUseCase", () => {
   let storageProvider: InMemoryStorageProvider;
   let auditLogWriter: InMemoryAuditLogWriter;
+  let outbox: FakeOutboxWriter;
   let useCase: CreateDocumentWithFirstVersionUseCase;
 
   beforeEach(() => {
     const { documentRepository } = wireDocumentFakes();
     storageProvider = new InMemoryStorageProvider();
     auditLogWriter = new InMemoryAuditLogWriter();
+    outbox = new FakeOutboxWriter();
     useCase = new CreateDocumentWithFirstVersionUseCase(
       documentRepository,
       storageProvider,
       auditLogWriter,
       new FixedClock(),
       new SequentialIdGenerator(),
+      outbox,
     );
   });
 
@@ -68,6 +72,21 @@ describe("CreateDocumentWithFirstVersionUseCase", () => {
     });
 
     expect(storageProvider.objects.size).toBe(1);
+  });
+
+  it("V2 Sprint 22 (billing, étape 22E) — emits DocumentVersionAdded (jamais sur une lecture, toujours au point d'écriture réel)", async () => {
+    await useCase.execute({
+      organizationId: "org-1",
+      actorId: "user-1",
+      actorRole: "CONTRIBUTOR",
+      title: "Rapport financier",
+      origin: "USER_UPLOAD",
+      domain: "ORGANIZATION",
+      file: validFile(),
+      maxFileSizeBytes: MAX_SIZE,
+    });
+
+    expect(outbox.events.map((e) => e.eventType)).toEqual(["DocumentVersionAdded"]);
   });
 
   it("refuses when the actor lacks document:create (Viewer tier)", async () => {

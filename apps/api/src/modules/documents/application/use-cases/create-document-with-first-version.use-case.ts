@@ -4,6 +4,7 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { parseDocumentDomain } from "../../domain/document-domain";
 import { DocumentId } from "../../domain/document-id.value-object";
 import { parseDocumentOrigin } from "../../domain/document-origin";
@@ -48,6 +49,7 @@ export class CreateDocumentWithFirstVersionUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(command: CreateDocumentWithFirstVersionCommand): Promise<DocumentSummary> {
@@ -124,6 +126,13 @@ export class CreateDocumentWithFirstVersionUseCase {
         resourceId: versionId,
         requestId: command.requestId,
         metadata: { documentId: documentId.value, versionNumber: 1, checksum: validated.checksum },
+      });
+
+      // V2 Sprint 22 (billing, étape 22E, correctif audit Codex P1-02 round 3) — "action métier ->
+      // vérification du seuil", jamais sur une lecture : le point d'écriture réel du stockage.
+      await this.outboxWriter.write({
+        organizationId: command.organizationId,
+        events: [{ eventType: "DocumentVersionAdded", aggregateType: "DocumentVersion", aggregateId: versionId, payload: {}, occurredAt }],
       });
 
       return toDocumentSummary(document, version);

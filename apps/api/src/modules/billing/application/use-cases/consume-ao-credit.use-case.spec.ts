@@ -8,6 +8,7 @@ import { PlanSource } from "../../domain/plan-source";
 import { PlanTier } from "../../domain/plan-tier";
 import {
   FIXED_NOW,
+  FakeOutboxWriter,
   InMemoryAoCreditLedgerRepository,
   InMemoryAuditLogWriter,
   InMemoryOrganizationSubscriptionRepository,
@@ -24,6 +25,7 @@ describe("ConsumeAoCreditUseCase", () => {
   let passes: InMemoryPassPurchaseRepository;
   let ledger: InMemoryAoCreditLedgerRepository;
   let auditLog: InMemoryAuditLogWriter;
+  let outbox: FakeOutboxWriter;
   let useCase: ConsumeAoCreditUseCase;
 
   beforeEach(() => {
@@ -31,8 +33,9 @@ describe("ConsumeAoCreditUseCase", () => {
     passes = new InMemoryPassPurchaseRepository();
     ledger = new InMemoryAoCreditLedgerRepository();
     auditLog = new InMemoryAuditLogWriter();
-    const consumePassForTenderUseCase = new ConsumePassForTenderUseCase(passes, auditLog);
-    useCase = new ConsumeAoCreditUseCase(subscriptions, passes, ledger, auditLog, consumePassForTenderUseCase);
+    outbox = new FakeOutboxWriter();
+    const consumePassForTenderUseCase = new ConsumePassForTenderUseCase(passes, auditLog, outbox);
+    useCase = new ConsumeAoCreditUseCase(subscriptions, passes, ledger, auditLog, outbox, consumePassForTenderUseCase);
   });
 
   it("consumes 1 AO credit from the ledger when the organization has an active finite-quota subscription with balance", async () => {
@@ -102,5 +105,36 @@ describe("ConsumeAoCreditUseCase", () => {
     const finalBalance = await ledger.getBalance(ORG_A);
     expect(finalBalance).toBe(0);
     expect(finalBalance).toBeGreaterThanOrEqual(0);
+  });
+
+  it("mission §53 — emits AoCreditBalanceLow when the balance reaches 2, 1, then 0, never before", async () => {
+    await subscriptions.save(
+      OrganizationSubscription.create({ id: "sub-1", organizationId: ORG_A, planTier: PlanTier.Starter, billingInterval: BillingInterval.Monthly, source: PlanSource.Stripe, occurredAt: FIXED_NOW }),
+    );
+    await ledger.grant({ organizationId: ORG_A, period: "2026-08", nominalAmount: 5, rolloverCap: 6, occurredAt: FIXED_NOW });
+
+    await useCase.execute({ organizationId: ORG_A, tenderId: "tender-1", actorId: "user-1", occurredAt: FIXED_NOW });
+    await useCase.execute({ organizationId: ORG_A, tenderId: "tender-2", actorId: "user-1", occurredAt: FIXED_NOW });
+    expect(outbox.events).toHaveLength(0);
+
+    await useCase.execute({ organizationId: ORG_A, tenderId: "tender-3", actorId: "user-1", occurredAt: FIXED_NOW });
+    expect(outbox.events.map((e) => e.eventType)).toEqual(["AoCreditBalanceLow"]);
+    expect(outbox.events[0]?.payload).toMatchObject({ balance: 2 });
+
+    await useCase.execute({ organizationId: ORG_A, tenderId: "tender-4", actorId: "user-1", occurredAt: FIXED_NOW });
+    await useCase.execute({ organizationId: ORG_A, tenderId: "tender-5", actorId: "user-1", occurredAt: FIXED_NOW });
+    expect(outbox.events.map((e) => e.eventType)).toEqual(["AoCreditBalanceLow", "AoCreditBalanceLow", "AoCreditBalanceLow"]);
+    expect(outbox.events[1]?.payload).toMatchObject({ balance: 1 });
+    expect(outbox.events[2]?.payload).toMatchObject({ balance: 0 });
+  });
+
+  it("mission §14 — Enterprise (unlimited) never emits AoCreditBalanceLow", async () => {
+    await subscriptions.save(
+      OrganizationSubscription.create({ id: "sub-1", organizationId: ORG_A, planTier: PlanTier.Enterprise, billingInterval: BillingInterval.Monthly, source: PlanSource.Stripe, occurredAt: FIXED_NOW }),
+    );
+
+    await useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW });
+
+    expect(outbox.events).toHaveLength(0);
   });
 });

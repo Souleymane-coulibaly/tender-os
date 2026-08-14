@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { PassPurchaseAlreadyConsumedError } from "../../domain/errors";
 import { PassPurchase } from "../../domain/pass-purchase.aggregate";
 import { PassPurchaseStatus } from "../../domain/pass-purchase-status";
-import { FIXED_NOW, InMemoryAuditLogWriter, InMemoryPassPurchaseRepository } from "../../test-support/fakes";
+import { FIXED_NOW, FakeOutboxWriter, InMemoryAuditLogWriter, InMemoryPassPurchaseRepository } from "../../test-support/fakes";
 import { ConsumePassForTenderUseCase } from "./consume-pass-for-tender.use-case";
 
 const ORG_A = "org-a";
@@ -12,12 +12,14 @@ const TENDER_B = "tender-b";
 describe("ConsumePassForTenderUseCase", () => {
   let passes: InMemoryPassPurchaseRepository;
   let auditLog: InMemoryAuditLogWriter;
+  let outbox: FakeOutboxWriter;
   let useCase: ConsumePassForTenderUseCase;
 
   beforeEach(async () => {
     passes = new InMemoryPassPurchaseRepository();
     auditLog = new InMemoryAuditLogWriter();
-    useCase = new ConsumePassForTenderUseCase(passes, auditLog);
+    outbox = new FakeOutboxWriter();
+    useCase = new ConsumePassForTenderUseCase(passes, auditLog, outbox);
 
     await passes.create(
       PassPurchase.create({ id: "pass-1", organizationId: ORG_A, externalReference: "cs_test_1", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW }),
@@ -33,11 +35,19 @@ describe("ConsumePassForTenderUseCase", () => {
     expect(auditLog.entries.map((e) => e.action)).toContain("PassConsumed");
   });
 
-  it("mission §7 — re-consuming for the SAME tender is idempotent (no error, no second audit entry)", async () => {
+  it("mission §53 — emits PassConsumedForTender addressed to the actor who triggered it", async () => {
+    await useCase.execute({ organizationId: ORG_A, passPurchaseId: "pass-1", tenderId: TENDER_A, actorId: "user-1", occurredAt: FIXED_NOW });
+
+    expect(outbox.events).toHaveLength(1);
+    expect(outbox.events[0]).toMatchObject({ eventType: "PassConsumedForTender", payload: { tenderId: TENDER_A, actorId: "user-1" } });
+  });
+
+  it("mission §7 — re-consuming for the SAME tender is idempotent (no error, no second audit entry, no second notification)", async () => {
     await useCase.execute({ organizationId: ORG_A, passPurchaseId: "pass-1", tenderId: TENDER_A, actorId: "user-1", occurredAt: FIXED_NOW });
     await useCase.execute({ organizationId: ORG_A, passPurchaseId: "pass-1", tenderId: TENDER_A, actorId: "user-1", occurredAt: FIXED_NOW });
 
     expect(auditLog.entries.filter((e) => e.action === "PassConsumed")).toHaveLength(1);
+    expect(outbox.events).toHaveLength(1);
   });
 
   it("refuses consuming an already-consumed Pass for a DIFFERENT tender", async () => {

@@ -12,6 +12,7 @@ import type { AoCreditLedgerPage, AoCreditLedgerRepository } from "../applicatio
 import type { AuditLogWriter, BillingAuditLogEntry } from "../application/ports/audit-log-writer";
 import type { EntitlementOverridePage, EntitlementOverrideRepository } from "../application/ports/entitlement-override.repository";
 import type { OrganizationSubscriptionRepository } from "../application/ports/organization-subscription.repository";
+import type { QuotaAlertRepository } from "../application/ports/quota-alert.repository";
 import {
   PassPurchaseExternalReferenceConflictError,
   type PassPurchasePage,
@@ -33,6 +34,31 @@ export class InMemoryAuditLogWriter implements AuditLogWriter {
   readonly entries: BillingAuditLogEntry[] = [];
   async record(entry: BillingAuditLogEntry): Promise<void> {
     this.entries.push(entry);
+  }
+}
+
+/** V2 Sprint 22 (billing, étape 22E) — même motif que `workspace/test-support/fakes.ts`
+ *  `FakeOutboxWriter` : jamais un vrai worker Outbox en test unitaire, seule la capture des
+ *  événements écrits importe pour vérifier QUOI est émis (type, payload), jamais leur livraison. */
+export type CapturedOutboxEvent = Readonly<{ eventType: string; aggregateType: string; aggregateId: string; payload: Record<string, unknown> }>;
+
+export class FakeOutboxWriter {
+  readonly events: CapturedOutboxEvent[] = [];
+  async write(input: { organizationId: string; events: readonly CapturedOutboxEvent[] }): Promise<void> {
+    this.events.push(...input.events);
+  }
+}
+
+/** V2 Sprint 22 (billing, étape 22E) — reproduit fidèlement la contrainte unique réelle
+ *  `(organizationId, quotaType, threshold, periodKey)` de `PrismaQuotaAlertRepository`. */
+export class InMemoryQuotaAlertRepository implements QuotaAlertRepository {
+  private readonly seen = new Set<string>();
+
+  async recordIfNew(input: { organizationId: string; quotaType: string; threshold: number; periodKey: string }): Promise<boolean> {
+    const key = `${input.organizationId}:${input.quotaType}:${input.threshold}:${input.periodKey}`;
+    if (this.seen.has(key)) return false;
+    this.seen.add(key);
+    return true;
   }
 }
 

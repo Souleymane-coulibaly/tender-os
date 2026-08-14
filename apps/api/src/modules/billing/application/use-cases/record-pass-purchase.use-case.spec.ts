@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { FIXED_NOW, InMemoryAuditLogWriter, InMemoryPassPurchaseRepository } from "../../test-support/fakes";
+import { FIXED_NOW, FakeOutboxWriter, InMemoryAuditLogWriter, InMemoryPassPurchaseRepository } from "../../test-support/fakes";
 import { RecordPassPurchaseUseCase } from "./record-pass-purchase.use-case";
 
 const ORG_A = "org-a";
@@ -7,12 +7,14 @@ const ORG_A = "org-a";
 describe("RecordPassPurchaseUseCase", () => {
   let passes: InMemoryPassPurchaseRepository;
   let auditLog: InMemoryAuditLogWriter;
+  let outbox: FakeOutboxWriter;
   let useCase: RecordPassPurchaseUseCase;
 
   beforeEach(() => {
     passes = new InMemoryPassPurchaseRepository();
     auditLog = new InMemoryAuditLogWriter();
-    useCase = new RecordPassPurchaseUseCase(passes, auditLog);
+    outbox = new FakeOutboxWriter();
+    useCase = new RecordPassPurchaseUseCase(passes, auditLog, outbox);
   });
 
   it("creates exactly one Pass purchase at 9900 cents (99€) and audits PassPurchased", async () => {
@@ -25,7 +27,13 @@ describe("RecordPassPurchaseUseCase", () => {
     expect(auditLog.entries[0]?.action).toBe("PassPurchased");
   });
 
-  it("mission §41 — a duplicate webhook delivery (same externalReference) never creates a second Pass", async () => {
+  it("mission §53/§54 — emits PassPurchaseConfirmed on a real new purchase", async () => {
+    await useCase.execute({ organizationId: ORG_A, externalReference: "cs_test_1", actorId: "user-1", occurredAt: FIXED_NOW });
+
+    expect(outbox.events.map((e) => e.eventType)).toEqual(["PassPurchaseConfirmed"]);
+  });
+
+  it("mission §41 — a duplicate webhook delivery (same externalReference) never creates a second Pass, nor a second notification", async () => {
     const first = await useCase.execute({ organizationId: ORG_A, externalReference: "cs_test_dup", actorId: "user-1", occurredAt: FIXED_NOW });
     const second = await useCase.execute({ organizationId: ORG_A, externalReference: "cs_test_dup", actorId: "user-1", occurredAt: FIXED_NOW });
 
@@ -35,6 +43,7 @@ describe("RecordPassPurchaseUseCase", () => {
     // Idempotent replay never re-audits (mission — pas de spam, même motif que le pattern
     // consommateur idempotent Outbox, Sprint 21).
     expect(auditLog.entries).toHaveLength(1);
+    expect(outbox.events).toHaveLength(1);
   });
 
   it("mission §36 — supports multiple distinct Pass purchases by the same organization, each traceable", async () => {

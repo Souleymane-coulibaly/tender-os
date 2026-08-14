@@ -191,6 +191,10 @@ export class SendMessageUseCase {
 
         const events: OutboxEventInput[] = [
           { eventType: "AiResponseCompleted", aggregateType: "Message", aggregateId: pendingAssistant.id, payload: { conversationId: command.conversationId }, occurredAt },
+          // V2 Sprint 22 (billing, étape 22E, correctif audit Codex P1-02 round 4) — "action
+          // métier -> vérification du seuil", jamais sur une lecture : le point d'écriture réel de
+          // la consommation Chat IA facturable (voir `QuotaThresholdEventConsumersModule`).
+          { eventType: "ChatMessageSent", aggregateType: "Message", aggregateId: pendingAssistant.id, payload: {}, occurredAt },
         ];
         await this.outboxWriter.write({ organizationId: command.organizationId, events });
       } else {

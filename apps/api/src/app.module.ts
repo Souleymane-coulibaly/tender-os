@@ -6,6 +6,11 @@ import { AiSuggestionModule } from "./modules/ai-suggestion";
 import { AiSuggestionBridgeModule } from "./modules/ai-suggestion-bridge";
 import { AnalysisModule } from "./modules/analysis/analysis.module";
 import { BillingModule } from "./modules/billing";
+// V2 Sprint 22 (billing, étape 22E, correctif audit Codex P1-02 round 4) — importé DIRECTEMENT
+// depuis son fichier concret, jamais via `./modules/billing` (voir la note dans
+// `quota-threshold-event-consumers.module.ts` : le réexporter depuis le barrel `billing`
+// refermerait un cycle billing -> chat/documents -> tenders -> billing).
+import { QuotaThresholdEventConsumersModule, QUOTA_THRESHOLD_OUTBOX_HANDLERS } from "./modules/billing/quota-threshold-event-consumers.module";
 import { ChatModule } from "./modules/chat/chat.module";
 import { ChecklistIntelligenceModule } from "./modules/checklist-intelligence/checklist-intelligence.module";
 import { ClientPortfolioModule } from "./modules/client-portfolio/client-portfolio.module";
@@ -58,10 +63,14 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     // provider ajouté par le module consommateur). V2 Sprint 18 — `NotificationEventConsumersModule`/
     // `NOTIFICATION_OUTBOX_HANDLERS` ajoutés au même point d'assemblage (mission §15/§21/§50/§51),
     // 6 types d'événements `workspace` jusqu'ici sans aucun handler (aucune collision avec
-    // `INTEGRATION_OUTBOX_HANDLERS`, voir notification-event-consumers.module.ts).
+    // `INTEGRATION_OUTBOX_HANDLERS`, voir notification-event-consumers.module.ts). V2 Sprint 22
+    // (billing, étape 22E, correctif audit Codex P1-02 round 4) — `QuotaThresholdEventConsumersModule`/
+    // `QUOTA_THRESHOLD_OUTBOX_HANDLERS` ajoutés au même point d'assemblage : `MembershipCreated`/
+    // `ChatMessageSent`/`DocumentVersionAdded` (écrits par `memberships`/`chat`/`documents` à leur
+    // propre point d'écriture réel, jamais depuis une lecture GET) jusqu'ici sans aucun handler.
     OutboxModule.forRoot({
-      handlerImports: [IntegrationEventConsumersModule, NotificationEventConsumersModule],
-      handlers: [...INTEGRATION_OUTBOX_HANDLERS, ...NOTIFICATION_OUTBOX_HANDLERS],
+      handlerImports: [IntegrationEventConsumersModule, NotificationEventConsumersModule, QuotaThresholdEventConsumersModule],
+      handlers: [...INTEGRATION_OUTBOX_HANDLERS, ...NOTIFICATION_OUTBOX_HANDLERS, ...QUOTA_THRESHOLD_OUTBOX_HANDLERS],
     }),
     HealthModule,
     MetricsModule,

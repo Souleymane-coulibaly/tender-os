@@ -7,6 +7,7 @@ import { StripeUnrecognizedPriceError } from "../../domain/errors";
 import { AssignSubscriptionUseCase } from "./assign-subscription.use-case";
 import { CancelSubscriptionUseCase } from "./cancel-subscription.use-case";
 import { GrantMonthlyAoCreditsUseCase } from "./grant-monthly-ao-credits.use-case";
+import { MarkSubscriptionPastDueUseCase } from "./mark-subscription-past-due.use-case";
 import { RecordPassPurchaseUseCase } from "./record-pass-purchase.use-case";
 import { ORGANIZATION_SUBSCRIPTION_REPOSITORY, type OrganizationSubscriptionRepository } from "../ports/organization-subscription.repository";
 import { STRIPE_CLIENT, type StripeClient } from "../ports/stripe-client";
@@ -70,6 +71,7 @@ export class HandleStripeWebhookUseCase {
     private readonly assignSubscriptionUseCase: AssignSubscriptionUseCase,
     private readonly cancelSubscriptionUseCase: CancelSubscriptionUseCase,
     private readonly grantMonthlyAoCreditsUseCase: GrantMonthlyAoCreditsUseCase,
+    private readonly markSubscriptionPastDueUseCase: MarkSubscriptionPastDueUseCase,
   ) {}
 
   async execute(command: HandleStripeWebhookCommand): Promise<void> {
@@ -175,6 +177,22 @@ export class HandleStripeWebhookUseCase {
           actorId: "stripe-webhook",
           occurredAt,
         });
+        return;
+      }
+
+      case "invoice.payment_failed": {
+        // Correctif (étape 22E) — jamais traité jusqu'ici malgré la mission §54 "paiement échoué" :
+        // aucune bascule PAST_DUE ne se déclenchait réellement (voir `MarkSubscriptionPastDueUseCase`).
+        const invoice = data as StripeInvoicePayload;
+        if (!invoice.subscription) {
+          return;
+        }
+        const subscription = await this.subscriptionRepository.findByStripeSubscriptionId(invoice.subscription);
+        if (!subscription) {
+          this.logger.warn(`invoice.payment_failed references an unknown subscription (subscription=${invoice.subscription}).`);
+          return;
+        }
+        await this.markSubscriptionPastDueUseCase.execute({ organizationId: subscription.organizationId, occurredAt });
         return;
       }
 

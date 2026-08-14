@@ -7647,3 +7647,28 @@ model StripeProcessedEvent {
   @@index([eventType])
   @@map("stripe_processed_events")
 }
+
+/// V2 Sprint 22 (billing, étape 22E, correctif audit Codex P1-02) — dédup des alertes de seuil
+/// d'usage (users/Chat IA/stockage, 80%/100%), même motif que `StripeProcessedEvent` : la
+/// contrainte unique `(organization_id, quota_type, threshold, period_key)` est la SEULE autorité
+/// réelle de l'idempotence (jamais un check-then-act applicatif) — insérer CETTE ligne EST l'acte
+/// d'alerte, une violation de contrainte signifie "déjà alerté pour cette période", jamais une
+/// erreur. `periodKey` = jour calendaire (Chat, quota quotidien) ou mois calendaire (Users/Storage,
+/// quotas persistants) — reborne le spam à au plus une alerte par palier par période, jamais un
+/// nouveau moteur de notification (réutilise le pipeline Outbox/Notification existant).
+model BillingQuotaAlertState {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// USERS_MAX | CHAT_AI_DAILY_MAX | STORAGE_GB_MAX (billing/domain/quota-type.ts).
+  quotaType String @map("quota_type") @db.VarChar(30)
+  /// 80 | 100.
+  threshold Int
+  /// "YYYY-MM-DD" (Chat) ou "YYYY-MM" (Users/Storage).
+  periodKey String @map("period_key") @db.VarChar(10)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, quotaType, threshold, periodKey])
+  @@map("billing_quota_alert_states")
+}

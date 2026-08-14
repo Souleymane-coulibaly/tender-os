@@ -1,5 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { PASS_EXPIRATION_POLICY_DAYS, PLAN_CATALOG } from "../../domain/plan-catalog";
 import { PlanTier } from "../../domain/plan-tier";
 import { PassPurchase } from "../../domain/pass-purchase.aggregate";
@@ -37,6 +38,7 @@ export class RecordPassPurchaseUseCase {
   constructor(
     @Inject(PASS_PURCHASE_REPOSITORY) private readonly passPurchaseRepository: PassPurchaseRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(command: RecordPassPurchaseCommand): Promise<PassPurchase> {
@@ -74,6 +76,22 @@ export class RecordPassPurchaseUseCase {
       resourceType: "OrganizationPassPurchase",
       resourceId: purchase.id,
       metadata: { externalReference: command.externalReference, priceCents },
+    });
+
+    // Mission §53/§54 "achat Pass confirmé... Votre Pass AO est disponible" — uniquement sur la
+    // création RÉELLE (jamais sur le chemin idempotent d'un rejeu webhook Stripe, voir le catch
+    // ci-dessus qui retourne avant d'atteindre cette ligne).
+    await this.outboxWriter.write({
+      organizationId: command.organizationId,
+      events: [
+        {
+          eventType: "PassPurchaseConfirmed",
+          aggregateType: "OrganizationPassPurchase",
+          aggregateId: purchase.id,
+          payload: {},
+          occurredAt: command.occurredAt,
+        },
+      ],
     });
 
     return purchase;

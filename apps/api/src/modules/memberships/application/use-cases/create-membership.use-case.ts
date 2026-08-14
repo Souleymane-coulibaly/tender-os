@@ -4,6 +4,7 @@ import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { GetCurrentUserUseCase } from "../../../identity";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { MembershipAlreadyExistsError, OwnershipRequiresTransferError } from "../../domain/errors";
 import { MembershipId } from "../../domain/membership-id.value-object";
 import { OrganizationMembership } from "../../domain/organization-membership.aggregate";
@@ -39,6 +40,7 @@ export class CreateMembershipUseCase {
     private readonly getCurrentUserUseCase: GetCurrentUserUseCase,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(command: CreateMembershipCommand): Promise<CreateMembershipResult> {
@@ -86,6 +88,14 @@ export class CreateMembershipUseCase {
       resourceId: membership.id.value,
       requestId: command.requestId,
       metadata: { userId: command.userId, role },
+    });
+
+    // V2 Sprint 22 (billing, étape 22E, correctif audit Codex P1-02 round 4) — "action métier ->
+    // vérification du seuil", jamais sur une lecture : le point d'écriture réel de l'ajout d'un
+    // membre (voir `QuotaThresholdEventConsumersModule`, module `billing`).
+    await this.outboxWriter.write({
+      organizationId: command.organizationId,
+      events: [{ eventType: "MembershipCreated", aggregateType: "OrganizationMembership", aggregateId: membership.id.value, payload: {}, occurredAt }],
     });
 
     return toMembershipSummary(membership);

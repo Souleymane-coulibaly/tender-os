@@ -28,9 +28,11 @@ export class SequentialIdGenerator implements IdGenerator {
   }
 }
 
+export type CapturedOutboxEvent = Readonly<{ eventType: string; aggregateType: string; aggregateId: string; payload: Record<string, unknown> }>;
+
 export class FakeOutboxWriter {
-  readonly events: unknown[] = [];
-  async write(input: { organizationId: string; events: readonly unknown[] }): Promise<void> {
+  readonly events: CapturedOutboxEvent[] = [];
+  async write(input: { organizationId: string; events: readonly CapturedOutboxEvent[] }): Promise<void> {
     this.events.push(...input.events);
   }
 }

@@ -44,3 +44,13 @@ export { GetAoCreditBalanceUseCase } from "./application/use-cases/get-ao-credit
 // de modules Billing -> Chat -> Tenders -> Billing). Voir `subscription-usage.module.ts`.
 export { GetOrganizationSubscriptionUseCase } from "./application/use-cases/get-organization-subscription.use-case";
 export { BillingErrorFilter } from "./interfaces/http/billing-error.filter";
+export { CheckQuotaThresholdUseCase } from "./application/use-cases/check-quota-threshold.use-case";
+export type { CheckQuotaThresholdCommand } from "./application/use-cases/check-quota-threshold.use-case";
+// V2 Sprint 22 (billing, étape 22E, correctif audit Codex P1-02 round 4) — `QuotaThresholdEventConsumersModule`
+// n'est JAMAIS réexporté ici (contrairement à tout le reste de ce fichier) : il importe `ChatModule`/
+// `DocumentsModule`, qui importent tous deux `TendersModule`, qui importe `BillingModule` via CE
+// BARREL (`"../billing"`) — le réexporter ici refermerait un cycle de modules
+// (billing/index.ts -> quota-threshold-event-consumers.module.ts -> chat -> tenders -> billing/index.ts),
+// détecté avant exécution en retraçant le graphe d'imports, pas seulement en compilant. `app.module.ts`
+// l'importe donc DIRECTEMENT depuis son fichier concret
+// (`./modules/billing/quota-threshold-event-consumers.module`), jamais via ce barrel.

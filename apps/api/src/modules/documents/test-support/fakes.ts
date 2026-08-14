@@ -37,6 +37,17 @@ export class InMemoryAuditLogWriter implements AuditLogWriter {
   }
 }
 
+/** V2 Sprint 22 (billing, étape 22E) — même motif que `workspace/test-support/fakes.ts`
+ *  `FakeOutboxWriter` : jamais un vrai worker Outbox en test unitaire. */
+export type CapturedOutboxEvent = Readonly<{ eventType: string; aggregateType: string; aggregateId: string; payload: Record<string, unknown> }>;
+
+export class FakeOutboxWriter {
+  readonly events: CapturedOutboxEvent[] = [];
+  async write(input: { organizationId: string; events: readonly CapturedOutboxEvent[] }): Promise<void> {
+    this.events.push(...input.events);
+  }
+}
+
 export class InMemoryDocumentRepository implements DocumentRepository {
   private readonly documents = new Map<string, Document>();
 

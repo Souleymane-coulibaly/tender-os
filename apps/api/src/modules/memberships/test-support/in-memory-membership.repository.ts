@@ -77,6 +77,12 @@ export class InMemoryMembershipRepository implements MembershipRepository {
     return count;
   }
 
+  async listActiveByOrganizationAndRoles(input: { organizationId: string; roles: readonly OrganizationRole[] }): Promise<OrganizationMembership[]> {
+    return [...this.records.values()].filter(
+      (membership) => membership.organizationId === input.organizationId && membership.status === MembershipStatus.Active && input.roles.includes(membership.role),
+    );
+  }
+
   async save(membership: OrganizationMembership): Promise<void> {
     this.records.set(membership.id.value, membership);
   }

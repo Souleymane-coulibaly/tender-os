@@ -1,5 +1,16 @@
 import { Module } from "@nestjs/common";
 import { IdentityModule } from "../identity";
+import { MembershipsModule } from "../memberships";
+import {
+  AoCreditBalanceLowNotificationOutboxHandler,
+  PassConsumedForTenderNotificationOutboxHandler,
+  PassPurchaseConfirmedNotificationOutboxHandler,
+  QuotaThresholdReachedNotificationOutboxHandler,
+  SubscriptionCanceledNotificationOutboxHandler,
+  SubscriptionPaymentFailedNotificationOutboxHandler,
+  SubscriptionPlanChangedNotificationOutboxHandler,
+} from "./infrastructure/outbox-handlers/billing-event-notification.outbox-handlers";
+import { BillingEventNotificationService } from "./infrastructure/outbox-handlers/billing-event-notification.service";
 import { ApprovalApprovedNotificationOutboxHandler } from "./infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers";
 import { ApprovalChangesRequestedNotificationOutboxHandler } from "./infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers";
 import { ApprovalRejectedNotificationOutboxHandler } from "./infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers";
@@ -23,6 +34,17 @@ export const NOTIFICATION_OUTBOX_HANDLERS = [
   ApprovalApprovedNotificationOutboxHandler,
   ApprovalChangesRequestedNotificationOutboxHandler,
   ApprovalRejectedNotificationOutboxHandler,
+  // V2 Sprint 22 (billing, étape 22E) — mission §53/§54, 5 types d'événements écrits par `billing`
+  // (`AoCreditBalanceLow`/`PassPurchaseConfirmed`/`PassConsumedForTender`/`SubscriptionPaymentFailed`/
+  // `SubscriptionPlanChanged`), aucun handler enregistré dessus jusqu'ici (confirmé par audit),
+  // aucun risque de collision avec `INTEGRATION_OUTBOX_HANDLERS`.
+  AoCreditBalanceLowNotificationOutboxHandler,
+  PassPurchaseConfirmedNotificationOutboxHandler,
+  PassConsumedForTenderNotificationOutboxHandler,
+  SubscriptionPaymentFailedNotificationOutboxHandler,
+  SubscriptionPlanChangedNotificationOutboxHandler,
+  SubscriptionCanceledNotificationOutboxHandler,
+  QuotaThresholdReachedNotificationOutboxHandler,
 ];
 
 /**
@@ -34,8 +56,8 @@ export const NOTIFICATION_OUTBOX_HANDLERS = [
  * les producteurs/consommateurs Outbox de ce dépôt depuis le correctif Sprint 16.
  */
 @Module({
-  imports: [NotificationsModule, IdentityModule],
-  providers: [WorkspaceEventNotificationService, ...NOTIFICATION_OUTBOX_HANDLERS],
-  exports: [WorkspaceEventNotificationService, ...NOTIFICATION_OUTBOX_HANDLERS],
+  imports: [NotificationsModule, IdentityModule, MembershipsModule],
+  providers: [WorkspaceEventNotificationService, BillingEventNotificationService, ...NOTIFICATION_OUTBOX_HANDLERS],
+  exports: [WorkspaceEventNotificationService, BillingEventNotificationService, ...NOTIFICATION_OUTBOX_HANDLERS],
 })
 export class NotificationEventConsumersModule {}

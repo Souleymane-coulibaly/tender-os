@@ -13,5 +13,9 @@ export { CurrentMembershipContext } from "./interfaces/http/current-membership-c
 // `assertWorkspaceAccess`/`TenderPermission.ManageWorkspace`, ceci n'est qu'une vérification de
 // validité de donnée.
 export { MEMBERSHIP_REPOSITORY } from "./application/ports/membership.repository";
-export type { MembershipRepository } from "./application/ports/membership.repository";
+export type { MembershipRepository, MembershipPage } from "./application/ports/membership.repository";
 export { OrganizationMembership } from "./domain/organization-membership.aggregate";
+// V2 Sprint 22 (billing, étape 22E) — réexporté pour que `notifications` résolve les OWNER/
+// ORGANIZATION_ADMIN d'une organisation à notifier pour un événement de facturation sans acteur
+// applicatif évident (webhook Stripe, Platform Admin non membre de l'organisation).
+export { OrganizationRole } from "./domain/organization-role";

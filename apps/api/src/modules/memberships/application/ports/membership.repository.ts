@@ -40,6 +40,15 @@ export interface MembershipRepository {
   listByUser(input: { userId: string; cursor?: string | undefined; limit: number }): Promise<MembershipPage>;
   countActiveByOrganizationAndRole(input: { organizationId: string; role: OrganizationRole }): Promise<number>;
   countActiveByOrganization(organizationId: string): Promise<number>;
+  /** Correctif audit Codex 22E (P2) — filtre par rôle AU NIVEAU REQUÊTE, jamais une pagination
+   *  générique de tous les membres suivie d'un filtre applicatif (`listByOrganization` paginée
+   *  aurait pu exclure silencieusement un OWNER/ORGANIZATION_ADMIN ajouté après les N premiers
+   *  membres d'une grande organisation). Le statut ACTIVE est filtré en base ; `expiresAt` reste
+   *  vérifié par l'appelant via `isEffectivelyActive` (dépend de "maintenant", jamais figé en
+   *  requête). Le nombre d'OWNER/ORGANIZATION_ADMIN d'une organisation reste toujours restreint
+   *  par construction (mission — un seul OWNER actif à la fois, BR-ORG-002), jamais un besoin de
+   *  pagination ici. */
+  listActiveByOrganizationAndRoles(input: { organizationId: string; roles: readonly OrganizationRole[] }): Promise<OrganizationMembership[]>;
   save(membership: OrganizationMembership): Promise<void>;
   /**
    * BR-ORG-004 — exécute `fn` à l'intérieur d'une unique transaction Postgres protégée par un

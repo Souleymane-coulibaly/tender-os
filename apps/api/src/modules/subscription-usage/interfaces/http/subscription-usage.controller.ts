@@ -18,6 +18,12 @@ import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe
  * courante uniquement (`membership.organizationId`, jamais un `organizationId` de route — aucune
  * organisation ne peut lire l'abonnement/l'usage d'une autre, même motif que `CheckoutController`).
  * L'assignation MANUAL/GRANTED reste Platform Admin only (voir `AdminOrganizationBillingController`).
+ *
+ * Correctif audit Codex 22E (P1-02, round 3, décision utilisateur "GET /billing/usage -> lecture
+ * pure uniquement") — ce contrôleur ne déclenche PLUS `CheckQuotaThresholdUseCase` : la vérification
+ * de seuil vit désormais dans `billing`, appelée depuis le point d'écriture réel de chaque dimension
+ * (`CreateMembershipUseCase`/`SendMessageUseCase`/`AddDocumentVersionUseCase`), jamais depuis une
+ * lecture.
  */
 @Controller("billing")
 @UseFilters(BillingErrorFilter)

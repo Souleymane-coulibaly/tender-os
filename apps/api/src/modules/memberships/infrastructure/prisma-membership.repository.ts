@@ -91,6 +91,18 @@ export class PrismaMembershipRepository implements MembershipRepository {
     });
   }
 
+  async listActiveByOrganizationAndRoles(input: { organizationId: string; roles: readonly OrganizationRole[] }): Promise<OrganizationMembership[]> {
+    const records = await this.prisma.organizationMembership.findMany({
+      where: {
+        organizationId: input.organizationId,
+        status: MembershipStatus.Active,
+        roles: { some: { role: { code: { in: [...input.roles] } } } },
+      },
+      include: MEMBERSHIP_INCLUDE,
+    });
+    return records.map((record) => this.mapper.toDomain(record));
+  }
+
   async save(membership: OrganizationMembership): Promise<void> {
     const data = this.mapper.toPersistence(membership);
     const role = await this.prisma.role.findUniqueOrThrow({ where: { code: membership.role } });

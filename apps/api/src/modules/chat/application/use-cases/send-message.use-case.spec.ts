@@ -85,6 +85,17 @@ describe("SendMessageUseCase", () => {
     expect(messageRepository.messages.filter((m) => m.conversationId === "conv-1")).toHaveLength(2);
   });
 
+  it("V2 Sprint 22 (billing, étape 22E) — emits ChatMessageSent on completion (jamais sur une lecture, toujours au point d'écriture réel)", async () => {
+    const provider = new FakeAIProvider([
+      { kind: "success", result: fakeChatAIProviderResult({ content: JSON.stringify({ answer: "La date limite est le 1er septembre 2026.", citations: [{ sourceRef: "TENDER:submissionDeadline" }], insufficientContext: false }) }) },
+    ]);
+    const useCase = buildUseCase(provider);
+
+    await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Quelle est la date limite ?" });
+
+    expect(outboxWriter.events.map((e) => e.eventType)).toEqual(expect.arrayContaining(["AiResponseCompleted", "ChatMessageSent"]));
+  });
+
   it("NEVER persists a forged citation (sourceRef not part of the supplied context) as a valid message — fails the message instead", async () => {
     const provider = new FakeAIProvider([
       { kind: "success", result: fakeChatAIProviderResult({ content: JSON.stringify({ answer: "Réponse avec source inventée.", citations: [{ sourceRef: "KB:forged-entry" }], insufficientContext: false }) }) },

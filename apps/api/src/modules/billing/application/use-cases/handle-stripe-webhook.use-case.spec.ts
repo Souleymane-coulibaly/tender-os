@@ -9,6 +9,7 @@ import type { AssignSubscriptionUseCase } from "./assign-subscription.use-case";
 import type { CancelSubscriptionUseCase } from "./cancel-subscription.use-case";
 import type { GrantMonthlyAoCreditsUseCase } from "./grant-monthly-ao-credits.use-case";
 import { HandleStripeWebhookUseCase } from "./handle-stripe-webhook.use-case";
+import type { MarkSubscriptionPastDueUseCase } from "./mark-subscription-past-due.use-case";
 import type { RecordPassPurchaseUseCase } from "./record-pass-purchase.use-case";
 
 class SequentialIdGenerator {
@@ -31,6 +32,7 @@ describe("HandleStripeWebhookUseCase", () => {
   let assignSubscriptionUseCase: { execute: ReturnType<typeof vi.fn> };
   let cancelSubscriptionUseCase: { execute: ReturnType<typeof vi.fn> };
   let grantMonthlyAoCreditsUseCase: { execute: ReturnType<typeof vi.fn> };
+  let markSubscriptionPastDueUseCase: { execute: ReturnType<typeof vi.fn> };
   let useCase: HandleStripeWebhookUseCase;
 
   const originalStarterMonthly = process.env.STRIPE_PRICE_STARTER_MONTHLY;
@@ -45,6 +47,7 @@ describe("HandleStripeWebhookUseCase", () => {
     assignSubscriptionUseCase = { execute: vi.fn(async () => {}) };
     cancelSubscriptionUseCase = { execute: vi.fn(async () => {}) };
     grantMonthlyAoCreditsUseCase = { execute: vi.fn(async () => {}) };
+    markSubscriptionPastDueUseCase = { execute: vi.fn(async () => {}) };
 
     useCase = new HandleStripeWebhookUseCase(
       stripeClient,
@@ -56,6 +59,7 @@ describe("HandleStripeWebhookUseCase", () => {
       assignSubscriptionUseCase as unknown as AssignSubscriptionUseCase,
       cancelSubscriptionUseCase as unknown as CancelSubscriptionUseCase,
       grantMonthlyAoCreditsUseCase as unknown as GrantMonthlyAoCreditsUseCase,
+      markSubscriptionPastDueUseCase as unknown as MarkSubscriptionPastDueUseCase,
     );
   });
 
@@ -196,6 +200,32 @@ describe("HandleStripeWebhookUseCase", () => {
     await useCase.execute({ rawBody, signatureHeader: "valid" });
 
     expect(grantMonthlyAoCreditsUseCase.execute).not.toHaveBeenCalled();
+  });
+
+  it("correctif étape 22E (mission §54 'paiement échoué') — invoice.payment_failed marks the subscription PAST_DUE", async () => {
+    await subscriptions.save(
+      OrganizationSubscription.create({
+        id: "sub-row-1",
+        organizationId: "org-a",
+        planTier: PlanTier.Starter,
+        billingInterval: BillingInterval.Monthly,
+        source: PlanSource.Stripe,
+        stripeSubscriptionId: "sub_1",
+        occurredAt: FIXED_NOW,
+      }),
+    );
+    const rawBody = stripeEventBuffer("evt_7", "invoice.payment_failed", { subscription: "sub_1", period_start: 0 });
+
+    await useCase.execute({ rawBody, signatureHeader: "valid" });
+
+    expect(markSubscriptionPastDueUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ organizationId: "org-a" }));
+  });
+
+  it("invoice.payment_failed for an unknown subscription is journaled, never fatal", async () => {
+    const rawBody = stripeEventBuffer("evt_8", "invoice.payment_failed", { subscription: "sub_unknown", period_start: 0 });
+
+    await expect(useCase.execute({ rawBody, signatureHeader: "valid" })).resolves.toBeUndefined();
+    expect(markSubscriptionPastDueUseCase.execute).not.toHaveBeenCalled();
   });
 
   it("an unmapped event type is received and journaled, never fatal", async () => {

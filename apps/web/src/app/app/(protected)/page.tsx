@@ -3,10 +3,39 @@ import Link from "next/link";
 import { appApiFetch } from "../../../lib/app-api-client";
 import type { ClientAccountSummary, ClientPortfolioPage } from "../../../lib/client-portfolio-types";
 import type { DashboardOverview } from "../../../lib/dashboard-types";
+import type { OrganizationEntitlementsDto, OrganizationSubscriptionDto, OrganizationUsageDto, PassPurchaseDto } from "../../../lib/billing-types";
+import { fetchAoCreditBalance, fetchEntitlements, fetchPassPurchases, fetchSubscription, fetchUsage } from "../billing-actions";
 import { fetchDashboard } from "../dashboard-actions";
 import { ApiErrorState } from "./api-error-state";
+import { BillingSummaryWidget } from "./billing-summary-widget";
 import { DashboardFilters } from "./dashboard-filters";
 import { ActivityWidget, AttentionWidget, DeadlinesWidget, GoNoGoWidget, KpiCard, MyTasksWidget, PackagesWidget, PipelineWidget } from "./dashboard-widgets";
+
+type BillingSummaryData = {
+  subscription: OrganizationSubscriptionDto | null;
+  entitlements: OrganizationEntitlementsDto;
+  usage: OrganizationUsageDto;
+  aoCreditBalance: number;
+  passPurchases: PassPurchaseDto[];
+};
+
+/** Mission §52 — jamais bloquant pour le reste du Dashboard (même motif que la cloche de
+ *  notifications dans le layout) : une organisation sans facturation configurée, ou une erreur
+ *  ponctuelle de l'API billing, ne doit jamais faire échouer la page entière. */
+async function fetchBillingSummary(): Promise<BillingSummaryData | null> {
+  try {
+    const [subscription, entitlements, usage, aoCreditBalance, passPurchasesPage] = await Promise.all([
+      fetchSubscription(),
+      fetchEntitlements(),
+      fetchUsage(),
+      fetchAoCreditBalance(),
+      fetchPassPurchases(),
+    ]);
+    return { subscription, entitlements, usage, aoCreditBalance, passPurchases: passPurchasesPage.items };
+  } catch {
+    return null;
+  }
+}
 
 export const metadata: Metadata = { title: "Tableau de bord — TenderOS" };
 
@@ -25,11 +54,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   let currentUser: { displayName: string };
   let clients: ClientPortfolioPage<ClientAccountSummary>;
   let overview: DashboardOverview;
+  let billingSummary: BillingSummaryData | null;
   try {
-    [currentUser, clients, overview] = await Promise.all([
+    [currentUser, clients, overview, billingSummary] = await Promise.all([
       appApiFetch<{ displayName: string }>("/api/v1/auth/me"),
       appApiFetch<ClientPortfolioPage<ClientAccountSummary>>("/api/v1/clients?limit=100"),
       fetchDashboard({ clientId: params.clientId, periodDays }),
+      fetchBillingSummary(),
     ]);
   } catch (error) {
     return <ApiErrorState error={error} />;
@@ -66,6 +97,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <KpiCard label="À traiter" value={overview.kpis.needingAttention} tone={overview.kpis.needingAttention > 0 ? "critical" : undefined} href="#attention" />
         <KpiCard label="Validations en attente" value={overview.kpis.pendingApprovals} tone={overview.kpis.pendingApprovals > 0 ? "warning" : undefined} href="/app/validations" />
       </div>
+
+      {billingSummary ? (
+        <BillingSummaryWidget
+          subscription={billingSummary.subscription}
+          entitlements={billingSummary.entitlements}
+          usage={billingSummary.usage}
+          aoCreditBalance={billingSummary.aoCreditBalance}
+          passPurchases={billingSummary.passPurchases}
+        />
+      ) : null}
 
       {overview.kpis.activeTenders === 0 ? (
         <div className="rounded border border-dashed border-neutral-300 p-8 text-center">

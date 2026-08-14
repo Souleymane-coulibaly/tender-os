@@ -36,7 +36,9 @@ import { GetOrCreateDefaultKnowledgeSpaceUseCase } from "./get-or-create-default
 const UNUSED_GET_CLIENT_ACCOUNT_USE_CASE = {} as GetClientAccountUseCase;
 const UNUSED_ASSERT_CLIENT_ACCESS_USE_CASE = {} as AssertClientAccessUseCase;
 // Ce test n'exerce jamais `createWithVersionAndTags`/`delete` (seuls appelants de l'Outbox sur ce
-// repository) — un no-op suffit, jamais destiné à être observé.
+// repository) — un no-op suffit, jamais destiné à être observé. Réutilisé aussi pour
+// `CreateDocumentWithFirstVersionUseCase` (V2 Sprint 22, étape 22E : émet `DocumentVersionAdded`
+// depuis son propre point d'écriture réel), même motif.
 const NOOP_OUTBOX_WRITER: OutboxWriter = { write: async () => {} };
 
 describe("AddKnowledgeDocumentUseCase — compensation after a real Document/DocumentVersion upload", () => {
@@ -84,7 +86,7 @@ describe("AddKnowledgeDocumentUseCase — compensation after a real Document/Doc
 
   it("purges the real Document/DocumentVersion and deletes the stored file when the Knowledge transaction fails after a real upload", async () => {
     const storageProvider = new InMemoryStorageProvider();
-    const createDocumentWithFirstVersionUseCase = new CreateDocumentWithFirstVersionUseCase(documentRepository, storageProvider, documentsAuditLogWriter, clock, idGenerator);
+    const createDocumentWithFirstVersionUseCase = new CreateDocumentWithFirstVersionUseCase(documentRepository, storageProvider, documentsAuditLogWriter, clock, idGenerator, NOOP_OUTBOX_WRITER);
     const internalDocumentCleanupService = new InternalDocumentCleanupService(documentRepository, documentVersionRepository, storageProvider);
     const dispatcher = new RecordingKnowledgeDispatcher();
 
@@ -150,7 +152,7 @@ describe("AddKnowledgeDocumentUseCase — compensation after a real Document/Doc
       throw new Error("Simulated storage deletion failure (test-only)");
     };
 
-    const createDocumentWithFirstVersionUseCase = new CreateDocumentWithFirstVersionUseCase(documentRepository, storageProvider, documentsAuditLogWriter, clock, idGenerator);
+    const createDocumentWithFirstVersionUseCase = new CreateDocumentWithFirstVersionUseCase(documentRepository, storageProvider, documentsAuditLogWriter, clock, idGenerator, NOOP_OUTBOX_WRITER);
     const internalDocumentCleanupService = new InternalDocumentCleanupService(documentRepository, documentVersionRepository, storageProvider);
     const dispatcher = new RecordingKnowledgeDispatcher();
 

@@ -1,5 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { BillingInterval } from "../../domain/billing-interval";
 import { OrganizationSubscription } from "../../domain/organization-subscription.aggregate";
 import { PlanSource } from "../../domain/plan-source";
@@ -31,6 +32,7 @@ export class AssignSubscriptionUseCase {
   constructor(
     @Inject(ORGANIZATION_SUBSCRIPTION_REPOSITORY) private readonly subscriptionRepository: OrganizationSubscriptionRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(command: AssignSubscriptionCommand): Promise<OrganizationSubscription> {
@@ -90,6 +92,37 @@ export class AssignSubscriptionUseCase {
         resourceType: "OrganizationSubscription",
         resourceId: existing.id,
         metadata: { fromPlanTier: previousPlanTier, toPlanTier: command.planTier },
+      });
+      // Mission §54 "changement de plan" — jamais un acteur org-member évident ici (webhook Stripe
+      // ou Platform Admin, aucun des deux n'est un membre de CETTE organisation) : notifie OWNER/
+      // ORGANIZATION_ADMIN, jamais `command.actorId`.
+      await this.outboxWriter.write({
+        organizationId: command.organizationId,
+        events: [
+          {
+            eventType: "SubscriptionPlanChanged",
+            aggregateType: "OrganizationSubscription",
+            aggregateId: existing.id,
+            payload: { fromPlanTier: previousPlanTier, toPlanTier: command.planTier },
+            occurredAt: command.occurredAt,
+          },
+          // V2 Sprint 22 (billing, étape 22E, décision utilisateur "éventuellement changement de
+          // plan si cela fait passer l'organisation dans un état over-quota") — type d'événement
+          // DISTINCT de `SubscriptionPlanChanged` (jamais un second handler sur le même eventType :
+          // `CompositeOutboxEventDispatcher` n'admet qu'UN SEUL handler par eventType et écraserait
+          // silencieusement `SubscriptionPlanChangedNotificationOutboxHandler`, voir
+          // `outbox/infrastructure/composite-outbox-event-dispatcher.ts`). Un changement de PALIER
+          // change la LIMITE (dénominateur), jamais l'usage lui-même — peut à lui seul faire
+          // franchir un seuil 80%/100% sans qu'aucune action d'usage n'ait eu lieu (ex. downgrade
+          // Business -> Starter avec 15 utilisateurs déjà actifs).
+          {
+            eventType: "SubscriptionPlanChangedQuotaRecheck",
+            aggregateType: "OrganizationSubscription",
+            aggregateId: existing.id,
+            payload: {},
+            occurredAt: command.occurredAt,
+          },
+        ],
       });
     }
     if (intervalChanged) {

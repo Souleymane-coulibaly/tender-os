@@ -1,18 +1,21 @@
 import { Module } from "@nestjs/common";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
+import { OutboxWriterModule } from "../outbox";
 import { PlatformAdministrationModule } from "../platform-administration";
 import { AO_CREDIT_LEDGER_REPOSITORY } from "./application/ports/ao-credit-ledger.repository";
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
 import { ENTITLEMENT_OVERRIDE_REPOSITORY } from "./application/ports/entitlement-override.repository";
 import { ORGANIZATION_SUBSCRIPTION_REPOSITORY } from "./application/ports/organization-subscription.repository";
 import { PASS_PURCHASE_REPOSITORY } from "./application/ports/pass-purchase.repository";
+import { QUOTA_ALERT_REPOSITORY } from "./application/ports/quota-alert.repository";
 import { STRIPE_CLIENT } from "./application/ports/stripe-client";
 import { STRIPE_PROCESSED_EVENT_REPOSITORY } from "./application/ports/stripe-processed-event.repository";
 import { DefaultEntitlementService, ENTITLEMENT_SERVICE } from "./application/services/entitlement.service";
 import { AdjustAoCreditsUseCase } from "./application/use-cases/adjust-ao-credits.use-case";
 import { AssignSubscriptionUseCase } from "./application/use-cases/assign-subscription.use-case";
 import { CancelSubscriptionUseCase } from "./application/use-cases/cancel-subscription.use-case";
+import { CheckQuotaThresholdUseCase } from "./application/use-cases/check-quota-threshold.use-case";
 import { ConsumeAoCreditUseCase } from "./application/use-cases/consume-ao-credit.use-case";
 import { ConsumePassForTenderUseCase } from "./application/use-cases/consume-pass-for-tender.use-case";
 import { CreateCheckoutSessionUseCase } from "./application/use-cases/create-checkout-session.use-case";
@@ -26,6 +29,7 @@ import { HandleStripeWebhookUseCase } from "./application/use-cases/handle-strip
 import { ListAoCreditLedgerUseCase } from "./application/use-cases/list-ao-credit-ledger.use-case";
 import { ListEntitlementOverridesUseCase } from "./application/use-cases/list-entitlement-overrides.use-case";
 import { ListPassPurchasesUseCase } from "./application/use-cases/list-pass-purchases.use-case";
+import { MarkSubscriptionPastDueUseCase } from "./application/use-cases/mark-subscription-past-due.use-case";
 import { RecordPassPurchaseUseCase } from "./application/use-cases/record-pass-purchase.use-case";
 import { ReverseAoCreditConsumptionUseCase } from "./application/use-cases/reverse-ao-credit-consumption.use-case";
 import { RevokeEntitlementOverrideUseCase } from "./application/use-cases/revoke-entitlement-override.use-case";
@@ -34,6 +38,7 @@ import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
 import { PrismaEntitlementOverrideRepository } from "./infrastructure/prisma-entitlement-override.repository";
 import { PrismaOrganizationSubscriptionRepository } from "./infrastructure/prisma-organization-subscription.repository";
 import { PrismaPassPurchaseRepository } from "./infrastructure/prisma-pass-purchase.repository";
+import { PrismaQuotaAlertRepository } from "./infrastructure/prisma-quota-alert.repository";
 import { PrismaStripeProcessedEventRepository } from "./infrastructure/prisma-stripe-processed-event.repository";
 import { StripeSdkClient } from "./infrastructure/stripe-sdk.client";
 import { AoCreditLedgerController } from "./interfaces/http/ao-credit-ledger.controller";
@@ -46,16 +51,22 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
  * "AO Credit Ledger / Rollover / Quotas" (22B) + "Stripe Payment + Subscriptions" (22C) +
  * "Subscription & Usage UI + Platform Admin" (22D, lecture propre — la composition avec les
  * usages Chat IA/stockage/utilisateurs vit dans le module `subscription-usage`, jamais ici, pour
- * éviter un cycle de modules Billing -> Chat -> Tenders -> Billing). Importe
- * `IdentityModule`/`MembershipsModule`/`PlatformAdministrationModule` UNIQUEMENT pour réutiliser
- * leurs guards/décorateurs sur ses propres contrôleurs — jamais l'inverse.
+ * éviter un cycle de modules Billing -> Chat -> Tenders -> Billing) + "Alertes de seuil d'usage"
+ * (22E, correctif audit Codex round 3 : `CheckQuotaThresholdUseCase` vit ICI et est réexporté —
+ * `memberships`/`chat`/`documents` en dépendent déjà tous, jamais l'inverse, donc aucun cycle ;
+ * chaque module déclenche la vérification depuis SON PROPRE point d'écriture réel, jamais depuis
+ * une lecture `GET /billing/usage`). Importe `IdentityModule`/`MembershipsModule`/
+ * `PlatformAdministrationModule` UNIQUEMENT pour réutiliser leurs guards/décorateurs sur ses propres
+ * contrôleurs — jamais l'inverse.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, PlatformAdministrationModule],
+  imports: [IdentityModule, MembershipsModule, PlatformAdministrationModule, OutboxWriterModule],
   controllers: [EntitlementOverridesController, AoCreditLedgerController, CheckoutController, StripeWebhookController],
   providers: [
     AssignSubscriptionUseCase,
     CancelSubscriptionUseCase,
+    MarkSubscriptionPastDueUseCase,
+    CheckQuotaThresholdUseCase,
     RecordPassPurchaseUseCase,
     ConsumePassForTenderUseCase,
     ListPassPurchasesUseCase,
@@ -79,6 +90,7 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
     { provide: ENTITLEMENT_OVERRIDE_REPOSITORY, useClass: PrismaEntitlementOverrideRepository },
     { provide: AO_CREDIT_LEDGER_REPOSITORY, useClass: PrismaAoCreditLedgerRepository },
     { provide: STRIPE_PROCESSED_EVENT_REPOSITORY, useClass: PrismaStripeProcessedEventRepository },
+    { provide: QUOTA_ALERT_REPOSITORY, useClass: PrismaQuotaAlertRepository },
     { provide: STRIPE_CLIENT, useClass: StripeSdkClient },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
     { provide: ENTITLEMENT_SERVICE, useClass: DefaultEntitlementService },
@@ -97,6 +109,11 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
     ConsumeAoCreditUseCase,
     GrantMonthlyAoCreditsUseCase,
     GetAoCreditBalanceUseCase,
+    // V2 Sprint 22E (correctif audit Codex P1-02, round 3) — réexporté pour que `memberships`/
+    // `chat`/`documents` déclenchent la vérification de seuil depuis leur propre point d'écriture
+    // réel (jamais depuis une lecture) : ces trois modules dépendent déjà de `billing`, jamais
+    // l'inverse, donc aucun cycle.
+    CheckQuotaThresholdUseCase,
   ],
 })
 export class BillingModule {}

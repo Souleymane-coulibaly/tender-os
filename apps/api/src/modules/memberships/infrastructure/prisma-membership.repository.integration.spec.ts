@@ -126,4 +126,23 @@ describe("PrismaMembershipRepository (PostgreSQL)", () => {
 
     expect(found).toBeNull();
   });
+
+  it("correctif audit Codex 22E (P2) — listActiveByOrganizationAndRoles finds an OWNER/ORGANIZATION_ADMIN even when the organization has more members than any pagination limit could have covered", async () => {
+    // 26 CONTRIBUTOR créés en premier (au-delà de l'ancien plafond bogué de 25), l'ORGANIZATION_ADMIN
+    // seulement APRÈS — reproduit exactement le scénario où `listByOrganization` paginée (triée par
+    // createdAt) l'aurait silencieusement exclu.
+    for (let i = 0; i < 26; i += 1) {
+      const userId = await seedUser();
+      await repository.save(createMembership(userId, OrganizationRole.Contributor));
+    }
+    const adminUserId = await seedUser();
+    const admin = createMembership(adminUserId, OrganizationRole.OrganizationAdmin);
+    await repository.save(admin);
+
+    const found = await repository.listActiveByOrganizationAndRoles({ organizationId, roles: [OrganizationRole.Owner, OrganizationRole.OrganizationAdmin] });
+
+    expect(found.some((m) => m.id.value === admin.id.value)).toBe(true);
+    // Jamais les CONTRIBUTOR — filtre par rôle réel, pas seulement "tous les membres".
+    expect(found.every((m) => m.role === OrganizationRole.OrganizationAdmin || m.role === OrganizationRole.Owner)).toBe(true);
+  });
 });

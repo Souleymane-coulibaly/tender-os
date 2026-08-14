@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { IdentityModule } from "../identity";
 import { OrganizationsModule } from "../organizations";
+import { OutboxWriterModule } from "../outbox";
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
 import { MEMBERSHIP_REPOSITORY } from "./application/ports/membership.repository";
 import { ChangeMembershipRoleUseCase } from "./application/use-cases/change-membership-role.use-case";
@@ -20,8 +21,14 @@ import { OrganizationLifecycleController } from "./interfaces/http/organization-
 import { OrganizationMembershipsController } from "./interfaces/http/organization-memberships.controller";
 import { OrganizationMembershipGuard } from "./interfaces/http/organization-membership.guard";
 
+/**
+ * V2 Sprint 22 (billing, étape 22E) — `OutboxWriterModule` importé UNIQUEMENT pour que
+ * `CreateMembershipUseCase` écrive l'événement `MembershipCreated` (consommé par
+ * `QuotaThresholdEventConsumersModule` dans `billing`, jamais un import direct de `BillingModule`
+ * ici : `billing.module.ts` importe déjà `MembershipsModule`, l'inverse créerait un cycle).
+ */
 @Module({
-  imports: [IdentityModule, OrganizationsModule],
+  imports: [IdentityModule, OrganizationsModule, OutboxWriterModule],
   controllers: [OrganizationMembershipsController, OrganizationLifecycleController],
   providers: [
     CreateMembershipUseCase,

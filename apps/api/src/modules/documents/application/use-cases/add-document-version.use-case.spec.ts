@@ -6,6 +6,7 @@ import { DocumentOrigin } from "../../domain/document-origin";
 import { DocumentVersion } from "../../domain/document-version.entity";
 import { Document } from "../../domain/document.aggregate";
 import {
+  FakeOutboxWriter,
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryStorageProvider,
@@ -19,11 +20,13 @@ const MAX_SIZE = 10 * 1024 * 1024;
 describe("AddDocumentVersionUseCase", () => {
   let fakes: ReturnType<typeof wireDocumentFakes>;
   let storageProvider: InMemoryStorageProvider;
+  let outbox: FakeOutboxWriter;
   let useCase: AddDocumentVersionUseCase;
 
   beforeEach(async () => {
     fakes = wireDocumentFakes();
     storageProvider = new InMemoryStorageProvider();
+    outbox = new FakeOutboxWriter();
     useCase = new AddDocumentVersionUseCase(
       fakes.documentRepository,
       fakes.versionRepository,
@@ -31,6 +34,7 @@ describe("AddDocumentVersionUseCase", () => {
       new InMemoryAuditLogWriter(),
       new FixedClock(),
       new SequentialIdGenerator(),
+      outbox,
     );
 
     const document = Document.create({
@@ -77,6 +81,19 @@ describe("AddDocumentVersionUseCase", () => {
     });
 
     expect(result.currentVersionNumber).toBe(2);
+  });
+
+  it("V2 Sprint 22 (billing, étape 22E) — emits DocumentVersionAdded (jamais sur une lecture, toujours au point d'écriture réel)", async () => {
+    await useCase.execute({
+      organizationId: "org-1",
+      documentId: "doc-1",
+      actorId: "user-1",
+      actorRole: "CONTRIBUTOR",
+      file: file(),
+      maxFileSizeBytes: MAX_SIZE,
+    });
+
+    expect(outbox.events.map((e) => e.eventType)).toEqual(["DocumentVersionAdded"]);
   });
 
   it("throws DocumentNotFoundError for a document in another organization", async () => {

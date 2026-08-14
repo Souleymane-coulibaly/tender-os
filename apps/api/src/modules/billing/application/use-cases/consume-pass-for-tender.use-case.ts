@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { PassPurchaseAlreadyConsumedError, PassPurchaseNotFoundError } from "../../domain/errors";
 import { PassPurchaseStatus } from "../../domain/pass-purchase-status";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
@@ -24,6 +25,7 @@ export class ConsumePassForTenderUseCase {
   constructor(
     @Inject(PASS_PURCHASE_REPOSITORY) private readonly passPurchaseRepository: PassPurchaseRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
   ) {}
 
   async execute(command: ConsumePassForTenderCommand): Promise<void> {
@@ -62,6 +64,22 @@ export class ConsumePassForTenderUseCase {
       resourceType: "OrganizationPassPurchase",
       resourceId: command.passPurchaseId,
       metadata: { tenderId: command.tenderId },
+    });
+
+    // Mission §53 "Après affectation : Votre Pass AO est maintenant associé à [Tender]" — contrairement
+    // aux événements webhook (aucun acteur), `command.actorId` est ICI un utilisateur réel (celui qui
+    // a déclenché la création du Tender) : notifié directement, jamais l'ensemble OWNER/ADMIN.
+    await this.outboxWriter.write({
+      organizationId: command.organizationId,
+      events: [
+        {
+          eventType: "PassConsumedForTender",
+          aggregateType: "OrganizationPassPurchase",
+          aggregateId: command.passPurchaseId,
+          payload: { tenderId: command.tenderId, actorId: command.actorId },
+          occurredAt: command.occurredAt,
+        },
+      ],
     });
   }
 }

@@ -122,7 +122,6 @@ function PassCard({ passPurchases, canManage }: { passPurchases: readonly PassPu
           ))}
         </ul>
       ) : null}
-      {passPurchases.length === 0 ? <p className="mb-3 text-sm text-neutral-600">Aucun Pass AO acheté pour l&apos;instant.</p> : null}
 
       {canManage ? (
         <div className="flex flex-wrap gap-2">
@@ -186,11 +185,11 @@ export default async function SubscriptionPage() {
 
       {subscription ? (
         <SubscriptionCard subscription={subscription} quotas={quotas} canManage={canManage} />
-      ) : (
+      ) : passPurchases.length > 0 ? (
         <PassCard passPurchases={passPurchases} canManage={canManage} />
+      ) : (
+        <NoPlanCard canManage={canManage} />
       )}
-
-      {!subscription && passPurchases.length === 0 ? <NoPlanCard canManage={canManage} /> : null}
 
       <section className="rounded border border-neutral-200 p-4">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">Utilisation</h2>

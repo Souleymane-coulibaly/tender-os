@@ -19,6 +19,12 @@ import { SubscriptionUsageController } from "./interfaces/http/subscription-usag
  * importe Billing/Chat/Documents/Memberships SANS jamais être importé en retour par aucun d'eux
  * (module feuille, même rôle que `DashboardModule`, Sprint 15 : "read-model pur composant des use
  * cases déjà exportés par chaque module propriétaire, jamais un accès Prisma cross-module direct").
+ *
+ * Correctif audit Codex 22E (P1-02, round 3, décision utilisateur) — ce module reste une LECTURE
+ * PURE : la vérification de seuil de quota (`CheckQuotaThresholdUseCase`) NE vit PLUS ici et n'est
+ * PLUS appelée depuis `GET /billing/usage` — elle vit dans `billing` et est déclenchée depuis le
+ * point d'écriture réel de chaque dimension (`CreateMembershipUseCase`/`SendMessageUseCase`/
+ * `AddDocumentVersionUseCase`), jamais depuis une lecture.
  */
 @Module({
   imports: [IdentityModule, MembershipsModule, PlatformAdministrationModule, BillingModule, ChatModule, DocumentsModule],

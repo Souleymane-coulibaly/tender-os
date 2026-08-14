@@ -4,42 +4,48 @@ import { SubscriptionNotFoundError } from "../../domain/errors";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { ORGANIZATION_SUBSCRIPTION_REPOSITORY, type OrganizationSubscriptionRepository } from "../ports/organization-subscription.repository";
 
-export type CancelSubscriptionCommand = Readonly<{ organizationId: string; actorId: string; occurredAt: Date }>;
+export type MarkSubscriptionPastDueCommand = Readonly<{ organizationId: string; occurredAt: Date }>;
 
+/**
+ * V2 Sprint 22 (billing, étape 22E) — mission §54 "paiement échoué". Correctif d'un écart réel
+ * trouvé en préparant 22E : le commentaire de `subscription-status.ts` affirmait la bascule
+ * PAST_DUE "livrée en 22C", mais `HandleStripeWebhookUseCase` ne traitait jamais
+ * `invoice.payment_failed` — la méthode `markPastDue()` de l'agrégat n'était appelée NULLE PART.
+ * Jamais déclenché par un acteur applicatif (webhook Stripe uniquement) : notifie les OWNER/
+ * ORGANIZATION_ADMIN de l'organisation (aucun utilisateur "acteur" évident), jamais un utilisateur
+ * arbitraire.
+ */
 @Injectable()
-export class CancelSubscriptionUseCase {
+export class MarkSubscriptionPastDueUseCase {
   constructor(
     @Inject(ORGANIZATION_SUBSCRIPTION_REPOSITORY) private readonly subscriptionRepository: OrganizationSubscriptionRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
   ) {}
 
-  async execute(command: CancelSubscriptionCommand): Promise<void> {
+  async execute(command: MarkSubscriptionPastDueCommand): Promise<void> {
     const subscription = await this.subscriptionRepository.findByOrganizationId(command.organizationId);
     if (!subscription) {
       throw new SubscriptionNotFoundError(command.organizationId);
     }
 
-    subscription.cancel(command.occurredAt);
+    subscription.markPastDue(command.occurredAt);
     await this.subscriptionRepository.save(subscription);
 
     await this.auditLogWriter.record({
       organizationId: command.organizationId,
-      actorId: command.actorId,
-      action: "SubscriptionCanceled",
+      actorId: "stripe-webhook",
+      action: "SubscriptionChanged",
       resourceType: "OrganizationSubscription",
       resourceId: subscription.id,
-      metadata: { planTier: subscription.planTier },
+      metadata: { toStatus: "PAST_DUE" },
     });
 
-    // Mission §54 "annulation programmée" — correctif audit 22E (P1-03), jamais câblé jusqu'ici.
-    // Déclenché uniquement par `customer.subscription.deleted` (webhook Stripe), jamais un acteur
-    // org-member évident : notifie OWNER/ORGANIZATION_ADMIN, même motif que `SubscriptionPlanChanged`.
     await this.outboxWriter.write({
       organizationId: command.organizationId,
       events: [
         {
-          eventType: "SubscriptionCanceled",
+          eventType: "SubscriptionPaymentFailed",
           aggregateType: "OrganizationSubscription",
           aggregateId: subscription.id,
           payload: { planTier: subscription.planTier },

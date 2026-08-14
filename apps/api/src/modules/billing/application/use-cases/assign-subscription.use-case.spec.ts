@@ -3,7 +3,7 @@ import { BillingInterval } from "../../domain/billing-interval";
 import { PlanSource } from "../../domain/plan-source";
 import { PlanTier } from "../../domain/plan-tier";
 import { SubscriptionStatus } from "../../domain/subscription-status";
-import { FIXED_NOW, InMemoryAuditLogWriter, InMemoryOrganizationSubscriptionRepository } from "../../test-support/fakes";
+import { FIXED_NOW, FakeOutboxWriter, InMemoryAuditLogWriter, InMemoryOrganizationSubscriptionRepository } from "../../test-support/fakes";
 import { AssignSubscriptionUseCase } from "./assign-subscription.use-case";
 
 const ORG_A = "org-a";
@@ -11,12 +11,14 @@ const ORG_A = "org-a";
 describe("AssignSubscriptionUseCase", () => {
   let subscriptions: InMemoryOrganizationSubscriptionRepository;
   let auditLog: InMemoryAuditLogWriter;
+  let outbox: FakeOutboxWriter;
   let useCase: AssignSubscriptionUseCase;
 
   beforeEach(() => {
     subscriptions = new InMemoryOrganizationSubscriptionRepository();
     auditLog = new InMemoryAuditLogWriter();
-    useCase = new AssignSubscriptionUseCase(subscriptions, auditLog);
+    outbox = new FakeOutboxWriter();
+    useCase = new AssignSubscriptionUseCase(subscriptions, auditLog, outbox);
   });
 
   it("creates the organization's first subscription as ACTIVE and audits PlanAssigned", async () => {
@@ -57,6 +59,34 @@ describe("AssignSubscriptionUseCase", () => {
     expect(upgraded.planTier).toBe(PlanTier.Business);
     const planChangedEntry = auditLog.entries.find((e) => e.action === "PlanChanged");
     expect(planChangedEntry?.metadata).toMatchObject({ fromPlanTier: PlanTier.Starter, toPlanTier: PlanTier.Business });
+  });
+
+  it("mission §54 — emits SubscriptionPlanChanged (never on the FIRST assignment, only on a real change)", async () => {
+    await useCase.execute({
+      organizationId: ORG_A,
+      planTier: PlanTier.Starter,
+      billingInterval: BillingInterval.Monthly,
+      source: PlanSource.Stripe,
+      actorId: "user-1",
+      occurredAt: FIXED_NOW,
+    });
+    expect(outbox.events).toHaveLength(0);
+
+    await useCase.execute({
+      organizationId: ORG_A,
+      planTier: PlanTier.Business,
+      billingInterval: BillingInterval.Monthly,
+      source: PlanSource.Stripe,
+      actorId: "user-1",
+      occurredAt: new Date(FIXED_NOW.getTime() + 1000),
+    });
+
+    // V2 Sprint 22 (billing, étape 22E, décision utilisateur "éventuellement changement de plan") —
+    // `SubscriptionPlanChangedQuotaRecheck` est un SECOND eventType distinct émis dans le MÊME appel
+    // (jamais un second handler sur `SubscriptionPlanChanged` lui-même, voir la note dans le use
+    // case : collision silencieuse avec `SubscriptionPlanChangedNotificationOutboxHandler`).
+    expect(outbox.events.map((e) => e.eventType)).toEqual(["SubscriptionPlanChanged", "SubscriptionPlanChangedQuotaRecheck"]);
+    expect(outbox.events[0]?.payload).toMatchObject({ fromPlanTier: PlanTier.Starter, toPlanTier: PlanTier.Business });
   });
 
   it("audits BillingIntervalChanged separately from PlanChanged when only the interval changes", async () => {

@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
+import { OutboxWriterModule } from "../outbox";
 import { TendersModule } from "../tenders";
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
 import { DOCUMENT_REPOSITORY } from "./application/ports/document.repository";
@@ -34,7 +35,7 @@ import { DocumentsController } from "./interfaces/http/documents.controller";
 import { TenderDocumentsController } from "./interfaces/http/tender-documents.controller";
 
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, OutboxWriterModule],
   controllers: [DocumentsController, TenderDocumentsController],
   providers: [
     CreateDocumentWithFirstVersionUseCase,

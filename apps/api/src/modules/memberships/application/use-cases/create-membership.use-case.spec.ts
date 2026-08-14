@@ -5,7 +5,7 @@ import { MembershipId } from "../../domain/membership-id.value-object";
 import { OrganizationMembership } from "../../domain/organization-membership.aggregate";
 import { OrganizationRole } from "../../domain/organization-role";
 import { InMemoryMembershipRepository } from "../../test-support/in-memory-membership.repository";
-import { FixedClock, InMemoryAuditLogWriter, SequentialIdGenerator } from "../../test-support/fakes";
+import { FakeOutboxWriter, FixedClock, InMemoryAuditLogWriter, SequentialIdGenerator } from "../../test-support/fakes";
 import { CreateMembershipUseCase } from "./create-membership.use-case";
 
 function fakeGetCurrentUserUseCase(overrides?: { execute?: ReturnType<typeof vi.fn> }): GetCurrentUserUseCase {
@@ -17,10 +17,12 @@ function fakeGetCurrentUserUseCase(overrides?: { execute?: ReturnType<typeof vi.
 describe("CreateMembershipUseCase", () => {
   let membershipRepository: InMemoryMembershipRepository;
   let auditLogWriter: InMemoryAuditLogWriter;
+  let outboxWriter: FakeOutboxWriter;
 
   beforeEach(() => {
     membershipRepository = new InMemoryMembershipRepository();
     auditLogWriter = new InMemoryAuditLogWriter();
+    outboxWriter = new FakeOutboxWriter();
   });
 
   function createUseCase(getCurrentUserUseCase = fakeGetCurrentUserUseCase()): CreateMembershipUseCase {
@@ -30,6 +32,7 @@ describe("CreateMembershipUseCase", () => {
       getCurrentUserUseCase,
       new FixedClock(),
       new SequentialIdGenerator(),
+      outboxWriter,
     );
   }
 
@@ -48,6 +51,20 @@ describe("CreateMembershipUseCase", () => {
     expect(result.role).toBe("CONTRIBUTOR");
     expect(auditLogWriter.entries).toHaveLength(1);
     expect(auditLogWriter.entries[0]?.action).toBe("organization_membership.created");
+  });
+
+  it("V2 Sprint 22 (billing, étape 22E) — emits MembershipCreated (jamais sur une lecture, toujours au point d'écriture réel)", async () => {
+    const useCase = createUseCase();
+
+    await useCase.execute({
+      organizationId: "org-1",
+      actorId: "user-1",
+      actorRole: OrganizationRole.OrganizationAdmin,
+      userId: "user-2",
+      role: OrganizationRole.Contributor,
+    });
+
+    expect(outboxWriter.events.map((e) => e.eventType)).toEqual(["MembershipCreated"]);
   });
 
   it("refuses when the actor lacks organization:member:invite", async () => {

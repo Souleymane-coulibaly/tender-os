@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { getPlanQuotaLimit } from "../../domain/plan-catalog";
 import { QuotaType, UNLIMITED } from "../../domain/quota-type";
 import { InsufficientAoCreditsError } from "../../domain/errors";
@@ -7,6 +8,13 @@ import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer
 import { ORGANIZATION_SUBSCRIPTION_REPOSITORY, type OrganizationSubscriptionRepository } from "../ports/organization-subscription.repository";
 import { PASS_PURCHASE_REPOSITORY, type PassPurchaseRepository } from "../ports/pass-purchase.repository";
 import { ConsumePassForTenderUseCase } from "./consume-pass-for-tender.use-case";
+
+/** Mission §53 "2 crédits restants / 1 crédit restant / 0 crédit" — jamais un spam à chaque
+ *  consommation : la consommation décrémente TOUJOURS le solde d'exactement 1 (mission §17, jamais
+ *  un montant variable), donc chaque palier n'est atteint qu'UNE SEULE fois par descente
+ *  monotone — inutile de mémoriser un "dernier seuil notifié" pour éviter la répétition. Si le
+ *  solde remonte (grant) puis redescend, une nouvelle notification est légitime, pas un doublon. */
+const LOW_BALANCE_THRESHOLDS = new Set([2, 1, 0]);
 
 export type ConsumeAoCreditCommand = Readonly<{ organizationId: string; tenderId: string; actorId: string; occurredAt: Date }>;
 
@@ -30,6 +38,7 @@ export class ConsumeAoCreditUseCase {
     @Inject(PASS_PURCHASE_REPOSITORY) private readonly passPurchaseRepository: PassPurchaseRepository,
     @Inject(AO_CREDIT_LEDGER_REPOSITORY) private readonly ledgerRepository: AoCreditLedgerRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
+    @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
     private readonly consumePassForTenderUseCase: ConsumePassForTenderUseCase,
   ) {}
 
@@ -64,6 +73,21 @@ export class ConsumeAoCreditUseCase {
         resourceId: entry!.id,
         metadata: { tenderId: command.tenderId, balanceAfter: entry!.balanceAfter },
       });
+
+      if (LOW_BALANCE_THRESHOLDS.has(entry!.balanceAfter)) {
+        await this.outboxWriter.write({
+          organizationId: command.organizationId,
+          events: [
+            {
+              eventType: "AoCreditBalanceLow",
+              aggregateType: "AoCreditLedgerEntry",
+              aggregateId: entry!.id,
+              payload: { balance: entry!.balanceAfter },
+              occurredAt: command.occurredAt,
+            },
+          ],
+        });
+      }
       return;
     }
 
