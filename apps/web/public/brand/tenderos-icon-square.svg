@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="TenderOS">
+  <rect width="48" height="48" rx="10" fill="#0A2A5B"/>
+  <polygon points="20,10 30,10 30,32 25,40 20,32" fill="#FFFFFF"/>
+  <polygon points="30,10 40,10 30,22" fill="#D4AF37"/>
+</svg>

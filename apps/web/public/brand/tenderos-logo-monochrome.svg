@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48" role="img" aria-label="TenderOS">
+  <rect width="48" height="48" rx="10" fill="none" stroke="#0A2A5B" stroke-width="3"/>
+  <polygon points="20,10 30,10 30,32 25,40 20,32" fill="#0A2A5B"/>
+  <polygon points="30,10 40,10 30,22" fill="#0A2A5B"/>
+  <text x="60" y="32" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="26" letter-spacing="-0.5" fill="#0A2A5B">TenderOS</text>
+</svg>

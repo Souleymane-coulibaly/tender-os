@@ -1,3 +1,68 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* V2 Sprint 23 (landing) — jetons de marque TenderOS, seule source de vérité pour la couleur
+   (tailwind.config.ts ne fait que les référencer). Un seul thème assumé (mission "Premium SaaS
+   B2B", pas de mode sombre demandé) — jamais de bloc @media prefers-color-scheme ici. */
+:root {
+  --tenderos-navy: #0a2a5b;
+  --tenderos-blue: #1472ff;
+  --tenderos-gold: #d4af37;
+  --tenderos-gold-light: #f4d47c;
+  --tenderos-slate: #64748b;
+  --tenderos-light: #f8fafc;
+  --tenderos-white: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* V2 Sprint 23A (landing, finalisation) — bandeau secteurs (mission §33/§38). CSS pur (`transform`
+   + `@keyframes`, jamais un `setInterval`/une librairie carousel, mission §38) : deux copies du
+   contenu placées côte à côte dans une rangée animée de 0 à -50%, la seconde copie étant identique
+   à la première, la boucle est donc parfaitement continue sans saut visible. */
+@keyframes tenderos-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.tenderos-marquee-track {
+  animation: tenderos-marquee 50s linear infinite;
+}
+
+.tenderos-marquee-track:hover {
+  /* Mission §39 — pause au survol desktop uniquement (les écrans tactiles n'ont pas de hover
+     persistant, comportement déjà naturellement neutre sur mobile). */
+  animation-play-state: paused;
+}
+
+/* Mission §40 — jamais juste "accélérer" l'animation (la règle générique ci-dessus la réduirait à
+   0.01ms, ce qui figerait le bandeau à -50% de transform, coupant visuellement la moitié du
+   contenu) : arrêt complet et propre, la seconde copie (dupliquée uniquement pour la boucle) est
+   alors masquée — le conteneur redevient un simple `overflow-x-auto` défilable manuellement. */
+@media (prefers-reduced-motion: reduce) {
+  .tenderos-marquee-track {
+    animation: none !important;
+  }
+  .tenderos-marquee-duplicate {
+    display: none;
+  }
+}
+
+/* V2 Sprint 23A (landing, finalisation) — FAQ (mission §42P-§42V). `<details>`/`<summary>` natifs
+   (mission §42S "lisible sans JavaScript si l'architecture le permet raisonnablement" — support
+   natif complet, clavier/focus/état inclus, jamais un accordéon React qui exigerait l'hydration
+   pour s'ouvrir) : seule la rotation du chevron a besoin d'une règle CSS dédiée. */
+.tenderos-faq-item[open] > summary .tenderos-faq-chevron {
+  transform: rotate(180deg);
+}
+.tenderos-faq-item summary::-webkit-details-marker {
+  display: none;
+}

@@ -28,6 +28,17 @@ export default tseslint.config(
     },
   },
   {
+    // Correctif audit Codex Sprint 23A (P1-01) — `.mjs` (config PostCSS/ESLint, scripts Node comme
+    // `generate-favicons.mjs`) ne passent JAMAIS par le parseur typescript-eslint (qui résout les
+    // globals via `lib`/`types` de tsconfig) : sans ceci, `console`/`process` sont de vrais
+    // `no-undef` (partie d'`eslint:recommended`). Scopé aux `.mjs` uniquement — jamais élargi aux
+    // fichiers `.ts`/`.tsx` du navigateur/React, qui n'en ont pas besoin.
+    files: ["**/*.mjs"],
+    languageOptions: {
+      globals: { console: "readonly", process: "readonly" },
+    },
+  },
+  {
     files: ["apps/web/**/*.{ts,tsx}"],
     plugins: {
       "react-hooks": reactHooks,

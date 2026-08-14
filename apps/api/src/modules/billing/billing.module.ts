@@ -24,6 +24,7 @@ import { CreateEntitlementOverrideUseCase } from "./application/use-cases/create
 import { GetAoCreditBalanceUseCase } from "./application/use-cases/get-ao-credit-balance.use-case";
 import { GetOrganizationEntitlementsUseCase } from "./application/use-cases/get-organization-entitlements.use-case";
 import { GetOrganizationSubscriptionUseCase } from "./application/use-cases/get-organization-subscription.use-case";
+import { GetPublicPlanCatalogUseCase } from "./application/use-cases/get-public-plan-catalog.use-case";
 import { GrantMonthlyAoCreditsUseCase } from "./application/use-cases/grant-monthly-ao-credits.use-case";
 import { HandleStripeWebhookUseCase } from "./application/use-cases/handle-stripe-webhook.use-case";
 import { ListAoCreditLedgerUseCase } from "./application/use-cases/list-ao-credit-ledger.use-case";
@@ -44,6 +45,7 @@ import { StripeSdkClient } from "./infrastructure/stripe-sdk.client";
 import { AoCreditLedgerController } from "./interfaces/http/ao-credit-ledger.controller";
 import { CheckoutController } from "./interfaces/http/checkout.controller";
 import { EntitlementOverridesController } from "./interfaces/http/entitlement-overrides.controller";
+import { PlanCatalogController } from "./interfaces/http/plan-catalog.controller";
 import { StripeWebhookController } from "./interfaces/http/stripe-webhook.controller";
 
 /**
@@ -58,15 +60,20 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
  * une lecture `GET /billing/usage`). Importe `IdentityModule`/`MembershipsModule`/
  * `PlatformAdministrationModule` UNIQUEMENT pour réutiliser leurs guards/décorateurs sur ses propres
  * contrôleurs — jamais l'inverse.
+ *
+ * V2 Sprint 23 (landing) — `PlanCatalogController`/`GetPublicPlanCatalogUseCase` : SEULE route
+ * publique (sans `@UseGuards`, même motif que `StripeWebhookController`) de ce module — la Landing
+ * Page tarifs lit `PLAN_CATALOG` sans dupliquer les prix/quotas côté frontend (mission §17/§55).
  */
 @Module({
   imports: [IdentityModule, MembershipsModule, PlatformAdministrationModule, OutboxWriterModule],
-  controllers: [EntitlementOverridesController, AoCreditLedgerController, CheckoutController, StripeWebhookController],
+  controllers: [EntitlementOverridesController, AoCreditLedgerController, CheckoutController, StripeWebhookController, PlanCatalogController],
   providers: [
     AssignSubscriptionUseCase,
     CancelSubscriptionUseCase,
     MarkSubscriptionPastDueUseCase,
     CheckQuotaThresholdUseCase,
+    GetPublicPlanCatalogUseCase,
     RecordPassPurchaseUseCase,
     ConsumePassForTenderUseCase,
     ListPassPurchasesUseCase,

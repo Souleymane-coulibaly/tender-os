@@ -29,6 +29,7 @@ import { GenerationModule } from "./modules/generation";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { IntegrationEventConsumersModule, IntegrationsModule, INTEGRATION_OUTBOX_HANDLERS } from "./modules/integrations";
 import { KnowledgeBaseModule } from "./modules/knowledge-base/knowledge-base.module";
+import { MarketingModule } from "./modules/marketing";
 import { MarketWatchModule } from "./modules/market-watch";
 import { MembershipsModule } from "./modules/memberships/memberships.module";
 import { NotificationEventConsumersModule, NotificationsModule, NOTIFICATION_OUTBOX_HANDLERS } from "./modules/notifications";
@@ -119,6 +120,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     ConnectorsModule,
     BillingModule,
     SubscriptionUsageModule,
+    MarketingModule,
   ],
 })
 export class AppModule {}

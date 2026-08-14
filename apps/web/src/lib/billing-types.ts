@@ -182,3 +182,20 @@ const BILLING_MANAGEMENT_TIER = ["OWNER", "ORGANIZATION_ADMIN"];
 export function canManageBilling(role: string | undefined): boolean {
   return role !== undefined && BILLING_MANAGEMENT_TIER.includes(role);
 }
+
+/**
+ * V2 Sprint 23 (landing) — miroir de `GetPublicPlanCatalogUseCase` (API, module `billing`), SEULE
+ * source de vérité Pricing (mission §17/§55) : jamais un second catalogue maintenu à la main ici.
+ * `PLAN_PRICES_CENTS` ci-dessus reste utilisé par l'écran Abonnement authentifié (22D, inchangé) —
+ * la Landing, elle, lit exclusivement `GET /api/v1/billing/plan-catalog`.
+ */
+export type PublicPlanCatalogEntry = {
+  tier: PlanTier;
+  displayName: string;
+  billingIntervalsSupported: BillingInterval[];
+  monthlyPriceCents: number | null;
+  yearlyPriceCents: number | null;
+  onePriceCents: number | null;
+  entitlements: string[];
+  quotas: Record<QuotaType, QuotaLimit>;
+};
