@@ -3,7 +3,7 @@ import { AoCreditMovementType } from "../domain/ao-credit-movement-type";
 import { createAoCreditLedgerEntry, type AoCreditLedgerEntry } from "../domain/ao-credit-ledger-entry";
 import type { EntitlementFeature } from "../domain/entitlement-feature";
 import { EntitlementOverride } from "../domain/entitlement-override.aggregate";
-import { AoCreditAdjustmentWouldGoNegativeError, AoCreditConsumptionAlreadyReversedError, AoCreditLedgerEntryNotFoundError } from "../domain/errors";
+import { AoCreditAdjustmentWouldGoNegativeError, AoCreditConsumptionAlreadyReversedError, AoCreditLedgerEntryNotFoundError, StripeWebhookSignatureInvalidError } from "../domain/errors";
 import { PassPurchaseStatus } from "../domain/pass-purchase-status";
 import type { QuotaType } from "../domain/quota-type";
 import type { OrganizationSubscription } from "../domain/organization-subscription.aggregate";
@@ -17,6 +17,8 @@ import {
   type PassPurchasePage,
   type PassPurchaseRepository,
 } from "../application/ports/pass-purchase.repository";
+import type { CreateStripeCheckoutSessionInput, StripeClient, StripeWebhookEvent } from "../application/ports/stripe-client";
+import type { StripeEventRecordOutcome, StripeProcessedEventRepository } from "../application/ports/stripe-processed-event.repository";
 
 export const FIXED_NOW = new Date("2026-08-13T09:00:00Z");
 
@@ -83,6 +85,15 @@ export class InMemoryOrganizationSubscriptionRepository implements OrganizationS
 
   async findByOrganizationId(organizationId: string): Promise<OrganizationSubscription | null> {
     return this.byOrganizationId.get(organizationId) ?? null;
+  }
+
+  async findByStripeSubscriptionId(stripeSubscriptionId: string): Promise<OrganizationSubscription | null> {
+    for (const subscription of this.byOrganizationId.values()) {
+      if (subscription.toProps().stripeSubscriptionId === stripeSubscriptionId) {
+        return subscription;
+      }
+    }
+    return null;
   }
 
   async save(subscription: OrganizationSubscription): Promise<void> {
@@ -327,5 +338,89 @@ export class InMemoryAoCreditLedgerRepository implements AoCreditLedgerRepositor
     const hasNextPage = page.length > options.limit;
     const items = hasNextPage ? page.slice(0, options.limit) : page;
     return { items, nextCursor: hasNextPage ? (items[items.length - 1]?.id ?? null) : null };
+  }
+}
+
+/** V2 Sprint 22 (billing, étape 22C) — jamais un vrai appel Stripe en test. `constructWebhookEvent`
+ *  parse directement le corps JSON brut (au lieu d'une vraie vérification cryptographique) — le
+ *  sentinel `signatureHeader === "invalid-signature"` simule un échec de vérification, même motif
+ *  que les autres fakes de providers externes de ce dépôt (email/IA/OAuth). */
+export class FakeStripeClient implements StripeClient {
+  private sequence = 0;
+  readonly checkoutSessionCalls: CreateStripeCheckoutSessionInput[] = [];
+  readonly portalSessionCalls: { stripeCustomerId: string; returnUrl: string }[] = [];
+
+  async createCheckoutSession(input: CreateStripeCheckoutSessionInput): Promise<{ sessionId: string; url: string }> {
+    this.checkoutSessionCalls.push(input);
+    this.sequence += 1;
+    const sessionId = `cs_test_${this.sequence}`;
+    return { sessionId, url: `https://checkout.stripe.test/${sessionId}` };
+  }
+
+  async createCustomerPortalSession(input: { stripeCustomerId: string; returnUrl: string }): Promise<{ url: string }> {
+    this.portalSessionCalls.push(input);
+    return { url: `https://billing.stripe.test/session/${input.stripeCustomerId}` };
+  }
+
+  constructWebhookEvent(rawBody: Buffer, signatureHeader: string): StripeWebhookEvent {
+    if (signatureHeader === "invalid-signature") {
+      throw new StripeWebhookSignatureInvalidError();
+    }
+    const parsed = JSON.parse(rawBody.toString("utf8")) as { id: string; type: string; data: { object: unknown } };
+    return { id: parsed.id, type: parsed.type, data: parsed.data.object };
+  }
+}
+
+type StripeProcessedEventRecord = {
+  id: string;
+  eventType: string;
+  receivedAt: Date;
+  status: "RECEIVED" | "PROCESSED" | "FAILED";
+  processedAt?: Date;
+  errorCode?: string;
+};
+
+/** Correctif audit Codex 22C (P1-01) — même discipline de section critique SYNCHRONE que les autres
+ *  fakes ci-dessus : reproduit l'atomicité réelle de `recordForProcessing`
+ *  (`PrismaStripeProcessedEventRepository`) sous `Promise.all` concurrent — un événement `FAILED`
+ *  redevient rejouable (`RETRY`), un événement `PROCESSED` reste un doublon silencieux (`SKIP`). */
+export class InMemoryStripeProcessedEventRepository implements StripeProcessedEventRepository {
+  private readonly byStripeEventId = new Map<string, StripeProcessedEventRecord>();
+  private readonly byId = new Map<string, string>();
+
+  async recordForProcessing(input: { id: string; stripeEventId: string; eventType: string; receivedAt: Date }): Promise<StripeEventRecordOutcome> {
+    const existing = this.byStripeEventId.get(input.stripeEventId);
+    if (!existing) {
+      this.byStripeEventId.set(input.stripeEventId, { id: input.id, eventType: input.eventType, receivedAt: input.receivedAt, status: "RECEIVED" });
+      this.byId.set(input.id, input.stripeEventId);
+      return { outcome: "NEW", recordId: input.id };
+    }
+
+    if (existing.status !== "FAILED") {
+      return { outcome: "SKIP" };
+    }
+
+    delete existing.processedAt;
+    delete existing.errorCode;
+    existing.status = "RECEIVED";
+    return { outcome: "RETRY", recordId: existing.id };
+  }
+
+  async markProcessed(input: { id: string; occurredAt: Date }): Promise<void> {
+    const stripeEventId = this.byId.get(input.id);
+    const record = stripeEventId ? this.byStripeEventId.get(stripeEventId) : undefined;
+    if (record) {
+      record.status = "PROCESSED";
+      record.processedAt = input.occurredAt;
+    }
+  }
+
+  async markFailed(input: { id: string; errorCode: string }): Promise<void> {
+    const stripeEventId = this.byId.get(input.id);
+    const record = stripeEventId ? this.byStripeEventId.get(stripeEventId) : undefined;
+    if (record) {
+      record.status = "FAILED";
+      record.errorCode = input.errorCode;
+    }
   }
 }

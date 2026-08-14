@@ -7622,3 +7622,28 @@ model AoCreditLedgerEntry {
   @@index([tenderId])
   @@map("ao_credit_ledger_entries")
 }
+
+/// V2 Sprint 22 (billing, étape 22C) — idempotence des webhooks Stripe (mission "P1 si possible") :
+/// même motif que `SignatureProviderEvent` (module `signature`) — une contrainte unique réelle sur
+/// l'identifiant d'événement, jamais une simple vérification applicative. Jamais de lien
+/// organisation direct ici (un événement peut référencer plusieurs ressources, ou aucune si
+/// malformé) — voir `AuditLog`/les entrées de ledger créées par le traitement pour la trace
+/// organisation-scopée.
+model StripeProcessedEvent {
+  id            String @id @default(uuid()) @db.Uuid
+  stripeEventId String @unique @map("stripe_event_id") @db.VarChar(255)
+  eventType     String @map("event_type") @db.VarChar(100)
+
+  /// RECEIVED | PROCESSED | FAILED (correctif audit Codex 22C P1-01) — un événement FAILED
+  /// redevient RECEIVED de façon atomique lors d'un retry Stripe pour le MÊME `stripeEventId`,
+  /// jamais bloqué à jamais derrière la contrainte unique (voir
+  /// `PrismaStripeProcessedEventRepository.recordForProcessing`).
+  status String @default("RECEIVED") @db.VarChar(9)
+
+  receivedAt  DateTime  @map("received_at")
+  processedAt DateTime? @map("processed_at")
+  errorCode   String?   @map("error_code")
+
+  @@index([eventType])
+  @@map("stripe_processed_events")
+}

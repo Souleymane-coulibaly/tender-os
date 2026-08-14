@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { BillingInterval } from "../../domain/billing-interval";
 import { EntitlementFeature } from "../../domain/entitlement-feature";
+import { SUBSCRIPTION_PLAN_TIERS } from "../../domain/plan-tier";
 import { QuotaType, UNLIMITED } from "../../domain/quota-type";
 
 export const OrganizationIdParamSchema = z.string().uuid();
@@ -63,3 +65,25 @@ export const ListAoCreditLedgerQuerySchema = z
   .strict();
 
 export type ListAoCreditLedgerQuery = z.infer<typeof ListAoCreditLedgerQuerySchema>;
+
+/** V2 Sprint 22 (billing, étape 22C) — mission anti price-tampering : uniquement le CHOIX métier
+ *  (Pass, ou palier+intervalle), jamais un prix/Price ID/devise envoyé par le client. `.strict()`
+ *  — même motif anti mass-assignment que le reste du module. Correctif audit Codex P1-03 : jamais
+ *  de `successUrl`/`cancelUrl` acceptés ici (open redirect) — toujours résolues côté serveur, voir
+ *  `application/services/app-return-urls.ts`. */
+export const CreateCheckoutSessionBodySchema = z
+  .object({
+    target: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("PASS") }).strict(),
+      z
+        .object({
+          kind: z.literal("SUBSCRIPTION"),
+          planTier: z.enum(SUBSCRIPTION_PLAN_TIERS as unknown as [string, ...string[]]),
+          billingInterval: z.enum(Object.values(BillingInterval) as [string, ...string[]]),
+        })
+        .strict(),
+    ]),
+  })
+  .strict();
+
+export type CreateCheckoutSessionBody = z.infer<typeof CreateCheckoutSessionBodySchema>;

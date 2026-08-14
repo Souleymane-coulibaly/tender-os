@@ -176,3 +176,49 @@ export class AoCreditConsumptionAlreadyReversedError extends DomainError {
     super(`The AO credit consumption for tender ${tenderId} has already been reversed`);
   }
 }
+
+/** V2 Sprint 22 (billing, étape 22C) — une variable `STRIPE_PRICE_*` manquante ne fait jamais
+ *  échouer le DÉMARRAGE (même discipline que `METRICS_TOKEN`, Sprint 21) ; seule une tentative
+ *  réelle de checkout pour ce couple plan/intervalle échoue, explicitement. */
+export class StripePriceNotConfiguredError extends DomainError {
+  readonly code = "STRIPE_PRICE_NOT_CONFIGURED";
+  constructor(target: string, envVar: string) {
+    super(`No Stripe Price configured for ${target} (expected environment variable ${envVar})`);
+  }
+}
+
+export class StripeWebhookSignatureInvalidError extends DomainError {
+  readonly code = "STRIPE_WEBHOOK_SIGNATURE_INVALID";
+  constructor() {
+    super("Invalid Stripe webhook signature");
+  }
+}
+
+/** Mission — Customer Portal réservé aux abonnements, "jamais forcé sur le Pass" : une
+ *  organisation sans abonnement Stripe actif (Pass uniquement, ou aucun plan) n'a pas de
+ *  `stripeCustomerId` réel à ouvrir dans le Portal. */
+export class NoStripeCustomerForOrganizationError extends DomainError {
+  readonly code = "NO_STRIPE_CUSTOMER_FOR_ORGANIZATION";
+  constructor(organizationId: string) {
+    super(`Organization ${organizationId} has no Stripe customer (no active subscription)`);
+  }
+}
+
+export class BillingManagementPermissionMissingError extends DomainError {
+  readonly code = "BILLING_MANAGEMENT_PERMISSION_MISSING";
+  constructor() {
+    super("Only the organization's Owner or Organization Admin can manage billing");
+  }
+}
+
+/** Correctif audit Codex 22C (P1-02) — un événement `customer.subscription.*` référençant un
+ *  Stripe Price ID que le registre ne reconnaît pas ne doit JAMAIS être un succès silencieux
+ *  (Stripe recevrait 200, ne rejouerait plus jamais, et l'abonnement local resterait divergent de
+ *  Stripe pour toujours). Doit échouer (non-2xx) pour que Stripe rejoue l'événement après correction
+ *  du registre. */
+export class StripeUnrecognizedPriceError extends DomainError {
+  readonly code = "STRIPE_UNRECOGNIZED_PRICE";
+  constructor(priceId: string) {
+    super(`Stripe subscription event references an unrecognized Price ID: ${priceId}`);
+  }
+}

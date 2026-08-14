@@ -8,6 +8,10 @@ import type { OrganizationSubscription } from "../../domain/organization-subscri
  */
 export interface OrganizationSubscriptionRepository {
   findByOrganizationId(organizationId: string): Promise<OrganizationSubscription | null>;
+  /** V2 Sprint 22C — un événement webhook `invoice.paid` ne porte pas de façon fiable les
+   *  métadonnées TenderOS (contrairement à `Subscription.metadata`, propagées depuis
+   *  `subscription_data.metadata` au checkout) : seule façon robuste de retrouver l'organisation. */
+  findByStripeSubscriptionId(stripeSubscriptionId: string): Promise<OrganizationSubscription | null>;
   save(subscription: OrganizationSubscription): Promise<void>;
 }
 

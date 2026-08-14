@@ -13,6 +13,7 @@ import { PrismaAoCreditLedgerRepository } from "./prisma-ao-credit-ledger.reposi
 import { PrismaEntitlementOverrideRepository } from "./prisma-entitlement-override.repository";
 import { PrismaOrganizationSubscriptionRepository } from "./prisma-organization-subscription.repository";
 import { PrismaPassPurchaseRepository } from "./prisma-pass-purchase.repository";
+import { PrismaStripeProcessedEventRepository } from "./prisma-stripe-processed-event.repository";
 
 /**
  * V2 Sprint 22 (billing, étape 22A, correctif audit Codex — après application de la migration
@@ -27,6 +28,7 @@ describe("billing module — invariantes critiques (PostgreSQL réel)", () => {
   const passPurchaseRepository = new PrismaPassPurchaseRepository(prisma);
   const overrideRepository = new PrismaEntitlementOverrideRepository(prisma);
   const ledgerRepository = new PrismaAoCreditLedgerRepository(prisma);
+  const stripeProcessedEventRepository = new PrismaStripeProcessedEventRepository(prisma);
 
   const organizationId = randomUUID();
   const now = new Date("2026-08-13T10:00:00Z");
@@ -44,6 +46,7 @@ describe("billing module — invariantes critiques (PostgreSQL réel)", () => {
     await prisma.entitlementOverride.deleteMany({ where: { organizationId } });
     await prisma.organizationPassPurchase.deleteMany({ where: { organizationId } });
     await prisma.organizationSubscription.deleteMany({ where: { organizationId } });
+    await prisma.stripeProcessedEvent.deleteMany({ where: { stripeEventId: { startsWith: "evt_test_" } } });
     await prisma.organization.deleteMany({ where: { id: organizationId } });
     await prisma.$disconnect();
   });
@@ -186,6 +189,57 @@ describe("billing module — invariantes critiques (PostgreSQL réel)", () => {
       ).rejects.toThrow();
 
       expect(await ledgerRepository.getBalance(organizationId)).toBe(balanceBefore);
+    });
+  });
+
+  describe("Stripe webhook idempotency (étape 22C)", () => {
+    it("mission — a real Postgres UNIQUE constraint on stripeEventId turns a duplicate webhook delivery into a no-op, never a second processing attempt", async () => {
+      const stripeEventId = `evt_test_${randomUUID()}`;
+      const firstId = randomUUID();
+      const first = await stripeProcessedEventRepository.recordForProcessing({ id: firstId, stripeEventId, eventType: "checkout.session.completed", receivedAt: now });
+      await stripeProcessedEventRepository.markProcessed({ id: firstId, occurredAt: now });
+      const second = await stripeProcessedEventRepository.recordForProcessing({ id: randomUUID(), stripeEventId, eventType: "checkout.session.completed", receivedAt: now });
+
+      expect(first).toEqual({ outcome: "NEW", recordId: firstId });
+      expect(second).toEqual({ outcome: "SKIP" });
+    });
+
+    it("BLOQUANT (concurrence réelle) — two truly simultaneous deliveries of the SAME Stripe event id: exactly one is NEW against real Postgres", async () => {
+      const stripeEventId = `evt_test_${randomUUID()}`;
+      const [resultA, resultB] = await Promise.all([
+        stripeProcessedEventRepository.recordForProcessing({ id: randomUUID(), stripeEventId, eventType: "invoice.paid", receivedAt: now }),
+        stripeProcessedEventRepository.recordForProcessing({ id: randomUUID(), stripeEventId, eventType: "invoice.paid", receivedAt: now }),
+      ]);
+
+      const newCount = [resultA, resultB].filter((r) => r.outcome === "NEW").length;
+      expect(newCount).toBe(1);
+    });
+
+    it("correctif audit Codex 22C (P1-01) — an event previously marked FAILED becomes RETRY on the next delivery, never stuck as a phantom duplicate", async () => {
+      const stripeEventId = `evt_test_${randomUUID()}`;
+      const firstId = randomUUID();
+      const first = await stripeProcessedEventRepository.recordForProcessing({ id: firstId, stripeEventId, eventType: "customer.subscription.updated", receivedAt: now });
+      expect(first).toEqual({ outcome: "NEW", recordId: firstId });
+      await stripeProcessedEventRepository.markFailed({ id: firstId, errorCode: "STRIPE_UNRECOGNIZED_PRICE" });
+
+      const retry = await stripeProcessedEventRepository.recordForProcessing({ id: randomUUID(), stripeEventId, eventType: "customer.subscription.updated", receivedAt: now });
+
+      expect(retry).toEqual({ outcome: "RETRY", recordId: firstId });
+    });
+
+    it("BLOQUANT (concurrence réelle) — two truly simultaneous retries of the SAME previously-FAILED event: exactly one gets RETRY against real Postgres", async () => {
+      const stripeEventId = `evt_test_${randomUUID()}`;
+      const firstId = randomUUID();
+      await stripeProcessedEventRepository.recordForProcessing({ id: firstId, stripeEventId, eventType: "customer.subscription.updated", receivedAt: now });
+      await stripeProcessedEventRepository.markFailed({ id: firstId, errorCode: "STRIPE_UNRECOGNIZED_PRICE" });
+
+      const [resultA, resultB] = await Promise.all([
+        stripeProcessedEventRepository.recordForProcessing({ id: randomUUID(), stripeEventId, eventType: "customer.subscription.updated", receivedAt: now }),
+        stripeProcessedEventRepository.recordForProcessing({ id: randomUUID(), stripeEventId, eventType: "customer.subscription.updated", receivedAt: now }),
+      ]);
+
+      const retryCount = [resultA, resultB].filter((r) => r.outcome === "RETRY").length;
+      expect(retryCount).toBe(1);
     });
   });
 });

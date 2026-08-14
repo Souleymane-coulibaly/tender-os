@@ -35,6 +35,11 @@ export class PrismaOrganizationSubscriptionRepository implements OrganizationSub
     return row ? toDomain(row) : null;
   }
 
+  async findByStripeSubscriptionId(stripeSubscriptionId: string): Promise<OrganizationSubscription | null> {
+    const row = await this.prisma.currentClient().organizationSubscription.findUnique({ where: { stripeSubscriptionId } });
+    return row ? toDomain(row) : null;
+  }
+
   async save(subscription: OrganizationSubscription): Promise<void> {
     const props = subscription.toProps();
     const data = {
