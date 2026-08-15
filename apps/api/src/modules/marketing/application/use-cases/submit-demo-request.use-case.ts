@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { EMAIL_PROVIDER, type EmailProvider } from "../../../notifications";
+import { EMAIL_PROVIDER, type EmailProvider } from "../../../../shared-kernel/email-provider";
 
 export type SubmitDemoRequestCommand = Readonly<{
   name: string;
@@ -23,8 +23,8 @@ function escapeHtml(value: string): string {
 
 /**
  * V2 Sprint 23 (landing) — mission §27 "Ne pas construire un CRM" : aucune persistance, un simple
- * email au destinataire configuré via `EMAIL_PROVIDER` (déjà exporté par `NotificationsModule`,
- * jamais un second pipeline email). Le honeypot rempli fait un no-op silencieux — jamais un email
+ * email au destinataire configuré via `EMAIL_PROVIDER` (Shared Kernel, V2 Sprint 24 — voir
+ * shared-kernel/email-provider.ts —, jamais un second pipeline email). Le honeypot rempli fait un no-op silencieux — jamais un email
  * envoyé, jamais une erreur qui renseignerait le bot.
  */
 @Injectable()

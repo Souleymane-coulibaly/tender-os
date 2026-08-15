@@ -3,7 +3,7 @@ import type { BillingInterval } from "../../domain/billing-interval";
 import type { SubscriptionPlanTier } from "../../domain/plan-tier";
 import { resolveStripePassPriceId, resolveStripeSubscriptionPriceId } from "../../domain/stripe-price-registry";
 import { assertCanManageBilling } from "../policies/assert-can-manage-billing";
-import { appBillingReturnUrls } from "../services/app-return-urls";
+import { appBillingReturnUrls, type CheckoutReturnTarget } from "../services/app-return-urls";
 import { ORGANIZATION_SUBSCRIPTION_REPOSITORY, type OrganizationSubscriptionRepository } from "../ports/organization-subscription.repository";
 import { STRIPE_CLIENT, type StripeCheckoutSession, type StripeClient } from "../ports/stripe-client";
 
@@ -17,6 +17,9 @@ export type CreateCheckoutSessionCommand = Readonly<{
   /** Jamais un prix/Price ID envoyé par le client — uniquement le choix métier, résolu côté
    *  backend (mission anti price-tampering). */
   target: Readonly<{ kind: "PASS" }> | Readonly<{ kind: "SUBSCRIPTION"; planTier: SubscriptionPlanTier; billingInterval: BillingInterval }>;
+  /** V2 Sprint 24 (onboarding) — "onboarding" fait revenir Stripe sur l'étape "Paiement" du
+   *  wizard plutôt que sur l'écran Abonnement classique ; absent = comportement inchangé. */
+  returnTarget?: CheckoutReturnTarget | undefined;
 }>;
 
 /**
@@ -46,7 +49,7 @@ export class CreateCheckoutSessionUseCase {
 
     const existingSubscription = await this.subscriptionRepository.findByOrganizationId(command.organizationId);
     const stripeCustomerId = existingSubscription?.toProps().stripeCustomerId;
-    const { successUrl, cancelUrl } = appBillingReturnUrls();
+    const { successUrl, cancelUrl } = appBillingReturnUrls(command.returnTarget);
 
     if (command.target.kind === "PASS") {
       return this.stripeClient.createCheckoutSession({

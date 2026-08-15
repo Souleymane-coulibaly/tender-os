@@ -31,6 +31,7 @@ describe("PrismaUserRepository (PostgreSQL)", () => {
       email: EmailAddress.create(email),
       displayName: "Ada Lovelace",
       passwordHash: "hashed:whatever",
+      termsVersion: "2026-08-15",
       occurredAt: new Date(),
     });
   }

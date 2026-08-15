@@ -10,6 +10,7 @@ import {
   appApiFetch,
   appApiFetchWithToken,
 } from "../../lib/app-api-client";
+import { PublicApiError, publicApiPost } from "../../lib/public-api-client";
 import {
   AWARD_TYPES,
   DEFAULT_TENDER_SOURCE,
@@ -196,15 +197,30 @@ function parseTenderFormFields(formData: FormData): { error: string } | { fields
 
 export type LoginActionState = { error?: string };
 
+/** V2 Sprint 24 (refonte /app/login) — anti open-redirect (mission) : SEULS des chemins internes
+ *  connus sont acceptés, jamais une URL absolue/protocole-relative fournie par le client. Toute
+ *  autre valeur retombe sur la destination par défaut, jamais un fail-open. */
+function sanitizeReturnTo(value: FormDataEntryValue | null): string | undefined {
+  if (typeof value !== "string" || !value) return undefined;
+  return /^\/(app|onboarding)(\/|$|\?)/.test(value) ? value : undefined;
+}
+
 /**
  * Authentifie via Identity, PUIS résout l'organisation de travail à partir de la première
  * Membership active de l'utilisateur (aucun sélecteur multi-organisation dans cette tranche —
  * mission Tenders : périmètre volontairement réduit, à étendre si un utilisateur multi-org
  * en a besoin).
+ *
+ * V2 Sprint 24 (refonte /app/login) — un compte SANS Membership n'est plus un échec : il est
+ * renvoyé vers `/onboarding`, qui résout lui-même l'étape exacte où reprendre (mission "owner
+ * avec onboarding incomplet -> reprendre l'onboarding", jamais un message d'erreur qui bloque un
+ * utilisateur légitime au milieu de son inscription). `returnTo` (validé, interne uniquement)
+ * prime sur la redirection par défaut pour un membre existant.
  */
 export async function loginAction(_prevState: LoginActionState, formData: FormData): Promise<LoginActionState> {
   const email = formData.get("email");
   const password = formData.get("password");
+  const returnTo = sanitizeReturnTo(formData.get("returnTo"));
 
   if (typeof email !== "string" || typeof password !== "string" || !email || !password) {
     return { error: "Email et mot de passe requis." };
@@ -230,32 +246,99 @@ export async function loginAction(_prevState: LoginActionState, formData: FormDa
       "/api/v1/organization-memberships/me?limit=1",
     );
   } catch {
-    return { error: "Impossible de resoudre votre organisation." };
+    return { error: "Une erreur est survenue. Veuillez réessayer." };
   }
 
   const organizationId = memberships.items[0]?.organization.id;
-  if (!organizationId) {
-    return { error: "Ce compte n'est associe a aucune organisation." };
-  }
-
   const cookieStore = await cookies();
   const expires = new Date(loginBody.expiresAt);
+  // path: "/" (jamais "/app") — /onboarding a aussi besoin de lire ce cookie côté serveur pour
+  // reprendre un onboarding incomplet après une connexion (voir ci-dessous).
   cookieStore.set(APP_SESSION_COOKIE, loginBody.accessToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    path: "/app",
+    path: "/",
     expires,
   });
+
+  if (!organizationId) {
+    // Compte créé mais onboarding jamais terminé (jamais d'organisation) — /onboarding résout
+    // lui-même l'étape exacte où reprendre, aucune logique dupliquée ici.
+    redirect("/onboarding");
+  }
+
   cookieStore.set(APP_ORGANIZATION_COOKIE, organizationId, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    path: "/app",
+    path: "/",
     expires,
   });
 
-  redirect("/app/tenders");
+  redirect(returnTo ?? "/app/tenders");
+}
+
+export type ForgotPasswordActionState = { submitted?: boolean; error?: string };
+
+/**
+ * V2 Sprint 24 (onboarding, flow "Mot de passe oublié" — décision utilisateur explicite : flow
+ * minimal complet, jamais un lien mort). Anti-énumération (mission 24.135) : le backend répond
+ * toujours 204 quel que soit l'état du compte — `submitted: true` est renvoyé même si l'appel
+ * échoue avec un statut < 500 (ex. corps invalide), jamais une nuance qui distinguerait "email
+ * inconnu" d'un vrai succès. Seule une erreur serveur/réseau inattendue (5xx, timeout) affiche un
+ * message d'erreur générique.
+ */
+export async function forgotPasswordAction(
+  _prevState: ForgotPasswordActionState,
+  formData: FormData,
+): Promise<ForgotPasswordActionState> {
+  const email = formData.get("email");
+  if (typeof email !== "string" || !email.trim()) {
+    return { error: "Veuillez saisir votre adresse email." };
+  }
+
+  try {
+    await publicApiPost("/api/v1/auth/forgot-password", { email: email.trim() });
+  } catch (error) {
+    if (error instanceof PublicApiError && error.status < 500) {
+      return { submitted: true };
+    }
+    console.error("[TenderOS] forgotPasswordAction failed:", error);
+    return { error: "Une erreur est survenue. Veuillez réessayer." };
+  }
+
+  return { submitted: true };
+}
+
+export type ResetPasswordActionState = { success?: boolean; error?: string };
+
+export async function resetPasswordAction(
+  token: string,
+  _prevState: ResetPasswordActionState,
+  formData: FormData,
+): Promise<ResetPasswordActionState> {
+  const newPassword = formData.get("newPassword");
+  const confirmPassword = formData.get("confirmPassword");
+
+  if (typeof newPassword !== "string" || newPassword.length < 8) {
+    return { error: "Le mot de passe doit contenir au moins 8 caractères." };
+  }
+  if (newPassword !== confirmPassword) {
+    return { error: "Les mots de passe ne correspondent pas." };
+  }
+
+  try {
+    await publicApiPost("/api/v1/auth/reset-password", { token, newPassword });
+  } catch (error) {
+    if (error instanceof PublicApiError && error.status === 400) {
+      return { error: "Ce lien de réinitialisation est invalide ou a expiré. Demandez-en un nouveau lien." };
+    }
+    console.error("[TenderOS] resetPasswordAction failed:", error);
+    return { error: "Une erreur est survenue. Veuillez réessayer." };
+  }
+
+  return { success: true };
 }
 
 export async function logoutAction(): Promise<void> {
@@ -270,8 +353,8 @@ export async function logoutAction(): Promise<void> {
     }).catch(() => undefined);
   }
 
-  cookieStore.delete(APP_SESSION_COOKIE);
-  cookieStore.delete(APP_ORGANIZATION_COOKIE);
+  cookieStore.delete({ name: APP_SESSION_COOKIE, path: "/" });
+  cookieStore.delete({ name: APP_ORGANIZATION_COOKIE, path: "/" });
   redirect("/app/login");
 }
 

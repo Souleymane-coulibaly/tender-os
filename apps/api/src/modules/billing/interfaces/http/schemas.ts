@@ -83,6 +83,9 @@ export const CreateCheckoutSessionBodySchema = z
         })
         .strict(),
     ]),
+    // V2 Sprint 24 (onboarding) — seule valeur acceptée en plus de l'absence du champ ; jamais une
+    // URL, toujours résolue côté serveur (voir appBillingReturnUrls).
+    returnTarget: z.literal("onboarding").optional(),
   })
   .strict();
 

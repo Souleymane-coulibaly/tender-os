@@ -31,5 +31,11 @@ export async function publicApiPost<T>(path: string, body: unknown): Promise<T> 
   if (!response.ok) {
     throw new PublicApiError(response.status, `Public API request to ${path} failed with status ${response.status}`);
   }
+  // V2 Sprint 24 (mot de passe oublié) — /auth/forgot-password et /auth/reset-password renvoient
+  // 204 sans corps (jamais un JSON vide, qui ferait échouer response.json()) — même garde que
+  // appApiFetch.
+  if (response.status === 204) {
+    return undefined as T;
+  }
   return (await response.json()) as T;
 }

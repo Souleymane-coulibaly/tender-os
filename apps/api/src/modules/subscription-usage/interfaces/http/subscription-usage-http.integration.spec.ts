@@ -34,7 +34,7 @@ describe("SubscriptionUsageController (subscription-usage) — real HTTP + Postg
     const registerRes = await fetch(`${baseUrl}/api/v1/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, displayName: "Subscription Usage HTTP Test" }),
+      body: JSON.stringify({ email, password, displayName: "Subscription Usage HTTP Test", termsAccepted: true }),
     });
     const user = (await registerRes.json()) as { id: string };
     const loginRes = await fetch(`${baseUrl}/api/v1/auth/login`, {

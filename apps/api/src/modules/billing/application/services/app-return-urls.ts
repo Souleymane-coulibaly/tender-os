@@ -9,13 +9,22 @@ function appBaseUrl(): string {
   return process.env.APP_BASE_URL ?? "http://localhost:3000";
 }
 
-export function appBillingReturnUrls(): { successUrl: string; cancelUrl: string } {
+export type CheckoutReturnTarget = "settings" | "onboarding";
+
+/** V2 Sprint 24 — correctif : ces chemins pointaient vers `/app/settings/billing`, une route qui
+ *  n'existe pas (la page réelle est `/app/subscription`) — un paiement Stripe réussi aurait
+ *  redirigé vers un 404. `returnTarget` optionnel ("onboarding") permet à l'étape "Paiement" du
+ *  wizard onboarding de récupérer la main sur son propre écran de confirmation — toujours l'un de
+ *  ces DEUX chemins fixes choisis côté serveur, jamais une URL fournie par le client (open
+ *  redirect sinon, correctif audit Codex 22C P1-03 toujours respecté). */
+export function appBillingReturnUrls(returnTarget: CheckoutReturnTarget = "settings"): { successUrl: string; cancelUrl: string } {
+  const path = returnTarget === "onboarding" ? "/onboarding/paiement" : "/app/subscription";
   return {
-    successUrl: `${appBaseUrl()}/app/settings/billing?checkout=success`,
-    cancelUrl: `${appBaseUrl()}/app/settings/billing?checkout=canceled`,
+    successUrl: `${appBaseUrl()}${path}?checkout=success`,
+    cancelUrl: `${appBaseUrl()}${path}?checkout=canceled`,
   };
 }
 
 export function appCustomerPortalReturnUrl(): string {
-  return `${appBaseUrl()}/app/settings/billing`;
+  return `${appBaseUrl()}/app/subscription`;
 }

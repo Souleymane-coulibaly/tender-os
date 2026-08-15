@@ -45,7 +45,7 @@ describe("Administrative Dossier — Sprint 8C.1 DC4 official form (real HTTP + 
     const registerRes = await fetch(`${baseUrl}/api/v1/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, displayName: "Official Form Test" }),
+      body: JSON.stringify({ email, password, displayName: "Official Form Test", termsAccepted: true }),
     });
     const user = (await registerRes.json()) as { id: string };
     const loginRes = await fetch(`${baseUrl}/api/v1/auth/login`, {

@@ -38,6 +38,7 @@ describe("PrismaSessionRepository (PostgreSQL)", () => {
       email: EmailAddress.create(`ada-${randomUUID()}@example.com`),
       displayName: "Ada Lovelace",
       passwordHash: "hashed:whatever",
+      termsVersion: "2026-08-15",
       occurredAt: new Date(),
     });
     await userRepository.save(user);

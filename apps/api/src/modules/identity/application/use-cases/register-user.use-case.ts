@@ -4,7 +4,8 @@ import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { EmailAddress } from "../../domain/email-address.value-object";
-import { EmailAlreadyRegisteredError } from "../../domain/errors";
+import { EmailAlreadyRegisteredError, TermsNotAcceptedError } from "../../domain/errors";
+import { TERMS_VERSION } from "../../domain/terms-version";
 import { UserId } from "../../domain/user-id.value-object";
 import { User } from "../../domain/user.aggregate";
 import { toUserSummary, type UserSummary } from "../dtos";
@@ -17,6 +18,11 @@ export type RegisterUserCommand = Readonly<{
   displayName: string;
   firstName?: string | undefined;
   lastName?: string | undefined;
+  /** V2 Sprint 24 (onboarding, CGU) — obligatoire ; `RegisterBodySchema` refuse déjà `!== true`
+   *  à la frontière HTTP, revérifié ici en défense en profondeur (jamais une seule couche pour
+   *  un invariant légal/RGPD). La version acceptée est TOUJOURS `TERMS_VERSION` (jamais une
+   *  valeur envoyée par le client — voir aussi `User.register`). */
+  termsAccepted: boolean;
 }>;
 
 export type RegisterUserResult = UserSummary;
@@ -31,6 +37,10 @@ export class RegisterUserUseCase {
   ) {}
 
   async execute(command: RegisterUserCommand): Promise<RegisterUserResult> {
+    if (!command.termsAccepted) {
+      throw new TermsNotAcceptedError();
+    }
+
     const email = EmailAddress.create(command.email);
 
     const existing = await this.userRepository.findByEmail(email);
@@ -49,6 +59,7 @@ export class RegisterUserUseCase {
       firstName: command.firstName,
       lastName: command.lastName,
       passwordHash,
+      termsVersion: TERMS_VERSION,
       occurredAt,
     });
 

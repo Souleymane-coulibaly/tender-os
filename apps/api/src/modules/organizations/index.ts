@@ -7,6 +7,10 @@ export type { CreateOrganizationCommand } from "./application/use-cases/create-o
 export { DeleteOrganizationUseCase } from "./application/use-cases/delete-organization.use-case";
 export type { DeleteOrganizationCommand } from "./application/use-cases/delete-organization.use-case";
 export { GetOrganizationUseCase } from "./application/use-cases/get-organization.use-case";
+// V2 Sprint 24 (onboarding, correctif sécurité) — réexporté pour `UpdateOrganizationProfileUseCase`
+// (module Memberships), voir organizations.module.ts.
+export { UpdateOrganizationUseCase } from "./application/use-cases/update-organization.use-case";
+export type { OrganizationSettings } from "./domain/organization.aggregate";
 export { ListOrganizationsUseCase } from "./application/use-cases/list-organizations.use-case";
 export { SuspendOrganizationUseCase } from "./application/use-cases/suspend-organization.use-case";
 export { ReactivateOrganizationUseCase } from "./application/use-cases/reactivate-organization.use-case";

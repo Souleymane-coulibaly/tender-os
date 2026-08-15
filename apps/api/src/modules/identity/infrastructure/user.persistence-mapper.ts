@@ -14,6 +14,8 @@ export type UserPersistenceData = {
   passwordHash: string;
   emailVerifiedAt: Date | null;
   lastLoginAt: Date | null;
+  termsAcceptedAt: Date | null;
+  termsAcceptedVersion: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -34,6 +36,8 @@ export class UserPersistenceMapper {
       passwordHash: record.passwordHash,
       emailVerifiedAt: record.emailVerifiedAt ?? undefined,
       lastLoginAt: record.lastLoginAt ?? undefined,
+      termsAcceptedAt: record.termsAcceptedAt ?? undefined,
+      termsAcceptedVersion: record.termsAcceptedVersion ?? undefined,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });
@@ -50,6 +54,8 @@ export class UserPersistenceMapper {
       passwordHash: user.passwordHash,
       emailVerifiedAt: user.emailVerifiedAt ?? null,
       lastLoginAt: user.lastLoginAt ?? null,
+      termsAcceptedAt: user.termsAcceptedAt ?? null,
+      termsAcceptedVersion: user.termsAcceptedVersion ?? null,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

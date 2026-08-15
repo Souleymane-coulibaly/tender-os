@@ -13,6 +13,8 @@ export type UserProps = {
   passwordHash: string;
   emailVerifiedAt?: Date | undefined;
   lastLoginAt?: Date | undefined;
+  termsAcceptedAt?: Date | undefined;
+  termsAcceptedVersion?: string | undefined;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -35,6 +37,9 @@ export class User {
     firstName?: string | undefined;
     lastName?: string | undefined;
     passwordHash: string;
+    /** Toujours la constante `TERMS_VERSION` (jamais une valeur fournie par le client) — voir
+     *  `RegisterUserUseCase`. */
+    termsVersion: string;
     occurredAt: Date;
   }): User {
     return new User({
@@ -47,6 +52,8 @@ export class User {
       passwordHash: input.passwordHash,
       emailVerifiedAt: undefined,
       lastLoginAt: undefined,
+      termsAcceptedAt: input.occurredAt,
+      termsAcceptedVersion: input.termsVersion,
       createdAt: input.occurredAt,
       updatedAt: input.occurredAt,
     });
@@ -69,6 +76,15 @@ export class User {
   recordLogin(occurredAt: Date): void {
     this.assertCanAuthenticate();
     this.props.lastLoginAt = occurredAt;
+    this.props.updatedAt = occurredAt;
+  }
+
+  /** V2 Sprint 24 (onboarding) — flow "Mot de passe oublié" : remplace le hash, jamais le mot de
+   *  passe en clair. Le jeton ayant déjà été validé par `ResetPasswordUseCase`, aucune
+   *  vérification de statut ici (un compte SUSPENDED reste réinitialisable — seule
+   *  `assertCanAuthenticate` bloque la connexion elle-même). */
+  resetPassword(newPasswordHash: string, occurredAt: Date): void {
+    this.props.passwordHash = newPasswordHash;
     this.props.updatedAt = occurredAt;
   }
 
@@ -106,6 +122,14 @@ export class User {
 
   get lastLoginAt(): Date | undefined {
     return this.props.lastLoginAt;
+  }
+
+  get termsAcceptedAt(): Date | undefined {
+    return this.props.termsAcceptedAt;
+  }
+
+  get termsAcceptedVersion(): string | undefined {
+    return this.props.termsAcceptedVersion;
   }
 
   get createdAt(): Date {

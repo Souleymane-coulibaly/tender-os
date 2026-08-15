@@ -32,7 +32,7 @@ describe("Subcontractors — real HTTP + PostgreSQL (NestJS)", () => {
     const registerRes = await fetch(`${baseUrl}/api/v1/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, displayName: "Subcontractors Test" }),
+      body: JSON.stringify({ email, password, displayName: "Subcontractors Test", termsAccepted: true }),
     });
     const user = (await registerRes.json()) as { id: string };
     const loginRes = await fetch(`${baseUrl}/api/v1/auth/login`, {

@@ -38,7 +38,7 @@ describe("Tenders — isolation HTTP inter-client au sein d'une même organisati
     const registerRes = await fetch(`${baseUrl}/api/v1/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, displayName: "HTTP Client Isolation Test" }),
+      body: JSON.stringify({ email, password, displayName: "HTTP Client Isolation Test", termsAccepted: true }),
     });
     const user = (await registerRes.json()) as { id: string };
     const loginRes = await fetch(`${baseUrl}/api/v1/auth/login`, {

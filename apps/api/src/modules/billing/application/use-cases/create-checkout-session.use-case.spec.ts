@@ -85,4 +85,20 @@ describe("CreateCheckoutSessionUseCase", () => {
     expect(call?.successUrl.startsWith("https://tenderos.example.com/")).toBe(true);
     expect(call?.cancelUrl.startsWith("https://tenderos.example.com/")).toBe(true);
   });
+
+  it("V2 Sprint 24 — defaults to the /app/subscription return path when returnTarget is absent", async () => {
+    await useCase.execute({ organizationId: ORG_A, actorId: "user-1", actorRole: "OWNER", target: { kind: "PASS" } });
+
+    const call = stripeClient.checkoutSessionCalls[0];
+    expect(call?.successUrl).toBe("https://app.test/app/subscription?checkout=success");
+    expect(call?.cancelUrl).toBe("https://app.test/app/subscription?checkout=canceled");
+  });
+
+  it("V2 Sprint 24 — returnTarget: 'onboarding' returns to the onboarding Paiement step instead", async () => {
+    await useCase.execute({ organizationId: ORG_A, actorId: "user-1", actorRole: "OWNER", target: { kind: "PASS" }, returnTarget: "onboarding" });
+
+    const call = stripeClient.checkoutSessionCalls[0];
+    expect(call?.successUrl).toBe("https://app.test/onboarding/paiement?checkout=success");
+    expect(call?.cancelUrl).toBe("https://app.test/onboarding/paiement?checkout=canceled");
+  });
 });

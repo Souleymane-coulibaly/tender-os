@@ -22,6 +22,7 @@ describe("ListUsersUseCase", () => {
         email: EmailAddress.create("ada@example.com"),
         displayName: "Ada",
         passwordHash: "hashed:whatever",
+        termsVersion: "2026-08-15",
         occurredAt: new Date("2026-01-01T00:00:00Z"),
       }),
     );
@@ -48,6 +49,7 @@ describe("ListUsersUseCase", () => {
         email: EmailAddress.create("ada@example.com"),
         displayName: "Ada",
         passwordHash: "hashed:whatever",
+        termsVersion: "2026-08-15",
         occurredAt: new Date("2026-01-01T00:00:00Z"),
       }),
     );

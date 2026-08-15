@@ -15,6 +15,7 @@ import { ListOrganizationMembersUseCase } from "./application/use-cases/list-org
 import { RemoveMembershipUseCase } from "./application/use-cases/remove-membership.use-case";
 import { SuspendMembershipUseCase } from "./application/use-cases/suspend-membership.use-case";
 import { TransferOrganizationOwnershipUseCase } from "./application/use-cases/transfer-organization-ownership.use-case";
+import { UpdateOrganizationProfileUseCase } from "./application/use-cases/update-organization-profile.use-case";
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
 import { PrismaMembershipRepository } from "./infrastructure/prisma-membership.repository";
 import { OrganizationLifecycleController } from "./interfaces/http/organization-lifecycle.controller";
@@ -42,6 +43,7 @@ import { OrganizationMembershipGuard } from "./interfaces/http/organization-memb
     TransferOrganizationOwnershipUseCase,
     CreateOrganizationWithOwnerUseCase,
     DeleteOrganizationAsOwnerUseCase,
+    UpdateOrganizationProfileUseCase,
     OrganizationMembershipGuard,
     { provide: MEMBERSHIP_REPOSITORY, useClass: PrismaMembershipRepository },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },

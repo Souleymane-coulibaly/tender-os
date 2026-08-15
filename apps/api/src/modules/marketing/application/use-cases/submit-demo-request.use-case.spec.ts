@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { EmailMessage, EmailProvider } from "../../../notifications";
+import type { EmailMessage, EmailProvider } from "../../../../shared-kernel/email-provider";
 import { SubmitDemoRequestUseCase } from "./submit-demo-request.use-case";
 
 class FakeEmailProvider implements EmailProvider {

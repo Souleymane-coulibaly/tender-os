@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { EmailAlreadyRegisteredError, InvalidEmailAddressError } from "../../domain/errors";
+import { EmailAlreadyRegisteredError, InvalidEmailAddressError, TermsNotAcceptedError } from "../../domain/errors";
 import { EmailAddress } from "../../domain/email-address.value-object";
 import { UserId } from "../../domain/user-id.value-object";
 import { User } from "../../domain/user.aggregate";
@@ -30,11 +30,27 @@ describe("RegisterUserUseCase", () => {
       email: "Ada@Example.com",
       password: "correct-horse-battery-staple",
       displayName: "Ada Lovelace",
+      termsAccepted: true,
     });
 
     expect(result.email).toBe("ada@example.com");
     expect(result.status).toBe("ACTIVE");
     expect(userRepository.savedIds).toHaveLength(1);
+  });
+
+  it("refuses to register without CGU acceptance (V2 Sprint 24, defense in depth behind RegisterBodySchema)", async () => {
+    const useCase = createUseCase(userRepository);
+
+    await expect(
+      useCase.execute({
+        email: "ada@example.com",
+        password: "correct-horse-battery-staple",
+        displayName: "Ada Lovelace",
+        termsAccepted: false,
+      }),
+    ).rejects.toThrow(TermsNotAcceptedError);
+
+    expect(userRepository.savedIds).toHaveLength(0);
   });
 
   it("refuses to register the same email address twice", async () => {
@@ -44,6 +60,7 @@ describe("RegisterUserUseCase", () => {
       email: EmailAddress.create("ada@example.com"),
       displayName: "Ada Lovelace",
       passwordHash: "hashed:whatever",
+      termsVersion: "2026-08-15",
       occurredAt: new Date(),
     });
     await userRepository.seed(existing);
@@ -53,6 +70,7 @@ describe("RegisterUserUseCase", () => {
         email: "ADA@EXAMPLE.COM",
         password: "another-password",
         displayName: "Someone else",
+        termsAccepted: true,
       }),
     ).rejects.toThrow(EmailAlreadyRegisteredError);
   });
@@ -65,6 +83,7 @@ describe("RegisterUserUseCase", () => {
         email: "not-an-email",
         password: "correct-horse-battery-staple",
         displayName: "Ada Lovelace",
+        termsAccepted: true,
       }),
     ).rejects.toThrow(InvalidEmailAddressError);
 

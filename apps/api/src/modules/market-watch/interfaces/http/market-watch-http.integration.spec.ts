@@ -41,7 +41,7 @@ describe("Market Watch (market-watch) — real HTTP + PostgreSQL (NestJS)", () =
 
   async function registerAndLogin(email: string): Promise<{ userId: string; token: string }> {
     const password = "SmokeTest#12345";
-    const registerRes = await fetch(`${baseUrl}/api/v1/auth/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, displayName: "Market Watch HTTP Test" }) });
+    const registerRes = await fetch(`${baseUrl}/api/v1/auth/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, displayName: "Market Watch HTTP Test", termsAccepted: true }) });
     const user = (await registerRes.json()) as { id: string };
     const loginRes = await fetch(`${baseUrl}/api/v1/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
     const { accessToken } = (await loginRes.json()) as { accessToken: string };

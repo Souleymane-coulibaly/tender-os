@@ -26,7 +26,10 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/app")) {
-    if (pathname === "/app/login") {
+    // V2 Sprint 24 (onboarding, flow "Mot de passe oublié") — accessibles SANS session, même
+    // motif que /app/login : un utilisateur qui a oublié son mot de passe est par définition
+    // déconnecté, le rediriger vers /app/login ici casserait le flow avant qu'il ne commence.
+    if (pathname === "/app/login" || pathname === "/app/forgot-password" || pathname === "/app/reset-password") {
       return NextResponse.next();
     }
 

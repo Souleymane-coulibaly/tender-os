@@ -57,6 +57,13 @@ export const GA_EVENTS = {
   AnnualPricingSelected: "annual_pricing_selected",
   MonthlyPricingSelected: "monthly_pricing_selected",
   DemoRequestSubmitted: "demo_request_submitted",
+  // V2 Sprint 24 (onboarding) — mission : funnel Onboarding, jamais un champ PII (email/nom/SIRET).
+  OnboardingStarted: "onboarding_started",
+  OnboardingAccountCompleted: "onboarding_account_completed",
+  OnboardingOrganizationCompleted: "onboarding_organization_completed",
+  OnboardingPlanSelected: "onboarding_plan_selected",
+  CheckoutStarted: "checkout_started",
+  OnboardingCompleted: "onboarding_completed",
 } as const;
 export type GaEventName = (typeof GA_EVENTS)[keyof typeof GA_EVENTS];
 

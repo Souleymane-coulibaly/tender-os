@@ -13,6 +13,7 @@ function registerUser(status: UserStatus = UserStatus.Active): User {
     email: EmailAddress.create("Ada@Example.com"),
     displayName: "Ada Lovelace",
     passwordHash: "hashed:password",
+    termsVersion: "2026-08-15",
     occurredAt: FIXED_NOW,
   });
 
@@ -38,6 +39,25 @@ describe("User.register", () => {
     expect(user.status).toBe(UserStatus.Active);
     expect(user.email.value).toBe("ada@example.com");
     expect(user.lastLoginAt).toBeUndefined();
+  });
+
+  it("stamps termsAcceptedAt/termsAcceptedVersion at registration time (CGU, V2 Sprint 24)", () => {
+    const user = registerUser();
+
+    expect(user.termsAcceptedAt).toEqual(FIXED_NOW);
+    expect(user.termsAcceptedVersion).toBe("2026-08-15");
+  });
+});
+
+describe("User.resetPassword", () => {
+  it("replaces the password hash and bumps updatedAt (V2 Sprint 24, forgot-password flow)", () => {
+    const user = registerUser();
+    const resetAt = new Date("2026-07-26T09:00:00Z");
+
+    user.resetPassword("new-hashed:password", resetAt);
+
+    expect(user.passwordHash).toBe("new-hashed:password");
+    expect(user.updatedAt).toEqual(resetAt);
   });
 });
 

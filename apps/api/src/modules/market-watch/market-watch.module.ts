@@ -43,8 +43,10 @@ import { SavedSearchesController } from "./interfaces/http/saved-searches.contro
  * (jamais `OutboxModule` complet, même motif que tous les producteurs depuis le correctif Sprint
  * 16). `BoampSourceConnector` est le seul connecteur réel enregistré ce sprint (mission §5) ;
  * `MARKET_SOURCE_CONNECTORS` reste un tableau pour permettre d'en ajouter d'autres sans toucher au
- * worker. `EMAIL_PROVIDER` (relocalisé dans `notifications` au Sprint 18, mission §51/§100 "ne pas
- * créer un second pipeline email") est fourni par `NotificationsModule`, déjà importé ci-dessous.
+ * worker. `NotificationsModule` reste importé pour `CreateNotificationUseCase` (notifications
+ * in-app sur un match) — `EMAIL_PROVIDER`, lui, a déménagé vers `shared-kernel` au V2 Sprint 24
+ * (voir shared-kernel/email-provider.ts) et est désormais disponible partout via
+ * `SharedKernelModule` (`@Global()`), sans plus jamais transiter par `NotificationsModule`.
  */
 @Module({
   imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, OpportunityModule, NotificationsModule, OutboxWriterModule],

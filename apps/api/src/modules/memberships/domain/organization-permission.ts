@@ -3,7 +3,7 @@ import { OrganizationRole } from "./organization-role";
 /**
  * Sous-ensemble des permissions Organization réellement appliqué par ce module
  * (bible/03-domain/permissions.md §7 "Membres" — notation canonique `resource:action`).
- * N'inclut pas les permissions organization:read/update/profile/settings/security/subscription,
+ * N'inclut pas les permissions organization:read/settings/security/subscription,
  * qui ne sont vérifiées par aucun use case de ce module (hors périmètre Memberships).
  */
 export const OrganizationPermission = {
@@ -12,6 +12,12 @@ export const OrganizationPermission = {
   MemberSuspend: "organization:member:suspend",
   MemberRemove: "organization:member:remove",
   RoleAssign: "organization:role:assign",
+  /**
+   * V2 Sprint 24 (onboarding, correctif sécurité IDOR) — `PATCH /organizations/me` (étape
+   * "Entreprise" de l'onboarding, ancien `OrganizationsController` vulnérable) exige désormais
+   * cette permission explicite, jamais uniquement l'appartenance à l'organisation.
+   */
+  ProfileUpdate: "organization:profile:update",
   /** Réservées à OWNER (bible/03-domain/permissions.md §4 "Owner") — jamais accordées à
    *  ORGANIZATION_ADMIN, quel que soit son périmètre par ailleurs. */
   OrganizationDelete: "organization:delete",
@@ -34,6 +40,7 @@ const ORGANIZATION_ADMIN_PERMISSIONS: readonly OrganizationPermission[] = [
   OrganizationPermission.MemberSuspend,
   OrganizationPermission.MemberRemove,
   OrganizationPermission.RoleAssign,
+  OrganizationPermission.ProfileUpdate,
 ];
 
 export const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrganizationPermission[]> = {

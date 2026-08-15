@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { GetCurrentUserUseCase } from "../../../identity";
-import { EMAIL_PROVIDER, type EmailProvider } from "../../../notifications";
+import { EMAIL_PROVIDER, type EmailProvider } from "../../../../shared-kernel/email-provider";
 import { EMAIL_ALERT_STALE_CLAIM_THRESHOLD_MS, EmailFrequency } from "../../domain/enums";
 import type { ExternalTender } from "../../domain/external-tender.entity";
 import type { SavedSearchMatch } from "../../domain/saved-search-match.entity";

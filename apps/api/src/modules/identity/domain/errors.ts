@@ -54,3 +54,25 @@ export class SessionNotFoundError extends DomainError {
     super("Session not found or already revoked.");
   }
 }
+
+/** V2 Sprint 24 (onboarding, CGU) — défense en profondeur : `RegisterBodySchema` refuse déjà
+ *  `termsAccepted !== true` à la frontière HTTP, ce garde-fou domain refuse en plus toute
+ *  tentative d'appeler le use case directement sans acceptation (jamais une seule couche de
+ *  contrôle pour un invariant légal/RGPD). */
+export class TermsNotAcceptedError extends DomainError {
+  readonly code = "TERMS_NOT_ACCEPTED";
+
+  constructor() {
+    super("Vous devez accepter les Conditions Générales d'Utilisation pour continuer.");
+  }
+}
+
+/** V2 Sprint 24 (onboarding) — anti-énumération : un jeton absent, expiré, ou déjà consommé
+ *  renvoie TOUJOURS ce même message générique, jamais une nuance qui distinguerait ces cas. */
+export class PasswordResetTokenInvalidError extends DomainError {
+  readonly code = "PASSWORD_RESET_TOKEN_INVALID";
+
+  constructor() {
+    super("This password reset link is invalid or has expired.");
+  }
+}

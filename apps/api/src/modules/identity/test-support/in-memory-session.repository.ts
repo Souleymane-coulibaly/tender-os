@@ -12,6 +12,14 @@ export class InMemorySessionRepository implements SessionRepository {
     this.records.set(session.id, session);
   }
 
+  async revokeAllForUser(userId: string, occurredAt: Date): Promise<void> {
+    for (const session of this.records.values()) {
+      if (session.userId === userId && session.revokedAt === undefined) {
+        session.revoke(occurredAt);
+      }
+    }
+  }
+
   get savedIds(): string[] {
     return [...this.records.keys()];
   }

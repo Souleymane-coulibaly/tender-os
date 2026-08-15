@@ -23,6 +23,7 @@ async function seedActiveUser(userRepository: InMemoryUserRepository): Promise<v
     email: EmailAddress.create("ada@example.com"),
     displayName: "Ada Lovelace",
     passwordHash: await hasher.hash(PASSWORD),
+    termsVersion: "2026-08-15",
     occurredAt: new Date("2026-01-01T00:00:00Z"),
   });
   await userRepository.seed(user);

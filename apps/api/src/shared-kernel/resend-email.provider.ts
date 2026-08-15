@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import type { EmailMessage, EmailProvider } from "../../application/ports/email-provider";
+import type { EmailMessage, EmailProvider } from "./email-provider";
 
 const RESEND_API_URL = "https://api.resend.com/emails";
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -9,7 +9,8 @@ const REQUEST_TIMEOUT_MS = 10_000;
  * clé en dur, lue depuis `process.env.RESEND_API_KEY` à chaque envoi (jamais mise en cache au
  * démarrage), `process.env.RESEND_FROM_EMAIL` pour l'expéditeur. Sans clé configurée, `send()`
  * échoue explicitement (jamais un faux succès silencieux) — c'est au module d'assemblage
- * (`NotificationsModule`) de choisir `LoggingEmailProvider` par défaut.
+ * (`SharedKernelModule`) de choisir `LoggingEmailProvider` par défaut. V2 Sprint 24 — relocalisé
+ * une seconde fois de `notifications` vers `shared-kernel` (voir `email-provider.ts`).
  */
 @Injectable()
 export class ResendEmailProvider implements EmailProvider {

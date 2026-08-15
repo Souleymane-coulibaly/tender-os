@@ -62,11 +62,14 @@ export async function fetchUsage(): Promise<OrganizationUsageDto> {
 export type CheckoutTarget = { kind: "PASS" } | { kind: "SUBSCRIPTION"; planTier: SubscriptionPlanTier; billingInterval: BillingInterval };
 export type CheckoutSessionResult = { error?: string; url?: string };
 
-export async function createCheckoutSessionAction(target: CheckoutTarget): Promise<CheckoutSessionResult> {
+/** `returnTarget: "onboarding"` (V2 Sprint 24) fait revenir Stripe sur l'étape "Paiement" du
+ *  wizard onboarding plutôt que sur l'écran Abonnement classique — voir
+ *  `appBillingReturnUrls` (API). Absent = comportement inchangé pour tous les appelants existants. */
+export async function createCheckoutSessionAction(target: CheckoutTarget, returnTarget?: "onboarding"): Promise<CheckoutSessionResult> {
   try {
     const result = await appApiFetch<{ sessionId: string; url: string }>("/api/v1/billing/checkout-sessions", {
       method: "POST",
-      body: JSON.stringify({ target }),
+      body: JSON.stringify(returnTarget ? { target, returnTarget } : { target }),
     });
     return { url: result.url };
   } catch (error) {

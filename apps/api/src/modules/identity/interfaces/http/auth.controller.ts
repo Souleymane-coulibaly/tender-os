@@ -3,12 +3,23 @@ import { AuthenticateUserUseCase } from "../../application/use-cases/authenticat
 import { GetCurrentUserUseCase } from "../../application/use-cases/get-current-user.use-case";
 import { LogoutUserUseCase } from "../../application/use-cases/logout-user.use-case";
 import { RegisterUserUseCase } from "../../application/use-cases/register-user.use-case";
+import { RequestPasswordResetUseCase } from "../../application/use-cases/request-password-reset.use-case";
+import { ResetPasswordUseCase } from "../../application/use-cases/reset-password.use-case";
 import { AuthenticatedGuard, type AuthenticatedActor } from "./authenticated.guard";
 import { AuthThrottlerGuard } from "./auth-throttler.guard";
 import { CurrentActor } from "./current-actor.decorator";
 import { IdentityErrorFilter } from "./identity-error.filter";
 import { presentAuthentication, presentUser, type AuthenticationResponse, type UserResponse } from "./presenters";
-import { LoginBodySchema, RegisterBodySchema, type LoginBody, type RegisterBody } from "./schemas";
+import {
+  LoginBodySchema,
+  RegisterBodySchema,
+  RequestPasswordResetBodySchema,
+  ResetPasswordBodySchema,
+  type LoginBody,
+  type RegisterBody,
+  type RequestPasswordResetBody,
+  type ResetPasswordBody,
+} from "./schemas";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
 
 @Controller("auth")
@@ -19,6 +30,8 @@ export class AuthController {
     private readonly authenticateUserUseCase: AuthenticateUserUseCase,
     private readonly logoutUserUseCase: LogoutUserUseCase,
     private readonly getCurrentUserUseCase: GetCurrentUserUseCase,
+    private readonly requestPasswordResetUseCase: RequestPasswordResetUseCase,
+    private readonly resetPasswordUseCase: ResetPasswordUseCase,
   ) {}
 
   @Post("register")
@@ -57,5 +70,25 @@ export class AuthController {
     const result = await this.getCurrentUserUseCase.execute({ userId: actor.userId });
 
     return presentUser(result);
+  }
+
+  /** V2 Sprint 24 (onboarding, flow "Mot de passe oublié") — 204 systématique, jamais un corps qui
+   *  distinguerait "email trouvé" de "email inconnu" (anti-énumération). */
+  @Post("forgot-password")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AuthThrottlerGuard)
+  async forgotPassword(
+    @Body(new ZodValidationPipe(RequestPasswordResetBodySchema)) body: RequestPasswordResetBody,
+  ): Promise<void> {
+    await this.requestPasswordResetUseCase.execute(body);
+  }
+
+  @Post("reset-password")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AuthThrottlerGuard)
+  async resetPassword(
+    @Body(new ZodValidationPipe(ResetPasswordBodySchema)) body: ResetPasswordBody,
+  ): Promise<void> {
+    await this.resetPasswordUseCase.execute(body);
   }
 }

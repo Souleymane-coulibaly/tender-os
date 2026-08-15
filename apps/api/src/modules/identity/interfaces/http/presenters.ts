@@ -18,6 +18,7 @@ export function presentUser(user: UserSummary): UserResponse {
     status: user.status,
     emailVerifiedAt: user.emailVerifiedAt,
     lastLoginAt: user.lastLoginAt,
+    termsAcceptedVersion: user.termsAcceptedVersion,
     createdAt: user.createdAt,
   };
 }

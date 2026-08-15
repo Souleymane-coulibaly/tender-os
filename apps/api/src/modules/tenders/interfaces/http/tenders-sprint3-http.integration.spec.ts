@@ -35,7 +35,7 @@ describe("Tenders â€” Sprint 3 (fiche Tender, acheteur, profil, restauration) â€
     const registerRes = await fetch(`${baseUrl}/api/v1/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, displayName: "HTTP Sprint 3 Test" }),
+      body: JSON.stringify({ email, password, displayName: "HTTP Sprint 3 Test", termsAccepted: true }),
     });
     const user = (await registerRes.json()) as { id: string };
     const loginRes = await fetch(`${baseUrl}/api/v1/auth/login`, {

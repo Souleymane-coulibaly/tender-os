@@ -1,20 +1,4 @@
-const SECTORS = [
-  "ESN",
-  "Cabinets de conseil",
-  "BTP",
-  "Industrie",
-  "Ingénierie",
-  "Services",
-  "Facilities Management",
-  "Nettoyage industriel",
-  "IT & Numérique",
-  "Transport",
-  "Énergie",
-  "Maintenance",
-  "Sécurité",
-  "PME",
-  "ETI",
-] as const;
+import { SECTORS } from "../../lib/sectors";
 
 function SectorList({ ariaHidden }: { ariaHidden: boolean }) {
   return (

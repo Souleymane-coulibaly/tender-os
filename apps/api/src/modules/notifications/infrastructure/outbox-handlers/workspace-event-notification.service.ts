@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { GetCurrentUserUseCase } from "../../../identity";
-import { EMAIL_PROVIDER, type EmailProvider } from "../../application/ports/email-provider";
+import { EMAIL_PROVIDER, type EmailProvider } from "../../../../shared-kernel/email-provider";
 import { CreateNotificationUseCase } from "../../application/use-cases/create-notification.use-case";
 
 export type NotifyUserInput = Readonly<{

@@ -50,6 +50,22 @@ const MARKETING_CSP =
   `frame-src https://client.crisp.chat; ` +
   `frame-ancestors 'none'; base-uri 'self'; form-action 'self'`;
 
+/** V2 Sprint 24 (onboarding) — le wizard a besoin de GA4 (mission : événements du funnel) mais
+ *  JAMAIS de Crisp (aucun widget de chat sur ce parcours, mission "CSP limitée aux scripts
+ *  réellement nécessaires") : une troisième politique, plus stricte que MARKETING_CSP sur ce seul
+ *  point, jamais un simple réemploi de MARKETING_CSP par commodité. L'étape "Paiement" redirige
+ *  vers Stripe Checkout via `window.location.href` (même motif que `CheckoutButton` existant sous
+ *  `/app`), une navigation top-level jamais régie par `form-action` — aucun domaine Stripe à
+ *  ajouter ici, exactement comme APP_CSP ne l'a jamais fait pour ce même mécanisme. */
+const ONBOARDING_CSP =
+  `default-src 'self'; ` +
+  `script-src 'self' 'unsafe-inline'${UNSAFE_EVAL_IN_DEV} https://www.googletagmanager.com; ` +
+  `style-src 'self' 'unsafe-inline'; ` +
+  `img-src 'self' data: blob: https://www.google-analytics.com; ` +
+  `font-src 'self' data:; ` +
+  `connect-src 'self' https://www.google-analytics.com https://analytics.google.com; ` +
+  `frame-ancestors 'none'; base-uri 'self'; form-action 'self'`;
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Le lint est un script dédié (`pnpm lint`, eslint.config.mjs à la racine du monorepo) ;
@@ -71,6 +87,8 @@ const nextConfig: NextConfig = {
       { source: "/contact", headers: [{ key: "Content-Security-Policy", value: MARKETING_CSP }] },
       { source: "/a-propos", headers: [{ key: "Content-Security-Policy", value: MARKETING_CSP }] },
       { source: "/legal/:path*", headers: [{ key: "Content-Security-Policy", value: MARKETING_CSP }] },
+      // V2 Sprint 24 (onboarding) — GA4 mais jamais Crisp, voir ONBOARDING_CSP.
+      { source: "/onboarding/:path*", headers: [{ key: "Content-Security-Policy", value: ONBOARDING_CSP }] },
     ];
   },
 };

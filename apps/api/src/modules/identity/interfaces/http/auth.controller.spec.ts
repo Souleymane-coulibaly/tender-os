@@ -3,6 +3,8 @@ import type { AuthenticateUserUseCase } from "../../application/use-cases/authen
 import type { GetCurrentUserUseCase } from "../../application/use-cases/get-current-user.use-case";
 import type { LogoutUserUseCase } from "../../application/use-cases/logout-user.use-case";
 import type { RegisterUserUseCase } from "../../application/use-cases/register-user.use-case";
+import type { RequestPasswordResetUseCase } from "../../application/use-cases/request-password-reset.use-case";
+import type { ResetPasswordUseCase } from "../../application/use-cases/reset-password.use-case";
 import type { UserSummary } from "../../application/dtos";
 import { AuthController } from "./auth.controller";
 
@@ -19,6 +21,8 @@ function createController(overrides?: {
   authenticateUserUseCase?: Partial<AuthenticateUserUseCase>;
   logoutUserUseCase?: Partial<LogoutUserUseCase>;
   getCurrentUserUseCase?: Partial<GetCurrentUserUseCase>;
+  requestPasswordResetUseCase?: Partial<RequestPasswordResetUseCase>;
+  resetPasswordUseCase?: Partial<ResetPasswordUseCase>;
 }) {
   const registerUserUseCase = {
     execute: vi.fn().mockResolvedValue(USER_SUMMARY),
@@ -44,14 +48,34 @@ function createController(overrides?: {
     ...overrides?.getCurrentUserUseCase,
   } as unknown as GetCurrentUserUseCase;
 
+  const requestPasswordResetUseCase = {
+    execute: vi.fn().mockResolvedValue(undefined),
+    ...overrides?.requestPasswordResetUseCase,
+  } as unknown as RequestPasswordResetUseCase;
+
+  const resetPasswordUseCase = {
+    execute: vi.fn().mockResolvedValue(undefined),
+    ...overrides?.resetPasswordUseCase,
+  } as unknown as ResetPasswordUseCase;
+
   const controller = new AuthController(
     registerUserUseCase,
     authenticateUserUseCase,
     logoutUserUseCase,
     getCurrentUserUseCase,
+    requestPasswordResetUseCase,
+    resetPasswordUseCase,
   );
 
-  return { controller, registerUserUseCase, authenticateUserUseCase, logoutUserUseCase, getCurrentUserUseCase };
+  return {
+    controller,
+    registerUserUseCase,
+    authenticateUserUseCase,
+    logoutUserUseCase,
+    getCurrentUserUseCase,
+    requestPasswordResetUseCase,
+    resetPasswordUseCase,
+  };
 }
 
 describe("AuthController", () => {
@@ -62,12 +86,14 @@ describe("AuthController", () => {
       email: "Ada@Example.com",
       password: "correct-horse-battery-staple",
       displayName: "Ada Lovelace",
+      termsAccepted: true,
     });
 
     expect(registerUserUseCase.execute).toHaveBeenCalledWith({
       email: "Ada@Example.com",
       password: "correct-horse-battery-staple",
       displayName: "Ada Lovelace",
+      termsAccepted: true,
     });
     expect(response).toEqual(USER_SUMMARY);
     expect(response).not.toHaveProperty("data");
@@ -100,5 +126,25 @@ describe("AuthController", () => {
 
     expect(getCurrentUserUseCase.execute).toHaveBeenCalledWith({ userId: "user-1" });
     expect(response).toEqual(USER_SUMMARY);
+  });
+
+  it("forgotPassword delegates to RequestPasswordResetUseCase and returns no body (anti-enumeration)", async () => {
+    const { controller, requestPasswordResetUseCase } = createController();
+
+    const response = await controller.forgotPassword({ email: "ada@example.com" });
+
+    expect(requestPasswordResetUseCase.execute).toHaveBeenCalledWith({ email: "ada@example.com" });
+    expect(response).toBeUndefined();
+  });
+
+  it("resetPassword delegates to ResetPasswordUseCase", async () => {
+    const { controller, resetPasswordUseCase } = createController();
+
+    await controller.resetPassword({ token: "raw-token", newPassword: "correct-horse-battery-staple" });
+
+    expect(resetPasswordUseCase.execute).toHaveBeenCalledWith({
+      token: "raw-token",
+      newPassword: "correct-horse-battery-staple",
+    });
   });
 });

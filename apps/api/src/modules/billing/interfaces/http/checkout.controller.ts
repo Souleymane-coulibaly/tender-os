@@ -41,6 +41,7 @@ export class CheckoutController {
       actorId: actor.userId,
       actorRole: membership.role,
       target,
+      returnTarget: body.returnTarget,
     });
   }
 

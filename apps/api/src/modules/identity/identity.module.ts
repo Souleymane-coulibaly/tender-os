@@ -4,6 +4,7 @@ import { ThrottlerModule } from "@nestjs/throttler";
 import { getRequiredEnv } from "../../shared-kernel/env";
 import { ACCESS_TOKEN_SERVICE } from "./application/ports/access-token.service";
 import { PASSWORD_HASHER } from "./application/ports/password-hasher";
+import { PASSWORD_RESET_TOKEN_REPOSITORY } from "./application/ports/password-reset-token.repository";
 import { SESSION_REPOSITORY } from "./application/ports/session.repository";
 import { USER_REPOSITORY } from "./application/ports/user.repository";
 import { AuthenticateUserUseCase } from "./application/use-cases/authenticate-user.use-case";
@@ -12,7 +13,10 @@ import { GetCurrentUserUseCase } from "./application/use-cases/get-current-user.
 import { ListUsersUseCase } from "./application/use-cases/list-users.use-case";
 import { LogoutUserUseCase } from "./application/use-cases/logout-user.use-case";
 import { RegisterUserUseCase } from "./application/use-cases/register-user.use-case";
+import { RequestPasswordResetUseCase } from "./application/use-cases/request-password-reset.use-case";
+import { ResetPasswordUseCase } from "./application/use-cases/reset-password.use-case";
 import { JwtAccessTokenService } from "./infrastructure/jwt-access-token.service";
+import { PrismaPasswordResetTokenRepository } from "./infrastructure/prisma-password-reset-token.repository";
 import { PrismaSessionRepository } from "./infrastructure/prisma-session.repository";
 import { PrismaUserRepository } from "./infrastructure/prisma-user.repository";
 import { ScryptPasswordHasher } from "./infrastructure/scrypt-password-hasher";
@@ -39,12 +43,15 @@ import { AuthThrottlerGuard } from "./interfaces/http/auth-throttler.guard";
     GetCurrentUserUseCase,
     ListUsersUseCase,
     CountUsersByStatusUseCase,
+    RequestPasswordResetUseCase,
+    ResetPasswordUseCase,
     AuthenticatedGuard,
     AuthThrottlerGuard,
     { provide: USER_REPOSITORY, useClass: PrismaUserRepository },
     { provide: SESSION_REPOSITORY, useClass: PrismaSessionRepository },
     { provide: PASSWORD_HASHER, useClass: ScryptPasswordHasher },
     { provide: ACCESS_TOKEN_SERVICE, useClass: JwtAccessTokenService },
+    { provide: PASSWORD_RESET_TOKEN_REPOSITORY, useClass: PrismaPasswordResetTokenRepository },
   ],
   // ACCESS_TOKEN_SERVICE et SESSION_REPOSITORY sont exportés uniquement pour que
   // AuthenticatedGuard reste résoluble quand il est réutilisé par un autre module

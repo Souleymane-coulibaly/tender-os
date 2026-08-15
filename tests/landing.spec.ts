@@ -102,15 +102,15 @@ test.describe.serial("Landing Page publique — flux principal", () => {
     await expect(pricingSection.getByText("2 189", { exact: false })).toBeVisible();
   });
 
-  test("mission §17/§55 — les CTA Pricing routent vers /contact (jamais un lien /onboarding mort), le choix de plan est conservé", async ({ page }) => {
+  test("V2 Sprint 24 (onboarding) — les CTA Pricing routent vers /onboarding (jamais /contact), le choix de plan est conservé", async ({ page }) => {
     await gotoResilient(page, "/");
     await page.getByRole("button", { name: "Tout refuser" }).click();
 
     const pricingSection = page.locator("#tarifs");
     await pricingSection.scrollIntoViewIfNeeded();
-    await clickAndExpectNavigation(page, pricingSection.getByRole("link", { name: "Choisir Starter" }), /\/contact\?plan=starter/);
+    await clickAndExpectNavigation(page, pricingSection.getByRole("link", { name: "Choisir Starter" }), /\/onboarding\?plan=STARTER/);
 
-    await expect(page.getByRole("heading", { name: "Demander une démo" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Créez votre compte" })).toBeVisible();
   });
 
   test("mission §54 — les 4 pages légales sont réellement accessibles, jamais un lien mort", async ({ page }) => {
