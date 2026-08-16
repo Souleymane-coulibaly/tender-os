@@ -25,11 +25,11 @@ import { RestoreDocumentUseCase } from "./application/use-cases/restore-document
 import { UpdateDocumentMetadataUseCase } from "./application/use-cases/update-document-metadata.use-case";
 import { InternalDocumentCleanupService } from "./application/services/internal-document-cleanup.service";
 
-import { LocalFilesystemStorageProvider } from "./infrastructure/local-filesystem-storage.provider";
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
 import { PrismaDocumentRepository } from "./infrastructure/prisma-document.repository";
 import { PrismaDocumentTenderAssociationRepository } from "./infrastructure/prisma-document-tender-association.repository";
 import { PrismaDocumentVersionRepository } from "./infrastructure/prisma-document-version.repository";
+import { createStorageProvider } from "./infrastructure/storage-provider.factory";
 
 import { DocumentsController } from "./interfaces/http/documents.controller";
 import { TenderDocumentsController } from "./interfaces/http/tender-documents.controller";
@@ -57,7 +57,14 @@ import { TenderDocumentsController } from "./interfaces/http/tender-documents.co
     { provide: DOCUMENT_REPOSITORY, useClass: PrismaDocumentRepository },
     { provide: DOCUMENT_VERSION_REPOSITORY, useClass: PrismaDocumentVersionRepository },
     { provide: DOCUMENT_TENDER_ASSOCIATION_REPOSITORY, useClass: PrismaDocumentTenderAssociationRepository },
-    { provide: STORAGE_PROVIDER, useClass: LocalFilesystemStorageProvider },
+    // Mission §26.X — sélection explicite via `DOCUMENT_STORAGE_DRIVER` (local par défaut, r2
+    // en staging/production), jamais une heuristique implicite comme `EMAIL_PROVIDER` plus haut
+    // dans le repo (`shared-kernel.module.ts`). `useFactory` construit directement (`new`)
+    // uniquement l'implémentation retenue : lister les deux classes comme providers Nest forcerait
+    // leur instanciation systématique par le graphe DI, y compris celle NON retenue — or
+    // `CloudflareR2StorageProvider` valide sa configuration dans son constructeur (fail-fast), ce
+    // qui ferait échouer le démarrage même quand `local` est sélectionné sans variable R2 définie.
+    { provide: STORAGE_PROVIDER, useFactory: createStorageProvider },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
   ],
   // Réexportés pour permettre au module DCE de déléguer ses écritures de fichier (création,

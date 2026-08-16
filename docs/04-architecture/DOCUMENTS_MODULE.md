@@ -69,20 +69,75 @@ existants (`OrganizationRole`) sont réutilisés :
 
 Port `StorageProvider` (`put`/`openReadStream`/`delete`/`exists`/`getMetadata` +
 `generateSignedUrl?` optionnel) — Domain et Application ne dépendent jamais de `fs`, S3 ou du SDK
-R2. V1 : `LocalFilesystemStorageProvider` (répertoire configurable via
-`DOCUMENT_LOCAL_STORAGE_PATH`), sans `generateSignedUrl` → toutes les requêtes sont
-API-médiées (upload multipart en mémoire, téléchargement en flux via l'API).
+R2 (confirmé structurellement : les ~15 consommateurs du port, dans `documents`, `extraction`,
+`signature`, `export`, `response-package`, `submission-package`, `pricing-schedule`,
+`technical-memo`, `document-generation`, n'importent que le port lui-même).
+
+Deux implémentations, sélectionnées explicitement via `DOCUMENT_STORAGE_DRIVER` (jamais une
+heuristique implicite du type "si telle variable est présente") :
+
+- **`local`** (défaut, développement) — `LocalFilesystemStorageProvider`, répertoire configurable
+  via `DOCUMENT_LOCAL_STORAGE_PATH`. Sans `generateSignedUrl` → toutes les requêtes sont
+  API-médiées (upload multipart en mémoire, téléchargement en flux via l'API).
+- **`r2`** (staging/production) — `CloudflareR2StorageProvider` (mission §26.X), adaptateur
+  Cloudflare R2 via le SDK S3 (`@aws-sdk/client-s3`, API S3-compatible). Implémente
+  `generateSignedUrl` — `DownloadDocumentVersionUseCase` bascule automatiquement en mode
+  redirection (URL signée, 60s) dès que le driver `r2` est actif, sans aucun changement de code
+  côté use case ou contrôleur (ce branchement existait déjà, en attente d'un adaptateur qui
+  l'implémente). Aucun autre consommateur du port ne vérifie `generateSignedUrl` : tout le reste
+  continue de proxyer via l'API (`openReadStream`), quel que soit le driver actif.
+
+Sélection réalisée par `createStorageProvider()` (`infrastructure/storage-provider.factory.ts`),
+appelée depuis `documents.module.ts` via `useFactory` — jamais `useClass` avec les deux classes
+listées comme providers Nest, ce qui forcerait leur instanciation systématique (y compris celle
+non retenue) pendant la construction du graphe DI ; `CloudflareR2StorageProvider` validant sa
+configuration dans son constructeur (fail-fast, `r2-config.ts`), cela ferait échouer le démarrage
+même quand `local` est sélectionné sans aucune variable R2 définie.
 
 La clé de stockage (`storageKey`) est **toujours** générée côté serveur à partir d'UUID
 (`{organizationId}/{documentId}/{versionId}.{extension}`), jamais dérivée du nom de fichier
-fourni par le client. `storageKey` n'est **jamais** exposé dans une réponse API (voir DTOs).
+fourni par le client. `storageKey` n'est **jamais** exposé dans une réponse API (voir DTOs). Cette
+discipline suffit à elle seule à garantir l'isolation multi-tenant au niveau du stockage : aucun
+consommateur n'accepte de clé fournie par le client, R2 comme le système de fichiers local n'ont
+donc jamais à connaître de notion de tenant — c'est la couche use case/autorisation qui empêche
+structurellement qu'une clé d'une autre organisation soit jamais construite ou demandée.
 
-### Vers Cloudflare R2
+Le bucket R2 reste **privé par défaut** — aucune URL publique permanente (pas de variable
+`R2_PUBLIC_BASE_URL`, aucun consommateur n'en a besoin). Le seul accès direct-navigateur possible
+est l'URL signée à 60 secondes du téléchargement de document, jamais un accès permanent.
 
-Le port `StorageProvider` est déjà suffisant pour un adaptateur R2 : implémenter les mêmes
-méthodes plus `generateSignedUrl`, l'enregistrer à la place de `LocalFilesystemStorageProvider`
-dans `documents.module.ts`. Aucun use case n'a besoin de changer — `DownloadDocumentVersionUseCase`
-bascule déjà automatiquement en mode redirection dès que `generateSignedUrl` existe sur le port.
+### Migration des fichiers existants
+
+Basculer `DOCUMENT_STORAGE_DRIVER=local → r2` sur un environnement contenant déjà des documents ne
+migre **jamais** automatiquement les fichiers locaux existants vers R2 (mission §26.X.21,
+décision explicite). Avant tout basculement en production sur un environnement déjà peuplé, un
+script de migration dédié (copie de chaque `storageKey` existant depuis
+`DOCUMENT_LOCAL_STORAGE_PATH` vers le bucket R2, vérifiable par comparaison de checksum) devra
+être écrit séparément — non nécessaire tant que l'environnement cible démarre sans documents
+locaux préexistants (ex. staging/production neufs).
+
+### Checklist de bascule en production (avant tout GO)
+
+- Credentials R2 dédiés à l'environnement (jamais partagés entre staging et production), API token
+  scopé au strict minimum (accès à un seul bucket, jamais un token de compte complet).
+- Bucket **séparé** par environnement — convention recommandée : `tenderos-staging` /
+  `tenderos-production` (jamais un préfixe partagé dans un bucket unique, pour éviter tout risque
+  de fuite croisée en cas d'erreur de configuration).
+- CORS : non requis aujourd'hui — le seul accès direct-navigateur est la redirection vers une URL
+  signée (`GET`, même origine applicative, jamais un upload direct depuis le navigateur) ; à
+  revérifier si un futur besoin d'upload direct-navigateur apparaît.
+- Politique de cycle de vie / rétention définie au niveau du bucket si une durée de conservation
+  réglementaire s'applique (hors périmètre de cette tranche, à trancher avec le métier).
+- Permissions minimales : le token applicatif ne doit avoir que `GetObject`/`PutObject`/
+  `DeleteObject`/`HeadObject` sur le bucket concerné, jamais de droits d'administration du compte
+  Cloudflare.
+- Plan de restauration/reprise documenté (versioning bucket ou sauvegarde externe, selon la
+  politique de rétention retenue).
+- Supervision des erreurs R2 (taux de 4xx/5xx sur les appels `StorageProvider`, alerting) avant
+  d'considérer le stockage R2 comme la source de vérité en production.
+- `R2_SECRET_ACCESS_KEY` ne doit jamais apparaître dans une variable `NEXT_PUBLIC_*`, le bundle
+  frontend, un log, un commit ou un snapshot de test (mission §26.X.17) — cette variable n'est lue
+  que côté API (`apps/api`), jamais côté `apps/web`.
 
 ## 6. Validation de fichier
 
