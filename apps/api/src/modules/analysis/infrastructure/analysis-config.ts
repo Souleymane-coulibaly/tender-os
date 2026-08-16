@@ -1,3 +1,5 @@
+import { DEFAULT_AI_MODEL } from "../../../shared-kernel/ai-model-defaults";
+
 export type AnalysisConfig = Readonly<{
   /** Nom du provider configuré (ex. "OPENAI") — `undefined` si absent : ne fait JAMAIS échouer le
    *  démarrage de l'application (mission §"Configuration" — "Aucune variable obligatoire ne doit
@@ -21,7 +23,6 @@ export type AnalysisConfig = Readonly<{
 
 export const ANALYSIS_CONFIG = Symbol("ANALYSIS_CONFIG");
 
-const DEFAULT_AI_MODEL = "gpt-4o-mini";
 const DEFAULT_AI_TIMEOUT_MS = 30_000;
 const DEFAULT_AI_MAX_RETRIES = 2;
 const DEFAULT_AI_RETRY_DELAY_MS = 1_000;

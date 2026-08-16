@@ -17,6 +17,7 @@
     "db:seed:staging": "tsx prisma/seed-staging.ts",
     "db:init:staging": "pnpm run db:migrate:deploy && pnpm run db:seed && pnpm run db:seed:staging",
     "bootstrap:platform-owner": "tsx prisma/bootstrap-platform-owner.ts",
+    "eval:compliance": "tsx scripts/compliance-probe.cli.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

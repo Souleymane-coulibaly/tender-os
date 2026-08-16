@@ -10,12 +10,15 @@ import {
   FakeAIProviderRegistry,
   FakeAtomicTransactionRunner,
   FakeOutboxWriter,
+  FakeRoutingPolicyResolver,
   fakeChatAIProviderResult,
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryConversationRepository,
   InMemoryMessageRepository,
+  RecordingRoutingDecisionWriter,
   SequentialIdGenerator,
+  ThrowingRoutingDecisionWriter,
 } from "../../test-support/fakes";
 import type { ChatContextAssembler } from "../services/chat-context-assembler";
 import { SendMessageUseCase } from "./send-message.use-case";
@@ -33,7 +36,12 @@ describe("SendMessageUseCase", () => {
 
   let clock: FixedClock;
 
-  function buildUseCase(provider: FakeAIProvider, config: Partial<typeof CHAT_CONFIG_FIXTURE> = {}): SendMessageUseCase {
+  function buildUseCase(
+    provider: FakeAIProvider,
+    config: Partial<typeof CHAT_CONFIG_FIXTURE> = {},
+    routingPolicyResolver?: FakeRoutingPolicyResolver,
+    routingDecisionWriter?: RecordingRoutingDecisionWriter | ThrowingRoutingDecisionWriter,
+  ): SendMessageUseCase {
     outboxWriter = new FakeOutboxWriter();
     auditLogWriter = new InMemoryAuditLogWriter();
     return new SendMessageUseCase(
@@ -49,6 +57,8 @@ describe("SendMessageUseCase", () => {
       getTenderUseCase as unknown as GetTenderUseCase,
       assertClientAccessUseCase as never,
       contextAssembler as unknown as ChatContextAssembler,
+      routingPolicyResolver as never,
+      routingDecisionWriter as never,
     );
   }
 
@@ -256,6 +266,133 @@ describe("SendMessageUseCase", () => {
         ChatRateLimitReachedError,
       );
       expect(provider.requests).toHaveLength(0);
+    });
+  });
+
+  describe("Consolidation IA — Checkpoint A §3/§6 (routing partagé)", () => {
+    function successProvider(): FakeAIProvider {
+      return new FakeAIProvider([{ kind: "success", result: fakeChatAIProviderResult({ content: JSON.stringify({ answer: "Réponse.", citations: [], insufficientContext: false }) }) }]);
+    }
+
+    it("no RoutingPolicy resolver wired (undefined) — behaves exactly as before, uses ChatConfig.aiModel", async () => {
+      const provider = successProvider();
+      const useCase = buildUseCase(provider, {}, undefined);
+
+      const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
+
+      expect(result.status).toBe(MessageStatus.Completed);
+      expect(provider.requests[0]?.model).toBe("gpt-4o-mini");
+    });
+
+    it("resolver present but no active RoutingPolicy (returns null) — falls back to ChatConfig.aiModel, never throws", async () => {
+      const provider = successProvider();
+      const resolver = new FakeRoutingPolicyResolver(null);
+      const useCase = buildUseCase(provider, {}, resolver);
+
+      const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
+
+      expect(result.status).toBe(MessageStatus.Completed);
+      expect(provider.requests[0]?.model).toBe("gpt-4o-mini");
+      expect(resolver.calls).toEqual([{ organizationId: "org-1", promptKey: "CHAT" }]);
+    });
+
+    it("an active RoutingPolicy resolves — the routed model is used instead of ChatConfig.aiModel", async () => {
+      const provider = successProvider();
+      const resolver = new FakeRoutingPolicyResolver({ policyId: "policy-1", policyVersion: 1, primaryModel: { provider: "OPENAI", modelKey: "gpt-4.1-mini" } });
+      const useCase = buildUseCase(provider, {}, resolver);
+
+      const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
+
+      expect(result.status).toBe(MessageStatus.Completed);
+      expect(provider.requests[0]?.model).toBe("gpt-4.1-mini");
+    });
+
+    it("BLOQUANT — the routing resolver throwing never fails the conversation, falls back to ChatConfig.aiModel", async () => {
+      const provider = successProvider();
+      const resolver = new FakeRoutingPolicyResolver(null, true);
+      const useCase = buildUseCase(provider, {}, resolver);
+
+      const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
+
+      expect(result.status).toBe(MessageStatus.Completed);
+      expect(provider.requests[0]?.model).toBe("gpt-4o-mini");
+    });
+  });
+
+  describe("Consolidation IA — Checkpoint D (traçabilité des décisions de routing, best-effort)", () => {
+    function successProvider(): FakeAIProvider {
+      return new FakeAIProvider([{ kind: "success", result: fakeChatAIProviderResult({ content: JSON.stringify({ answer: "Réponse.", citations: [], insufficientContext: false }) }) }]);
+    }
+
+    it("BLOQUANT — no writer wired (undefined) — behaves exactly as before, never throws", async () => {
+      const provider = successProvider();
+      const useCase = buildUseCase(provider, {}, undefined, undefined);
+
+      const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
+
+      expect(result.status).toBe(MessageStatus.Completed);
+    });
+
+    it("complete() is called exactly once on success, with the correct conversationId/promptKey/model", async () => {
+      const provider = successProvider();
+      const writer = new RecordingRoutingDecisionWriter();
+      const useCase = buildUseCase(provider, {}, undefined, writer);
+
+      const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
+
+      expect(result.status).toBe(MessageStatus.Completed);
+      expect(writer.created).toHaveLength(1);
+      expect(writer.created[0]).toMatchObject({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", promptKey: "CHAT", primaryModel: "gpt-4o-mini" });
+      expect(writer.completed).toHaveLength(1);
+      expect(writer.completed[0]).toMatchObject({ id: writer.created[0]?.id, selectedModel: "gpt-4o-mini", status: "SUCCEEDED", fallbackLevel: 0, fallbackAttempts: 0 });
+    });
+
+    /**
+     * Correctif audit P2 Checkpoint D — le test précédent prouve seulement que `create()`/`complete()`
+     * sont bien APPELÉS, jamais que `create()` précède réellement l'appel provider dans le temps (ni
+     * que `complete()` le suit). `vi.spyOn` sur les DEUX côtés (provider ET writer) partage le même
+     * compteur global `invocationCallOrder` de vitest — comparer ces indices prouve l'ORDRE CHRONOLOGIQUE
+     * réel des appels, jamais une simple co-occurrence de compteurs.
+     */
+    it("BLOQUANT — create() happens strictly BEFORE provider.complete(), which happens strictly BEFORE routingDecision.complete() — proven by invocation order, not just call counts", async () => {
+      const provider = successProvider();
+      const writer = new RecordingRoutingDecisionWriter();
+      const providerCompleteSpy = vi.spyOn(provider, "complete");
+      const createSpy = vi.spyOn(writer, "create");
+      const completeSpy = vi.spyOn(writer, "complete");
+      const useCase = buildUseCase(provider, {}, undefined, writer);
+
+      await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
+
+      expect(createSpy).toHaveBeenCalledTimes(1);
+      expect(providerCompleteSpy).toHaveBeenCalledTimes(1);
+      expect(completeSpy).toHaveBeenCalledTimes(1);
+      expect(createSpy.mock.invocationCallOrder[0]).toBeLessThan(providerCompleteSpy.mock.invocationCallOrder[0]!);
+      expect(providerCompleteSpy.mock.invocationCallOrder[0]).toBeLessThan(completeSpy.mock.invocationCallOrder[0]!);
+    });
+
+    it("BLOQUANT — complete() is called exactly once with status FAILED when the conversation ultimately fails", async () => {
+      const provider = new FakeAIProvider([{ kind: "error", error: new Error("network error while calling the AI provider") }]);
+      const writer = new RecordingRoutingDecisionWriter();
+      const useCase = buildUseCase(provider, { aiMaxRetries: 0 }, undefined, writer);
+
+      const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
+
+      expect(result.status).toBe(MessageStatus.Failed);
+      expect(writer.created).toHaveLength(1);
+      expect(writer.completed).toHaveLength(1);
+      expect(writer.completed[0]?.status).toBe("FAILED");
+    });
+
+    it("BLOQUANT — a writer that throws on create()/complete() never fails an otherwise-successful conversation", async () => {
+      const provider = successProvider();
+      const writer = new ThrowingRoutingDecisionWriter();
+      const useCase = buildUseCase(provider, {}, undefined, writer);
+
+      const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
+
+      expect(result.status).toBe(MessageStatus.Completed);
+      expect(result.content).toBe("Réponse.");
     });
   });
 });

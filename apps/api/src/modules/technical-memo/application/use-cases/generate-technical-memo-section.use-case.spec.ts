@@ -8,13 +8,16 @@ import {
   FakeAIProvider,
   FakeAIProviderRegistry,
   FakeAtomicTransactionRunner,
+  FakeRoutingPolicyResolver,
   fakeSectionAIProviderResult,
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryTechnicalMemoSectionRepository,
   InMemoryTechnicalMemoSectionRequirementRepository,
   InMemoryTechnicalMemoSectionRevisionRepository,
+  RecordingRoutingDecisionWriter,
   SequentialIdGenerator,
+  ThrowingRoutingDecisionWriter,
 } from "../../test-support/fakes";
 import type { TechnicalMemoAccessService } from "../services/technical-memo-access.service";
 import type { TechnicalMemoSectionContextAssembler } from "../services/technical-memo-section-context-assembler";
@@ -43,7 +46,11 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
     updatedAt: OCCURRED_AT,
   });
 
-  function buildUseCase(provider: FakeAIProvider): GenerateTechnicalMemoSectionUseCase {
+  function buildUseCase(
+    provider: FakeAIProvider,
+    routingPolicyResolver?: FakeRoutingPolicyResolver,
+    routingDecisionWriter?: RecordingRoutingDecisionWriter | ThrowingRoutingDecisionWriter,
+  ): GenerateTechnicalMemoSectionUseCase {
     return new GenerateTechnicalMemoSectionUseCase(
       sectionRepository,
       revisionRepository,
@@ -56,6 +63,8 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
       new SequentialIdGenerator(),
       accessService as unknown as TechnicalMemoAccessService,
       contextAssembler as unknown as TechnicalMemoSectionContextAssembler,
+      routingPolicyResolver as never,
+      routingDecisionWriter as never,
     );
   }
 
@@ -175,5 +184,127 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
       useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "some-other-memo", technicalMemoSectionId: "section-1" }),
     ).rejects.toThrow();
     expect(revisionRepository.revisions).toHaveLength(0);
+  });
+
+  describe("Consolidation IA — Checkpoint A §3/§6 (routing partagé)", () => {
+    function successProvider(): FakeAIProvider {
+      return new FakeAIProvider([{ kind: "success", result: fakeSectionAIProviderResult({ content: JSON.stringify({ content: "Texte généré.", citations: [], missingDataNotes: [] }) }) }]);
+    }
+
+    it("no RoutingPolicy resolver wired (undefined) — behaves exactly as before, uses TechnicalMemoAiConfig.aiModel", async () => {
+      const provider = successProvider();
+      const useCase = buildUseCase(provider, undefined);
+
+      await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
+
+      expect(provider.requests[0]?.model).toBe("gpt-4o-mini");
+    });
+
+    it("resolver present but no active RoutingPolicy (returns null) — falls back to TechnicalMemoAiConfig.aiModel, never throws", async () => {
+      const provider = successProvider();
+      const resolver = new FakeRoutingPolicyResolver(null);
+      const useCase = buildUseCase(provider, resolver);
+
+      await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
+
+      expect(provider.requests[0]?.model).toBe("gpt-4o-mini");
+      expect(resolver.calls).toEqual([{ organizationId: "org-1", promptKey: "TECHNICAL_MEMO_SECTION" }]);
+    });
+
+    it("an active RoutingPolicy resolves — the routed model is used instead of TechnicalMemoAiConfig.aiModel", async () => {
+      const provider = successProvider();
+      const resolver = new FakeRoutingPolicyResolver({ policyId: "policy-1", policyVersion: 1, primaryModel: { provider: "OPENAI", modelKey: "gpt-4.1-mini" } });
+      const useCase = buildUseCase(provider, resolver);
+
+      await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
+
+      expect(provider.requests[0]?.model).toBe("gpt-4.1-mini");
+    });
+
+    it("BLOQUANT — the routing resolver throwing never fails the generation, falls back to TechnicalMemoAiConfig.aiModel", async () => {
+      const provider = successProvider();
+      const resolver = new FakeRoutingPolicyResolver(null, true);
+      const useCase = buildUseCase(provider, resolver);
+
+      const revision = await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
+
+      expect(revision.aiModel).toBe("gpt-4o-mini");
+    });
+  });
+
+  describe("Consolidation IA — Checkpoint D (traçabilité des décisions de routing, best-effort)", () => {
+    function successProvider(): FakeAIProvider {
+      return new FakeAIProvider([{ kind: "success", result: fakeSectionAIProviderResult({ content: JSON.stringify({ content: "Texte généré.", citations: [], missingDataNotes: [] }) }) }]);
+    }
+
+    it("BLOQUANT — no writer wired (undefined) — behaves exactly as before, never throws", async () => {
+      const provider = successProvider();
+      const useCase = buildUseCase(provider, undefined, undefined);
+
+      const revision = await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
+
+      expect(revision.content).toBe("Texte généré.");
+    });
+
+    it("complete() is called exactly once on success, with the correct technicalMemoSectionId/tenderId/promptKey/model", async () => {
+      const provider = successProvider();
+      const writer = new RecordingRoutingDecisionWriter();
+      const useCase = buildUseCase(provider, undefined, writer);
+
+      await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
+
+      expect(writer.created).toHaveLength(1);
+      expect(writer.created[0]).toMatchObject({ organizationId: "org-1", tenderId: "tender-1", technicalMemoSectionId: "section-1", promptKey: "TECHNICAL_MEMO_SECTION", primaryModel: "gpt-4o-mini" });
+      expect(writer.completed).toHaveLength(1);
+      expect(writer.completed[0]).toMatchObject({ id: writer.created[0]?.id, selectedModel: "gpt-4o-mini", status: "SUCCEEDED", fallbackLevel: 0, fallbackAttempts: 0 });
+    });
+
+    /**
+     * Correctif audit P2 Checkpoint D — le test précédent prouve seulement que `create()`/`complete()`
+     * sont bien APPELÉS, jamais que `create()` précède réellement l'appel provider dans le temps (ni
+     * que `complete()` le suit). `vi.spyOn` sur les DEUX côtés (provider ET writer) partage le même
+     * compteur global `invocationCallOrder` de vitest — comparer ces indices prouve l'ORDRE CHRONOLOGIQUE
+     * réel des appels, jamais une simple co-occurrence de compteurs.
+     */
+    it("BLOQUANT — create() happens strictly BEFORE provider.complete(), which happens strictly BEFORE routingDecision.complete() — proven by invocation order, not just call counts", async () => {
+      const provider = successProvider();
+      const writer = new RecordingRoutingDecisionWriter();
+      const providerCompleteSpy = vi.spyOn(provider, "complete");
+      const createSpy = vi.spyOn(writer, "create");
+      const completeSpy = vi.spyOn(writer, "complete");
+      const useCase = buildUseCase(provider, undefined, writer);
+
+      await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
+
+      expect(createSpy).toHaveBeenCalledTimes(1);
+      expect(providerCompleteSpy).toHaveBeenCalledTimes(1);
+      expect(completeSpy).toHaveBeenCalledTimes(1);
+      expect(createSpy.mock.invocationCallOrder[0]).toBeLessThan(providerCompleteSpy.mock.invocationCallOrder[0]!);
+      expect(providerCompleteSpy.mock.invocationCallOrder[0]).toBeLessThan(completeSpy.mock.invocationCallOrder[0]!);
+    });
+
+    it("BLOQUANT — complete() is called exactly once with status FAILED when the generation ultimately fails", async () => {
+      const provider = new FakeAIProvider([
+        { kind: "success", result: fakeSectionAIProviderResult({ content: JSON.stringify({ content: "Texte avec source inventée.", citations: [{ sourceRef: "KB:forged-entry" }], missingDataNotes: [] }) }) },
+      ]);
+      const writer = new RecordingRoutingDecisionWriter();
+      const useCase = buildUseCase(provider, undefined, writer);
+
+      await expect(useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" })).rejects.toThrow();
+
+      expect(writer.created).toHaveLength(1);
+      expect(writer.completed).toHaveLength(1);
+      expect(writer.completed[0]?.status).toBe("FAILED");
+    });
+
+    it("BLOQUANT — a writer that throws on create()/complete() never fails an otherwise-successful generation", async () => {
+      const provider = successProvider();
+      const writer = new ThrowingRoutingDecisionWriter();
+      const useCase = buildUseCase(provider, undefined, writer);
+
+      const revision = await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
+
+      expect(revision.content).toBe("Texte généré.");
+    });
   });
 });

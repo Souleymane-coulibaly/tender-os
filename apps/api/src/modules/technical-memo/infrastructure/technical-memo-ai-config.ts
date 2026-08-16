@@ -1,3 +1,5 @@
+import { DEFAULT_AI_MODEL } from "../../../shared-kernel/ai-model-defaults";
+
 /** Config locale au module `technical-memo` (même motif que `ChatConfig`/`GenerationConfig`) —
  *  `AI_PROVIDER_REGISTRY` reste partagé (résout la clé API via `AnalysisConfig.openAiApiKey`) : ce
  *  fichier ne porte jamais de secret, uniquement les paramètres de modèle/timeout propres à ce
@@ -12,7 +14,6 @@ export type TechnicalMemoAiConfig = Readonly<{
 
 export const TECHNICAL_MEMO_AI_CONFIG = Symbol("TECHNICAL_MEMO_AI_CONFIG");
 
-const DEFAULT_AI_MODEL = "gpt-4o-mini";
 const DEFAULT_AI_TIMEOUT_MS = 60_000;
 const DEFAULT_AI_MAX_RETRIES = 2;
 const DEFAULT_AI_RETRY_DELAY_MS = 1_000;

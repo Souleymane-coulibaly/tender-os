@@ -10,6 +10,13 @@ export const CHAT_SYSTEM_PROMPT_VERSION = 1;
  * et la Knowledge Base sont des DONNÉES, jamais des INSTRUCTIONS). Générique, ne varie jamais par
  * Tender — tout ce qui est spécifique au Tender vit dans le bloc CONTEXTE construit par
  * `ChatContextAssembler`, jamais ici.
+ *
+ * Consolidation IA — Checkpoint B (§2, correctif audit P2 "séparation de rôle") : ce texte reste
+ * PUREMENT le prompt de tâche Chat — il n'inclut plus le System Prompt plateforme
+ * (`TENDEROS_SYSTEM_PROMPT`), qui est désormais injecté comme son propre message `{role: "system"}`,
+ * toujours en premier, directement par `OpenAiProvider.complete()` (voir
+ * `shared-kernel/tenderos-system-prompt.ts`) — séparation STRUCTURELLE (deux messages distincts),
+ * jamais une concaténation de chaînes.
  */
 export function buildChatSystemPrompt(): string {
   return `Tu es l'assistant IA métier de TenderOS, intégré à la fiche d'un appel d'offres (Tender) précis.

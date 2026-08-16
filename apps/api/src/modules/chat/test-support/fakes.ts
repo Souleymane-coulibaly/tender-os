@@ -6,6 +6,7 @@ import type { AuditLogWriter, ChatAuditLogEntry } from "../application/ports/aud
 import type { ConversationListFilters, ConversationRepository } from "../application/ports/conversation.repository";
 import type { DceChunkMatch, DceChunkSearchProvider } from "../application/ports/dce-chunk-search-provider";
 import type { MessageRepository } from "../application/ports/message.repository";
+import type { CompleteRoutingDecisionInput, CreateRoutingDecisionInput, RoutingDecisionWriter } from "../application/ports/routing-decision-writer";
 import type { Conversation } from "../domain/conversation.entity";
 import type { MessageCitation } from "../domain/message-citation.entity";
 import { Message, MessageRole, MessageStatus } from "../domain/message.entity";
@@ -170,6 +171,50 @@ export class FakeAIProviderRegistry implements AIProviderRegistry {
   constructor(private readonly provider: AIProvider) {}
   resolve(): AIProvider {
     return this.provider;
+  }
+}
+
+/** Consolidation IA — Checkpoint A §3/§5 (tests) — fake du port propre à Chat
+ *  (`chat/application/ports/routing-policy-resolver.ts`). `decision: null` (défaut) reproduit
+ *  l'absence de `RoutingPolicy` active : `SendMessageUseCase` doit retomber sur `ChatConfig.aiModel`
+ *  sans jamais lever. `throwOnResolve` simule un échec du résolveur lui-même (jamais une cause
+ *  d'échec de la conversation). */
+export class FakeRoutingPolicyResolver {
+  calls: { organizationId: string; promptKey: string }[] = [];
+  constructor(
+    private readonly decision: { policyId: string; policyVersion: number; primaryModel: { provider: string; modelKey: string } } | null = null,
+    private readonly throwOnResolve = false,
+  ) {}
+  async resolveActive(input: { organizationId: string; promptKey: string }) {
+    this.calls.push(input);
+    if (this.throwOnResolve) throw new Error("simulated routing policy resolution failure");
+    return this.decision;
+  }
+}
+
+/** Consolidation IA — Checkpoint D (tests) — même motif que `analysis/test-support/fakes.ts` :
+ *  enregistre chaque appel `create`/`complete` pour permettre aux tests d'affirmer qu'une décision de
+ *  routage a bien été créée AVANT le premier appel provider et complétée exactement une fois, sans
+ *  dépendre d'une base réelle. */
+export class RecordingRoutingDecisionWriter implements RoutingDecisionWriter {
+  readonly created: CreateRoutingDecisionInput[] = [];
+  readonly completed: CompleteRoutingDecisionInput[] = [];
+
+  async create(input: CreateRoutingDecisionInput): Promise<void> {
+    this.created.push(input);
+  }
+
+  async complete(input: CompleteRoutingDecisionInput): Promise<void> {
+    this.completed.push(input);
+  }
+}
+
+export class ThrowingRoutingDecisionWriter implements RoutingDecisionWriter {
+  async create(): Promise<void> {
+    throw new Error("Simulated routing decision write failure (test-only)");
+  }
+  async complete(): Promise<void> {
+    throw new Error("Simulated routing decision write failure (test-only)");
   }
 }
 

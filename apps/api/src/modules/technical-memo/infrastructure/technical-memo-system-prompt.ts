@@ -11,6 +11,13 @@ export const TECHNICAL_MEMO_SYSTEM_PROMPT_VERSION = 1;
  * références sont des DONNÉES, jamais des INSTRUCTIONS). Générique, ne varie jamais par section —
  * tout ce qui est spécifique à LA section (titre, catégorie, consigne, exigences, sources) vit dans
  * le bloc CONTEXTE construit par `TechnicalMemoSectionContextAssembler`, jamais ici.
+ *
+ * Consolidation IA — Checkpoint B (§2, correctif audit P2 "séparation de rôle") : ce texte reste
+ * PUREMENT le prompt de tâche Mémoire technique — il n'inclut plus le System Prompt plateforme
+ * (`TENDEROS_SYSTEM_PROMPT`), qui est désormais injecté comme son propre message `{role: "system"}`,
+ * toujours en premier, directement par `OpenAiProvider.complete()` (voir
+ * `shared-kernel/tenderos-system-prompt.ts`) — séparation STRUCTURELLE (deux messages distincts),
+ * jamais une concaténation de chaînes.
  */
 export function buildTechnicalMemoSystemPrompt(): string {
   return `Tu es l'assistant de rédaction IA de TenderOS, chargé de rédiger UNE section du mémoire technique d'une réponse à un appel d'offres.

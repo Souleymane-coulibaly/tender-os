@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AI_TASK_TYPES } from "../../../../shared-kernel/ai-task-type";
 
 export const IdParamSchema = z.string().uuid();
 
@@ -95,35 +96,16 @@ const ESCALATION_CONDITIONS = [
   "TIMEOUT",
 ] as const;
 
-/** Correctif Sprint 6 (audit Codex, routing dormant) — liste DÉLIBÉRÉMENT SÉPARÉE de `PROMPT_KEYS`
- *  (qui reste réservée à `CreateBenchmarkSuiteBodySchema`, jamais élargie : un benchmark ne doit
- *  jamais pouvoir cibler un type de tâche Generation, hors périmètre de ce correctif). Liste à plat
- *  des 2 `PromptKey` d'Analysis + des 17 `GenerationTaskType` — valeurs recopiées littéralement,
- *  jamais un import du module Generation (ai-benchmark ne doit dépendre d'aucun module qui le
- *  consomme). Ajouter un nouveau type de tâche routable côté Generation nécessite d'ajouter sa
- *  valeur ici aussi — coût de couplage assumé et documenté, préférable à une dépendance inversée.
+/** Consolidation IA — Checkpoint A (Foundation) : liste DÉLIBÉRÉMENT SÉPARÉE de `PROMPT_KEYS` (qui
+ *  reste réservée à `CreateBenchmarkSuiteBodySchema`, hors périmètre de ce checkpoint — voir
+ *  Checkpoint C pour l'élargissement de la couverture benchmark). Reprend désormais `AI_TASK_TYPES`
+ *  (`shared-kernel/ai-task-type.ts`), la source de vérité unique des task types routables — élimine
+ *  la resynchronisation manuelle qui existait ici (les 19 valeurs Analyse+Génération + les 2
+ *  nouvelles, `CHAT`/`TECHNICAL_MEMO_SECTION`), sans réintroduire la dépendance `ai-benchmark →
+ *  generation` que l'ancienne duplication évitait : `shared-kernel` n'a par construction aucun
+ *  consommateur qui la consommerait en retour.
  */
-const ROUTABLE_TASK_KEYS = [
-  "ANALYZE_DOCUMENT",
-  "CONSOLIDATE_TENDER_ANALYSIS",
-  "EXECUTIVE_SUMMARY",
-  "NEED_UNDERSTANDING",
-  "CRITERION_RESPONSE",
-  "METHODOLOGY",
-  "ORGANIZATION",
-  "GOVERNANCE",
-  "HUMAN_RESOURCES",
-  "TECHNICAL_RESOURCES",
-  "PLANNING",
-  "RISK_MANAGEMENT",
-  "QUALITY",
-  "SECURITY",
-  "CSR",
-  "REFERENCES",
-  "SECTION_SUMMARY",
-  "REPHRASING",
-  "CONTENT_IMPROVEMENT",
-] as const;
+const ROUTABLE_TASK_KEYS = AI_TASK_TYPES;
 
 export const CreateRoutingPolicyBodySchema = z
   .object({

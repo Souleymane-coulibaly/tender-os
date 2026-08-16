@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import {
@@ -24,6 +24,8 @@ import { ATOMIC_TRANSACTION_RUNNER, type AtomicTransactionRunner } from "../port
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { CONVERSATION_REPOSITORY, type ConversationRepository } from "../ports/conversation.repository";
 import { MESSAGE_REPOSITORY, type MessageRepository } from "../ports/message.repository";
+import { ROUTING_POLICY_RESOLVER, type RoutingPolicyResolver } from "../ports/routing-policy-resolver";
+import { ROUTING_DECISION_WRITER, type RoutingDecisionWriter } from "../ports/routing-decision-writer";
 import { OUTBOX_WRITER, type OutboxEventInput, type OutboxWriter } from "../../../outbox";
 import { ChatContextAssembler } from "../services/chat-context-assembler";
 import { ChatResponseOutputSchema } from "../services/chat-response-schema";
@@ -83,6 +85,15 @@ export class SendMessageUseCase {
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
     private readonly contextAssembler: ChatContextAssembler,
+    // Consolidation IA — Checkpoint A §3 : résolveur optionnel (comme pour Analyse, jamais le motif
+    // obligatoire de Génération — Chat a un comportement historique à préserver). Absent tant que
+    // `RoutingPolicyBridgeModule` n'est pas câblé, ou tant qu'aucune `RoutingPolicy` ACTIVE n'existe
+    // pour le task type `CHAT` ⇒ repli strict sur `ChatConfig.aiModel`, jamais une exception.
+    @Optional() @Inject(ROUTING_POLICY_RESOLVER) private readonly routingPolicyResolver?: RoutingPolicyResolver,
+    // Consolidation IA — Checkpoint D : writer optionnel (même motif best-effort qu'Analyse) — absent
+    // ou en échec, la décision n'est simplement pas persistée durablement, jamais une cause d'échec
+    // de la conversation elle-même (voir `createRoutingDecision`/`completeRoutingDecision`).
+    @Optional() @Inject(ROUTING_DECISION_WRITER) private readonly routingDecisionWriter?: RoutingDecisionWriter,
   ) {}
 
   async execute(command: SendMessageCommand): Promise<MessageSummary> {
@@ -231,12 +242,51 @@ export class SendMessageUseCase {
     priorMessages: readonly Message[];
     assistantMessageId: string;
   }): Promise<GenerationOutcome> {
+    // Consolidation IA — Checkpoint A §3 : consulte le moteur de routing partagé (task type
+    // `CHAT`) avant de retomber sur le modèle statique — même discipline que
+    // `resolveModelForAnalysis` (analysis/application/services/model-routing-resolver.ts), jamais
+    // une cause d'échec de la conversation si la résolution échoue ou ne trouve aucune policy.
+    let resolvedModel = this.config.aiModel;
+    let resolvedProvider = this.config.aiProvider;
+    let routingPolicyId: string | undefined;
+    let routingPolicyVersion: number | undefined;
+    if (this.routingPolicyResolver) {
+      try {
+        const decision = await this.routingPolicyResolver.resolveActive({ organizationId: input.command.organizationId, promptKey: "CHAT" });
+        if (decision) {
+          resolvedModel = decision.primaryModel.modelKey;
+          resolvedProvider = decision.primaryModel.provider;
+          routingPolicyId = decision.policyId;
+          routingPolicyVersion = decision.policyVersion;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Routing policy resolution failed for conversation ${input.command.conversationId}, falling back to the static model configuration: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
     let provider: AIProvider;
     try {
-      provider = this.providerRegistry.resolve(this.config.aiProvider ? { provider: this.config.aiProvider } : undefined);
+      provider = this.providerRegistry.resolve(resolvedProvider ? { provider: resolvedProvider } : undefined);
     } catch (error) {
       return this.toFailureOutcome(error);
     }
+
+    // Consolidation IA — Checkpoint D : la décision est créée AVANT le premier appel provider
+    // (même discipline qu'Analyse/Génération), best-effort — voir `createRoutingDecision`.
+    const routingDecisionId = this.idGenerator.generate();
+    await this.createRoutingDecision({
+      id: routingDecisionId,
+      command: input.command,
+      routingPolicyId,
+      routingPolicyVersion,
+      primaryProvider: resolvedProvider ?? provider.name,
+      primaryModel: resolvedModel,
+    });
+    const completeRoutingDecision = (outcome: GenerationOutcome): Promise<GenerationOutcome> =>
+      this.completeRoutingDecision({ id: routingDecisionId, outcome, selectedProvider: provider.name }).then(() => outcome);
 
     const context = await this.contextAssembler.assemble({
       organizationId: input.command.organizationId,
@@ -254,7 +304,7 @@ export class SendMessageUseCase {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const result = await this.callWithTimeout(provider, {
-          model: this.config.aiModel,
+          model: resolvedModel,
           systemPrompt: buildChatSystemPrompt(),
           userPrompt,
           responseSchemaName: "CHAT_RESPONSE",
@@ -263,21 +313,79 @@ export class SendMessageUseCase {
         });
 
         const citations = this.parseAndValidate(result.content, context.knownReferences, input.command, input.assistantMessageId);
-        return { kind: "completed", content: JSON.parse(result.content).answer as string, model: this.config.aiModel, citations, usage: result.usage };
+        return await completeRoutingDecision({ kind: "completed", content: JSON.parse(result.content).answer as string, model: resolvedModel, citations, usage: result.usage });
       } catch (error) {
         const isLastAttempt = attempt === maxAttempts;
         if (!isRetryableAiError(error) || isLastAttempt) {
           // Un appel provider a été RÉELLEMENT tenté (au moins cette itération) — facturable au
           // sens du garde-fou volume IA, que l'échec vienne du réseau ou de la validation
           // sortie/citations APRÈS une réponse effectivement reçue (voir `Message.fail`).
-          return this.toFailureOutcome(error, this.config.aiModel);
+          return await completeRoutingDecision(this.toFailureOutcome(error, resolvedModel));
         }
         this.logger.warn(`AI provider call failed (retryable) for conversation ${input.command.conversationId}, attempt ${attempt}/${maxAttempts}: ${error instanceof Error ? error.message : String(error)}`);
         await sleep(this.config.aiRetryDelayMs * attempt);
       }
     }
 
-    return this.toFailureOutcome(new AiTimeoutError({ timeoutMs: this.config.aiTimeoutMs }), this.config.aiModel);
+    return await completeRoutingDecision(this.toFailureOutcome(new AiTimeoutError({ timeoutMs: this.config.aiTimeoutMs }), resolvedModel));
+  }
+
+  /** Audit Codex-style best-effort (Checkpoint D) — même discipline que
+   *  `ProcessAnalysisJobUseCase.createRoutingDecision` : jamais une cause d'échec de la conversation,
+   *  jamais silencieuse non plus (journalisée en ERROR). Créée avant le premier appel provider. */
+  private async createRoutingDecision(input: {
+    id: string;
+    command: SendMessageCommand;
+    routingPolicyId: string | undefined;
+    routingPolicyVersion: number | undefined;
+    primaryProvider: string;
+    primaryModel: string;
+  }): Promise<void> {
+    if (!this.routingDecisionWriter) return;
+    try {
+      await this.routingDecisionWriter.create({
+        id: input.id,
+        organizationId: input.command.organizationId,
+        tenderId: input.command.tenderId,
+        conversationId: input.command.conversationId,
+        promptKey: "CHAT",
+        routingPolicyId: input.routingPolicyId,
+        routingPolicyVersion: input.routingPolicyVersion,
+        primaryProvider: input.primaryProvider,
+        primaryModel: input.primaryModel,
+        occurredAt: this.clock.now(),
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to persist routing decision ${input.id} for conversation ${input.command.conversationId} (conversation continues normally): ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /** Mise à jour finale (une seule fois) — jamais de palier d'escalade pour Chat (retry simple sur
+   *  le même modèle principal), `fallbackLevel`/`fallbackAttempts` toujours `0`. */
+  private async completeRoutingDecision(input: { id: string; outcome: GenerationOutcome; selectedProvider: string }): Promise<void> {
+    if (!this.routingDecisionWriter) return;
+    try {
+      await this.routingDecisionWriter.complete({
+        id: input.id,
+        selectedProvider: input.outcome.kind === "completed" ? input.selectedProvider : undefined,
+        selectedModel: input.outcome.model,
+        fallbackLevel: 0,
+        fallbackAttempts: 0,
+        inputTokenCount: input.outcome.kind === "completed" ? input.outcome.usage.inputTokens : undefined,
+        outputTokenCount: input.outcome.kind === "completed" ? input.outcome.usage.outputTokens : undefined,
+        status: input.outcome.kind === "completed" ? "SUCCEEDED" : "FAILED",
+        failureReason: input.outcome.kind === "failed" ? input.outcome.errorMessage.slice(0, 60) : undefined,
+        occurredAt: this.clock.now(),
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to complete routing decision ${input.id} (chat result already acquired, unaffected): ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   private buildHistoryBlock(priorMessages: readonly Message[]): string {

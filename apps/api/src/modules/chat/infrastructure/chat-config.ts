@@ -1,3 +1,5 @@
+import { DEFAULT_AI_MODEL } from "../../../shared-kernel/ai-model-defaults";
+
 /** Config locale au module Chat (même motif que `GenerationConfig`) — `AI_PROVIDER_REGISTRY` reste
  *  partagé (résout la clé API via `AnalysisConfig.openAiApiKey`, voir `AnalysisModule`) : ce fichier
  *  ne porte jamais de secret, uniquement les paramètres de modèle/timeout propres au Chat. */
@@ -18,7 +20,6 @@ export type ChatConfig = Readonly<{
 
 export const CHAT_CONFIG = Symbol("CHAT_CONFIG");
 
-const DEFAULT_AI_MODEL = "gpt-4o-mini";
 const DEFAULT_AI_TIMEOUT_MS = 60_000;
 const DEFAULT_AI_MAX_RETRIES = 2;
 const DEFAULT_AI_RETRY_DELAY_MS = 1_000;

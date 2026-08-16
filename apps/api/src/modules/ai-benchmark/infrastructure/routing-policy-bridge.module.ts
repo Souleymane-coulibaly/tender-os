@@ -3,6 +3,10 @@ import { ROUTING_POLICY_RESOLVER } from "../../analysis/application/ports/routin
 import { ROUTING_DECISION_WRITER } from "../../analysis/application/ports/routing-decision-writer";
 import { ROUTING_POLICY_RESOLVER as GENERATION_ROUTING_POLICY_RESOLVER } from "../../generation/application/ports/routing-policy-resolver";
 import { GENERATION_ROUTING_DECISION_WRITER } from "../../generation/application/ports/routing-decision-writer";
+import { ROUTING_POLICY_RESOLVER as CHAT_ROUTING_POLICY_RESOLVER } from "../../chat/application/ports/routing-policy-resolver";
+import { ROUTING_DECISION_WRITER as CHAT_ROUTING_DECISION_WRITER } from "../../chat/application/ports/routing-decision-writer";
+import { ROUTING_POLICY_RESOLVER as TECHNICAL_MEMO_ROUTING_POLICY_RESOLVER } from "../../technical-memo/application/ports/routing-policy-resolver";
+import { ROUTING_DECISION_WRITER as TECHNICAL_MEMO_ROUTING_DECISION_WRITER } from "../../technical-memo/application/ports/routing-decision-writer";
 import { PRICING_SNAPSHOT_READER } from "../../pricing/application/ports/pricing-snapshot-reader";
 import { ROUTING_MODEL_READER } from "../../pricing/application/ports/routing-model-reader";
 import { AI_MODEL_REPOSITORY } from "../application/ports/ai-model.repository";
@@ -16,6 +20,8 @@ import { PrismaRoutingPolicyRepository } from "./prisma-routing-policy.repositor
 import { PrismaRoutingPolicyResolver } from "./prisma-routing-policy-resolver";
 import { PrismaRoutingDecisionWriter } from "./prisma-routing-decision.writer";
 import { PrismaGenerationRoutingDecisionWriter } from "./prisma-generation-routing-decision.writer";
+import { PrismaChatRoutingDecisionWriter } from "./prisma-chat-routing-decision.writer";
+import { PrismaTechnicalMemoRoutingDecisionWriter } from "./prisma-technical-memo-routing-decision.writer";
 
 /**
  * Pont `@Global()` entre `analysis` (qui définit et consomme `ROUTING_POLICY_RESOLVER` et, depuis
@@ -57,6 +63,16 @@ import { PrismaGenerationRoutingDecisionWriter } from "./prisma-generation-routi
     { provide: GENERATION_ROUTING_DECISION_WRITER, useClass: PrismaGenerationRoutingDecisionWriter },
     { provide: ROUTING_MODEL_READER, useClass: PrismaRoutingModelReader },
     { provide: PRICING_SNAPSHOT_READER, useClass: PrismaPricingSnapshotReader },
+    // Consolidation IA — Checkpoint A §3 : même resolver, zéro nouvelle classe — Chat et Mémoire
+    // technique rejoignent le même moteur de routing qu'Analyse/Génération (jamais un second
+    // mécanisme).
+    { provide: CHAT_ROUTING_POLICY_RESOLVER, useClass: PrismaRoutingPolicyResolver },
+    { provide: TECHNICAL_MEMO_ROUTING_POLICY_RESOLVER, useClass: PrismaRoutingPolicyResolver },
+    // Consolidation IA — Checkpoint D : writer de décision pour Chat/Mémoire technique, régime
+    // BEST-EFFORT (même motif qu'Analyse, jamais celui, obligatoire, de Génération) — comble le
+    // trou explicitement laissé ouvert par Checkpoint A (résolution câblée, audit trail absent).
+    { provide: CHAT_ROUTING_DECISION_WRITER, useClass: PrismaChatRoutingDecisionWriter },
+    { provide: TECHNICAL_MEMO_ROUTING_DECISION_WRITER, useClass: PrismaTechnicalMemoRoutingDecisionWriter },
   ],
   exports: [
     ROUTING_POLICY_RESOLVER,
@@ -65,6 +81,10 @@ import { PrismaGenerationRoutingDecisionWriter } from "./prisma-generation-routi
     GENERATION_ROUTING_DECISION_WRITER,
     ROUTING_MODEL_READER,
     PRICING_SNAPSHOT_READER,
+    CHAT_ROUTING_POLICY_RESOLVER,
+    TECHNICAL_MEMO_ROUTING_POLICY_RESOLVER,
+    CHAT_ROUTING_DECISION_WRITER,
+    TECHNICAL_MEMO_ROUTING_DECISION_WRITER,
   ],
 })
 export class RoutingPolicyBridgeModule {}

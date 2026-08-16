@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { TENDEROS_SYSTEM_PROMPT } from "../../../shared-kernel/tenderos-system-prompt";
 import { StaticPromptTemplateProvider } from "./static-prompt-template.provider";
 import { PromptKey } from "../application/ports/prompt-template.port";
 import { DocumentAnalysisOutputSchema } from "../application/schemas/business/document-analysis-output.schema";
@@ -60,5 +61,20 @@ describe("StaticPromptTemplateProvider — couverture prompt/schéma", () => {
     assertPromptMentionsEveryField(fullText, requiredItemFieldNames(TenderConsolidationOutputSchema.shape.risks));
     assertPromptMentionsEveryField(fullText, requiredItemFieldNames(TenderConsolidationOutputSchema.shape.questions));
     assertPromptMentionsEveryField(fullText, requiredFieldNames(TenderConsolidationOutputSchema.shape.summary));
+  });
+
+  describe("Consolidation IA — Checkpoint B §2, correctif audit P2 (séparation structurelle)", () => {
+    // Le System Prompt plateforme n'est plus concaténé ici — il est injecté comme son propre
+    // message `{role: "system"}` par `OpenAiProvider.complete()` (voir openai.ai-provider.spec.ts).
+    // Ces `systemPrompt` de rendu restent donc PUREMENT le texte de tâche Analyse.
+    it("ANALYZE_DOCUMENT's systemPrompt never embeds the platform System Prompt text", () => {
+      const rendered = provider.render(PromptKey.AnalyzeDocument, { chunksText: "[0] exemple" });
+      expect(rendered.systemPrompt).not.toContain(TENDEROS_SYSTEM_PROMPT);
+    });
+
+    it("CONSOLIDATE_TENDER_ANALYSIS's systemPrompt never embeds the platform System Prompt text", () => {
+      const rendered = provider.render(PromptKey.ConsolidateTenderAnalysis, { documentAnalysesJson: "[]" });
+      expect(rendered.systemPrompt).not.toContain(TENDEROS_SYSTEM_PROMPT);
+    });
   });
 });

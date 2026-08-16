@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import { AI_PROVIDER_REGISTRY, AiTimeoutError, type AIProvider, type AIProviderRegistry, type AIProviderRequest, type AIProviderResult } from "../../../analysis";
@@ -13,6 +13,8 @@ import { isRetryableAiError } from "../policies/ai-error-classification";
 import { assertTechnicalMemoAccess } from "../policies/technical-memo-access.policy";
 import { ATOMIC_TRANSACTION_RUNNER, type AtomicTransactionRunner } from "../ports/atomic-transaction-runner";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
+import { ROUTING_POLICY_RESOLVER, type RoutingPolicyResolver } from "../ports/routing-policy-resolver";
+import { ROUTING_DECISION_WRITER, type RoutingDecisionWriter } from "../ports/routing-decision-writer";
 import { TECHNICAL_MEMO_SECTION_REPOSITORY, type TechnicalMemoSectionRepository } from "../ports/technical-memo-section.repository";
 import {
   TECHNICAL_MEMO_SECTION_REQUIREMENT_REPOSITORY,
@@ -73,6 +75,14 @@ export class GenerateTechnicalMemoSectionUseCase {
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly accessService: TechnicalMemoAccessService,
     private readonly contextAssembler: TechnicalMemoSectionContextAssembler,
+    // Consolidation IA — Checkpoint A §3 : résolveur optionnel (motif d'Analyse, jamais celui,
+    // obligatoire, de Génération — Mémoire technique a un comportement historique à préserver).
+    // Absent ⇒ repli strict sur `TechnicalMemoAiConfig.aiModel`, jamais une exception.
+    @Optional() @Inject(ROUTING_POLICY_RESOLVER) private readonly routingPolicyResolver?: RoutingPolicyResolver,
+    // Consolidation IA — Checkpoint D : writer optionnel (même motif best-effort qu'Analyse) — absent
+    // ou en échec, la décision n'est simplement pas persistée durablement, jamais une cause d'échec
+    // de la génération de section elle-même (voir `createRoutingDecision`/`completeRoutingDecision`).
+    @Optional() @Inject(ROUTING_DECISION_WRITER) private readonly routingDecisionWriter?: RoutingDecisionWriter,
   ) {}
 
   async execute(command: GenerateTechnicalMemoSectionCommand): Promise<TechnicalMemoSectionRevision> {
@@ -126,12 +136,51 @@ export class GenerateTechnicalMemoSectionUseCase {
   private async generate(input: { command: GenerateTechnicalMemoSectionCommand; memo: Awaited<ReturnType<TechnicalMemoAccessService["loadMemo"]>>; section: Awaited<ReturnType<TechnicalMemoSectionRepository["findById"]>> }): Promise<GenerationOutcome> {
     const section = input.section!;
 
+    // Consolidation IA — Checkpoint A §3 : consulte le moteur de routing partagé (task type
+    // `TECHNICAL_MEMO_SECTION`) avant de retomber sur le modèle statique — jamais une cause
+    // d'échec de la génération si la résolution échoue ou ne trouve aucune policy active.
+    let resolvedModel = this.config.aiModel;
+    let resolvedProvider = this.config.aiProvider;
+    let routingPolicyId: string | undefined;
+    let routingPolicyVersion: number | undefined;
+    if (this.routingPolicyResolver) {
+      try {
+        const decision = await this.routingPolicyResolver.resolveActive({ organizationId: input.command.organizationId, promptKey: "TECHNICAL_MEMO_SECTION" });
+        if (decision) {
+          resolvedModel = decision.primaryModel.modelKey;
+          resolvedProvider = decision.primaryModel.provider;
+          routingPolicyId = decision.policyId;
+          routingPolicyVersion = decision.policyVersion;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Routing policy resolution failed for technical memo section ${input.command.technicalMemoSectionId}, falling back to the static model configuration: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
     let provider: AIProvider;
     try {
-      provider = this.providerRegistry.resolve(this.config.aiProvider ? { provider: this.config.aiProvider } : undefined);
+      provider = this.providerRegistry.resolve(resolvedProvider ? { provider: resolvedProvider } : undefined);
     } catch (error) {
       return this.toFailureOutcome(error);
     }
+
+    // Consolidation IA — Checkpoint D : la décision est créée AVANT le premier appel provider
+    // (même discipline qu'Analyse/Génération), best-effort — voir `createRoutingDecision`.
+    const routingDecisionId = this.idGenerator.generate();
+    await this.createRoutingDecision({
+      id: routingDecisionId,
+      command: input.command,
+      tenderId: input.memo.tenderId,
+      routingPolicyId,
+      routingPolicyVersion,
+      primaryProvider: resolvedProvider ?? provider.name,
+      primaryModel: resolvedModel,
+    });
+    const completeRoutingDecision = (outcome: GenerationOutcome): Promise<GenerationOutcome> =>
+      this.completeRoutingDecision({ id: routingDecisionId, outcome, selectedProvider: provider.name }).then(() => outcome);
 
     const context = await this.contextAssembler.assemble({
       organizationId: input.command.organizationId,
@@ -148,7 +197,7 @@ export class GenerateTechnicalMemoSectionUseCase {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const result = await this.callWithTimeout(provider, {
-          model: this.config.aiModel,
+          model: resolvedModel,
           systemPrompt: buildTechnicalMemoSystemPrompt(),
           userPrompt,
           responseSchemaName: "TECHNICAL_MEMO_SECTION_RESPONSE",
@@ -157,18 +206,77 @@ export class GenerateTechnicalMemoSectionUseCase {
         });
 
         const { citationMatches, missingDataNotes, content } = this.parseAndValidate(result.content, context.knownReferences);
-        return { kind: "completed", content, model: this.config.aiModel, citationMatches, missingDataNotes, usage: result.usage };
+        return await completeRoutingDecision({ kind: "completed", content, model: resolvedModel, citationMatches, missingDataNotes, usage: result.usage });
       } catch (error) {
         const isLastAttempt = attempt === maxAttempts;
         if (!isRetryableAiError(error) || isLastAttempt) {
-          return this.toFailureOutcome(error);
+          return await completeRoutingDecision(this.toFailureOutcome(error));
         }
         this.logger.warn(`AI provider call failed (retryable) for technical memo section ${input.command.technicalMemoSectionId}, attempt ${attempt}/${maxAttempts}: ${error instanceof Error ? error.message : String(error)}`);
         await sleep(this.config.aiRetryDelayMs * attempt);
       }
     }
 
-    return this.toFailureOutcome(new AiTimeoutError({ timeoutMs: this.config.aiTimeoutMs }));
+    return await completeRoutingDecision(this.toFailureOutcome(new AiTimeoutError({ timeoutMs: this.config.aiTimeoutMs })));
+  }
+
+  /** Best-effort (Checkpoint D) — même discipline que `ProcessAnalysisJobUseCase.createRoutingDecision` :
+   *  jamais une cause d'échec de la génération, jamais silencieuse non plus (journalisée en ERROR).
+   *  Créée avant le premier appel provider. */
+  private async createRoutingDecision(input: {
+    id: string;
+    command: GenerateTechnicalMemoSectionCommand;
+    tenderId: string;
+    routingPolicyId: string | undefined;
+    routingPolicyVersion: number | undefined;
+    primaryProvider: string;
+    primaryModel: string;
+  }): Promise<void> {
+    if (!this.routingDecisionWriter) return;
+    try {
+      await this.routingDecisionWriter.create({
+        id: input.id,
+        organizationId: input.command.organizationId,
+        tenderId: input.tenderId,
+        technicalMemoSectionId: input.command.technicalMemoSectionId,
+        promptKey: "TECHNICAL_MEMO_SECTION",
+        routingPolicyId: input.routingPolicyId,
+        routingPolicyVersion: input.routingPolicyVersion,
+        primaryProvider: input.primaryProvider,
+        primaryModel: input.primaryModel,
+        occurredAt: this.clock.now(),
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to persist routing decision ${input.id} for technical memo section ${input.command.technicalMemoSectionId} (generation continues normally): ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /** Mise à jour finale (une seule fois) — jamais de palier d'escalade (retry simple sur le même
+   *  modèle principal), `fallbackLevel`/`fallbackAttempts` toujours `0`. */
+  private async completeRoutingDecision(input: { id: string; outcome: GenerationOutcome; selectedProvider: string }): Promise<void> {
+    if (!this.routingDecisionWriter) return;
+    try {
+      await this.routingDecisionWriter.complete({
+        id: input.id,
+        selectedProvider: input.outcome.kind === "completed" ? input.selectedProvider : undefined,
+        selectedModel: input.outcome.kind === "completed" ? input.outcome.model : undefined,
+        fallbackLevel: 0,
+        fallbackAttempts: 0,
+        inputTokenCount: input.outcome.kind === "completed" ? input.outcome.usage.inputTokens : undefined,
+        outputTokenCount: input.outcome.kind === "completed" ? input.outcome.usage.outputTokens : undefined,
+        status: input.outcome.kind === "completed" ? "SUCCEEDED" : "FAILED",
+        failureReason: input.outcome.kind === "failed" ? input.outcome.errorMessage.slice(0, 60) : undefined,
+        occurredAt: this.clock.now(),
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to complete routing decision ${input.id} (technical memo section result already acquired, unaffected): ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /** JSON.parse + validation Zod + validation des citations, HORS transaction — une sortie invalide

@@ -42,6 +42,13 @@ function requireConfidenceOn(arrayNames: readonly string[]): string {
  * statique/applicatif (mission §"Prompts" — aucun écran d'administration, aucune édition
  * dynamique) : ce fichier est la SEULE source de contenu de prompt, jamais dispersé dans les use
  * cases (mission §"éviter les prompts dispersés dans les use cases").
+ *
+ * Consolidation IA — Checkpoint B (§2, correctif audit P2 "séparation de rôle") : les 3
+ * `systemPrompt` ci-dessous restent PUREMENT le prompt de tâche Analyse — ils n'incluent plus le
+ * System Prompt plateforme (`TENDEROS_SYSTEM_PROMPT`), désormais injecté comme son propre message
+ * `{role: "system"}`, toujours en premier, directement par `OpenAiProvider.complete()` (voir
+ * `shared-kernel/tenderos-system-prompt.ts`) — séparation STRUCTURELLE (deux messages distincts),
+ * jamais une concaténation de chaînes.
  */
 @Injectable()
 export class StaticPromptTemplateProvider implements PromptTemplatePort {

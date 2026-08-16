@@ -7,6 +7,7 @@ import type { TechnicalMemoSectionRepository } from "../application/ports/techni
 import type { TechnicalMemoSectionRequirementRepository } from "../application/ports/technical-memo-section-requirement.repository";
 import type { TechnicalMemoSectionRevisionRepository } from "../application/ports/technical-memo-section-revision.repository";
 import type { TechnicalMemoRepository } from "../application/ports/technical-memo.repository";
+import type { CompleteRoutingDecisionInput, CreateRoutingDecisionInput, RoutingDecisionWriter } from "../application/ports/routing-decision-writer";
 import type { TechnicalMemo } from "../domain/technical-memo.aggregate";
 import type { TechnicalMemoSection } from "../domain/technical-memo-section.entity";
 import type { TechnicalMemoSectionCitation } from "../domain/technical-memo-section-citation.value-object";
@@ -156,6 +157,50 @@ export class FakeAIProviderRegistry implements AIProviderRegistry {
   constructor(private readonly provider: AIProvider) {}
   resolve(): AIProvider {
     return this.provider;
+  }
+}
+
+/** Consolidation IA — Checkpoint A §3/§5 (tests) — fake du port propre à Mémoire technique
+ *  (`technical-memo/application/ports/routing-policy-resolver.ts`), même motif que le fake
+ *  homonyme de `chat/test-support/fakes.ts`. `decision: null` (défaut) reproduit l'absence de
+ *  `RoutingPolicy` active : `GenerateTechnicalMemoSectionUseCase` doit retomber sur
+ *  `TechnicalMemoAiConfig.aiModel` sans jamais lever. */
+export class FakeRoutingPolicyResolver {
+  calls: { organizationId: string; promptKey: string }[] = [];
+  constructor(
+    private readonly decision: { policyId: string; policyVersion: number; primaryModel: { provider: string; modelKey: string } } | null = null,
+    private readonly throwOnResolve = false,
+  ) {}
+  async resolveActive(input: { organizationId: string; promptKey: string }) {
+    this.calls.push(input);
+    if (this.throwOnResolve) throw new Error("simulated routing policy resolution failure");
+    return this.decision;
+  }
+}
+
+/** Consolidation IA — Checkpoint D (tests) — même motif que `analysis/test-support/fakes.ts`/
+ *  `chat/test-support/fakes.ts` : enregistre chaque appel `create`/`complete` pour permettre aux
+ *  tests d'affirmer qu'une décision de routage a bien été créée AVANT le premier appel provider et
+ *  complétée exactement une fois, sans dépendre d'une base réelle. */
+export class RecordingRoutingDecisionWriter implements RoutingDecisionWriter {
+  readonly created: CreateRoutingDecisionInput[] = [];
+  readonly completed: CompleteRoutingDecisionInput[] = [];
+
+  async create(input: CreateRoutingDecisionInput): Promise<void> {
+    this.created.push(input);
+  }
+
+  async complete(input: CompleteRoutingDecisionInput): Promise<void> {
+    this.completed.push(input);
+  }
+}
+
+export class ThrowingRoutingDecisionWriter implements RoutingDecisionWriter {
+  async create(): Promise<void> {
+    throw new Error("Simulated routing decision write failure (test-only)");
+  }
+  async complete(): Promise<void> {
+    throw new Error("Simulated routing decision write failure (test-only)");
   }
 }
 

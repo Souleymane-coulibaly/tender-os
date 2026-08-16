@@ -1,4 +1,6 @@
+import { Logger } from "@nestjs/common";
 import { z } from "zod";
+import { TENDEROS_SYSTEM_PROMPT, TENDEROS_SYSTEM_PROMPT_VERSION } from "../../../shared-kernel/tenderos-system-prompt";
 import { AnalysisProvider } from "../domain/analysis-provider";
 import {
   AiAuthenticationFailedError,
@@ -85,9 +87,19 @@ async function describeProviderErrorBody(response: Response): Promise<string | u
  * officiel `openai` (évite une dépendance supplémentaire pour un socle qui ne produit encore aucune
  * analyse métier réelle). Anthropic/Mistral/Azure OpenAI restent des extensions futures
  * documentées (voir `AIProviderRegistry`), jamais implémentées ici.
+ *
+ * Consolidation IA — Checkpoint B, correctifs audit Codex (P2) : (1) "séparation de rôle" — seul
+ * adapter réel utilisé par les 4 pipelines (Chat/Mémoire technique/Analyse/Génération), c'est ICI,
+ * et ICI SEULEMENT, que `TENDEROS_SYSTEM_PROMPT` est injecté comme son propre message
+ * `{role: "system"}`, toujours en premier — jamais concaténé au prompt de tâche par un appelant
+ * (voir `shared-kernel/tenderos-system-prompt.ts`). (2) "traçabilité incomplète" — chaque appel
+ * réussi journalise `TENDEROS_SYSTEM_PROMPT_VERSION` (log structuré, aucune migration Prisma requise
+ * — la version plateforme n'est pas propre à un tenant/enregistrement, un log suffit à l'audit).
  */
 export class OpenAiProvider implements AIProvider {
   readonly name = AnalysisProvider.OpenAi;
+
+  private readonly logger = new Logger(OpenAiProvider.name);
 
   constructor(private readonly apiKey: string) {}
 
@@ -102,6 +114,7 @@ export class OpenAiProvider implements AIProvider {
         body: JSON.stringify({
           model: request.model,
           messages: [
+            { role: "system", content: TENDEROS_SYSTEM_PROMPT },
             { role: "system", content: request.systemPrompt },
             { role: "user", content: request.userPrompt },
           ],
@@ -158,6 +171,10 @@ export class OpenAiProvider implements AIProvider {
     if (choice.message.content === null) {
       throw new AiInvalidResponseError({ reason: "response body has no content and no refusal" });
     }
+
+    this.logger.log(
+      `AI completion succeeded: model=${request.model}, platformSystemPromptVersion=${TENDEROS_SYSTEM_PROMPT_VERSION}, responseSchemaName=${request.responseSchemaName}, durationMs=${durationMs}, providerRequestId=${parsed.data.id ?? "n/a"}`,
+    );
 
     return {
       content: choice.message.content,

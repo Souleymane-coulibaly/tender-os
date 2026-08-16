@@ -5,7 +5,10 @@ export default defineConfig({
   plugins: [swc.vite()],
   test: {
     root: "./",
-    include: ["src/**/*.spec.ts"],
+    // Consolidation IA — Checkpoint C : `scripts/*.spec.ts` couvre les fonctions pures/testables des
+    // scripts opérationnels autonomes (même motif que `prisma/*.ts`, hors de `src/`) — aucun appel
+    // réseau réel dans ces tests (fetch stubbed, voir `scripts/compliance-probe.spec.ts`).
+    include: ["src/**/*.spec.ts", "scripts/**/*.spec.ts"],
     environment: "node",
     // Correctif audit Sprint 18 — chaque spec d'intégration boote son propre `AppModule` complet
     // (`Test.createTestingModule`), donc ses propres workers à minuteur réel (Outbox, livraison

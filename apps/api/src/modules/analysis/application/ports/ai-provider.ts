@@ -8,8 +8,12 @@
  */
 export type AIProviderRequest = Readonly<{
   model: string;
-  /** Instruction système — reste un texte technique minimal pour cette tranche (voir
-   *  `PromptTemplatePort`), jamais un prompt métier RC/CCTP/CCAP. */
+  /** Instruction système DE TÂCHE uniquement — reste un texte technique minimal pour cette tranche
+   *  (voir `PromptTemplatePort`), jamais un prompt métier RC/CCTP/CCAP. Consolidation IA —
+   *  Checkpoint B (correctif audit P2 "séparation de rôle") : ne contient JAMAIS le System Prompt
+   *  plateforme (`TENDEROS_SYSTEM_PROMPT`) — celui-ci est injecté séparément et structurellement
+   *  (son propre message `{role: "system"}`, toujours en premier) par l'adapter
+   *  (`infrastructure/openai.ai-provider.ts`), jamais concaténé ici par l'appelant. */
   systemPrompt: string;
   userPrompt: string;
   /** Schéma JSON attendu de la réponse (mission §"Validation de sortie") — transmis au provider

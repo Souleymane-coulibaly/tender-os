@@ -2822,15 +2822,21 @@ model RoutingDecision {
 
   /// Correctif Sprint 6 (audit Codex P1 — "fausse routingDecisionId") : `analysisId` devient
   /// nullable et `generationId` est ajouté — une RoutingDecision sert désormais EXACTEMENT UNE
-  /// cible, Analysis OU Generation, jamais aucune ni les deux (voir la contrainte CHECK ajoutée en
-  /// migration, `routing_decisions_analysis_or_generation_check`). Aucune FK Prisma déclarée sur
-  /// ces deux colonnes (même discipline que l'`analysisId` d'origine, jamais garantie qu'au niveau
-  /// applicatif) — uniquement des index pour la recherche par cible.
-  analysisId   String? @map("analysis_id") @db.Uuid
-  generationId String? @map("generation_id") @db.Uuid
+  /// cible parmi les 4 pipelines IA (voir la contrainte CHECK ajoutée en migration,
+  /// `routing_decisions_exactly_one_target_check`, étendue en Checkpoint D à `conversationId`/
+  /// `technicalMemoSectionId`). Aucune FK Prisma déclarée sur ces colonnes (même discipline que
+  /// l'`analysisId` d'origine, jamais garantie qu'au niveau applicatif) — uniquement des index pour
+  /// la recherche par cible.
+  analysisId             String? @map("analysis_id") @db.Uuid
+  generationId           String? @map("generation_id") @db.Uuid
+  /// Consolidation IA — Checkpoint D (Chat).
+  conversationId         String? @map("conversation_id") @db.Uuid
+  /// Consolidation IA — Checkpoint D (Mémoire technique).
+  technicalMemoSectionId String? @map("technical_memo_section_id") @db.Uuid
 
-  /// ANALYZE_DOCUMENT | CONSOLIDATE_TENDER_ANALYSIS (Analysis) ou l'un des 17 GenerationTaskType
-  /// (Sprint 6) — même vocabulaire que RoutingPolicy.promptKey, jamais un type fermé importé ici.
+  /// ANALYZE_DOCUMENT | CONSOLIDATE_TENDER_ANALYSIS (Analysis), l'un des 17 GenerationTaskType
+  /// (Sprint 6), CHAT ou TECHNICAL_MEMO_SECTION (Checkpoint D) — même vocabulaire que
+  /// RoutingPolicy.promptKey, jamais un type fermé importé ici.
   promptKey String @map("prompt_key") @db.VarChar(40)
 
   /// NULL = chemin legacy (aucune RoutingPolicy consultée, résolution par variable d'environnement
@@ -2870,6 +2876,8 @@ model RoutingDecision {
   @@unique([id, organizationId])
   @@index([organizationId, analysisId])
   @@index([organizationId, generationId])
+  @@index([organizationId, conversationId])
+  @@index([organizationId, technicalMemoSectionId])
   @@index([organizationId, promptKey, createdAt])
   @@map("routing_decisions")
 }
