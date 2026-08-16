@@ -70,7 +70,7 @@ describe("DceSection", () => {
   it("shows an initialization action when no DCE exists yet", () => {
     render(<DceSection tenderId="tender-1" dce={null} documents={[]} canManage={true} canDelete={true} canAnalyze={true} />);
 
-    expect(screen.getByText(/Aucun DCE initialise/)).toBeInTheDocument();
+    expect(screen.getByText(/Aucun DCE initialisé/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Initialiser le DCE" })).toBeInTheDocument();
   });
 
@@ -97,7 +97,7 @@ describe("DceSection", () => {
 
     expect(fetchDceSectionData).toHaveBeenCalledWith("tender-1");
     expect(await screen.findByText("Aucun document du DCE.")).toBeInTheDocument();
-    expect(screen.queryByText(/Aucun DCE initialise/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Aucun DCE initialisé/)).not.toBeInTheDocument();
   });
 
   it("lists existing DCE documents once a DCE exists", () => {

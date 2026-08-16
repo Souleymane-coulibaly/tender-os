@@ -63,7 +63,7 @@ describe("ChecklistSection", () => {
   it("shows an empty state when there are no checklist items", () => {
     render(<ChecklistSection tenderId="tender-1" items={[]} lots={LOTS} progress={null} />);
 
-    expect(screen.getByText("Aucun element de checklist.")).toBeInTheDocument();
+    expect(screen.getByText("Aucun élément de checklist")).toBeInTheDocument();
   });
 
   it("lists existing items and lets the status be changed", async () => {
@@ -72,7 +72,7 @@ describe("ChecklistSection", () => {
 
     expect(screen.getByText("Fournir attestation")).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByDisplayValue("A faire"), "COMPLETED");
+    await user.selectOptions(screen.getByDisplayValue("À faire"), "COMPLETED");
 
     expect(changeChecklistItemStatusAction).toHaveBeenCalledWith("tender-1", "item-1", "COMPLETED");
   });
@@ -87,8 +87,9 @@ describe("ChecklistSection", () => {
   it("shows the progress summary when provided", () => {
     render(<ChecklistSection tenderId="tender-1" items={ITEMS} lots={LOTS} progress={PROGRESS} />);
 
-    // 0 validé sur 1 applicable dans la fixture PROGRESS ci-dessus.
-    expect(screen.getByText("0% prête")).toBeInTheDocument();
+    // 0 validé sur 1 applicable dans la fixture PROGRESS ci-dessus — l'UI actuelle (plus
+    // informative que l'ancien "0% prête") affiche le ratio explicite en plus du pourcentage.
+    expect(screen.getByText("0 / 1 validés (0%)")).toBeInTheDocument();
   });
 
   it("lets the user validate an item, calling the dedicated action (never the generic status action)", async () => {

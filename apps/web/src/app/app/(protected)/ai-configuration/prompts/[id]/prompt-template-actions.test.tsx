@@ -27,16 +27,28 @@ vi.mock("next/navigation", () => ({
 describe("CreatePromptVersionForm", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("submits systemPrompt/userPromptTemplate bound to the template id", async () => {
-    const user = userEvent.setup();
-    render(<CreatePromptVersionForm templateId="template-1" />);
+  // Correctif post-audit global (P1, 6 échecs Web) — diagnostiqué comme un vrai goulot CPU, jamais
+  // un hang : c'est le seul test de ce fichier qui simule une frappe caractère par caractère sur
+  // DEUX champs (`userEvent.type`, contre un simple clic pour les 2 autres describe blocks), avec
+  // un temps de base déjà mesuré à 1000-2200ms même isolé. Reproduit isolément (4 exécutions) et en
+  // suite complète (2 exécutions) sans jamais échouer — le timeout original observé par Codex
+  // correspond à une contention CPU ponctuelle (61 fichiers en parallèle sur 12 coeurs logiques),
+  // jamais une promesse non résolue, un mock incomplet ou une race condition dans le composant.
+  // Timeout local (jamais global) porté à 15s en dernier recours, une fois la cause comprise.
+  it(
+    "submits systemPrompt/userPromptTemplate bound to the template id",
+    async () => {
+      const user = userEvent.setup();
+      render(<CreatePromptVersionForm templateId="template-1" />);
 
-    await user.type(screen.getByLabelText(/Prompt système/), "You are helpful.");
-    await user.type(screen.getByLabelText(/Prompt utilisateur/), "Summarize {{tender.title}}");
-    await user.click(screen.getByRole("button", { name: "Créer la version (brouillon)" }));
+      await user.type(screen.getByLabelText(/Prompt système/), "You are helpful.");
+      await user.type(screen.getByLabelText(/Prompt utilisateur/), "Summarize {{tender.title}}");
+      await user.click(screen.getByRole("button", { name: "Créer la version (brouillon)" }));
 
-    expect(createPromptVersionAction).toHaveBeenCalledWith("template-1", {}, expect.any(FormData));
-  });
+      expect(createPromptVersionAction).toHaveBeenCalledWith("template-1", {}, expect.any(FormData));
+    },
+    15_000,
+  );
 });
 
 describe("PromptVersionActivateButton", () => {

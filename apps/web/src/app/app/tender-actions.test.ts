@@ -87,7 +87,10 @@ describe("createTenderAction", () => {
       estimatedAmount: "50000",
       submissionDeadline: "2026-09-30T00:00:00.000Z",
     });
-    expect(redirectMock).toHaveBeenCalledWith("/app/tenders/tender-1");
+    // mission §25.92 — `?created=1` est un signal volontaire (voir actions.ts), consommé une seule
+    // fois par `FirstTenderTracker` pour déclencher l'événement analytics "first_tender_started"
+    // puis nettoyé de l'URL côté client — jamais un paramètre accidentel.
+    expect(redirectMock).toHaveBeenCalledWith("/app/tenders/tender-1?created=1");
     expect(revalidatePathMock).toHaveBeenCalledWith("/app/tenders");
   });
 
