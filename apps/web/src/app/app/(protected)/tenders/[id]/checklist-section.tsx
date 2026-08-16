@@ -26,6 +26,10 @@ import type {
   ChecklistRequirementLevel,
   TenderLot,
 } from "../../../../../lib/tenders-types";
+import { Badge, type BadgeTone } from "../../../../../components/ui/badge";
+import { Button } from "../../../../../components/ui/button";
+import { Card } from "../../../../../components/ui/card";
+import { EmptyState } from "../../../../../components/ui/empty-state";
 
 const INITIAL_STATE: FormActionState = {};
 const STATUSES: ChecklistItemStatus[] = ["TODO", "IN_PROGRESS", "COMPLETED", "NOT_APPLICABLE"];
@@ -49,14 +53,16 @@ const TYPES: ChecklistItemType[] = [
 const REQUIREMENT_LEVELS: ChecklistRequirementLevel[] = ["MANDATORY", "CONDITIONAL", "INFORMATIONAL"];
 const CRITICALITIES: ChecklistItemCriticality[] = ["BLOCKING", "HIGH", "MEDIUM", "LOW"];
 
+const INPUT_CLASS = "rounded-lg border border-tenderos-navy/15 px-2.5 py-1.5 text-xs text-tenderos-navy";
+
 function statusLabel(status: ChecklistItemStatus): string {
   switch (status) {
     case "TODO":
-      return "A faire";
+      return "À faire";
     case "IN_PROGRESS":
       return "En cours";
     case "COMPLETED":
-      return "Termine";
+      return "Terminé";
     case "NOT_APPLICABLE":
       return "Non applicable";
   }
@@ -94,16 +100,16 @@ function requirementLevelLabel(level: ChecklistRequirementLevel): string {
   }
 }
 
-function criticalityBadgeClass(criticality: ChecklistItemCriticality): string {
+function criticalityTone(criticality: ChecklistItemCriticality): BadgeTone {
   switch (criticality) {
     case "BLOCKING":
-      return "bg-red-100 text-red-800";
+      return "danger";
     case "HIGH":
-      return "bg-orange-100 text-orange-800";
+      return "warning";
     case "MEDIUM":
-      return "bg-amber-100 text-amber-800";
+      return "gold";
     case "LOW":
-      return "bg-neutral-100 text-neutral-700";
+      return "neutral";
   }
 }
 
@@ -122,18 +128,18 @@ function complianceStatusLabel(status: ChecklistComplianceStatus): string {
   }
 }
 
-function complianceBadgeClass(status: ChecklistComplianceStatus): string {
+function complianceTone(status: ChecklistComplianceStatus): BadgeTone {
   switch (status) {
     case "VALIDATED":
-      return "bg-green-100 text-green-800";
+      return "success";
     case "READY":
-      return "bg-blue-100 text-blue-800";
+      return "info";
     case "NON_COMPLIANT":
-      return "bg-red-100 text-red-800";
+      return "danger";
     case "NOT_APPLICABLE":
-      return "bg-neutral-100 text-neutral-500";
+      return "neutral";
     case "TO_REVIEW":
-      return "bg-amber-100 text-amber-800";
+      return "warning";
   }
 }
 
@@ -164,22 +170,22 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
   }
 
   return (
-    <li className="flex flex-col gap-2 border-b border-neutral-100 py-3 text-sm">
+    <li className="flex flex-col gap-2 border-b border-tenderos-navy/5 py-3 text-sm last:border-b-0">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <span className="font-medium text-neutral-900">{item.title}</span>
-          <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-700">{typeLabel(item.type)}</span>
-            <span className={`rounded px-1.5 py-0.5 ${criticalityBadgeClass(item.criticality)}`}>{item.criticality}</span>
-            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-700">{requirementLevelLabel(item.requirementLevel)}</span>
-            <span className={`rounded px-1.5 py-0.5 ${complianceBadgeClass(item.complianceStatus)}`}>{complianceStatusLabel(item.complianceStatus)}</span>
-            {lot ? <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-indigo-800">{lot.title}</span> : <span className="rounded bg-neutral-50 px-1.5 py-0.5 text-neutral-500">Global</span>}
-            {item.origin === "AI_SUGGESTION" ? <span className="rounded bg-purple-100 px-1.5 py-0.5 text-purple-800">Suggéré par l&apos;IA</span> : null}
+        <div className="flex flex-col gap-1.5">
+          <span className="font-semibold text-tenderos-navy">{item.title}</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge tone="neutral">{typeLabel(item.type)}</Badge>
+            <Badge tone={criticalityTone(item.criticality)}>{item.criticality}</Badge>
+            <Badge tone="neutral">{requirementLevelLabel(item.requirementLevel)}</Badge>
+            <Badge tone={complianceTone(item.complianceStatus)}>{complianceStatusLabel(item.complianceStatus)}</Badge>
+            {lot ? <Badge tone="info">{lot.title}</Badge> : <Badge tone="neutral">Global</Badge>}
+            {item.origin === "AI_SUGGESTION" ? <Badge tone="gold">Suggéré par l&apos;IA</Badge> : null}
           </div>
-          {item.conditionText ? <p className="text-xs italic text-neutral-500">Condition : {item.conditionText}</p> : null}
+          {item.conditionText ? <p className="text-xs italic text-tenderos-slate">Condition : {item.conditionText}</p> : null}
           {item.matchedDocumentId ? (
-            <p className="text-xs text-neutral-600">
-              Document associé — statut : <span className="font-medium">{item.documentStatus}</span>
+            <p className="text-xs text-tenderos-slate">
+              Document associé — statut : <span className="font-medium text-tenderos-navy">{item.documentStatus}</span>
               {item.documentExpiresAt ? ` (expire le ${new Date(item.documentExpiresAt).toLocaleDateString("fr-FR")})` : ""}
             </p>
           ) : null}
@@ -200,7 +206,7 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
             setIsPending(false);
             setError(result.error);
           }}
-          className="rounded border border-neutral-300 px-2 py-1 text-xs"
+          className={INPUT_CLASS}
         >
           {STATUSES.map((value) => (
             <option key={value} value={value}>
@@ -216,7 +222,7 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
             type="button"
             disabled={isPending}
             onClick={() => runAction(() => validateChecklistItemAction(tenderId, item.id))}
-            className="rounded border border-green-300 bg-green-50 px-2 py-1 text-xs text-green-800 hover:bg-green-100 disabled:opacity-50"
+            className="rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-800 hover:bg-green-100 disabled:opacity-50"
           >
             Valider
           </button>
@@ -226,7 +232,7 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
             type="button"
             disabled={isPending}
             onClick={() => runAction(() => markChecklistItemNotApplicableAction(tenderId, item.id))}
-            className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+            className="rounded-lg border border-tenderos-navy/15 px-2.5 py-1 text-xs font-medium text-tenderos-navy hover:bg-tenderos-light disabled:opacity-50"
           >
             Non applicable
           </button>
@@ -242,7 +248,7 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
               setMatches(result.result);
               setError(result.error);
             }}
-            className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+            className="rounded-lg border border-tenderos-navy/15 px-2.5 py-1 text-xs font-medium text-tenderos-navy hover:bg-tenderos-light disabled:opacity-50"
           >
             {isSearchingMatches ? "Recherche…" : "Rechercher un document"}
           </button>
@@ -251,29 +257,29 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
             type="button"
             disabled={isPending}
             onClick={() => runAction(() => detachChecklistItemDocumentAction(tenderId, item.id))}
-            className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+            className="rounded-lg border border-tenderos-navy/15 px-2.5 py-1 text-xs font-medium text-tenderos-navy hover:bg-tenderos-light disabled:opacity-50"
           >
             Dissocier le document
           </button>
         )}
         {!taskCreated ? (
-          <button type="button" onClick={() => setShowTaskForm((v) => !v)} className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100">
+          <button type="button" onClick={() => setShowTaskForm((v) => !v)} className="rounded-lg border border-tenderos-navy/15 px-2.5 py-1 text-xs font-medium text-tenderos-navy hover:bg-tenderos-light">
             Créer une tâche
           </button>
         ) : (
-          <span className="text-xs text-neutral-500">Tâche créée — voir l&apos;onglet Workspace.</span>
+          <span className="text-xs text-tenderos-slate">Tâche créée — voir l&apos;onglet Workspace.</span>
         )}
         {item.complianceStatus === "VALIDATED" ? (
           !promotedEntryId ? (
             <button
               type="button"
               onClick={() => setShowPromoteForm((v) => !v)}
-              className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100"
+              className="rounded-lg border border-tenderos-navy/15 px-2.5 py-1 text-xs font-medium text-tenderos-navy hover:bg-tenderos-light"
             >
               Ajouter à la bibliothèque
             </button>
           ) : (
-            <a href={`/app/knowledge/${promotedEntryId}`} className="text-xs text-neutral-500 hover:underline">
+            <a href={`/app/knowledge/${promotedEntryId}`} className="text-xs font-medium text-tenderos-blue hover:underline">
               Ajoutée à la bibliothèque — voir l&apos;entrée
             </a>
           )
@@ -282,7 +288,7 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
 
       {showTaskForm ? (
         <form
-          className="flex flex-wrap items-end gap-2 rounded border border-neutral-200 bg-neutral-50 p-2"
+          className="flex flex-wrap items-end gap-2 rounded-xl bg-tenderos-light p-3"
           action={async (formData: FormData) => {
             setIsPending(true);
             setError(undefined);
@@ -306,23 +312,23 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
           {/* Préremplissage indicatif (titre + criticité -> priorité suggérée), jamais
               d'affectation automatique (mission §14 : le responsable/l'échéance/la priorité
               restent à confirmer explicitement par l'utilisateur). */}
-          <input name="title" defaultValue={item.title} required className="min-w-56 rounded border border-neutral-300 px-2 py-1 text-xs" />
-          <select name="priority" defaultValue={CRITICALITY_TO_SUGGESTED_PRIORITY[item.criticality] ?? "MEDIUM"} className="rounded border border-neutral-300 px-2 py-1 text-xs">
+          <input name="title" defaultValue={item.title} required className={`min-w-56 ${INPUT_CLASS}`} />
+          <select name="priority" defaultValue={CRITICALITY_TO_SUGGESTED_PRIORITY[item.criticality] ?? "MEDIUM"} className={INPUT_CLASS}>
             <option value="LOW">LOW</option>
             <option value="MEDIUM">MEDIUM</option>
             <option value="HIGH">HIGH</option>
             <option value="URGENT">URGENT</option>
           </select>
-          <input name="dueDate" type="date" className="rounded border border-neutral-300 px-2 py-1 text-xs" />
-          <button type="submit" disabled={isPending} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50">
+          <input name="dueDate" type="date" className={INPUT_CLASS} />
+          <Button type="submit" disabled={isPending}>
             Créer
-          </button>
+          </Button>
         </form>
       ) : null}
 
       {showPromoteForm ? (
         <form
-          className="flex flex-wrap items-end gap-2 rounded border border-neutral-200 bg-neutral-50 p-2"
+          className="flex flex-wrap items-end gap-2 rounded-xl bg-tenderos-light p-3"
           action={async (formData: FormData) => {
             setIsPending(true);
             setError(undefined);
@@ -347,30 +353,30 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
         >
           {/* Mission §19/§53 — jamais un titre/une catégorie hérités silencieusement : préremplissage
               indicatif uniquement (titre de l'item), l'utilisateur confirme ou modifie avant l'envoi. */}
-          <input name="title" defaultValue={item.title} required className="min-w-56 rounded border border-neutral-300 px-2 py-1 text-xs" />
-          <select name="category" defaultValue="ADMINISTRATIVE" className="rounded border border-neutral-300 px-2 py-1 text-xs">
+          <input name="title" defaultValue={item.title} required className={`min-w-56 ${INPUT_CLASS}`} />
+          <select name="category" defaultValue="ADMINISTRATIVE" className={INPUT_CLASS}>
             {Object.entries(KNOWLEDGE_CATEGORY_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
           </select>
-          <input name="tags" type="text" placeholder="Tags (séparés par virgule)" className="rounded border border-neutral-300 px-2 py-1 text-xs" />
-          <button type="submit" disabled={isPending} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50">
+          <input name="tags" type="text" placeholder="Tags (séparés par virgule)" className={INPUT_CLASS} />
+          <Button type="submit" disabled={isPending}>
             Enregistrer
-          </button>
+          </Button>
         </form>
       ) : null}
 
       {matches ? (
-        <div className="rounded border border-neutral-200 bg-neutral-50 p-2 text-xs">
-          <p className="mb-1 font-medium text-neutral-700">
+        <div className="rounded-xl bg-tenderos-light p-3 text-xs">
+          <p className="mb-1 font-semibold text-tenderos-navy">
             {matches.candidates.length === 0 ? "Aucun document correspondant trouvé." : `Correspondance : ${matches.status}`}
           </p>
           <ul className="flex flex-col gap-1">
             {matches.candidates.map((candidate) => (
               <li key={candidate.documentId} className="flex items-center justify-between gap-2">
-                <span>
+                <span className="text-tenderos-slate">
                   {candidate.label} (score {(candidate.score * 100).toFixed(0)}%)
                 </span>
                 <button
@@ -388,7 +394,7 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
                       }),
                     )
                   }
-                  className="rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-blue-800 hover:bg-blue-100 disabled:opacity-50"
+                  className="rounded-lg border border-tenderos-blue/30 bg-tenderos-blue/10 px-2 py-0.5 font-medium text-tenderos-blue hover:bg-tenderos-blue/20 disabled:opacity-50"
                 >
                   Associer
                 </button>
@@ -407,14 +413,21 @@ function ProgressSummary({ progress }: { progress: ChecklistProgress | null }) {
   const percent = global.totalApplicable === 0 ? 100 : Math.round((global.validated / global.totalApplicable) * 100);
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded border border-neutral-200 bg-neutral-50 p-2 text-xs text-neutral-700">
-      <span className="font-semibold text-neutral-900">{percent}% prête</span>
-      <span>{global.totalApplicable} applicables</span>
-      <span>{global.validated} validés</span>
-      <span>{global.missing} manquants</span>
-      {global.blockingMissing > 0 ? <span className="font-medium text-red-700">{global.blockingMissing} bloquant(s)</span> : null}
-      <span>{global.expired} expirés</span>
-      <span>{global.toReview} à vérifier</span>
+    <div className="flex flex-col gap-2 rounded-xl bg-tenderos-light p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold text-tenderos-navy">
+          {global.validated} / {global.totalApplicable} validés ({percent}%)
+        </span>
+        {global.blockingMissing > 0 ? <Badge tone="danger">{global.blockingMissing} bloquant{global.blockingMissing > 1 ? "s" : ""}</Badge> : null}
+      </div>
+      <span className="h-1.5 w-full overflow-hidden rounded-full bg-white">
+        <span className="block h-full rounded-full bg-tenderos-blue" style={{ width: `${percent}%` }} />
+      </span>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-tenderos-slate">
+        <span>{global.missing} manquant{global.missing > 1 ? "s" : ""}</span>
+        <span>{global.expired} expiré{global.expired > 1 ? "s" : ""}</span>
+        <span>{global.toReview} à vérifier</span>
+      </div>
     </div>
   );
 }
@@ -442,11 +455,11 @@ export function ChecklistSection({
   }, [items, lotFilter]);
 
   return (
-    <section className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-neutral-700">Checklist</h2>
-        <button
-          type="button"
+    <Card
+      title="Checklist"
+      actions={
+        <Button
+          variant="secondary"
           onClick={async () => {
             const result = await reconcileChecklistWithNewAnalysisAction(tenderId);
             if (result.error) {
@@ -457,78 +470,70 @@ export function ChecklistSection({
               );
             }
           }}
-          className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100"
         >
           Comparer avec la dernière analyse
-        </button>
-      </div>
-      {reconcileMessage ? <p className="text-xs text-neutral-600">{reconcileMessage}</p> : null}
-      <ProgressSummary progress={progress} />
-      {lots.length > 0 ? (
-        <label className="flex items-center gap-2 text-xs text-neutral-600">
-          Filtrer par lot
-          <select value={lotFilter} onChange={(event) => setLotFilter(event.target.value)} className="rounded border border-neutral-300 px-2 py-1">
-            <option value="ALL">Tous</option>
-            <option value="GLOBAL">Global</option>
-            {lots.map((lot) => (
-              <option key={lot.id} value={lot.id}>
-                {lot.title}
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        {reconcileMessage ? <p className="text-xs text-tenderos-slate">{reconcileMessage}</p> : null}
+        <ProgressSummary progress={progress} />
+        {lots.length > 0 ? (
+          <label className="flex items-center gap-2 text-xs text-tenderos-slate">
+            Filtrer par lot
+            <select value={lotFilter} onChange={(event) => setLotFilter(event.target.value)} className={INPUT_CLASS}>
+              <option value="ALL">Tous</option>
+              <option value="GLOBAL">Global</option>
+              {lots.map((lot) => (
+                <option key={lot.id} value={lot.id}>
+                  {lot.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {filteredItems.length === 0 ? (
+          <EmptyState title="Aucun élément de checklist" description="Ajoutez un élément manuellement ci-dessous, ou comparez avec la dernière analyse IA pour en suggérer." />
+        ) : (
+          <ul>
+            {filteredItems.map((item) => (
+              <ChecklistItemRow key={item.id} tenderId={tenderId} item={item} lots={lots} />
+            ))}
+          </ul>
+        )}
+        <form action={formAction} className="flex flex-wrap items-end gap-2 border-t border-tenderos-navy/10 pt-3">
+          <input name="title" type="text" required placeholder="Nouvel element..." className={`text-sm ${INPUT_CLASS}`} />
+          <select name="type" defaultValue="OTHER" className={INPUT_CLASS}>
+            {TYPES.map((type) => (
+              <option key={type} value={type}>
+                {typeLabel(type)}
               </option>
             ))}
           </select>
-        </label>
-      ) : null}
-      {filteredItems.length === 0 ? (
-        <p className="text-sm text-neutral-500">Aucun element de checklist.</p>
-      ) : (
-        <ul>
-          {filteredItems.map((item) => (
-            <ChecklistItemRow key={item.id} tenderId={tenderId} item={item} lots={lots} />
-          ))}
-        </ul>
-      )}
-      <form action={formAction} className="flex flex-wrap items-end gap-2">
-        <input
-          name="title"
-          type="text"
-          required
-          placeholder="Nouvel element..."
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
-        />
-        <select name="type" defaultValue="OTHER" className="rounded border border-neutral-300 px-2 py-1 text-xs">
-          {TYPES.map((type) => (
-            <option key={type} value={type}>
-              {typeLabel(type)}
-            </option>
-          ))}
-        </select>
-        <select name="requirementLevel" defaultValue="MANDATORY" className="rounded border border-neutral-300 px-2 py-1 text-xs">
-          {REQUIREMENT_LEVELS.map((level) => (
-            <option key={level} value={level}>
-              {requirementLevelLabel(level)}
-            </option>
-          ))}
-        </select>
-        <select name="criticality" defaultValue="MEDIUM" className="rounded border border-neutral-300 px-2 py-1 text-xs">
-          {CRITICALITIES.map((criticality) => (
-            <option key={criticality} value={criticality}>
-              {criticality}
-            </option>
-          ))}
-        </select>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
-        >
-          Ajouter
-        </button>
-        {state.error ? (
-          <p role="alert" className="text-xs text-red-600">
-            {state.error}
-          </p>
-        ) : null}
-      </form>
-    </section>
+          <select name="requirementLevel" defaultValue="MANDATORY" className={INPUT_CLASS}>
+            {REQUIREMENT_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {requirementLevelLabel(level)}
+              </option>
+            ))}
+          </select>
+          <select name="criticality" defaultValue="MEDIUM" className={INPUT_CLASS}>
+            {CRITICALITIES.map((criticality) => (
+              <option key={criticality} value={criticality}>
+                {criticality}
+              </option>
+            ))}
+          </select>
+          <Button type="submit" variant="primary" disabled={isPending}>
+            Ajouter
+          </Button>
+          {state.error ? (
+            <p role="alert" className="text-xs text-red-600">
+              {state.error}
+            </p>
+          ) : null}
+        </form>
+      </div>
+    </Card>
   );
 }

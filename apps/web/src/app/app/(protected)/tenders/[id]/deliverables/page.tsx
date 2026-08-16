@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
 import type { DeliverableSummary } from "../../../../../../lib/deliverable-types";
+import { PageHeader } from "../../../../../../components/ui/page-header";
+import { TabsNav } from "../../../../../../components/ui/tabs-nav";
 import { ApiErrorState } from "../../../api-error-state";
+import { buildTenderNavTabs } from "../tender-nav-tabs";
 import { DeliverablesSection } from "./deliverables-section";
 
 export const metadata: Metadata = { title: "Livrables — TenderOS" };
@@ -19,12 +22,12 @@ export default async function TenderDeliverablesPage({ params }: { params: Promi
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">Livrables</h1>
-        <p className="text-sm text-neutral-600">
-          Mémoire technique, synthèse exécutive, matrice de conformité, checklist, rapports et documents de soumission — structurés, générés par IA, édités et validés depuis un seul espace.
-        </p>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Livrables" }]}
+        title="Livrables"
+        description="Mémoire technique, synthèse exécutive, matrice de conformité, checklist, rapports et documents de soumission — structurés, générés par IA, édités et validés depuis un seul espace."
+      />
+      <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/deliverables`} />
       <DeliverablesSection tenderId={tenderId} deliverables={deliverables} actorRole={actorRole} />
     </div>
   );

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { formatEurosFromCents, type BillingInterval, type PublicPlanCatalogEntry, type QuotaLimit } from "../../lib/billing-types";
-import { GA_EVENTS, trackEvent, type GaEventName } from "../../lib/analytics";
-import { getPlanCtaHref } from "../../lib/plan-cta";
-import { TrackedLink } from "../../components/marketing/tracked-link";
+import { formatEurosFromCents, type BillingInterval, type PublicPlanCatalogEntry, type QuotaLimit } from "../../../lib/billing-types";
+import { GA_EVENTS, trackEvent, type GaEventName } from "../../../lib/analytics";
+import { getPlanCtaHref } from "../../../lib/plan-cta";
+import { formatProjectedTrialEndDate, STARTER_TRIAL_DAYS } from "../../../lib/trial-policy";
+import { TrackedLink } from "../../../components/marketing/tracked-link";
 
 function formatLimit(limit: QuotaLimit): string {
   return limit === "UNLIMITED" ? "illimité*" : String(limit);
@@ -35,12 +36,14 @@ function buildBullets(entry: PublicPlanCatalogEntry): string[] {
 }
 
 /**
- * V2 Sprint 23 (landing) — mission §17 "NE PAS recréer une deuxième source de vérité Pricing" :
- * `items` provient de `GET /api/v1/billing/plan-catalog` (fetch côté serveur dans `page.tsx`),
- * jamais un montant recalculé ici (mission §23 "ne pas recalculer monthly × 11 si le catalogue
- * existe déjà" — `yearlyPriceCents` est déjà la valeur réelle du catalogue).
+ * V2 Sprint 25 (Pricing dédié) — remplace `(marketing)/pricing-section.tsx` (retiré de la Landing,
+ * mission §25.33) : `/pricing` (Sprint 25B) en devient l'unique consommatrice, mission §25.32
+ * "/pricing devient la référence commerciale publique". `items` provient toujours de
+ * `GET /api/v1/billing/plan-catalog` (mission §25.52 "Source of Truth Pricing", jamais un second
+ * catalogue). La carte Starter porte désormais le message Trial (mission §25.5/§25.45), les autres
+ * cartes restent inchangées dans leur mécanique.
  */
-export function PricingSection({ items }: { items: PublicPlanCatalogEntry[] }) {
+export function PricingPlansSection({ items }: { items: PublicPlanCatalogEntry[] }) {
   const [interval, setInterval] = useState<Lowercase<BillingInterval>>("monthly");
   const pass = items.find((entry) => entry.tier === "PASS");
   const starter = items.find((entry) => entry.tier === "STARTER");
@@ -59,11 +62,12 @@ export function PricingSection({ items }: { items: PublicPlanCatalogEntry[] }) {
     return { amount: formatEurosFromCents(cents), period: interval === "yearly" ? "HT / an" : "HT / mois" };
   }
 
-  return (
-    <section id="tarifs" className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-      <h2 className="font-tenderos-display text-center text-3xl font-extrabold text-tenderos-navy">Des offres adaptées à chaque organisation</h2>
+  const starterPrice = priceFor(starter);
+  const projectedTrialEndDate = formatProjectedTrialEndDate();
 
-      <div className="mt-8 flex items-center justify-center gap-2">
+  return (
+    <section id="offres" className="mx-auto max-w-6xl px-4 pb-20 sm:px-6">
+      <div className="flex items-center justify-center gap-2">
         <div className="inline-flex rounded-lg border border-tenderos-navy/15 p-1">
           <button
             type="button"
@@ -84,8 +88,8 @@ export function PricingSection({ items }: { items: PublicPlanCatalogEntry[] }) {
       </div>
       <p className="mt-2 text-center text-xs text-tenderos-slate">{interval === "monthly" ? "Sans engagement" : "1 mois offert"}</p>
 
-      <div className="mt-10 grid gap-5 lg:grid-cols-5">
-        {/* Pass AO — mission §18, jamais un abonnement, texte largement fixe (le mécanisme Pass
+      <div className="mt-10 grid gap-6 lg:grid-cols-5">
+        {/* Pass AO — mission §25.44, jamais un abonnement, texte largement fixe (le mécanisme Pass
             n'est pas modélisé par des quotas côté domaine, voir plan-catalog.ts). */}
         <PricingCard title="Pass AO" price={pass ? formatEurosFromCents(pass.onePriceCents ?? 0) : "—"} period="HT — Paiement unique" description="Pour répondre ponctuellement à un appel d'offres.">
           <Bullets items={["1 crédit AO", "Fonctionnalités métier Starter", "Accès limité au dossier acheté", "Pas d'abonnement"]} />
@@ -94,11 +98,24 @@ export function PricingSection({ items }: { items: PublicPlanCatalogEntry[] }) {
           </CtaButton>
         </PricingCard>
 
-        <PricingCard title="Starter" price={priceFor(starter).amount} period={priceFor(starter).period} description="Pour démarrer et structurer vos réponses.">
+        {/* Starter — mission §25.5/§25.45 : SEUL palier avec Trial (mission §25.2, jamais Pass/
+            Business/Enterprise/Conseil). Le badge, la date projetée et la mention de résiliation ne
+            s'affichent QUE sur cette carte. */}
+        <PricingCard
+          title="Starter"
+          price={starterPrice.amount}
+          period={starterPrice.period}
+          description="Pour démarrer et structurer vos réponses."
+          badge={`${STARTER_TRIAL_DAYS} JOURS D'ESSAI GRATUIT`}
+        >
+          <p className="text-xs text-tenderos-slate">à partir du {projectedTrialEndDate}</p>
           <Bullets items={starter ? buildBullets(starter) : []} />
-          <CtaButton href={getPlanCtaHref("starter", interval)} event={GA_EVENTS.PricingPlanSelected} params={{ plan: "starter", billing: interval }} variant="secondary">
-            Choisir Starter
+          {/* mission §25.92 — événement Trial dédié, distinct de `PricingPlanSelected` (Business/Enterprise). */}
+          <CtaButton href={getPlanCtaHref("starter", interval)} event={GA_EVENTS.StarterTrialSelected} params={{ billing: interval }} variant="secondary">
+            Démarrer mon essai gratuit
           </CtaButton>
+          <p className="mt-2 text-center text-[11px] text-tenderos-slate">Carte bancaire requise · Aucun débit aujourd&apos;hui</p>
+          <p className="mt-1 text-center text-[11px] text-tenderos-slate">Vous pouvez résilier avant cette date pour ne pas être débité.</p>
         </PricingCard>
 
         <PricingCard
@@ -121,7 +138,7 @@ export function PricingSection({ items }: { items: PublicPlanCatalogEntry[] }) {
           </CtaButton>
         </PricingCard>
 
-        {/* Conseil — mission §22, jamais un PlanTier côté domaine (sur devis, sans quota SaaS
+        {/* Conseil — mission §25.48, jamais un PlanTier côté domaine (sur devis, sans quota SaaS
             automatique) : contenu entièrement statique, jamais tiré du catalogue. */}
         <PricingCard title="Conseil" price="Sur devis" period="" description="Accompagnement personnalisé et besoins spécifiques.">
           <Bullets items={["Accompagnement sur mesure", "Formation", "Intégrations spécifiques", "Support prioritaire"]} />
@@ -142,6 +159,7 @@ function PricingCard({
   period,
   description,
   highlight,
+  badge,
   children,
 }: {
   title: string;
@@ -149,18 +167,21 @@ function PricingCard({
   period: string;
   description: string;
   highlight?: boolean;
+  badge?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className={`relative flex flex-col rounded-2xl border p-6 ${highlight ? "border-tenderos-gold bg-tenderos-navy text-white shadow-xl" : "border-tenderos-navy/10 bg-white"}`}>
+    <div className={`relative flex flex-col rounded-2xl border p-7 ${highlight ? "border-tenderos-gold bg-tenderos-navy text-white shadow-xl" : "border-tenderos-navy/10 bg-white shadow-sm"}`}>
       {highlight ? (
         <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-tenderos-gold px-3 py-1 text-xs font-bold text-tenderos-navy">RECOMMANDÉ</span>
+      ) : badge ? (
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-tenderos-navy px-3 py-1 text-[11px] font-bold text-white">{badge}</span>
       ) : null}
       <h3 className={`font-tenderos-display text-lg font-bold ${highlight ? "text-white" : "text-tenderos-navy"}`}>{title}</h3>
       <p className={`mt-1 text-xs ${highlight ? "text-white/70" : "text-tenderos-slate"}`}>{description}</p>
       <p className={`mt-4 text-3xl font-extrabold ${highlight ? "text-white" : "text-tenderos-navy"}`}>{price}</p>
       {period ? <p className={`text-xs ${highlight ? "text-white/60" : "text-tenderos-slate"}`}>{period}</p> : null}
-      <div className="mt-5 flex flex-1 flex-col">{children}</div>
+      <div className="mt-5 flex flex-1 flex-col gap-2">{children}</div>
     </div>
   );
 }
@@ -196,7 +217,7 @@ function CtaButton({
       href={href}
       event={event}
       params={params}
-      className={`mt-5 block rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition ${
+      className={`mt-3 block rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition ${
         variant === "primary" ? "bg-tenderos-gold text-tenderos-navy hover:bg-tenderos-gold-light" : "bg-tenderos-navy text-white hover:bg-tenderos-navy/90"
       }`}
     >

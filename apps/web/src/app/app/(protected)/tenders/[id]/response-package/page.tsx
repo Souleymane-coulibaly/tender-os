@@ -5,7 +5,10 @@ import { fetchResponsePackages } from "../../../../response-package-actions";
 import type { ResponsePackage } from "../../../../../../lib/response-package-types";
 import { fetchParticipants, fetchWorkspaceMembers } from "../../../../workspace-actions";
 import type { TenderParticipant } from "../../../../../../lib/workspace-types";
+import { PageHeader } from "../../../../../../components/ui/page-header";
+import { TabsNav } from "../../../../../../components/ui/tabs-nav";
 import { ApiErrorState } from "../../../api-error-state";
+import { buildTenderNavTabs } from "../tender-nav-tabs";
 import { ResponsePackageSection } from "./response-package-section";
 
 export const metadata: Metadata = { title: "Dossier final — TenderOS" };
@@ -40,14 +43,12 @@ export default async function TenderResponsePackagePage({ params }: { params: Pr
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">Dossier final</h1>
-        <p className="text-sm text-neutral-600">
-          Assemblez les pièces déjà produites (Checklist, dossier administratif, mémoire technique, chiffrage) en un
-          dossier de réponse par lot, contrôlez sa complétude, validez-le, puis générez le ZIP prêt au dépôt manuel.
-          Une pièce facultative absente ne bloque jamais le dossier.
-        </p>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Dossier final" }]}
+        title="Dossier final"
+        description="Assemblez les pièces déjà produites (Checklist, dossier administratif, mémoire technique, chiffrage) en un dossier de réponse par lot, contrôlez sa complétude, validez-le, puis générez le ZIP prêt au dépôt manuel. Une pièce facultative absente ne bloque jamais le dossier."
+      />
+      <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/response-package`} />
       <ResponsePackageSection
         tenderId={tenderId}
         initialPackages={packages}

@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
 import type { ExportCapabilities, ExportJobSummary, ExportTemplateSummary } from "../../../../../../lib/export-types";
+import { PageHeader } from "../../../../../../components/ui/page-header";
+import { TabsNav } from "../../../../../../components/ui/tabs-nav";
 import { ApiErrorState } from "../../../api-error-state";
 import { fetchExportCapabilities } from "../../../../export-actions";
+import { buildTenderNavTabs } from "../tender-nav-tabs";
 import { ExportSection } from "./export-section";
 
 export const metadata: Metadata = { title: "Export — TenderOS" };
@@ -27,13 +30,12 @@ export default async function TenderExportPage({ params }: { params: Promise<{ i
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">Export documentaire</h1>
-        <p className="text-sm text-neutral-600">
-          Génère un aperçu du document à partir d&apos;un template et du contenu déjà produit (générations IA, estimations de coût, contenu manuel). L&apos;export FINAL figé n&apos;est produit
-          qu&apos;après approbation dans l&apos;onglet Validation.
-        </p>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Export" }]}
+        title="Export documentaire"
+        description="Génère un aperçu du document à partir d'un template et du contenu déjà produit (générations IA, estimations de coût, contenu manuel). L'export FINAL figé n'est produit qu'après approbation dans l'onglet Validation."
+      />
+      <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/export`} />
       <ExportSection tenderId={tenderId} templates={templates} history={history.items} actorRole={actorRole} capabilities={capabilities} />
     </div>
   );

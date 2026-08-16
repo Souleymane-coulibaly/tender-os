@@ -13,6 +13,10 @@ export interface OrganizationSubscriptionRepository {
    *  `subscription_data.metadata` au checkout) : seule façon robuste de retrouver l'organisation. */
   findByStripeSubscriptionId(stripeSubscriptionId: string): Promise<OrganizationSubscription | null>;
   save(subscription: OrganizationSubscription): Promise<void>;
+  /** V2 Sprint 25 (Trial Starter) — pour `SendTrialRemindersUseCase` (worker) : toutes les
+   *  organisations actuellement en essai, jamais un filtrage par date fait ici (le calcul de
+   *  jours restants reste dans le domaine/use case, cette méthode ne fait que lister le statut). */
+  listTrialing(): Promise<OrganizationSubscription[]>;
 }
 
 export const ORGANIZATION_SUBSCRIPTION_REPOSITORY = Symbol("ORGANIZATION_SUBSCRIPTION_REPOSITORY");

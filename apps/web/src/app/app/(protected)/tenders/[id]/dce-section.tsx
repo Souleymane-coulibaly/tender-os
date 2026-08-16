@@ -22,20 +22,24 @@ import {
   type DceImportJobSummary,
   type DceSummary,
 } from "../../../../../lib/dce-types";
+import { Badge, type BadgeTone } from "../../../../../components/ui/badge";
+import { Button } from "../../../../../components/ui/button";
+import { Card } from "../../../../../components/ui/card";
+import { EmptyState } from "../../../../../components/ui/empty-state";
 
 const NON_TERMINAL_ANALYSIS_STATUSES = ["PENDING", "QUEUED", "PROCESSING"];
 
-function analysisStatusBadgeClass(status: AnalysisJobSummary["status"]): string {
+function analysisStatusTone(status: AnalysisJobSummary["status"]): BadgeTone {
   switch (status) {
     case "SUCCEEDED":
     case "PARTIALLY_SUCCEEDED":
-      return "bg-green-100 text-green-800";
+      return "success";
     case "FAILED":
-      return "bg-red-100 text-red-800";
+      return "danger";
     case "CANCELLED":
-      return "bg-neutral-200 text-neutral-700";
+      return "neutral";
     default:
-      return "bg-blue-100 text-blue-800";
+      return "info";
   }
 }
 
@@ -105,14 +109,8 @@ function DocumentAnalysisControl({ tenderId, documentId, processingStatus, canAn
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-2">
-        <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
-          {DCE_DOCUMENT_PROCESSING_STATUS_LABELS[processingStatus]}
-        </span>
-        {job ? (
-          <span className={`rounded px-2 py-0.5 text-xs font-medium ${analysisStatusBadgeClass(job.status)}`}>
-            {ANALYSIS_STATUS_LABELS[job.status]}
-          </span>
-        ) : null}
+        <Badge tone="neutral">{DCE_DOCUMENT_PROCESSING_STATUS_LABELS[processingStatus]}</Badge>
+        {job ? <Badge tone={analysisStatusTone(job.status)}>{ANALYSIS_STATUS_LABELS[job.status]}</Badge> : null}
       </div>
       {canAnalyze ? (
         <div className="flex items-center gap-2">
@@ -121,7 +119,7 @@ function DocumentAnalysisControl({ tenderId, documentId, processingStatus, canAn
               type="button"
               disabled={isPending}
               onClick={handleRefresh}
-              className="text-xs text-neutral-700 hover:underline disabled:opacity-50"
+              className="text-xs font-medium text-tenderos-blue hover:underline disabled:opacity-50"
             >
               Actualiser
             </button>
@@ -131,7 +129,7 @@ function DocumentAnalysisControl({ tenderId, documentId, processingStatus, canAn
               type="button"
               disabled={isPending || !ready || isRunning || capabilityReasonCode !== undefined}
               onClick={handleStart}
-              className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50"
+              className="rounded-lg border border-tenderos-navy/15 px-2.5 py-1 text-xs font-medium text-tenderos-navy hover:bg-tenderos-light disabled:opacity-50"
             >
               Analyser
             </button>
@@ -141,7 +139,7 @@ function DocumentAnalysisControl({ tenderId, documentId, processingStatus, canAn
               type="button"
               disabled={isPending}
               onClick={handleRetry}
-              className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50"
+              className="rounded-lg border border-tenderos-navy/15 px-2.5 py-1 text-xs font-medium text-tenderos-navy hover:bg-tenderos-light disabled:opacity-50"
             >
               Relancer
             </button>
@@ -199,7 +197,7 @@ function DeleteDocumentButton({ tenderId, documentId }: { tenderId: string; docu
           setIsPending(false);
           setError(result.error);
         }}
-        className="text-xs text-red-700 hover:underline disabled:opacity-50"
+        className="text-xs font-medium text-red-700 hover:underline disabled:opacity-50"
       >
         Supprimer
       </button>
@@ -217,9 +215,9 @@ function InitDceButton({ tenderId, onSettled }: { tenderId: string; onSettled: (
   const [error, setError] = useState<string | undefined>();
 
   return (
-    <div className="flex flex-col items-start gap-1">
-      <button
-        type="button"
+    <div className="flex flex-col items-center gap-1">
+      <Button
+        variant="primary"
         disabled={isPending}
         onClick={async () => {
           setIsPending(true);
@@ -233,10 +231,9 @@ function InitDceButton({ tenderId, onSettled }: { tenderId: string; onSettled: (
           // existe déjà réellement en base — même motif que `ZipImportControl.onSettled`.
           if (!result.error) onSettled();
         }}
-        className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
       >
         Initialiser le DCE
-      </button>
+      </Button>
       {error ? (
         <p role="alert" className="text-xs text-red-600">
           {error}
@@ -301,16 +298,12 @@ function ZipImportControl({ tenderId, onSettled }: { tenderId: string; onSettled
     <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col items-start gap-2">
       <div className="flex items-end gap-2">
         <input name="archive" type="file" accept=".zip" className="text-xs" />
-        <button
-          type="submit"
-          disabled={isSubmitting || isRunning}
-          className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={isSubmitting || isRunning}>
           Importer une archive ZIP
-        </button>
+        </Button>
       </div>
       {job ? (
-        <p className="text-xs text-neutral-600">
+        <p className="text-xs text-tenderos-slate">
           {DCE_IMPORT_JOB_STATUS_LABELS[job.status]}
           {job.totalFiles !== undefined ? ` — ${job.totalFiles} fichier(s)` : ""}
         </p>
@@ -376,40 +369,36 @@ export function DceSection({
   }
 
   return (
-    <section className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-neutral-700">DCE</h2>
-        {liveDce ? (
-          <button
-            type="button"
-            disabled={isRefreshing}
-            onClick={handleRefresh}
-            className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50"
-          >
+    <Card
+      title="DCE"
+      actions={
+        liveDce ? (
+          <Button variant="secondary" disabled={isRefreshing} onClick={handleRefresh}>
             Actualiser
-          </button>
-        ) : null}
-      </div>
-
+          </Button>
+        ) : null
+      }
+    >
       {!liveDce ? (
-        <>
-          <p className="text-sm text-neutral-500">Aucun DCE initialise pour cet appel d&apos;offres.</p>
-          {canManage ? <InitDceButton tenderId={tenderId} onSettled={handleRefresh} /> : null}
-        </>
+        <EmptyState
+          title="Aucun DCE initialisé"
+          description="Initialisez le DCE de cet appel d'offres pour commencer à importer ses documents."
+          actions={canManage ? <InitDceButton tenderId={tenderId} onSettled={handleRefresh} /> : undefined}
+        />
       ) : (
-        <>
+        <div className="flex flex-col gap-3">
           {liveDocuments.length === 0 ? (
-            <p className="text-sm text-neutral-500">Aucun document du DCE.</p>
+            <EmptyState title="Aucun document du DCE." description="Importez des fichiers individuels ou une archive ZIP ci-dessous." />
           ) : (
             <ul>
               {liveDocuments.map((doc) => (
                 <li
                   key={doc.documentId}
-                  className="flex items-center justify-between gap-2 border-b border-neutral-100 py-2 text-sm"
+                  className="flex items-center justify-between gap-2 border-b border-tenderos-navy/5 py-2.5 text-sm last:border-b-0"
                 >
                   <div>
-                    <span className="font-medium text-neutral-900">{doc.originalFilename}</span>
-                    <span className="ml-2 text-xs text-neutral-500">{formatDceFileSize(doc.sizeBytes)}</span>
+                    <span className="font-semibold text-tenderos-navy">{doc.originalFilename}</span>
+                    <span className="ml-2 text-xs text-tenderos-slate">{formatDceFileSize(doc.sizeBytes)}</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <DocumentAnalysisControl
@@ -421,9 +410,9 @@ export function DceSection({
                     />
                     <a
                       href={`/app/tenders/${tenderId}/dce-documents/${doc.documentId}/download`}
-                      className="text-xs text-neutral-700 hover:underline"
+                      className="text-xs font-medium text-tenderos-blue hover:underline"
                     >
-                      Telecharger
+                      Télécharger
                     </a>
                     {canDelete ? <DeleteDocumentButton tenderId={tenderId} documentId={doc.documentId} /> : null}
                   </div>
@@ -433,17 +422,13 @@ export function DceSection({
           )}
 
           {canManage ? (
-            <>
+            <div className="flex flex-col gap-3 border-t border-tenderos-navy/10 pt-3">
               <form action={importFilesFormAction} className="flex flex-col items-start gap-2">
                 <div className="flex items-end gap-2">
                   <input name="files" type="file" multiple className="text-xs" />
-                  <button
-                    type="submit"
-                    disabled={isImportingFiles}
-                    className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
-                  >
+                  <Button type="submit" disabled={isImportingFiles}>
                     Importer
-                  </button>
+                  </Button>
                 </div>
                 {importFilesState.error ? (
                   <p role="alert" className="text-xs text-red-600">
@@ -454,10 +439,10 @@ export function DceSection({
               </form>
 
               <ZipImportControl tenderId={tenderId} onSettled={handleRefresh} />
-            </>
+            </div>
           ) : null}
-        </>
+        </div>
       )}
-    </section>
+    </Card>
   );
 }

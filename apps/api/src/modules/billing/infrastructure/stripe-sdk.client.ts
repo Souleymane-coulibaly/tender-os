@@ -40,15 +40,41 @@ export class StripeSdkClient implements StripeClient {
   }
 
   async createCheckoutSession(input: CreateStripeCheckoutSessionInput): Promise<StripeCheckoutSession> {
-    const session = await this.stripeClient().checkout.sessions.create({
-      mode: input.mode,
-      line_items: [{ price: input.priceId, quantity: 1 }],
-      success_url: input.successUrl,
-      cancel_url: input.cancelUrl,
-      ...(input.stripeCustomerId ? { customer: input.stripeCustomerId } : input.customerEmail ? { customer_email: input.customerEmail } : {}),
-      metadata: { organizationId: input.organizationId },
-      ...(input.mode === "subscription" ? { subscription_data: { metadata: { organizationId: input.organizationId } } } : {}),
-    });
+    const session = await this.stripeClient().checkout.sessions.create(
+      {
+        mode: input.mode,
+        line_items: [{ price: input.priceId, quantity: 1 }],
+        success_url: input.successUrl,
+        cancel_url: input.cancelUrl,
+        ...(input.stripeCustomerId ? { customer: input.stripeCustomerId } : input.customerEmail ? { customer_email: input.customerEmail } : {}),
+        metadata: { organizationId: input.organizationId },
+        ...(input.mode === "subscription"
+          ? {
+              subscription_data: {
+                metadata: { organizationId: input.organizationId },
+                ...(input.trialPeriodDays
+                  ? {
+                      trial_period_days: input.trialPeriodDays,
+                      // Mission §8/§9 — carte bancaire OBLIGATOIRE au démarrage du Trial : sans moyen
+                      // de paiement valide enregistré à la fin de l'essai, Stripe ANNULE la
+                      // subscription plutôt que de la laisser continuer sans facturation possible
+                      // (jamais un Trial "activé" sans carte réellement associée).
+                      trial_settings: { end_behavior: { missing_payment_method: "cancel" } },
+                    }
+                  : {}),
+              },
+              // Mission §8 — la carte est collectée AVANT activation du Trial, jamais différée :
+              // Stripe Checkout ne demande pas systématiquement de moyen de paiement pour une
+              // subscription en Trial sauf demande explicite.
+              ...(input.trialPeriodDays ? { payment_method_collection: "always" as const } : {}),
+            }
+          : {}),
+      },
+      // Correctif audit Codex Checkpoint 25A (P1-001) — options de requête Stripe (2e argument),
+      // jamais un champ du corps de la requête : c'est la déduplication CÔTÉ STRIPE de deux appels
+      // concurrents partageant la même clé (voir le commentaire sur `idempotencyKey` dans le port).
+      input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
+    );
 
     if (!session.url) {
       throw new Error("Stripe did not return a Checkout Session URL");

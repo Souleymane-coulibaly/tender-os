@@ -55,6 +55,15 @@ model User {
   termsAcceptedAt      DateTime? @map("terms_accepted_at")
   termsAcceptedVersion String?   @map("terms_accepted_version") @db.VarChar(20)
 
+  /// V2 Sprint 25 (Guide interactif) — mission §25.82 "User-scoped. Pas organization-scoped" :
+  /// même motif que `termsAcceptedAt` ci-dessus (horodatage, jamais un simple booléen). Un compte
+  /// utilisé dans plusieurs organisations ne revoit jamais la visite guidée par organisation —
+  /// l'état vit sur l'utilisateur lui-même. `tourDismissedAt` est effacé si l'utilisateur relance
+  /// la visite (mission §25.83), jamais un état figé de façon permanente.
+  tourStartedAt   DateTime? @map("tour_started_at")
+  tourCompletedAt DateTime? @map("tour_completed_at")
+  tourDismissedAt DateTime? @map("tour_dismissed_at")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -156,6 +165,8 @@ model Organization {
   entitlementOverrides  EntitlementOverride[]
   aoCreditBalance       OrganizationAoCreditBalance?
   aoCreditLedgerEntries AoCreditLedgerEntry[]
+  /// V2 Sprint 25 (Trial Starter) — dédup des rappels J7/J11/J13 (voir TrialReminderRecord).
+  trialReminderRecords  TrialReminderRecord[]
 
   @@map("organizations")
 }
@@ -7495,7 +7506,9 @@ model OrganizationSubscription {
   planTier        String @map("plan_tier") @db.VarChar(30)
   /// MONTHLY | YEARLY (billing/domain/billing-interval.ts).
   billingInterval String @map("billing_interval") @db.VarChar(20)
-  /// ACTIVE | CANCELED | PAST_DUE (billing/domain/subscription-status.ts).
+  /// ACTIVE | TRIALING | CANCELED | PAST_DUE (billing/domain/subscription-status.ts). V2 Sprint 25
+  /// (Trial Starter) — TRIALING ajouté, synchronisé par webhook comme tout autre statut (jamais un
+  /// Trial recréé uniquement côté PostgreSQL).
   status          String @db.VarChar(30)
   /// STRIPE | MANUAL | GRANTED — mission §49 : pilotes/démos assignés par Platform Admin sans
   /// paiement Stripe réel doivent rester représentables.
@@ -7509,12 +7522,37 @@ model OrganizationSubscription {
   currentPeriodStart DateTime? @map("current_period_start")
   currentPeriodEnd   DateTime? @map("current_period_end")
   canceledAt         DateTime? @map("canceled_at")
+  /// V2 Sprint 25 (Trial Starter) — fin de la période d'essai Stripe (`subscription.trial_end`),
+  /// uniquement renseigné tant que status = TRIALING (effacé à la sortie du Trial, voir l'agrégat).
+  trialEndsAt        DateTime? @map("trial_ends_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([planTier, status])
   @@map("organization_subscriptions")
+}
+
+/// V2 Sprint 25 (Trial Starter) — mission §93 "chaque rappel doit être idempotent... pas de
+/// refresh -> nouveau mail, pas de scheduler retry -> email dupliqué". `TrialReminderWorker`
+/// (aucun mécanisme de cron existant dans ce repo, voir le worker lui-même) écrit une ligne ICI
+/// avant d'émettre l'événement Outbox correspondant — la contrainte unique
+/// (organization_id, days_remaining) est la SEULE autorité réelle d'idempotence, jamais une
+/// simple vérification applicative non protégée sous concurrence (même discipline que le grant
+/// mensuel AO, 22B).
+model TrialReminderRecord {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  /// 7 | 3 | 1 (billing/domain/trial-policy.ts, TRIAL_REMINDER_DAYS_REMAINING) — jamais une date
+  /// calendaire (le jour exact dépend de `trialEndsAt`, propre à chaque organisation).
+  daysRemaining Int @map("days_remaining")
+
+  sentAt DateTime @default(now()) @map("sent_at")
+
+  @@unique([organizationId, daysRemaining])
+  @@map("trial_reminder_records")
 }
 
 /// V2 Sprint 22 (billing, étape 22A) — une ligne PAR ACHAT (jamais un solde mutable unique, mission

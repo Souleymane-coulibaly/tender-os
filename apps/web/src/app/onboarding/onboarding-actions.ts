@@ -178,10 +178,10 @@ export async function startOnboardingCheckoutAction(target: CheckoutTarget): Pro
 
 /** Sondage de l'état réel de paiement (mission : ne jamais faire confiance à l'URL de retour
  *  Stripe, uniquement à `GET /billing/subscription`/aux Pass — la seule autorité). */
-export async function fetchOnboardingPaymentStatus(): Promise<{ hasPlan: boolean }> {
+export async function fetchOnboardingPaymentStatus(): Promise<{ hasPlan: boolean; subscriptionStatus?: string }> {
   try {
-    const subscription = await appApiFetch<{ subscription: unknown }>("/api/v1/billing/subscription");
-    if (subscription.subscription) return { hasPlan: true };
+    const subscription = await appApiFetch<{ subscription: { status: string } | null }>("/api/v1/billing/subscription");
+    if (subscription.subscription) return { hasPlan: true, subscriptionStatus: subscription.subscription.status };
   } catch {
     // ignore, on retente via les Pass ci-dessous
   }

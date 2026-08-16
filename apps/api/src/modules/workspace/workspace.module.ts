@@ -128,6 +128,9 @@ import { MyTasksController } from "./interfaces/http/me-tasks.controller";
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
   ],
   // V2 Sprint 15 — réexportés pour `dashboard` (voir index.ts). Premier export de ce module.
-  exports: [GetMyTasksUseCase, ListRecentActivityForDashboardUseCase, ListMyApprovalsUseCase],
+  // V2 Sprint 25 (Dashboard Premium) — `ListTenderParticipantsUseCase` ajouté (mission §25.59
+  // "responsables") : réexporter la CLASSE depuis `index.ts` ne suffit pas à la rendre injectable
+  // ailleurs, elle doit aussi figurer ici (le tableau `exports` Nest, seule autorité DI réelle).
+  exports: [GetMyTasksUseCase, ListRecentActivityForDashboardUseCase, ListMyApprovalsUseCase, ListTenderParticipantsUseCase],
 })
 export class WorkspaceModule {}

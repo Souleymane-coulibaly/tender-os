@@ -8,6 +8,7 @@ import { FIXED_NOW, FakeStripeClient, FixedClock, InMemoryStripeProcessedEventRe
 import type { AssignSubscriptionUseCase } from "./assign-subscription.use-case";
 import type { CancelSubscriptionUseCase } from "./cancel-subscription.use-case";
 import type { GrantMonthlyAoCreditsUseCase } from "./grant-monthly-ao-credits.use-case";
+import type { GrantTrialAoCreditUseCase } from "./grant-trial-ao-credit.use-case";
 import { HandleStripeWebhookUseCase } from "./handle-stripe-webhook.use-case";
 import type { MarkSubscriptionPastDueUseCase } from "./mark-subscription-past-due.use-case";
 import type { RecordPassPurchaseUseCase } from "./record-pass-purchase.use-case";
@@ -32,6 +33,7 @@ describe("HandleStripeWebhookUseCase", () => {
   let assignSubscriptionUseCase: { execute: ReturnType<typeof vi.fn> };
   let cancelSubscriptionUseCase: { execute: ReturnType<typeof vi.fn> };
   let grantMonthlyAoCreditsUseCase: { execute: ReturnType<typeof vi.fn> };
+  let grantTrialAoCreditUseCase: { execute: ReturnType<typeof vi.fn> };
   let markSubscriptionPastDueUseCase: { execute: ReturnType<typeof vi.fn> };
   let useCase: HandleStripeWebhookUseCase;
 
@@ -47,6 +49,7 @@ describe("HandleStripeWebhookUseCase", () => {
     assignSubscriptionUseCase = { execute: vi.fn(async () => {}) };
     cancelSubscriptionUseCase = { execute: vi.fn(async () => {}) };
     grantMonthlyAoCreditsUseCase = { execute: vi.fn(async () => {}) };
+    grantTrialAoCreditUseCase = { execute: vi.fn(async () => {}) };
     markSubscriptionPastDueUseCase = { execute: vi.fn(async () => {}) };
 
     useCase = new HandleStripeWebhookUseCase(
@@ -59,6 +62,7 @@ describe("HandleStripeWebhookUseCase", () => {
       assignSubscriptionUseCase as unknown as AssignSubscriptionUseCase,
       cancelSubscriptionUseCase as unknown as CancelSubscriptionUseCase,
       grantMonthlyAoCreditsUseCase as unknown as GrantMonthlyAoCreditsUseCase,
+      grantTrialAoCreditUseCase as unknown as GrantTrialAoCreditUseCase,
       markSubscriptionPastDueUseCase as unknown as MarkSubscriptionPastDueUseCase,
     );
   });
@@ -116,6 +120,63 @@ describe("HandleStripeWebhookUseCase", () => {
     expect(assignSubscriptionUseCase.execute).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "org-a", planTier: "STARTER", stripeCustomerId: "cus_1", stripeSubscriptionId: "sub_1" }),
     );
+  });
+
+  it("V2 Sprint 25 (Trial Starter) — customer.subscription.created with status=trialing maps to TRIALING and grants the 1 Trial AO credit", async () => {
+    const trialEnd = Math.floor(FIXED_NOW.getTime() / 1000) + 14 * 24 * 60 * 60;
+    const rawBody = stripeEventBuffer("evt_trial_1", "customer.subscription.created", {
+      id: "sub_trial_1",
+      customer: "cus_1",
+      status: "trialing",
+      trial_end: trialEnd,
+      items: { data: [{ price: { id: "price_starter_monthly" } }] },
+      current_period_start: Math.floor(FIXED_NOW.getTime() / 1000),
+      current_period_end: Math.floor(FIXED_NOW.getTime() / 1000) + 2_592_000,
+      metadata: { organizationId: "org-a" },
+    });
+
+    await useCase.execute({ rawBody, signatureHeader: "valid" });
+
+    expect(assignSubscriptionUseCase.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org-a", status: "TRIALING", trialEndsAt: new Date(trialEnd * 1000) }),
+    );
+    expect(grantTrialAoCreditUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ organizationId: "org-a" }));
+  });
+
+  it("V2 Sprint 25 (Trial Starter) — an ACTIVE subscription event never grants the Trial credit", async () => {
+    const rawBody = stripeEventBuffer("evt_active_1", "customer.subscription.created", {
+      id: "sub_active_1",
+      customer: "cus_1",
+      status: "active",
+      trial_end: null,
+      items: { data: [{ price: { id: "price_starter_monthly" } }] },
+      current_period_start: Math.floor(FIXED_NOW.getTime() / 1000),
+      current_period_end: Math.floor(FIXED_NOW.getTime() / 1000) + 2_592_000,
+      metadata: { organizationId: "org-a" },
+    });
+
+    await useCase.execute({ rawBody, signatureHeader: "valid" });
+
+    expect(assignSubscriptionUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ status: "ACTIVE" }));
+    expect(grantTrialAoCreditUseCase.execute).not.toHaveBeenCalled();
+  });
+
+  it("V2 Sprint 25 (mission §23) — an unrecognized Stripe status (e.g. 'unpaid') never maps to ACTIVE, falls back to PAST_DUE", async () => {
+    const rawBody = stripeEventBuffer("evt_unpaid_1", "customer.subscription.updated", {
+      id: "sub_unpaid_1",
+      customer: "cus_1",
+      status: "unpaid",
+      trial_end: null,
+      items: { data: [{ price: { id: "price_starter_monthly" } }] },
+      current_period_start: 0,
+      current_period_end: 0,
+      metadata: { organizationId: "org-a" },
+    });
+
+    await useCase.execute({ rawBody, signatureHeader: "valid" });
+
+    expect(assignSubscriptionUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ status: "PAST_DUE" }));
+    expect(grantTrialAoCreditUseCase.execute).not.toHaveBeenCalled();
   });
 
   it("correctif audit Codex 22C (P1-02) — an unrecognized Price ID on a subscription event throws (fail-closed), never a silent success", async () => {

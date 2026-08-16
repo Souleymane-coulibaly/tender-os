@@ -190,6 +190,31 @@ describe("billing module — invariantes critiques (PostgreSQL réel)", () => {
 
       expect(await ledgerRepository.getBalance(organizationId)).toBe(balanceBefore);
     });
+
+    it("BLOQUANT (V2 Sprint 25, mission §18/§105 — concurrence réelle) — two truly simultaneous grantTrial calls for the SAME organization: exactly one applies, final balance credited only once against the real partial unique index", async () => {
+      const trialOrgId = randomUUID();
+      await prisma.organization.create({
+        data: { id: trialOrgId, name: "Billing Trial Concurrency Test Org", slug: `billing-trial-concurrency-org-${trialOrgId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
+      });
+
+      try {
+        const [resultA, resultB] = await Promise.all([
+          ledgerRepository.grantTrial({ organizationId: trialOrgId, occurredAt: now }),
+          ledgerRepository.grantTrial({ organizationId: trialOrgId, occurredAt: now }),
+        ]);
+
+        const appliedCount = [resultA.alreadyApplied, resultB.alreadyApplied].filter((alreadyApplied) => !alreadyApplied).length;
+        expect(appliedCount).toBe(1);
+        expect(resultA.entry.id).toBe(resultB.entry.id);
+
+        const finalBalance = await ledgerRepository.getBalance(trialOrgId);
+        expect(finalBalance).toBe(1);
+      } finally {
+        await prisma.aoCreditLedgerEntry.deleteMany({ where: { organizationId: trialOrgId } });
+        await prisma.organizationAoCreditBalance.deleteMany({ where: { organizationId: trialOrgId } });
+        await prisma.organization.deleteMany({ where: { id: trialOrgId } });
+      }
+    });
   });
 
   describe("Stripe webhook idempotency (étape 22C)", () => {

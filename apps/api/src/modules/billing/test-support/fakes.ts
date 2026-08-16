@@ -8,11 +8,13 @@ import { PassPurchaseStatus } from "../domain/pass-purchase-status";
 import type { QuotaType } from "../domain/quota-type";
 import type { OrganizationSubscription } from "../domain/organization-subscription.aggregate";
 import { PassPurchase } from "../domain/pass-purchase.aggregate";
+import { SubscriptionStatus } from "../domain/subscription-status";
 import type { AoCreditLedgerPage, AoCreditLedgerRepository } from "../application/ports/ao-credit-ledger.repository";
 import type { AuditLogWriter, BillingAuditLogEntry } from "../application/ports/audit-log-writer";
 import type { EntitlementOverridePage, EntitlementOverrideRepository } from "../application/ports/entitlement-override.repository";
 import type { OrganizationSubscriptionRepository } from "../application/ports/organization-subscription.repository";
 import type { QuotaAlertRepository } from "../application/ports/quota-alert.repository";
+import type { TrialReminderRepository } from "../application/ports/trial-reminder.repository";
 import {
   PassPurchaseExternalReferenceConflictError,
   type PassPurchasePage,
@@ -56,6 +58,20 @@ export class InMemoryQuotaAlertRepository implements QuotaAlertRepository {
 
   async recordIfNew(input: { organizationId: string; quotaType: string; threshold: number; periodKey: string }): Promise<boolean> {
     const key = `${input.organizationId}:${input.quotaType}:${input.threshold}:${input.periodKey}`;
+    if (this.seen.has(key)) return false;
+    this.seen.add(key);
+    return true;
+  }
+}
+
+/** V2 Sprint 25 (Trial Starter) — reproduit fidèlement la contrainte unique réelle
+ *  `(organizationId, daysRemaining)` de `PrismaTrialReminderRepository`, même motif que
+ *  `InMemoryQuotaAlertRepository`. */
+export class InMemoryTrialReminderRepository implements TrialReminderRepository {
+  private readonly seen = new Set<string>();
+
+  async recordIfNotSent(input: { organizationId: string; daysRemaining: number; occurredAt: Date }): Promise<boolean> {
+    const key = `${input.organizationId}:${input.daysRemaining}`;
     if (this.seen.has(key)) return false;
     this.seen.add(key);
     return true;
@@ -124,6 +140,10 @@ export class InMemoryOrganizationSubscriptionRepository implements OrganizationS
 
   async save(subscription: OrganizationSubscription): Promise<void> {
     this.byOrganizationId.set(subscription.organizationId, subscription);
+  }
+
+  async listTrialing(): Promise<OrganizationSubscription[]> {
+    return Array.from(this.byOrganizationId.values()).filter((s) => s.status === SubscriptionStatus.Trialing);
   }
 }
 
@@ -269,6 +289,27 @@ export class InMemoryAoCreditLedgerRepository implements AoCreditLedgerRepositor
       amount: appliedAmount,
       balanceAfter,
       period: input.period,
+      occurredAt: input.occurredAt,
+    });
+    this.balances.set(input.organizationId, balanceAfter);
+    this.entries.push(entry);
+    return { entry, alreadyApplied: false };
+  }
+
+  async grantTrial(input: { organizationId: string; occurredAt: Date }): Promise<{ entry: AoCreditLedgerEntry; alreadyApplied: boolean }> {
+    const existing = this.entries.find((e) => e.organizationId === input.organizationId && e.type === AoCreditMovementType.TrialGrant);
+    if (existing) {
+      return { entry: existing, alreadyApplied: true };
+    }
+
+    const currentBalance = this.balances.get(input.organizationId) ?? 0;
+    const balanceAfter = currentBalance + 1;
+    const entry = createAoCreditLedgerEntry({
+      id: this.nextId(),
+      organizationId: input.organizationId,
+      type: AoCreditMovementType.TrialGrant,
+      amount: 1,
+      balanceAfter,
       occurredAt: input.occurredAt,
     });
     this.balances.set(input.organizationId, balanceAfter);

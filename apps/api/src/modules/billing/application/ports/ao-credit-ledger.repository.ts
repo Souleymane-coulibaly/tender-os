@@ -21,6 +21,15 @@ export interface AoCreditLedgerRepository {
    *  demandé. */
   grant(input: { organizationId: string; period: string; nominalAmount: number; rolloverCap: number; occurredAt: Date }): Promise<{ entry: AoCreditLedgerEntry; alreadyApplied: boolean }>;
 
+  /** V2 Sprint 25 (Trial Starter) — mission §18 "même Trial activé deux fois par webhook/retry : 1
+   *  seul crédit" : idempotent "au plus une fois par organisation" (jamais par mois, contrairement
+   *  à `grant`), garanti par un index unique partiel réel (voir la migration), pas seulement une
+   *  vérification applicative — deux appels réellement concurrents pour la même organisation ne
+   *  produisent jamais deux entrées. `alreadyApplied: true` signale un rejeu, jamais un second
+   *  AuditLog. Toujours exactement 1 crédit (mission §16), jamais plafonné par le rollover cap
+   *  (contrairement à `grant`, qui est mensuel et récurrent). */
+  grantTrial(input: { organizationId: string; occurredAt: Date }): Promise<{ entry: AoCreditLedgerEntry; alreadyApplied: boolean }>;
+
   /** Compare-and-set : `applied: false` signifie solde insuffisant, jamais une exception — c'est à
    *  l'appelant (`ConsumeAoCreditUseCase`) de traduire ça en refus métier. Jamais de solde négatif
    *  possible (mission §16, test de concurrence obligatoire). */

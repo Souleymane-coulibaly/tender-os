@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { getCurrentMembershipRole, getCurrentUserId } from "../../../../../../lib/app-api-client";
 import { fetchActivity, fetchApprovals, fetchParticipants, fetchTasks, fetchWorkspaceMembers } from "../../../../workspace-actions";
 import type { ApprovalRequest, Task, TenderActivityPage, TenderParticipant } from "../../../../../../lib/workspace-types";
+import { PageHeader } from "../../../../../../components/ui/page-header";
+import { TabsNav } from "../../../../../../components/ui/tabs-nav";
 import { ApiErrorState } from "../../../api-error-state";
+import { buildTenderNavTabs } from "../tender-nav-tabs";
 import { WorkspaceSection } from "./workspace-section";
 
 export const metadata: Metadata = { title: "Workspace — TenderOS" };
@@ -33,14 +36,12 @@ export default async function TenderWorkspacePage({ params }: { params: Promise<
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">Workspace collaboratif</h1>
-        <p className="text-sm text-neutral-600">
-          Qui travaille sur ce dossier, quelles tâches restent à faire, quelles validations sont en attente — un score
-          de complétude Workspace distinct du GO/NO-GO (Sprint 5) et de la checklist (Sprint 6), jamais recalculé
-          automatiquement.
-        </p>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Workspace" }]}
+        title="Workspace collaboratif"
+        description="Qui travaille sur ce dossier, quelles tâches restent à faire, quelles validations sont en attente — un score de complétude Workspace distinct du GO/NO-GO et de la checklist, jamais recalculé automatiquement."
+      />
+      <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/workspace`} />
       <WorkspaceSection
         tenderId={tenderId}
         initialParticipants={participants}

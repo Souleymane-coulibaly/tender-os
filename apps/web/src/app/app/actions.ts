@@ -397,7 +397,10 @@ export async function createTenderAction(_prevState: FormActionState, formData: 
   }
 
   revalidatePath("/app/tenders");
-  redirect(`/app/tenders/${tender.id}`);
+  // mission §25.92 — `?created=1` : seul signal disponible pour un event "first_tender_started"
+  // déclenché côté client (`FirstTenderTracker`), `trackEvent`/`window` étant inatteignables depuis
+  // cette action serveur elle-même. Nettoyé par le tracker après lecture, jamais persisté dans l'URL.
+  redirect(`/app/tenders/${tender.id}?created=1`);
 }
 
 function optional(value: FormDataEntryValue | null): string | undefined {

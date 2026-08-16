@@ -4,7 +4,9 @@ import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { BillingInterval } from "../../domain/billing-interval";
 import { OrganizationSubscription } from "../../domain/organization-subscription.aggregate";
 import { PlanSource } from "../../domain/plan-source";
+import { resolvePriceCents } from "../../domain/plan-catalog";
 import type { SubscriptionPlanTier } from "../../domain/plan-tier";
+import { SubscriptionStatus } from "../../domain/subscription-status";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { ORGANIZATION_SUBSCRIPTION_REPOSITORY, type OrganizationSubscriptionRepository } from "../ports/organization-subscription.repository";
 
@@ -17,6 +19,12 @@ export type AssignSubscriptionCommand = Readonly<{
   stripeSubscriptionId?: string | undefined;
   currentPeriodStart?: Date | undefined;
   currentPeriodEnd?: Date | undefined;
+  /** V2 Sprint 25 (Trial Starter) — statut RÉEL lu d'un webhook Stripe (jamais deviné). Absent =
+   *  comportement historique inchangé (MANUAL/GRANTED, et STRIPE hors Trial qui n'avait jamais
+   *  besoin de le fournir avant ce sprint) : la création par défaut reste ACTIVE, et une
+   *  réassignation existante ne touche toujours pas au statut quand ce champ est omis. */
+  status?: SubscriptionStatus | undefined;
+  trialEndsAt?: Date | undefined;
   actorId: string;
   occurredAt: Date;
 }>;
@@ -49,6 +57,8 @@ export class AssignSubscriptionUseCase {
         stripeSubscriptionId: command.stripeSubscriptionId,
         currentPeriodStart: command.currentPeriodStart,
         currentPeriodEnd: command.currentPeriodEnd,
+        status: command.status,
+        trialEndsAt: command.trialEndsAt,
         occurredAt: command.occurredAt,
       });
       await this.subscriptionRepository.save(subscription);
@@ -60,18 +70,43 @@ export class AssignSubscriptionUseCase {
         resourceId: subscription.id,
         metadata: { planTier: command.planTier, billingInterval: command.billingInterval, source: command.source },
       });
+
+      // V2 Sprint 25 (Trial Starter) — première assignation déjà TRIALING (cas normal : le premier
+      // webhook `customer.subscription.created` d'un Trial Starter porte déjà ce statut). Jamais
+      // émis pour MANUAL/GRANTED (`command.status` toujours absent sur ces chemins).
+      if (command.status === SubscriptionStatus.Trialing) {
+        await this.outboxWriter.write({
+          organizationId: command.organizationId,
+          events: [
+            {
+              eventType: "TrialStarted",
+              aggregateType: "OrganizationSubscription",
+              aggregateId: subscription.id,
+              payload: {
+                planTier: command.planTier,
+                billingInterval: command.billingInterval,
+                futurePriceCents: resolvePriceCents(command.planTier, command.billingInterval),
+                trialEndsAt: command.trialEndsAt?.toISOString(),
+              },
+              occurredAt: command.occurredAt,
+            },
+          ],
+        });
+      }
+
       return subscription;
     }
 
     const previousPlanTier = existing.planTier;
     const previousSource = existing.source;
+    const previousStatus = existing.status;
     const planChanged = previousPlanTier !== command.planTier;
     const intervalChanged = existing.billingInterval !== command.billingInterval;
     const sourceChanged = previousSource !== command.source;
 
     // Correctif audit Codex 22D (P1-01) — `reassign` remplace TOUJOURS source/métadonnées Stripe/
     // périodes, jamais un `changePlan` qui les aurait silencieusement conservées d'une précédente
-    // assignation (voir le commentaire de l'agrégat).
+    // assignation (voir le commentaire de l'agrégat). Ne touche TOUJOURS PAS au statut.
     existing.reassign({
       planTier: command.planTier,
       billingInterval: command.billingInterval,
@@ -82,7 +117,56 @@ export class AssignSubscriptionUseCase {
       currentPeriodEnd: command.currentPeriodEnd,
       occurredAt: command.occurredAt,
     });
+
+    // V2 Sprint 25 (Trial Starter) — transition de statut explicite, UNIQUEMENT quand l'appelant
+    // (webhook Stripe) fournit un statut réellement lu. Jamais pour MANUAL/GRANTED (`command.status`
+    // toujours absent sur ces chemins, `reassign` ci-dessus reste alors la SEULE écriture).
+    if (command.status !== undefined) {
+      existing.updateFromStripeStatus({ status: command.status, trialEndsAt: command.trialEndsAt, occurredAt: command.occurredAt });
+    }
     await this.subscriptionRepository.save(existing);
+
+    if (command.status === SubscriptionStatus.Trialing && previousStatus !== SubscriptionStatus.Trialing) {
+      await this.outboxWriter.write({
+        organizationId: command.organizationId,
+        events: [
+          {
+            eventType: "TrialStarted",
+            aggregateType: "OrganizationSubscription",
+            aggregateId: existing.id,
+            payload: {
+              planTier: command.planTier,
+              billingInterval: command.billingInterval,
+              futurePriceCents: resolvePriceCents(command.planTier, command.billingInterval),
+              trialEndsAt: command.trialEndsAt?.toISOString(),
+            },
+            occurredAt: command.occurredAt,
+          },
+        ],
+      });
+    }
+    // Mission §21 "TRIALING -> ACTIVE" (jour 14, premier paiement réussi) — jamais émis pour une
+    // bascule ACTIVE qui ne vient pas d'un Trial (ex. réactivation après CANCELED), ni pour une
+    // sortie de Trial vers autre chose que ACTIVE (PAST_DUE en cas d'échec de paiement — mission
+    // §23, aucun événement "converti" dans ce cas, `SubscriptionPaymentFailed` s'en charge déjà).
+    if (previousStatus === SubscriptionStatus.Trialing && command.status === SubscriptionStatus.Active) {
+      await this.outboxWriter.write({
+        organizationId: command.organizationId,
+        events: [
+          {
+            eventType: "TrialConverted",
+            aggregateType: "OrganizationSubscription",
+            aggregateId: existing.id,
+            payload: {
+              planTier: command.planTier,
+              billingInterval: command.billingInterval,
+              priceCents: resolvePriceCents(command.planTier, command.billingInterval),
+            },
+            occurredAt: command.occurredAt,
+          },
+        ],
+      });
+    }
 
     if (planChanged) {
       await this.auditLogWriter.record({

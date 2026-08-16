@@ -5,6 +5,7 @@ import type { LogoutUserUseCase } from "../../application/use-cases/logout-user.
 import type { RegisterUserUseCase } from "../../application/use-cases/register-user.use-case";
 import type { RequestPasswordResetUseCase } from "../../application/use-cases/request-password-reset.use-case";
 import type { ResetPasswordUseCase } from "../../application/use-cases/reset-password.use-case";
+import type { UpdateTourStateUseCase } from "../../application/use-cases/update-tour-state.use-case";
 import type { UserSummary } from "../../application/dtos";
 import { AuthController } from "./auth.controller";
 
@@ -23,6 +24,7 @@ function createController(overrides?: {
   getCurrentUserUseCase?: Partial<GetCurrentUserUseCase>;
   requestPasswordResetUseCase?: Partial<RequestPasswordResetUseCase>;
   resetPasswordUseCase?: Partial<ResetPasswordUseCase>;
+  updateTourStateUseCase?: Partial<UpdateTourStateUseCase>;
 }) {
   const registerUserUseCase = {
     execute: vi.fn().mockResolvedValue(USER_SUMMARY),
@@ -58,6 +60,11 @@ function createController(overrides?: {
     ...overrides?.resetPasswordUseCase,
   } as unknown as ResetPasswordUseCase;
 
+  const updateTourStateUseCase = {
+    execute: vi.fn().mockResolvedValue(undefined),
+    ...overrides?.updateTourStateUseCase,
+  } as unknown as UpdateTourStateUseCase;
+
   const controller = new AuthController(
     registerUserUseCase,
     authenticateUserUseCase,
@@ -65,6 +72,7 @@ function createController(overrides?: {
     getCurrentUserUseCase,
     requestPasswordResetUseCase,
     resetPasswordUseCase,
+    updateTourStateUseCase,
   );
 
   return {

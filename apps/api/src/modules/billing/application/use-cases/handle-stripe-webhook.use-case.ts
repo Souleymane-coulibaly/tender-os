@@ -3,10 +3,12 @@ import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import { resolvePlanFromStripePriceId } from "../../domain/stripe-price-registry";
 import { PlanSource } from "../../domain/plan-source";
+import { SubscriptionStatus } from "../../domain/subscription-status";
 import { StripeUnrecognizedPriceError } from "../../domain/errors";
 import { AssignSubscriptionUseCase } from "./assign-subscription.use-case";
 import { CancelSubscriptionUseCase } from "./cancel-subscription.use-case";
 import { GrantMonthlyAoCreditsUseCase } from "./grant-monthly-ao-credits.use-case";
+import { GrantTrialAoCreditUseCase } from "./grant-trial-ao-credit.use-case";
 import { MarkSubscriptionPastDueUseCase } from "./mark-subscription-past-due.use-case";
 import { RecordPassPurchaseUseCase } from "./record-pass-purchase.use-case";
 import { ORGANIZATION_SUBSCRIPTION_REPOSITORY, type OrganizationSubscriptionRepository } from "../ports/organization-subscription.repository";
@@ -29,6 +31,8 @@ type StripeSubscriptionPayload = {
   items: { data: Array<{ price: { id: string } }> };
   current_period_start: number;
   current_period_end: number;
+  /** V2 Sprint 25 (Trial Starter) — `null` hors Trial, fin de période d'essai (Unix seconds) sinon. */
+  trial_end: number | null;
   metadata?: Record<string, string> | null;
 };
 type StripeInvoicePayload = {
@@ -39,6 +43,18 @@ type StripeInvoicePayload = {
 function periodOf(unixSeconds: number): string {
   const date = new Date(unixSeconds * 1000);
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** V2 Sprint 25 (Trial Starter) — mission §23 "jamais marquer ACTIVE artificiellement" : tout
+ *  statut Stripe qui n'est ni "trialing" ni "active" retombe sur PAST_DUE (jamais un défaut
+ *  optimiste), qu'il s'agisse d'un problème de paiement réel ("past_due"/"unpaid") ou d'un état
+ *  transitoire d'intégration ("incomplete") — la seule alternative sûre à "n'accorde aucun accès
+ *  entitlements" tout en restant un statut du domaine existant (CANCELED est réservé au webhook
+ *  dédié `customer.subscription.deleted`, jamais deviné ici). */
+function mapStripeSubscriptionStatus(stripeStatus: string): SubscriptionStatus {
+  if (stripeStatus === "trialing") return SubscriptionStatus.Trialing;
+  if (stripeStatus === "active") return SubscriptionStatus.Active;
+  return SubscriptionStatus.PastDue;
 }
 
 /**
@@ -71,6 +87,7 @@ export class HandleStripeWebhookUseCase {
     private readonly assignSubscriptionUseCase: AssignSubscriptionUseCase,
     private readonly cancelSubscriptionUseCase: CancelSubscriptionUseCase,
     private readonly grantMonthlyAoCreditsUseCase: GrantMonthlyAoCreditsUseCase,
+    private readonly grantTrialAoCreditUseCase: GrantTrialAoCreditUseCase,
     private readonly markSubscriptionPastDueUseCase: MarkSubscriptionPastDueUseCase,
   ) {}
 
@@ -129,6 +146,9 @@ export class HandleStripeWebhookUseCase {
           // silencieusement divergent de Stripe pour toujours.
           throw new StripeUnrecognizedPriceError(priceId ?? "(missing)");
         }
+        const status = mapStripeSubscriptionStatus(subscription.status);
+        const trialEndsAt = subscription.trial_end ? new Date(subscription.trial_end * 1000) : undefined;
+
         await this.assignSubscriptionUseCase.execute({
           organizationId,
           planTier: plan.planTier,
@@ -138,9 +158,20 @@ export class HandleStripeWebhookUseCase {
           stripeSubscriptionId: subscription.id,
           currentPeriodStart: new Date(subscription.current_period_start * 1000),
           currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+          status,
+          trialEndsAt,
           actorId: "stripe-webhook",
           occurredAt,
         });
+
+        // V2 Sprint 25 (Trial Starter) — mission §13/§16 : le Trial démarre à l'activation RÉELLE
+        // de la Subscription (jamais au clic Landing/à un retour Checkout), et accorde exactement 1
+        // crédit AO, idempotent quel que soit le nombre de fois où Stripe redélivre cet événement
+        // pour la même organisation (mission §18 — `GrantTrialAoCreditUseCase`/`grantTrial` sont
+        // eux-mêmes la seule autorité d'idempotence, jamais un `if` supplémentaire ici).
+        if (status === SubscriptionStatus.Trialing) {
+          await this.grantTrialAoCreditUseCase.execute({ organizationId, actorId: "stripe-webhook", occurredAt });
+        }
         return;
       }
 

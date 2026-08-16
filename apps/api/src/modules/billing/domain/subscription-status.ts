@@ -6,9 +6,15 @@ import { InvalidSubscriptionStatusError } from "./errors";
  * silencieusement actif). PAST_DUE existe dès 22A (colonne + statut) mais sa bascule réelle depuis
  * un événement Stripe `invoice.payment_failed` est livrée en 22C ; ce module ne fait ici que
  * respecter le statut tel qu'il est, jamais le calculer depuis un état de paiement externe.
+ *
+ * V2 Sprint 25 (Trial Starter) — TRIALING ajouté : une vraie Subscription Stripe en essai (mission
+ * §7 "ne jamais créer un faux Trial uniquement dans PostgreSQL"), synchronisée par webhook comme
+ * tout autre statut. `OrganizationSubscription.isEntitled` (jamais `isActive`, qui reste strictement
+ * ACTIVE) traite TRIALING comme donnant droit aux entitlements Starter — voir l'agrégat.
  */
 export const SubscriptionStatus = {
   Active: "ACTIVE",
+  Trialing: "TRIALING",
   PastDue: "PAST_DUE",
   Canceled: "CANCELED",
 } as const;

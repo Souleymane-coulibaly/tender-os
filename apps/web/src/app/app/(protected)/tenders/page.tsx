@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { appApiFetch } from "../../../../lib/app-api-client";
+import { Button } from "../../../../components/ui/button";
+import { EmptyState } from "../../../../components/ui/empty-state";
+import { PageHeader } from "../../../../components/ui/page-header";
 import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../lib/client-portfolio-types";
 import type { PageResponse, TenderListItem, TenderStatistics as TenderStatisticsData } from "../../../../lib/tenders-types";
 import { ApiErrorState } from "../api-error-state";
@@ -8,6 +11,12 @@ import { TenderFilters } from "./tender-filters";
 import { TenderStatistics } from "./tender-statistics";
 import { TenderStatusBadge } from "./tender-status-badge";
 import { TenderViewSwitcher } from "./tender-view-switcher";
+
+const FOLDER_ICON = (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M9 2h6l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2zM9 13h6M9 17h6" stroke="#1472FF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 
 export const metadata: Metadata = { title: "Appels d'offres — TenderOS" };
 
@@ -59,18 +68,18 @@ export default async function TendersListPage({ searchParams }: { searchParams: 
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Appels d&apos;offres</h1>
-        <div className="flex items-center gap-3">
-          <TenderViewSwitcher active="list" queryString={queryString} />
-          <Link
-            href="/app/tenders/new"
-            className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
-          >
-            Nouvel appel d&apos;offres
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="Appels d'offres"
+        description="Retrouvez ici vos dossiers en préparation et finalisés."
+        actions={
+          <>
+            <TenderViewSwitcher active="list" queryString={queryString} />
+            <Button href="/app/tenders/new" variant="primary">
+              Nouvel appel d&apos;offres
+            </Button>
+          </>
+        }
+      />
 
       <TenderStatistics stats={stats} />
 
@@ -90,48 +99,62 @@ export default async function TendersListPage({ searchParams }: { searchParams: 
       />
 
       {page.items.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucun appel d&apos;offres a afficher.</p>
+        <EmptyState
+          icon={FOLDER_ICON}
+          title="Aucun appel d'offres pour le moment"
+          description="Importez votre premier DCE ou explorez les opportunités détectées par TenderOS."
+          actions={
+            <>
+              <Button href="/app/tenders/new" variant="primary">
+                Importer un DCE
+              </Button>
+              <Button href="/app/market-watch" variant="secondary">
+                Explorer les opportunités
+              </Button>
+            </>
+          }
+        />
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-2xl border border-tenderos-navy/10 bg-white shadow-sm">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="py-2 pr-4">Reference</th>
-                <th className="py-2 pr-4">Objet</th>
-                <th className="py-2 pr-4">Client</th>
-                <th className="py-2 pr-4">Acheteur</th>
-                <th className="py-2 pr-4">Statut</th>
-                <th className="py-2 pr-4">Date limite</th>
-                <th className="py-2 pr-4">Score</th>
-                <th className="py-2 pr-4">Risques</th>
-                <th className="py-2 pr-4">Checklist</th>
-                <th className="py-2 pr-4">Derniere modification</th>
-                <th className="py-2 pr-4">Actions</th>
+              <tr className="border-b border-tenderos-navy/10 text-left text-tenderos-slate">
+                <th className="px-4 py-3 font-medium">Référence</th>
+                <th className="px-4 py-3 font-medium">Objet</th>
+                <th className="px-4 py-3 font-medium">Client</th>
+                <th className="px-4 py-3 font-medium">Acheteur</th>
+                <th className="px-4 py-3 font-medium">Statut</th>
+                <th className="px-4 py-3 font-medium">Date limite</th>
+                <th className="px-4 py-3 font-medium">Score</th>
+                <th className="px-4 py-3 font-medium">Risques</th>
+                <th className="px-4 py-3 font-medium">Checklist</th>
+                <th className="px-4 py-3 font-medium">Dernière modification</th>
+                <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {page.items.map((tender) => (
-                <tr key={tender.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4 text-neutral-600">{tender.reference ?? "—"}</td>
-                  <td className="py-2 pr-4">
-                    <Link href={`/app/tenders/${tender.id}`} className="font-medium text-neutral-900 hover:underline">
+                <tr key={tender.id} className="border-b border-tenderos-navy/5 last:border-b-0 hover:bg-tenderos-light/60">
+                  <td className="px-4 py-3 text-tenderos-slate">{tender.reference ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <Link href={`/app/tenders/${tender.id}`} className="font-semibold text-tenderos-navy hover:text-tenderos-blue hover:underline">
                       {tender.title}
                     </Link>
                   </td>
-                  <td className="py-2 pr-4 text-neutral-600">
+                  <td className="px-4 py-3 text-tenderos-slate">
                     {clientNameById.get(tender.clientAccountId) ?? (
                       <Link href={`/app/clients/${tender.clientAccountId}`} className="hover:underline">
                         Voir le client
                       </Link>
                     )}
                   </td>
-                  <td className="py-2 pr-4 text-neutral-600">{tender.buyerName ?? "—"}</td>
-                  <td className="py-2 pr-4">
+                  <td className="px-4 py-3 text-tenderos-slate">{tender.buyerName ?? "—"}</td>
+                  <td className="px-4 py-3">
                     <TenderStatusBadge status={tender.status} />
                   </td>
-                  <td className="py-2 pr-4 text-neutral-600">
+                  <td className="px-4 py-3 text-tenderos-slate">
                     {tender.submissionDeadline ? (
-                      <span className={tender.overdue ? "font-medium text-red-700" : undefined}>
+                      <span className={tender.overdue ? "font-semibold text-red-700" : undefined}>
                         {new Date(tender.submissionDeadline).toLocaleDateString("fr-FR")}
                         {tender.overdue ? " (retard)" : ""}
                       </span>
@@ -139,20 +162,20 @@ export default async function TendersListPage({ searchParams }: { searchParams: 
                       "—"
                     )}
                   </td>
-                  <td className="py-2 pr-4 text-neutral-600">{tender.readinessScore}/100</td>
-                  <td className="py-2 pr-4 text-neutral-600">
+                  <td className="px-4 py-3 tabular-nums text-tenderos-slate">{tender.readinessScore}/100</td>
+                  <td className="px-4 py-3 tabular-nums text-tenderos-slate">
                     {tender.openRisksCount > 0 ? (
-                      <span className="text-red-700">{tender.openRisksCount}</span>
+                      <span className="font-semibold text-red-700">{tender.openRisksCount}</span>
                     ) : (
                       0
                     )}
                   </td>
-                  <td className="py-2 pr-4 text-neutral-600">{tender.incompleteChecklistCount}</td>
-                  <td className="py-2 pr-4 text-neutral-600">
+                  <td className="px-4 py-3 tabular-nums text-tenderos-slate">{tender.incompleteChecklistCount}</td>
+                  <td className="px-4 py-3 text-tenderos-slate">
                     {new Date(tender.updatedAt).toLocaleDateString("fr-FR")}
                   </td>
-                  <td className="py-2 pr-4">
-                    <Link href={`/app/tenders/${tender.id}`} className="text-neutral-700 hover:underline">
+                  <td className="px-4 py-3">
+                    <Link href={`/app/tenders/${tender.id}`} className="font-medium text-tenderos-blue hover:underline">
                       Ouvrir
                     </Link>
                   </td>
@@ -166,7 +189,7 @@ export default async function TendersListPage({ searchParams }: { searchParams: 
       {page.pageInfo.hasNextPage && page.pageInfo.nextCursor ? (
         <Link
           href={`/app/tenders?${new URLSearchParams({ ...params, cursor: page.pageInfo.nextCursor }).toString()}`}
-          className="self-start text-sm text-neutral-700 hover:underline"
+          className="self-start text-sm font-medium text-tenderos-blue hover:underline"
         >
           Page suivante →
         </Link>

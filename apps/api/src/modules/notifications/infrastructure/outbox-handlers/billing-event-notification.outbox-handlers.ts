@@ -9,6 +9,7 @@ import {
   buildSubscriptionPaymentFailedEmail,
   buildSubscriptionPlanChangedEmail,
 } from "./billing-notification-templates";
+import { buildTrialConvertedEmail, buildTrialEndingSoonEmail, buildTrialStartedEmail } from "./trial-notification-templates";
 import { BillingEventNotificationService } from "./billing-event-notification.service";
 
 function baseUrl(): string {
@@ -185,6 +186,96 @@ export class QuotaThresholdReachedNotificationOutboxHandler implements OutboxEve
       title: email.subject,
       targetUrl: link,
       metadata: { quotaType: payload.quotaType, threshold: payload.threshold, used: payload.used, limit: payload.limit },
+      emailSubject: email.subject,
+      emailHtml: email.html,
+      emailText: email.text,
+    });
+  }
+}
+
+/** V2 Sprint 25 (Trial Starter) — mission §29 "J0 : essai activé". Émis par
+ *  `AssignSubscriptionUseCase` dès la première observation d'un statut Stripe `trialing` pour
+ *  cette organisation (jamais au clic Landing/à un retour Checkout, voir §13). */
+@Injectable()
+export class TrialStartedNotificationOutboxHandler implements OutboxEventHandler {
+  readonly eventType = "TrialStarted";
+  constructor(private readonly service: BillingEventNotificationService) {}
+
+  async handle(event: OutboxEventToDispatch): Promise<void> {
+    const payload = event.payload as { billingInterval?: unknown; futurePriceCents?: unknown; trialEndsAt?: unknown };
+    if (typeof payload.billingInterval !== "string" || typeof payload.futurePriceCents !== "number" || typeof payload.trialEndsAt !== "string") return;
+    const link = subscriptionLink();
+    const email = buildTrialStartedEmail({ futurePriceCents: payload.futurePriceCents, billingInterval: payload.billingInterval, trialEndsAt: new Date(payload.trialEndsAt), link });
+    await this.service.notifyOrganizationBillingManagers({
+      organizationId: event.organizationId,
+      type: "BILLING_TRIAL_STARTED",
+      title: email.subject,
+      targetUrl: link,
+      metadata: { subscriptionId: event.aggregateId, trialEndsAt: payload.trialEndsAt },
+      emailSubject: email.subject,
+      emailHtml: email.html,
+      emailText: email.text,
+    });
+  }
+}
+
+/** V2 Sprint 25 (Trial Starter) — mission §29 "J7/J11/J13". Émis par `SendTrialRemindersUseCase`
+ *  (worker), jamais par un événement Stripe (rien ne se passe côté paiement un jour de rappel). */
+@Injectable()
+export class TrialEndingSoonNotificationOutboxHandler implements OutboxEventHandler {
+  readonly eventType = "TrialEndingSoon";
+  constructor(private readonly service: BillingEventNotificationService) {}
+
+  async handle(event: OutboxEventToDispatch): Promise<void> {
+    const payload = event.payload as { daysRemaining?: unknown; billingInterval?: unknown; futurePriceCents?: unknown; trialEndsAt?: unknown };
+    if (
+      typeof payload.daysRemaining !== "number" ||
+      typeof payload.billingInterval !== "string" ||
+      typeof payload.futurePriceCents !== "number" ||
+      typeof payload.trialEndsAt !== "string"
+    ) {
+      return;
+    }
+    const link = subscriptionLink();
+    const email = buildTrialEndingSoonEmail({
+      daysRemaining: payload.daysRemaining,
+      futurePriceCents: payload.futurePriceCents,
+      billingInterval: payload.billingInterval,
+      trialEndsAt: new Date(payload.trialEndsAt),
+      link,
+    });
+    await this.service.notifyOrganizationBillingManagers({
+      organizationId: event.organizationId,
+      type: "BILLING_TRIAL_ENDING_SOON",
+      title: email.subject,
+      targetUrl: link,
+      metadata: { subscriptionId: event.aggregateId, daysRemaining: payload.daysRemaining, trialEndsAt: payload.trialEndsAt },
+      emailSubject: email.subject,
+      emailHtml: email.html,
+      emailText: email.text,
+    });
+  }
+}
+
+/** V2 Sprint 25 (Trial Starter) — mission §21/§29 "J14 : Trial terminé / abonnement activé". Émis
+ *  par `AssignSubscriptionUseCase` uniquement sur une transition RÉELLE TRIALING -> ACTIVE (jamais
+ *  pour une réactivation qui ne vient pas d'un Trial). */
+@Injectable()
+export class TrialConvertedNotificationOutboxHandler implements OutboxEventHandler {
+  readonly eventType = "TrialConverted";
+  constructor(private readonly service: BillingEventNotificationService) {}
+
+  async handle(event: OutboxEventToDispatch): Promise<void> {
+    const payload = event.payload as { billingInterval?: unknown; priceCents?: unknown };
+    if (typeof payload.billingInterval !== "string" || typeof payload.priceCents !== "number") return;
+    const link = subscriptionLink();
+    const email = buildTrialConvertedEmail({ priceCents: payload.priceCents, billingInterval: payload.billingInterval, link });
+    await this.service.notifyOrganizationBillingManagers({
+      organizationId: event.organizationId,
+      type: "BILLING_TRIAL_CONVERTED",
+      title: email.subject,
+      targetUrl: link,
+      metadata: { subscriptionId: event.aggregateId },
       emailSubject: email.subject,
       emailHtml: email.html,
       emailText: email.text,

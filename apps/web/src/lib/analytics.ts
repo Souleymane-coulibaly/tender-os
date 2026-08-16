@@ -21,6 +21,23 @@ function gtag(...args: unknown[]): void {
   window.dataLayer.push(args);
 }
 
+// Correctif réaudit Codex (Sprint 25E, 3e tour) — un premier correctif affectait `window.gtag = gtag`
+// inconditionnellement au chargement du module pour que `trackEvent` cesse d'être un no-op muet en
+// production. Codex a montré à raison que cela créait une VRAIE régression : `window.gtag` devenait
+// alors atteignable AVANT tout consentement (cassant `tests/landing.spec.ts:58-79`, mission §58/§59
+// "Analytics non initialisé avant consentement"), et `trackEvent` — appelé sans aucune garde de
+// consentement locale par `site-header.tsx`/`tracked-link.tsx`/etc., qui ne faisaient QUE compter
+// implicitement sur l'absence de `window.gtag` comme unique protection — pouvait alors pousser des
+// événements dans `dataLayer` avant accord utilisateur.
+//
+// Le vrai correctif sépare les deux préoccupations : le consentement (état applicatif explicite,
+// ci-dessous) et la disponibilité du script GA4 vendeur (dont l'existence de `window.gtag` n'a
+// jamais été une condition réelle : la file d'attente `dataLayer` fonctionne dès que des entrées y
+// sont poussées, script chargé ou non — c'est tout l'intérêt du motif `dataLayer.push`). `trackEvent`
+// n'a donc plus besoin de `window.gtag` du tout : il pousse directement via `gtag()` ci-dessus,
+// gardé par ce drapeau de consentement, jamais par la simple présence d'une fonction sur `window`.
+let hasAnalyticsConsent = false;
+
 /** Mission §34 — avant tout consentement, tout est `denied`. Appelé au montage du script GA4
  *  (donc seulement une fois le consentement Analytics déjà accordé, voir `AnalyticsLoader`), suivi
  *  immédiatement de `applyConsentToGtag`. */
@@ -34,8 +51,11 @@ export function setDefaultDeniedConsent(): void {
 }
 
 /** TenderOS n'active jamais les signaux Ads (mission §34 "pas besoin d'activer les fonctions Ads
- *  simplement pour Analytics") — seul `analytics_storage` peut passer à `granted`. */
+ *  simplement pour Analytics") — seul `analytics_storage` peut passer à `granted`. Seul point qui
+ *  fait réellement autorité sur "le consentement est accordé" pour `trackEvent` (voir plus bas) —
+ *  jamais l'existence de `window.gtag` ou du script vendeur GA4. */
 export function applyConsentToGtag(analyticsGranted: boolean): void {
+  hasAnalyticsConsent = analyticsGranted;
   gtag("consent", "update", { analytics_storage: analyticsGranted ? "granted" : "denied" });
 }
 
@@ -64,14 +84,26 @@ export const GA_EVENTS = {
   OnboardingPlanSelected: "onboarding_plan_selected",
   CheckoutStarted: "checkout_started",
   OnboardingCompleted: "onboarding_completed",
+  // V2 Sprint 25 (mission §25.92 "GA4 / PRODUCT EVENTS") — après consentement uniquement (même
+  // moteur, `trackEvent` ci-dessous), aucune PII.
+  PricingPageViewed: "pricing_page_viewed",
+  StarterTrialSelected: "starter_trial_selected",
+  StarterTrialStarted: "starter_trial_started",
+  StarterTrialConversion: "starter_trial_conversion",
+  ProductTourStarted: "product_tour_started",
+  ProductTourCompleted: "product_tour_completed",
+  FirstTenderStarted: "first_tender_started",
 } as const;
 export type GaEventName = (typeof GA_EVENTS)[keyof typeof GA_EVENTS];
 
 export type GaEventParams = Readonly<Record<string, string | number | boolean>>;
 
-/** Sans script GA4 monté (pas de consentement, ou `NEXT_PUBLIC_GA_MEASUREMENT_ID` absent), un
- *  no-op silencieux — jamais un crash (mission §63 "Landing doit fonctionner normalement"). */
+/** Sans consentement Analytics accordé, un no-op silencieux — jamais un crash (mission §63 "Landing
+ *  doit fonctionner normalement"), jamais un événement mis en file avant l'accord de l'utilisateur
+ *  (mission §58/§59). Ne dépend plus de `window.gtag` (voir le commentaire au-dessus de
+ *  `hasAnalyticsConsent`) : le consentement est le SEUL garde-fou, indépendant de l'état de
+ *  chargement du script GA4 vendeur. */
 export function trackEvent(name: GaEventName, params?: GaEventParams): void {
-  if (typeof window === "undefined" || typeof window.gtag !== "function") return;
-  window.gtag("event", name, params ?? {});
+  if (typeof window === "undefined" || !hasAnalyticsConsent) return;
+  gtag("event", name, params ?? {});
 }

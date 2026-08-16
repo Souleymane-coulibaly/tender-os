@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
 import type { PricingEstimateSummary, TenderCostSummary } from "../../../../../../lib/pricing-types";
+import { Card } from "../../../../../../components/ui/card";
+import { PageHeader } from "../../../../../../components/ui/page-header";
+import { TabsNav } from "../../../../../../components/ui/tabs-nav";
 import { ApiErrorState } from "../../../api-error-state";
+import { buildTenderNavTabs } from "../tender-nav-tabs";
 import { EstimateHistorySection } from "./estimate-history-section";
 import { PricingSection } from "./pricing-section";
 
@@ -27,19 +31,17 @@ export default async function TenderPricingPage({ params }: { params: Promise<{ 
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">Pricing &amp; prévisions</h1>
-        <p className="text-sm text-neutral-600">
-          Coût technique IA réel de ce Tender et estimations prévisionnelles indicatives. Aucun montant affiché ici
-          n&apos;est un prix réel garanti du marché.
-        </p>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Pricing" }]}
+        title="Pricing & prévisions"
+        description="Coût technique IA réel de ce Tender et estimations prévisionnelles indicatives. Aucun montant affiché ici n'est un prix réel garanti du marché."
+      />
+      <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/pricing`} />
       <PricingSection tenderId={tenderId} initialSummary={summary} actorRole={actorRole} />
 
-      <section className="rounded border border-neutral-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-900">Historique des estimations</h2>
+      <Card title="Historique des estimations">
         <EstimateHistorySection estimates={history.items} />
-      </section>
+      </Card>
     </div>
   );
 }

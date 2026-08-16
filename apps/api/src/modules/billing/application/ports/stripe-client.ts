@@ -9,6 +9,22 @@ export type CreateStripeCheckoutSessionInput = Readonly<{
   customerEmail?: string | undefined;
   successUrl: string;
   cancelUrl: string;
+  /** V2 Sprint 25 (Trial Starter) — mission §7/§8 : uniquement `mode: "subscription"`. Résolu côté
+   *  backend (`STARTER_TRIAL_DAYS`, jamais un nombre fourni par le client) UNIQUEMENT quand
+   *  l'organisation est éligible (mission §11, jamais plus d'un Trial). La collecte de la carte
+   *  reste TOUJOURS obligatoire (mission §8/§9) — voir `stripe-sdk.client.ts`, qui force
+   *  `payment_method_collection: "always"` et annule le Trial si la carte n'a jamais été
+   *  enregistrée, plutôt que de l'activer artificiellement. */
+  trialPeriodDays?: number | undefined;
+  /** Correctif audit Codex Checkpoint 25A (P1-001) — `existingSubscription === null` ne protège
+   *  QUE contre un second Trial une fois la subscription locale créée par le webhook Stripe, jamais
+   *  contre deux `CreateCheckoutSessionUseCase.execute()` réellement concurrents (aucune ligne
+   *  locale n'existe encore pour l'un ou l'autre appel). La clé d'idempotence Stripe (stable, scopée
+   *  organisation) est LA protection réelle sous concurrence : deux appels simultanés avec la même
+   *  clé n'aboutissent jamais qu'à une seule Checkout Session côté Stripe (Stripe fait lui-même
+   *  patienter le second appel puis renvoie la réponse du premier), jamais deux abonnements Trial
+   *  distincts pour la même organisation. */
+  idempotencyKey?: string | undefined;
 }>;
 
 export type StripeCheckoutSession = Readonly<{ sessionId: string; url: string }>;

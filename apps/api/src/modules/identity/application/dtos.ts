@@ -13,6 +13,12 @@ export type UserSummary = {
    *  déjà accepté la version actuelle des CGU (`TERMS_VERSION`) sans jamais lui redemander
    *  pendant une reprise d'onboarding ou à chaque connexion. */
   termsAcceptedVersion?: string | undefined;
+  /** V2 Sprint 25 (Guide interactif) — mission §25.72 "première arrivée" : le frontend décide
+   *  d'afficher "Bienvenue dans TenderOS" quand les trois sont absents, jamais un second état de
+   *  progression persisté côté client. */
+  tourStartedAt?: string | undefined;
+  tourCompletedAt?: string | undefined;
+  tourDismissedAt?: string | undefined;
   createdAt: string;
 };
 
@@ -27,6 +33,9 @@ export function toUserSummary(user: User): UserSummary {
     emailVerifiedAt: user.emailVerifiedAt?.toISOString(),
     lastLoginAt: user.lastLoginAt?.toISOString(),
     termsAcceptedVersion: user.termsAcceptedVersion,
+    tourStartedAt: user.tourStartedAt?.toISOString(),
+    tourCompletedAt: user.tourCompletedAt?.toISOString(),
+    tourDismissedAt: user.tourDismissedAt?.toISOString(),
     createdAt: user.createdAt.toISOString(),
   };
 }

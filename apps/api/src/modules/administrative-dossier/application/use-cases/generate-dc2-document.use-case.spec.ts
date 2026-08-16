@@ -31,7 +31,7 @@ function fakeDossierRepository(dossier: AdministrativeDossier | null): Administr
   return { create: async () => {}, findById: async () => dossier, findByTenderId: async () => dossier, save: async () => {} };
 }
 function fakeDocumentRepository(documents: readonly AdministrativeDocument[]): AdministrativeDocumentRepository {
-  return { create: async () => {}, findById: async () => null, listByDossier: async () => documents, findByRequirementId: async () => null, save: async () => {} };
+  return { create: async () => {}, findById: async () => null, listByDossier: async () => documents, findByRequirementId: async () => null, save: async () => {}, existsForOrganization: async () => documents.length > 0 };
 }
 function fakeDeclarationRepository(declaration: Dc2Declaration | null): Dc2DeclarationRepository {
   return { create: async () => {}, findById: async () => declaration, findByTenderId: async () => declaration, save: async () => {} };

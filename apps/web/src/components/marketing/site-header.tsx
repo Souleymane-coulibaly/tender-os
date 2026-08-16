@@ -6,7 +6,7 @@ import { GA_EVENTS, trackEvent } from "../../lib/analytics";
 
 const NAV_LINKS = [
   { href: "#fonctionnalites", label: "Fonctionnalités" },
-  { href: "#tarifs", label: "Tarifs" },
+  { href: "/pricing", label: "Tarifs" },
   { href: "/a-propos", label: "À propos" },
 ] as const;
 

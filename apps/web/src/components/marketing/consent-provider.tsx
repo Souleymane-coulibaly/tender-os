@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { applyConsentToGtag } from "../../lib/analytics";
 import {
   ACCEPT_ALL_CONSENT,
   REJECT_ALL_CONSENT,
@@ -38,11 +39,21 @@ export function ConsentProvider({ children }: { children: ReactNode }) {
     const stored = readStoredConsent();
     if (stored) {
       setConsent({ necessary: true, analytics: stored.analytics, support: stored.support });
+      // Correctif réaudit Codex (Sprint 25E, 4e tour, P2) — appelé ici directement plutôt que
+      // laissé à un effet réactif propre à `AnalyticsLoader` : React exécute les effets des ENFANTS
+      // avant ceux des composants parents, donc l'effet de `PageViewTracker` (monté dans la page,
+      // un enfant du layout `(marketing)`) pouvait s'exécuter AVANT celui d'`AnalyticsLoader` (monté
+      // dans le layout, un parent) — `trackEvent` lisait alors encore le drapeau de consentement à
+      // `false`, perdait l'événement silencieusement, et `hasFired` empêchait tout nouvel essai.
+      // `ConsentProvider` est la SEULE source de vérité du consentement (mission §37) : c'est donc le
+      // seul endroit garanti de s'exécuter avant tout effet qui dépend de `consent`, jamais après.
+      applyConsentToGtag(stored.analytics);
     }
   }, []);
 
   const savePreferences = useCallback((categories: ConsentCategories) => {
     writeStoredConsent(categories);
+    applyConsentToGtag(categories.analytics);
     setConsent(categories);
     setIsSettingsOpen(false);
   }, []);

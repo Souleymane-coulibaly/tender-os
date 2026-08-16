@@ -66,6 +66,20 @@ const ONBOARDING_CSP =
   `connect-src 'self' https://www.google-analytics.com https://analytics.google.com; ` +
   `frame-ancestors 'none'; base-uri 'self'; form-action 'self'`;
 
+/** V2 Sprint 25 (mission §25.92 "GA4 / PRODUCT EVENTS") — correctif audit Codex Checkpoint 25E
+ *  (P1) : `AuthenticatedAnalyticsLoader` charge GA4 sur `/app/*` (jamais Crisp — même discipline
+ *  qu'ONBOARDING_CSP) pour que `product_tour_started/completed`/`starter_trial_started/conversion`/
+ *  `first_tender_started` puissent réellement partir. `/platform-admin/*` reste sur `APP_CSP`
+ *  strict inchangé (aucun besoin produit GA4 côté Platform Admin, jamais élargi sans raison). */
+const APP_CSP_WITH_GA4 =
+  `default-src 'self'; ` +
+  `script-src 'self' 'unsafe-inline'${UNSAFE_EVAL_IN_DEV} https://www.googletagmanager.com; ` +
+  `style-src 'self' 'unsafe-inline'; ` +
+  `img-src 'self' data: blob: https://www.google-analytics.com; ` +
+  `font-src 'self' data:; ` +
+  `connect-src 'self' https://www.google-analytics.com https://analytics.google.com; ` +
+  `frame-ancestors 'none'; base-uri 'self'; form-action 'self'`;
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Le lint est un script dédié (`pnpm lint`, eslint.config.mjs à la racine du monorepo) ;
@@ -79,13 +93,18 @@ const nextConfig: NextConfig = {
       // Baseline (jamais de CSP ici, voir le commentaire ci-dessus) — appliqué à toute réponse,
       // y compris les assets statiques (favicons, manifest, robots.txt, sitemap.xml).
       { source: "/:path*", headers: [...COMMON_HEADERS, ...hstsInProd] },
-      // Surface authentifiée — CSP stricte inchangée depuis Sprint 21.
-      { source: "/app/:path*", headers: [{ key: "Content-Security-Policy", value: APP_CSP }] },
+      // Surface authentifiée — V2 Sprint 25 : GA4 autorisé (voir APP_CSP_WITH_GA4 ci-dessus),
+      // jamais Crisp. Platform Admin reste sur APP_CSP strict, inchangé depuis Sprint 21.
+      { source: "/app/:path*", headers: [{ key: "Content-Security-Policy", value: APP_CSP_WITH_GA4 }] },
       { source: "/platform-admin/:path*", headers: [{ key: "Content-Security-Policy", value: APP_CSP }] },
       // Surface marketing publique (mission §2) — SEULES routes autorisées à charger GA4/Crisp.
       { source: "/", headers: [{ key: "Content-Security-Policy", value: MARKETING_CSP }] },
       { source: "/contact", headers: [{ key: "Content-Security-Policy", value: MARKETING_CSP }] },
       { source: "/a-propos", headers: [{ key: "Content-Security-Policy", value: MARKETING_CSP }] },
+      // V2 Sprint 25 (Pricing dédié) — mission §25.32 : nouvelle route publique, même politique que
+      // les autres pages marketing (GA4 pour le suivi Pricing, jamais de CSP par défaut trop
+      // permissive — voir le commentaire au sommet de ce fichier sur le partitionnement CSP).
+      { source: "/pricing", headers: [{ key: "Content-Security-Policy", value: MARKETING_CSP }] },
       { source: "/legal/:path*", headers: [{ key: "Content-Security-Policy", value: MARKETING_CSP }] },
       // V2 Sprint 24 (onboarding) — GA4 mais jamais Crisp, voir ONBOARDING_CSP.
       { source: "/onboarding/:path*", headers: [{ key: "Content-Security-Policy", value: ONBOARDING_CSP }] },

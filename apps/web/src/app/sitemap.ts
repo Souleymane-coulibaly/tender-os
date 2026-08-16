@@ -8,6 +8,9 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 },
+    // V2 Sprint 25 (Pricing dédié) — mission §25.53 "/pricing doit être indexable" : priorité au
+    // même niveau que `/contact` (page commerciale), jamais oubliée du sitemap.
+    { url: `${SITE_URL}/pricing`, changeFrequency: "weekly", priority: 0.9 },
     { url: `${SITE_URL}/contact`, changeFrequency: "monthly", priority: 0.6 },
     { url: `${SITE_URL}/a-propos`, changeFrequency: "monthly", priority: 0.5 },
   ];

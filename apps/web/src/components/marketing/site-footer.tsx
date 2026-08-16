@@ -27,7 +27,7 @@ export function SiteFooter() {
             <h3 className="text-sm font-semibold text-white/50">Produit</h3>
             <ul className="mt-3 space-y-2 text-sm">
               <li><a href="#fonctionnalites" className="text-white/80 hover:text-white">Fonctionnalités</a></li>
-              <li><a href="#tarifs" className="text-white/80 hover:text-white">Tarifs</a></li>
+              <li><a href="/pricing" className="text-white/80 hover:text-white">Tarifs</a></li>
               <li><a href="#integrations" className="text-white/80 hover:text-white">Intégrations</a></li>
               <li><a href="#securite" className="text-white/80 hover:text-white">Sécurité</a></li>
             </ul>

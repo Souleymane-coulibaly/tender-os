@@ -3,7 +3,10 @@ import { fetchDceSectionData } from "../../../../dce-actions";
 import { fetchPricingSchedules } from "../../../../pricing-schedule-actions";
 import type { PricingSchedule } from "../../../../../../lib/pricing-schedule-types";
 import type { DceDocumentSummary } from "../../../../../../lib/dce-types";
+import { PageHeader } from "../../../../../../components/ui/page-header";
+import { TabsNav } from "../../../../../../components/ui/tabs-nav";
 import { ApiErrorState } from "../../../api-error-state";
+import { buildTenderNavTabs } from "../tender-nav-tabs";
 import { PricingScheduleSection } from "./pricing-schedule-section";
 
 export const metadata: Metadata = { title: "Chiffrage — TenderOS" };
@@ -23,14 +26,12 @@ export default async function TenderPricingSchedulePage({ params }: { params: Pr
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">Chiffrage</h1>
-        <p className="text-sm text-neutral-600">
-          Détectez les fichiers BPU/DPGF/DQE du DCE, saisissez vos prix sur les cellules autorisées, validez le
-          chiffrage puis générez le fichier financier final — une copie du classeur acheteur avec uniquement vos prix
-          injectés, jamais un fichier reconstruit.
-        </p>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Chiffrage" }]}
+        title="Chiffrage"
+        description="Détectez les fichiers BPU/DPGF/DQE du DCE, saisissez vos prix sur les cellules autorisées, validez le chiffrage puis générez le fichier financier final — une copie du classeur acheteur avec uniquement vos prix injectés, jamais un fichier reconstruit."
+      />
+      <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/pricing-schedule`} />
       <PricingScheduleSection tenderId={tenderId} initialSchedules={schedules} detectedFinancialDocuments={detectedFinancialDocuments} />
     </div>
   );

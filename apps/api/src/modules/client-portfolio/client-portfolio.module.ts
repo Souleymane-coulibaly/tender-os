@@ -52,6 +52,9 @@ import { ClientPortfolioController } from "./interfaces/http/client-portfolio.co
     { provide: CLIENT_ASSIGNMENT_REPOSITORY, useClass: PrismaClientAssignmentRepository },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
   ],
-  exports: [AssertClientAccessUseCase, ListAccessibleClientsUseCase, GetClientAccountUseCase],
+  // V2 Sprint 25 (Dashboard Premium — checklist d'activation) — `ListClientAccountsUseCase` ajouté :
+  // même motif que les autres réexports ci-dessus, nécessaire à `dashboard` pour énumérer les
+  // clients accessibles (mission §25.69 "Compléter l'entreprise candidate").
+  exports: [AssertClientAccessUseCase, ListAccessibleClientsUseCase, GetClientAccountUseCase, ListClientAccountsUseCase],
 })
 export class ClientPortfolioModule {}

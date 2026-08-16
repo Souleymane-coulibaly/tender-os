@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
+import { FirstTenderTracker } from "./first-tender-tracker";
 import { fetchAnalysisCapabilities, fetchAnalysisSectionData } from "../../../analysis-actions";
 import { canTriggerAnalysis, type AnalysisCapability, type AnalysisSectionData } from "../../../../../lib/analysis-types";
 import { fetchTenderSuggestions } from "../../../ai-suggestion-actions";
@@ -31,6 +32,10 @@ import {
   type TenderLot,
   type TenderProfile,
 } from "../../../../../lib/tenders-types";
+import { Badge, type BadgeTone } from "../../../../../components/ui/badge";
+import { Card } from "../../../../../components/ui/card";
+import { PageHeader } from "../../../../../components/ui/page-header";
+import { TabsNav } from "../../../../../components/ui/tabs-nav";
 import { ApiErrorState } from "../../api-error-state";
 import { TenderStatusBadge } from "../tender-status-badge";
 import { AiSuggestionsSection } from "./ai-suggestions-section";
@@ -52,19 +57,20 @@ import { RequestedDocumentsSection } from "./requested-documents-section";
 import { RestoreButton } from "./restore-button";
 import { RisksSection } from "./risks-section";
 import { StatusChangeForm } from "./status-change-form";
+import { buildTenderNavTabs } from "./tender-nav-tabs";
 
 export const metadata: Metadata = { title: "Detail de l'appel d'offres — TenderOS" };
 
-function readinessBadgeClass(status: Readiness["status"]): string {
+function readinessTone(status: Readiness["status"]): BadgeTone {
   switch (status) {
     case "READY":
-      return "bg-green-100 text-green-800";
+      return "success";
     case "READY_WITH_WARNINGS":
-      return "bg-amber-100 text-amber-800";
+      return "warning";
     case "IN_PROGRESS":
-      return "bg-blue-100 text-blue-800";
+      return "info";
     default:
-      return "bg-red-100 text-red-800";
+      return "danger";
   }
 }
 
@@ -149,72 +155,27 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
     return <ApiErrorState error={error} />;
   }
 
+  const navTabs = buildTenderNavTabs(tender.id);
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">{tender.title}</h1>
-          <p className="text-sm text-neutral-600">
-            {tender.reference ? `${tender.reference} — ` : null}
-            {tender.buyerName ?? "Acheteur non renseigne"}
-          </p>
-          <Link href={`/app/clients/${tender.clientAccountId}`} className="text-sm text-neutral-700 hover:underline">
-            Voir le client →
-          </Link>
-        </div>
-        <div className="flex items-center gap-3">
-          <TenderStatusBadge status={tender.status} />
-          {tender.status !== "ARCHIVED" ? <ArchiveButton tenderId={tender.id} /> : <RestoreButton tenderId={tender.id} />}
-        </div>
-      </div>
+      <FirstTenderTracker />
+      <PageHeader
+        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: tender.title }]}
+        title={tender.title}
+        description={`${tender.reference ? `${tender.reference} — ` : ""}${tender.buyerName ?? "Acheteur non renseigné"}`}
+        status={<TenderStatusBadge status={tender.status} />}
+        actions={
+          <>
+            <Link href={`/app/clients/${tender.clientAccountId}`} className="text-sm font-medium text-tenderos-blue hover:underline">
+              Voir le client
+            </Link>
+            {tender.status !== "ARCHIVED" ? <ArchiveButton tenderId={tender.id} /> : <RestoreButton tenderId={tender.id} />}
+          </>
+        }
+      />
 
-      <nav className="flex flex-wrap gap-2 border-b border-neutral-200 pb-3 text-sm">
-        <Link href={`/app/tenders/${tender.id}/workspace`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Workspace
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/assistant`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Assistant IA
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/technical-memo`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Rédaction IA du mémoire
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/pricing-schedule`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Chiffrage
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/response-package`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Dossier final
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/generations`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Générations
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/deliverables`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Livrables
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/administrative-dossier`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Dossier administratif
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/pricing`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Pricing
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/export`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Export
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/documents-generated`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Documents générés
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/validation`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Validation
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/signature`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Signature
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/submission-package`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Dossier de soumission
-        </Link>
-        <Link href={`/app/tenders/${tender.id}/submission`} className="rounded px-2 py-1 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">
-          Dépôt
-        </Link>
-      </nav>
+      <TabsNav items={navTabs} activeHref={`/app/tenders/${tender.id}`} />
 
       <CockpitSection tenderId={tender.id} cockpit={cockpit} />
 
@@ -229,30 +190,27 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
           accessibleClients={accessibleClients}
           canChange={canChangeTenderCandidate(role)}
         />
-        <section className="rounded border border-neutral-200 p-4">
-          <h2 className="text-sm font-semibold text-neutral-700">Acheteur</h2>
+        <Card title="Acheteur">
           {profile.buyer ? (
-            <div className="mt-1 text-sm text-neutral-900">
-              <p className="font-medium">{profile.buyer.name}</p>
-              {profile.buyer.city ? <p className="text-xs text-neutral-600">{profile.buyer.city}</p> : null}
-              {profile.buyer.siret ? <p className="text-xs text-neutral-600">SIRET : {profile.buyer.siret}</p> : null}
+            <div className="text-sm text-tenderos-navy">
+              <p className="font-semibold">{profile.buyer.name}</p>
+              {profile.buyer.city ? <p className="text-xs text-tenderos-slate">{profile.buyer.city}</p> : null}
+              {profile.buyer.siret ? <p className="text-xs text-tenderos-slate">SIRET : {profile.buyer.siret}</p> : null}
             </div>
           ) : (
-            <p className="mt-1 text-sm text-neutral-500">
-              {tender.buyerName ?? "Aucun acheteur structure rattache."}
-            </p>
+            <p className="text-sm text-tenderos-slate">{tender.buyerName ?? "Aucun acheteur structuré rattaché."}</p>
           )}
-          <p className="mt-2 text-xs text-neutral-500">
+          <p className="mt-2 text-xs text-tenderos-slate">
             Modifiable depuis « Modifier les informations de l&apos;appel d&apos;offres » ci-dessous.
           </p>
-        </section>
+        </Card>
       </div>
 
       {tender.status !== "ARCHIVED" ? <StatusChangeForm tenderId={tender.id} status={tender.status} /> : null}
 
       {canEditTenderDetails(role) ? (
-        <details className="rounded border border-neutral-200 p-4">
-          <summary className="cursor-pointer text-sm font-semibold text-neutral-700">
+        <details className="rounded-2xl border border-tenderos-navy/10 bg-white p-5 shadow-sm">
+          <summary className="cursor-pointer font-tenderos-display text-base font-bold text-tenderos-navy">
             Modifier les informations de l&apos;appel d&apos;offres
           </summary>
           <div className="mt-4">
@@ -261,23 +219,20 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         </details>
       ) : null}
 
-      <section className="rounded border border-neutral-200 p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-neutral-700">Score de preparation</h2>
-          <span className={`rounded px-2 py-1 text-xs font-medium ${readinessBadgeClass(readiness.status)}`}>
-            {readiness.score}/100
-          </span>
-        </div>
-        <ul className="mt-2 flex flex-col gap-1 text-xs text-neutral-600">
+      <Card
+        title="Score de préparation"
+        actions={<Badge tone={readinessTone(readiness.status)}>{readiness.score}/100</Badge>}
+      >
+        <ul className="flex flex-col gap-1 text-xs text-tenderos-slate">
           {readiness.breakdown.map((entry) => (
             <li key={entry.label} className="flex justify-between">
               <span>{entry.label}</span>
-              <span>{entry.points.toFixed(1)} / {entry.weight}</span>
+              <span className="tabular-nums">{entry.points.toFixed(1)} / {entry.weight}</span>
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-xs italic text-neutral-500">{readiness.disclaimer}</p>
-      </section>
+        <p className="mt-2 text-xs italic text-tenderos-slate">{readiness.disclaimer}</p>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <LotsSection tenderId={tender.id} lots={lots} canManage={canManageTenderLots(role)} />
@@ -307,25 +262,24 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
           canDecide={canRecordGoNoGoDecision(role)}
         />
 
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-neutral-700">Historique</h2>
+        <Card title="Historique">
           {history.length === 0 ? (
-            <p className="text-sm text-neutral-500">Aucun changement de statut.</p>
+            <p className="text-sm text-tenderos-slate">Aucun changement de statut.</p>
           ) : (
-            <ul>
+            <ul className="flex flex-col">
               {history.map((entry) => (
-                <li key={entry.id} className="border-b border-neutral-100 py-2 text-sm text-neutral-700">
+                <li key={entry.id} className="border-b border-tenderos-navy/5 py-2 text-sm text-tenderos-navy last:border-b-0">
                   {entry.previousStatus ? TENDER_STATUS_LABELS[entry.previousStatus as keyof typeof TENDER_STATUS_LABELS] ?? entry.previousStatus : "—"}
                   {" → "}
                   {TENDER_STATUS_LABELS[entry.newStatus as keyof typeof TENDER_STATUS_LABELS] ?? entry.newStatus}
-                  <span className="ml-2 text-xs text-neutral-500">
+                  <span className="ml-2 text-xs text-tenderos-slate">
                     {new Date(entry.changedAt).toLocaleString("fr-FR")}
                   </span>
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </Card>
       </div>
     </div>
   );

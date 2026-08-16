@@ -28,6 +28,8 @@ export type DashboardDeadlineItem = {
   bucket: DeadlineBucket;
 };
 
+export type DashboardAssignee = { userId: string; displayName: string };
+
 export type DashboardAttentionItem = {
   tenderId: string;
   title: string;
@@ -39,6 +41,9 @@ export type DashboardAttentionItem = {
   readinessScore: number;
   incompleteChecklistCount: number;
   lotPackages: { lotId: string | null; status: ResponsePackageStatus }[];
+  buyerName?: string;
+  lotCount: number;
+  assignees: DashboardAssignee[];
 };
 
 export type DashboardPackages = {
@@ -74,6 +79,38 @@ export type DashboardActivityItem = {
   createdAt: string;
 };
 
+export type DashboardRecommendedOpportunity = {
+  externalTenderId: string;
+  savedSearchId: string;
+  title: string;
+  buyerName?: string;
+  score: number;
+  matchedLabels: string[];
+};
+
+export type DashboardMarketWatch = {
+  hasSavedSearches: boolean;
+  relevantOpportunitiesCount: number;
+  recommended: DashboardRecommendedOpportunity[];
+};
+
+export type ActivationChecklistItemId =
+  | "ACCOUNT_CREATED"
+  | "ORGANIZATION_CONFIGURED"
+  | "CANDIDATE_COMPANY_COMPLETE"
+  | "ADMINISTRATIVE_DOCUMENTS_ADDED"
+  | "MARKET_WATCH_CONFIGURED"
+  | "FIRST_DCE_IMPORTED"
+  | "COLLABORATOR_INVITED";
+
+export type DashboardActivationChecklistItem = { id: ActivationChecklistItemId; label: string; completed: boolean };
+
+export type DashboardActivationChecklist = {
+  items: DashboardActivationChecklistItem[];
+  completedCount: number;
+  totalCount: number;
+};
+
 export type DashboardOverview = {
   generatedAt: string;
   scope: { allClients: boolean; clientAccountId?: string };
@@ -85,6 +122,8 @@ export type DashboardOverview = {
   goNoGo: DashboardGoNoGo;
   myTasks: DashboardMyTasks;
   activity: DashboardActivityItem[];
+  marketWatch: DashboardMarketWatch;
+  activationChecklist: DashboardActivationChecklist;
   averageReadinessScore: number;
 };
 

@@ -1,6 +1,9 @@
 import { Module } from "@nestjs/common";
+import { AdministrativeDossierModule } from "../administrative-dossier";
 import { ClientPortfolioModule } from "../client-portfolio";
+import { CompanyProfileModule } from "../company-profile";
 import { IdentityModule } from "../identity";
+import { MarketWatchModule } from "../market-watch";
 import { MembershipsModule } from "../memberships";
 import { OpportunityModule } from "../opportunity";
 import { ResponsePackageModule } from "../response-package";
@@ -18,7 +21,18 @@ import { DashboardController } from "./interfaces/http/dashboard.controller";
  * persiste rien, il projette (mission §53).
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, TendersModule, ResponsePackageModule, OpportunityModule, WorkspaceModule],
+  imports: [
+    IdentityModule,
+    MembershipsModule,
+    ClientPortfolioModule,
+    TendersModule,
+    ResponsePackageModule,
+    OpportunityModule,
+    WorkspaceModule,
+    MarketWatchModule,
+    CompanyProfileModule,
+    AdministrativeDossierModule,
+  ],
   controllers: [DashboardController],
   providers: [GetDashboardOverviewUseCase],
 })

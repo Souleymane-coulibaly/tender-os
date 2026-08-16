@@ -10,3 +10,7 @@ export type { AdministrativeDocumentForPackage, ListValidatedAdministrativeDocum
 // groupement/sous-traitant déjà déclaré, jamais un second système de déclaration.
 export { GetCandidateContextForPackageUseCase } from "./application/use-cases/get-candidate-context-for-package.use-case";
 export type { CandidateContextForPackage, GetCandidateContextForPackageQuery } from "./application/use-cases/get-candidate-context-for-package.use-case";
+
+// V2 Sprint 25 (Dashboard Premium — checklist d'activation) — réexporté pour `dashboard`, même
+// motif ci-dessus : jamais un second accès direct au repository depuis dashboard.
+export { HasAnyAdministrativeDocumentUseCase } from "./application/use-cases/has-any-administrative-document.use-case";

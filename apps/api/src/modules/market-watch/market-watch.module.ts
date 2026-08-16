@@ -79,6 +79,9 @@ import { SavedSearchesController } from "./interfaces/http/saved-searches.contro
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
     { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
   ],
-  exports: [],
+  // V2 Sprint 25 (Dashboard Premium) — mission §25.63 "Opportunités recommandées" : premier export
+  // de ce module (voir `index.ts`) — la classe seule, réexportée par le barrel, ne suffit pas à la
+  // rendre injectable ailleurs sans figurer aussi dans ce tableau (seule autorité DI réelle).
+  exports: [ListSavedSearchesUseCase, ListSavedSearchMatchesUseCase],
 })
 export class MarketWatchModule {}

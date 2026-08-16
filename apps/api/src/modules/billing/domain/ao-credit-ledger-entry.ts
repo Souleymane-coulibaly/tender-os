@@ -49,6 +49,20 @@ export function createAoCreditLedgerEntry(input: {
     }
   }
 
+  /** V2 Sprint 25 (Trial Starter) — mission §16 "exactement 1 crédit AO Trial", jamais un montant
+   *  variable : contrairement à GRANT (mensuel, plafonné par le rollover cap), TRIAL_GRANT n'a
+   *  qu'une seule forme valide possible — défense en profondeur au niveau domaine, en plus de
+   *  l'idempotence base (au plus une entrée par organisation, voir la migration). Jamais de
+   *  `period` (l'idempotence est "au plus une fois par organisation", pas "par mois"). */
+  if (input.type === AoCreditMovementType.TrialGrant) {
+    if (input.amount !== 1) {
+      throw new InvalidAoCreditLedgerEntryError("TRIAL_GRANT amount must be exactly 1");
+    }
+    if (input.period !== undefined) {
+      throw new InvalidAoCreditLedgerEntryError("TRIAL_GRANT must never carry a period");
+    }
+  }
+
   if (input.type === AoCreditMovementType.Consumption) {
     if (input.tenderId === undefined) {
       throw new InvalidAoCreditLedgerEntryError("CONSUMPTION requires a tenderId");

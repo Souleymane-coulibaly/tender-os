@@ -9,6 +9,9 @@ import {
   SubscriptionCanceledNotificationOutboxHandler,
   SubscriptionPaymentFailedNotificationOutboxHandler,
   SubscriptionPlanChangedNotificationOutboxHandler,
+  TrialConvertedNotificationOutboxHandler,
+  TrialEndingSoonNotificationOutboxHandler,
+  TrialStartedNotificationOutboxHandler,
 } from "./infrastructure/outbox-handlers/billing-event-notification.outbox-handlers";
 import { BillingEventNotificationService } from "./infrastructure/outbox-handlers/billing-event-notification.service";
 import { ApprovalApprovedNotificationOutboxHandler } from "./infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers";
@@ -45,6 +48,12 @@ export const NOTIFICATION_OUTBOX_HANDLERS = [
   SubscriptionPlanChangedNotificationOutboxHandler,
   SubscriptionCanceledNotificationOutboxHandler,
   QuotaThresholdReachedNotificationOutboxHandler,
+  // V2 Sprint 25 (activation, Trial Starter) — mission §29, 3 types d'événements écrits par
+  // `billing` (`TrialStarted`/`TrialEndingSoon`/`TrialConverted`), aucun handler enregistré dessus
+  // jusqu'ici, aucun risque de collision avec `INTEGRATION_OUTBOX_HANDLERS`.
+  TrialStartedNotificationOutboxHandler,
+  TrialEndingSoonNotificationOutboxHandler,
+  TrialConvertedNotificationOutboxHandler,
 ];
 
 /**

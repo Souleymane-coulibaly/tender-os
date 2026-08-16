@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
 import { fetchGenerationCapabilities } from "../../../../generation-actions";
 import { GENERATION_TASK_TYPE_LABELS, type GenerationCapability, type GenerationSummary } from "../../../../../../lib/generation-types";
+import { PageHeader } from "../../../../../../components/ui/page-header";
+import { TabsNav } from "../../../../../../components/ui/tabs-nav";
 import { ApiErrorState } from "../../../api-error-state";
+import { buildTenderNavTabs } from "../tender-nav-tabs";
 import { GenerationSection } from "./generation-section";
 
 export const metadata: Metadata = { title: "Générations — TenderOS" };
@@ -25,13 +28,12 @@ export default async function TenderGenerationsPage({ params }: { params: Promis
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">Générations de contenu</h1>
-        <p className="text-sm text-neutral-600">
-          Contenus générés par IA pour ce Tender, à partir des analyses, de la Base de connaissances et de prompts
-          versionnés. Toute génération doit être relue et validée par un humain avant utilisation.
-        </p>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Générations" }]}
+        title="Générations de contenu"
+        description="Contenus générés par IA pour ce Tender, à partir des analyses, de la Base de connaissances et de prompts versionnés. Toute génération doit être relue et validée par un humain avant utilisation."
+      />
+      <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/generations`} />
       <GenerationSection
         tenderId={tenderId}
         initialGenerations={generations.items}

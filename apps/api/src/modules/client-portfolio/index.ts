@@ -10,6 +10,10 @@ export { ListAccessibleClientsUseCase } from "./application/use-cases/list-acces
 export type { ListAccessibleClientsQuery, ListAccessibleClientsResult } from "./application/use-cases/list-accessible-clients.use-case";
 export { GetClientAccountUseCase } from "./application/use-cases/get-client-account.use-case";
 export type { GetClientAccountQuery } from "./application/use-cases/get-client-account.use-case";
+// V2 Sprint 25 (Dashboard Premium — checklist d'activation) — réexporté pour `dashboard`, jamais un
+// second accès direct au repository.
+export { ListClientAccountsUseCase } from "./application/use-cases/list-client-accounts.use-case";
+export type { ListClientAccountsQuery, ListClientAccountsResult } from "./application/use-cases/list-client-accounts.use-case";
 // V2 Sprint 2 — nécessaire à `company-profile`/`subcontractors` pour typer le retour de
 // `GetClientAccountUseCase` sans dupliquer sa forme (mission "ne jamais dupliquer une donnée
 // métier lorsqu'une référence suffit").

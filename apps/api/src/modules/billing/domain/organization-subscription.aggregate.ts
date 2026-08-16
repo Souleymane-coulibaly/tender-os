@@ -15,6 +15,10 @@ export type OrganizationSubscriptionProps = {
   currentPeriodStart?: Date | undefined;
   currentPeriodEnd?: Date | undefined;
   canceledAt?: Date | undefined;
+  /** V2 Sprint 25 (Trial Starter) — fin de la période d'essai Stripe (`subscription.trial_end`),
+   *  autoritaire côté serveur/Stripe (mission §14/§10 : jamais un retour Checkout comme preuve).
+   *  Toujours `undefined` hors TRIALING (effacé par `updateFromStripeStatus` à la sortie du Trial). */
+  trialEndsAt?: Date | undefined;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -40,6 +44,11 @@ export class OrganizationSubscription {
     stripeSubscriptionId?: string | undefined;
     currentPeriodStart?: Date | undefined;
     currentPeriodEnd?: Date | undefined;
+    /** V2 Sprint 25 — absent = ACTIVE (comportement historique 100% inchangé pour tous les
+     *  appelants existants, MANUAL/GRANTED compris) ; STRIPE fournit désormais le statut réel lu
+     *  du webhook (mission §7/§23 : jamais recalculé/deviné ici). */
+    status?: SubscriptionStatus | undefined;
+    trialEndsAt?: Date | undefined;
     occurredAt: Date;
   }): OrganizationSubscription {
     return new OrganizationSubscription({
@@ -47,13 +56,14 @@ export class OrganizationSubscription {
       organizationId: input.organizationId,
       planTier: input.planTier,
       billingInterval: input.billingInterval,
-      status: SubscriptionStatus.Active,
+      status: input.status ?? SubscriptionStatus.Active,
       source: input.source,
       stripeCustomerId: input.stripeCustomerId,
       stripeSubscriptionId: input.stripeSubscriptionId,
       currentPeriodStart: input.currentPeriodStart,
       currentPeriodEnd: input.currentPeriodEnd,
       canceledAt: undefined,
+      trialEndsAt: input.trialEndsAt,
       createdAt: input.occurredAt,
       updatedAt: input.occurredAt,
     });
@@ -103,6 +113,23 @@ export class OrganizationSubscription {
     };
   }
 
+  /** V2 Sprint 25 (Trial Starter) — TRANSITION DE STATUT explicite pilotée par le statut RÉEL lu
+   *  d'un webhook Stripe (`customer.subscription.created`/`updated`), volontairement DISTINCTE de
+   *  `reassign()` : `reassign()` reste inchangée et NE TOUCHE JAMAIS au statut (invariant
+   *  documenté ci-dessus, essentiel pour les réassignations MANUAL/GRANTED de Platform Admin, qui
+   *  ne doivent jamais démarrer/arrêter un Trial). Seul l'appelant qui possède un statut Stripe
+   *  fraîchement lu (jamais deviné/recalculé) invoque cette méthode, en plus de `reassign()`. */
+  updateFromStripeStatus(input: { status: SubscriptionStatus; trialEndsAt?: Date | undefined; occurredAt: Date }): void {
+    this.props = {
+      ...this.props,
+      status: input.status,
+      // Hors TRIALING, aucune fin d'essai à conserver (mission — jamais une date d'essai qui
+      // survivrait à la sortie du Trial et fausserait un affichage ultérieur).
+      trialEndsAt: input.status === SubscriptionStatus.Trialing ? input.trialEndsAt : undefined,
+      updatedAt: input.occurredAt,
+    };
+  }
+
   markPastDue(occurredAt: Date): void {
     this.props = { ...this.props, status: SubscriptionStatus.PastDue, updatedAt: occurredAt };
   }
@@ -141,6 +168,18 @@ export class OrganizationSubscription {
 
   get isActive(): boolean {
     return this.props.status === SubscriptionStatus.Active;
+  }
+
+  /** V2 Sprint 25 (Trial Starter) — "donne droit aux entitlements du plan", DISTINCT de `isActive`
+   *  (strictement ACTIVE) : un abonnement TRIALING doit bénéficier des entitlements/quotas Starter
+   *  (mission §20) exactement comme s'il était ACTIVE, jamais `isActive` lui-même élargi (qui
+   *  garderait son sens strict pour un futur besoin qui voudrait vraiment "payant et à jour"). */
+  get isEntitled(): boolean {
+    return this.props.status === SubscriptionStatus.Active || this.props.status === SubscriptionStatus.Trialing;
+  }
+
+  get trialEndsAt(): Date | undefined {
+    return this.props.trialEndsAt;
   }
 
   toProps(): OrganizationSubscriptionProps {

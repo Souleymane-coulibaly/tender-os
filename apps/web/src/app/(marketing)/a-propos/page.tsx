@@ -33,7 +33,7 @@ export default function AboutPage() {
         <Link href="/contact" className="rounded-lg bg-tenderos-navy px-6 py-3 text-sm font-semibold text-white transition hover:bg-tenderos-navy/90">
           Nous contacter
         </Link>
-        <Link href="/#tarifs" className="rounded-lg border border-tenderos-navy/20 px-6 py-3 text-sm font-semibold text-tenderos-navy transition hover:bg-tenderos-light">
+        <Link href="/pricing" className="rounded-lg border border-tenderos-navy/20 px-6 py-3 text-sm font-semibold text-tenderos-navy transition hover:bg-tenderos-light">
           Voir les tarifs
         </Link>
       </div>

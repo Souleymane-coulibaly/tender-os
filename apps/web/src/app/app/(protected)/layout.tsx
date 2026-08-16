@@ -1,26 +1,16 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getAppSessionToken } from "../../../lib/app-api-client";
+import { appApiFetch, getAppSessionToken } from "../../../lib/app-api-client";
+import { fetchEntitlements } from "../billing-actions";
 import { logoutAction } from "../actions";
 import { fetchNotifications, fetchUnreadNotificationCount } from "../notifications-actions";
+import { resolveTourSteps } from "../../../lib/tour-steps";
+import { AppShell } from "./app-shell";
+import { AuthenticatedAnalyticsLoader } from "./authenticated-analytics-loader";
 import { NotificationBell } from "./notification-bell";
-
-const NAV_ITEMS = [
-  { href: "/app", label: "Tableau de bord" },
-  { href: "/app/clients", label: "Clients" },
-  { href: "/app/subcontractor-profiles", label: "Sous-traitants" },
-  { href: "/app/opportunities", label: "Opportunités" },
-  { href: "/app/tenders", label: "Appels d'offres" },
-  { href: "/app/documents", label: "Documents" },
-  { href: "/app/knowledge", label: "Base de connaissances" },
-  { href: "/app/pricing", label: "Pricing organisation" },
-  { href: "/app/ai-configuration/models", label: "Configuration IA" },
-  { href: "/app/integrations/api-keys", label: "Intégrations" },
-  { href: "/app/market-watch", label: "Veille" },
-  { href: "/app/validations", label: "Mes validations" },
-  { href: "/app/subscription", label: "Abonnement & utilisation" },
-];
+import { RestartTourButton } from "./restart-tour-button";
+import { TourProvider } from "./tour-provider";
+import { TourTooltip } from "./tour-tooltip";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const token = await getAppSessionToken();
@@ -43,36 +33,41 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     // Dégradation silencieuse — voir commentaire ci-dessus.
   }
 
+  // V2 Sprint 25 (Guide interactif) — mission §25.72/§25.84, jamais bloquant : une erreur ici ne
+  // doit jamais empêcher l'accès au reste de l'application, seule la visite guidée reste indisponible.
+  let hasEverInteractedWithTour = true; // défaut prudent : ne jamais afficher le prompt si l'état est inconnu.
+  let hasApiOrWebhooksEntitlement = false;
+  try {
+    const [currentUser, entitlements] = await Promise.all([
+      appApiFetch<{ tourStartedAt?: string; tourCompletedAt?: string; tourDismissedAt?: string }>("/api/v1/auth/me"),
+      fetchEntitlements(),
+    ]);
+    hasEverInteractedWithTour = Boolean(currentUser.tourStartedAt ?? currentUser.tourCompletedAt ?? currentUser.tourDismissedAt);
+    hasApiOrWebhooksEntitlement = entitlements.entitlements.includes("PUBLIC_API") || entitlements.entitlements.includes("WEBHOOKS");
+  } catch {
+    // Dégradation silencieuse — voir commentaire ci-dessus.
+  }
+  const tourSteps = resolveTourSteps(hasApiOrWebhooksEntitlement);
+
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-neutral-200 px-6 py-4">
-        <span className="text-sm font-semibold uppercase tracking-wide text-neutral-500">TenderOS</span>
-        <div className="flex items-center gap-3">
-          <NotificationBell initialNotifications={initialNotifications} initialUnreadCount={initialUnreadCount} />
-          <form action={logoutAction}>
-            <button type="submit" className="text-sm text-neutral-600 hover:underline">
-              Se déconnecter
-            </button>
-          </form>
-        </div>
-      </header>
-      <div className="flex flex-1 flex-col md:flex-row">
-        {/* Mission Sprint 15 §7/§9/§107 — barre horizontale scrollable en mobile/tablette (jamais
-            une largeur fixe qui provoque un débordement horizontal global), sidebar classique à
-            partir de md:. Bénéficie à toutes les pages, pas seulement au Dashboard. */}
-        <nav className="shrink-0 overflow-x-auto border-b border-neutral-200 p-2 md:w-56 md:overflow-visible md:border-b-0 md:border-r md:p-4">
-          <ul className="flex gap-1 md:flex-col">
-            {NAV_ITEMS.map((item) => (
-              <li key={item.href} className="shrink-0 md:shrink">
-                <Link href={item.href} className="block whitespace-nowrap rounded px-3 py-2 text-sm hover:bg-neutral-100">
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
-      </div>
-    </div>
+    <TourProvider steps={tourSteps} hasEverInteractedWithTour={hasEverInteractedWithTour}>
+      <AuthenticatedAnalyticsLoader />
+      <AppShell
+        headerActions={
+          <>
+            <RestartTourButton hasEverInteractedWithTour={hasEverInteractedWithTour} />
+            <NotificationBell initialNotifications={initialNotifications} initialUnreadCount={initialUnreadCount} />
+            <form action={logoutAction}>
+              <button type="submit" className="text-sm text-tenderos-slate hover:text-tenderos-navy hover:underline">
+                Se déconnecter
+              </button>
+            </form>
+          </>
+        }
+      >
+        {children}
+      </AppShell>
+      <TourTooltip />
+    </TourProvider>
   );
 }

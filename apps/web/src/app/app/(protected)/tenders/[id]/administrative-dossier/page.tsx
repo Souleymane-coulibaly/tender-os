@@ -1,15 +1,35 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
 import { ensureAdministrativeDossierAction } from "../../../../administrative-dossier-actions";
 import type { AdministrativeDossierCapabilities, AdministrativeDossierSummary } from "../../../../../../lib/administrative-dossier-types";
-import { ADMINISTRATIVE_DOSSIER_STATUS_LABELS, administrativeDossierStatusBadgeClass } from "../../../../../../lib/administrative-dossier-types";
+import { ADMINISTRATIVE_DOSSIER_STATUS_LABELS } from "../../../../../../lib/administrative-dossier-types";
 import { canUseDocumentGeneration, type DocumentTemplateSummary, type GeneratedDocumentSummary } from "../../../../../../lib/document-generation-types";
 import { fetchDocumentTemplates, fetchGeneratedDocuments } from "../../../../document-generation-actions";
 import { fetchConsortium, fetchDc1Readiness, fetchDc2CandidateReadiness, fetchDc2MemberReadiness, fetchDc4Readiness, fetchSubcontractorDeclarations } from "../../../../official-form-actions";
 import type { OfficialFormReadiness } from "../../../../../../lib/official-form-types";
+import { Badge, type BadgeTone } from "../../../../../../components/ui/badge";
+import { Button } from "../../../../../../components/ui/button";
+import { Card } from "../../../../../../components/ui/card";
+import { PageHeader } from "../../../../../../components/ui/page-header";
+import { TabsNav } from "../../../../../../components/ui/tabs-nav";
 import { ApiErrorState } from "../../../api-error-state";
+import { buildTenderNavTabs } from "../tender-nav-tabs";
 import { OfficialFormsSection, type FormCardSpec } from "./official-forms-section";
+
+function dossierStatusTone(status: AdministrativeDossierSummary["status"]): BadgeTone {
+  switch (status) {
+    case "READY":
+      return "success";
+    case "BLOCKED":
+      return "danger";
+    case "IN_VERIFICATION":
+      return "info";
+    case "TO_COMPLETE":
+      return "warning";
+    default:
+      return "neutral";
+  }
+}
 
 export const metadata: Metadata = { title: "Dossier administratif — TenderOS" };
 
@@ -122,40 +142,36 @@ export default async function AdministrativeDossierPage({ params }: { params: Pr
 
     return (
       <div className="flex flex-col gap-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold">Dossier administratif</h1>
-            <p className="text-sm text-neutral-600">
-              TenderOS assiste la constitution du dossier sans garantir juridiquement sa conformité — la vérification finale reste
-              humaine.
-            </p>
-          </div>
-          <span className={`w-fit rounded px-2 py-1 text-xs font-medium ${administrativeDossierStatusBadgeClass(dossier.status)}`}>
-            {ADMINISTRATIVE_DOSSIER_STATUS_LABELS[dossier.status] ?? dossier.status}
-          </span>
-        </div>
+        <PageHeader
+          breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Dossier administratif" }]}
+          title="Dossier administratif"
+          description="TenderOS assiste la constitution du dossier sans garantir juridiquement sa conformité — la vérification finale reste humaine."
+          status={<Badge tone={dossierStatusTone(dossier.status)}>{ADMINISTRATIVE_DOSSIER_STATUS_LABELS[dossier.status] ?? dossier.status}</Badge>}
+        />
+
+        <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/administrative-dossier`} />
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded border border-neutral-200 p-3">
-            <span className="text-xs font-medium text-neutral-500">Complétude</span>
-            <p className="text-lg font-semibold text-neutral-900">{dossier.completionPercentage}%</p>
-          </div>
-          <div className="rounded border border-neutral-200 p-3">
-            <span className="text-xs font-medium text-neutral-500">Validation humaine</span>
-            <p className="text-lg font-semibold text-neutral-900">
+          <Card padding="tight">
+            <span className="text-xs font-medium text-tenderos-slate">Complétude</span>
+            <p className="text-lg font-extrabold tabular-nums text-tenderos-navy">{dossier.completionPercentage}%</p>
+          </Card>
+          <Card padding="tight">
+            <span className="text-xs font-medium text-tenderos-slate">Validation humaine</span>
+            <p className="text-lg font-extrabold text-tenderos-navy">
               {dossier.validationStatus === "VALIDATED" ? "Validé" : dossier.validationStatus === "OUTDATED" ? "Périmée" : "Non validé"}
             </p>
-          </div>
-          <div className="rounded border border-neutral-200 p-3">
-            <span className="text-xs font-medium text-neutral-500">Signature</span>
-            <p className="text-sm text-neutral-600">Non gérée à ce stade (phase ultérieure)</p>
-          </div>
+          </Card>
+          <Card padding="tight">
+            <span className="text-xs font-medium text-tenderos-slate">Signature</span>
+            <p className="text-sm text-tenderos-slate">Non gérée à ce stade (phase ultérieure)</p>
+          </Card>
         </div>
 
         {capabilities.blockers.length > 0 ? (
           <ul className="flex flex-col gap-1.5">
             {capabilities.blockers.map((blocker, index) => (
-              <li key={index} role="alert" className="rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-800">
+              <li key={index} role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-800 shadow-sm">
                 {blocker}
               </li>
             ))}
@@ -163,22 +179,17 @@ export default async function AdministrativeDossierPage({ params }: { params: Pr
         ) : null}
 
         <div className="flex flex-wrap gap-2">
-          <Link href={`/app/tenders/${tenderId}/administrative-dossier/checklist`} className="w-fit rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white">
+          <Button href={`/app/tenders/${tenderId}/administrative-dossier/checklist`} variant="primary">
             Ouvrir la checklist →
-          </Link>
-          <Link href={`/app/tenders/${tenderId}/administrative-dossier/structured`} className="w-fit rounded border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700">
+          </Button>
+          <Button href={`/app/tenders/${tenderId}/administrative-dossier/structured`} variant="secondary">
             Groupement, DC1/DC2/DUME, sous-traitance, acte d&apos;engagement, pouvoirs →
-          </Link>
+          </Button>
         </div>
 
-        <div>
-          <h2 className="text-base font-semibold text-neutral-900">Formulaires officiels</h2>
-          <p className="mb-3 text-xs text-neutral-500">
-            Préremplissage automatique depuis les données du dossier. Consultez la disponibilité des champs et générez le DOCX
-            officiel quand vous le souhaitez — jamais requis pour continuer à utiliser TenderOS.
-          </p>
+        <Card title="Formulaires officiels" description="Préremplissage automatique depuis les données du dossier. Consultez la disponibilité des champs et générez le DOCX officiel quand vous le souhaitez — jamais requis pour continuer à utiliser TenderOS.">
           <OfficialFormsSection cards={cards} />
-        </div>
+        </Card>
       </div>
     );
   } catch (error) {

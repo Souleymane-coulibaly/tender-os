@@ -15,6 +15,11 @@ export function presentSubscription(subscription: { toProps(): Record<string, un
     currentPeriodStart: props.currentPeriodStart ?? null,
     currentPeriodEnd: props.currentPeriodEnd ?? null,
     canceledAt: props.canceledAt ?? null,
+    // V2 Sprint 25 (Trial Starter) — correctif : absent de ce présentateur depuis l'ajout du champ
+    // domaine (Checkpoint 25A), jamais exposé via HTTP jusqu'ici. Sans lui, AUCUNE surface
+    // authentifiée (bannière Trial du Dashboard, écran Abonnement) ne peut afficher "X jours
+    // restants" malgré un statut TRIALING correctement propagé.
+    trialEndsAt: props.trialEndsAt ?? null,
     createdAt: props.createdAt,
     updatedAt: props.updatedAt,
   };

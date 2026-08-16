@@ -33,4 +33,9 @@ export class PrismaAdministrativeDocumentRepository implements AdministrativeDoc
   async save(document: AdministrativeDocument): Promise<void> {
     await this.prisma.administrativeDocument.update({ where: { id: document.id }, data: toAdministrativeDocumentRow(document) });
   }
+
+  async existsForOrganization(organizationId: string): Promise<boolean> {
+    const record = await this.prisma.administrativeDocument.findFirst({ where: { organizationId }, select: { id: true } });
+    return record !== null;
+  }
 }

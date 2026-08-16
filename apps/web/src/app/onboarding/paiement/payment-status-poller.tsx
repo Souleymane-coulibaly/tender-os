@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { GA_EVENTS, trackEvent } from "../../../lib/analytics";
 import { fetchOnboardingPaymentStatus } from "../onboarding-actions";
 
 const POLL_INTERVAL_MS = 3000;
@@ -29,6 +30,12 @@ export function PaymentStatusPoller() {
       if (cancelled.current) return;
 
       if (status.hasPlan) {
+        // mission §25.92 — uniquement pour un Trial réellement confirmé côté serveur (webhook
+        // Stripe déjà traité, jamais l'URL de retour comme preuve — voir le commentaire au sommet
+        // de ce fichier), jamais pour un Pass ou un abonnement direct sans essai.
+        if (status.subscriptionStatus === "TRIALING") {
+          trackEvent(GA_EVENTS.StarterTrialStarted);
+        }
         router.push("/onboarding/configuration");
         return;
       }

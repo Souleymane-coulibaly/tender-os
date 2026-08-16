@@ -11,6 +11,7 @@ import { PASS_PURCHASE_REPOSITORY } from "./application/ports/pass-purchase.repo
 import { QUOTA_ALERT_REPOSITORY } from "./application/ports/quota-alert.repository";
 import { STRIPE_CLIENT } from "./application/ports/stripe-client";
 import { STRIPE_PROCESSED_EVENT_REPOSITORY } from "./application/ports/stripe-processed-event.repository";
+import { TRIAL_REMINDER_REPOSITORY } from "./application/ports/trial-reminder.repository";
 import { DefaultEntitlementService, ENTITLEMENT_SERVICE } from "./application/services/entitlement.service";
 import { AdjustAoCreditsUseCase } from "./application/use-cases/adjust-ao-credits.use-case";
 import { AssignSubscriptionUseCase } from "./application/use-cases/assign-subscription.use-case";
@@ -26,6 +27,7 @@ import { GetOrganizationEntitlementsUseCase } from "./application/use-cases/get-
 import { GetOrganizationSubscriptionUseCase } from "./application/use-cases/get-organization-subscription.use-case";
 import { GetPublicPlanCatalogUseCase } from "./application/use-cases/get-public-plan-catalog.use-case";
 import { GrantMonthlyAoCreditsUseCase } from "./application/use-cases/grant-monthly-ao-credits.use-case";
+import { GrantTrialAoCreditUseCase } from "./application/use-cases/grant-trial-ao-credit.use-case";
 import { HandleStripeWebhookUseCase } from "./application/use-cases/handle-stripe-webhook.use-case";
 import { ListAoCreditLedgerUseCase } from "./application/use-cases/list-ao-credit-ledger.use-case";
 import { ListEntitlementOverridesUseCase } from "./application/use-cases/list-entitlement-overrides.use-case";
@@ -34,6 +36,7 @@ import { MarkSubscriptionPastDueUseCase } from "./application/use-cases/mark-sub
 import { RecordPassPurchaseUseCase } from "./application/use-cases/record-pass-purchase.use-case";
 import { ReverseAoCreditConsumptionUseCase } from "./application/use-cases/reverse-ao-credit-consumption.use-case";
 import { RevokeEntitlementOverrideUseCase } from "./application/use-cases/revoke-entitlement-override.use-case";
+import { SendTrialRemindersUseCase } from "./application/use-cases/send-trial-reminders.use-case";
 import { PrismaAoCreditLedgerRepository } from "./infrastructure/prisma-ao-credit-ledger.repository";
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
 import { PrismaEntitlementOverrideRepository } from "./infrastructure/prisma-entitlement-override.repository";
@@ -41,7 +44,9 @@ import { PrismaOrganizationSubscriptionRepository } from "./infrastructure/prism
 import { PrismaPassPurchaseRepository } from "./infrastructure/prisma-pass-purchase.repository";
 import { PrismaQuotaAlertRepository } from "./infrastructure/prisma-quota-alert.repository";
 import { PrismaStripeProcessedEventRepository } from "./infrastructure/prisma-stripe-processed-event.repository";
+import { PrismaTrialReminderRepository } from "./infrastructure/prisma-trial-reminder.repository";
 import { StripeSdkClient } from "./infrastructure/stripe-sdk.client";
+import { TrialReminderWorker } from "./infrastructure/trial-reminder.worker";
 import { AoCreditLedgerController } from "./interfaces/http/ao-credit-ledger.controller";
 import { CheckoutController } from "./interfaces/http/checkout.controller";
 import { EntitlementOverridesController } from "./interfaces/http/entitlement-overrides.controller";
@@ -84,6 +89,7 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
     ListEntitlementOverridesUseCase,
     ConsumeAoCreditUseCase,
     GrantMonthlyAoCreditsUseCase,
+    GrantTrialAoCreditUseCase,
     AdjustAoCreditsUseCase,
     ReverseAoCreditConsumptionUseCase,
     GetAoCreditBalanceUseCase,
@@ -91,6 +97,8 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
     CreateCheckoutSessionUseCase,
     CreateCustomerPortalSessionUseCase,
     HandleStripeWebhookUseCase,
+    SendTrialRemindersUseCase,
+    TrialReminderWorker,
 
     { provide: ORGANIZATION_SUBSCRIPTION_REPOSITORY, useClass: PrismaOrganizationSubscriptionRepository },
     { provide: PASS_PURCHASE_REPOSITORY, useClass: PrismaPassPurchaseRepository },
@@ -98,6 +106,7 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
     { provide: AO_CREDIT_LEDGER_REPOSITORY, useClass: PrismaAoCreditLedgerRepository },
     { provide: STRIPE_PROCESSED_EVENT_REPOSITORY, useClass: PrismaStripeProcessedEventRepository },
     { provide: QUOTA_ALERT_REPOSITORY, useClass: PrismaQuotaAlertRepository },
+    { provide: TRIAL_REMINDER_REPOSITORY, useClass: PrismaTrialReminderRepository },
     { provide: STRIPE_CLIENT, useClass: StripeSdkClient },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
     { provide: ENTITLEMENT_SERVICE, useClass: DefaultEntitlementService },

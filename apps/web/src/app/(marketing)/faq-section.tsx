@@ -1,4 +1,4 @@
-import { LANDING_FAQ } from "../../lib/landing-faq";
+import { LANDING_FAQ, type LandingFaqItem } from "../../lib/landing-faq";
 
 /**
  * V2 Sprint 23A (landing, finalisation) — mission §42P-§42S. `<details>`/`<summary>` natifs plutôt
@@ -8,15 +8,31 @@ import { LANDING_FAQ } from "../../lib/landing-faq";
  * l'hydratation JS, mission §42T "les réponses doivent être dans le HTML"), et reste un Server
  * Component (mission §47 "Server Components par défaut" — encore mieux respecté qu'un accordéon
  * client).
+ *
+ * V2 Sprint 25 (Pricing dédié) — mission §25.51 : `/pricing` a besoin de sa propre FAQ commerciale
+ * (`PRICING_FAQ`, contenu différent de `LANDING_FAQ`). Plutôt que dupliquer tout ce composant pour
+ * un second accordéon identique visuellement, `items`/`title`/`subtitle`/`sectionId` sont désormais
+ * paramétrables — les valeurs par défaut reproduisent EXACTEMENT le comportement Landing d'origine
+ * (aucun appelant existant n'a besoin de changer).
  */
-export function FaqSection() {
+export function FaqSection({
+  items = LANDING_FAQ,
+  title = "Questions fréquentes",
+  subtitle = "Tout ce qu'il faut savoir avant de commencer avec TenderOS.",
+  sectionId = "faq",
+}: {
+  items?: readonly LandingFaqItem[];
+  title?: string;
+  subtitle?: string;
+  sectionId?: string;
+}) {
   return (
-    <section id="faq" className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
-      <h2 className="font-tenderos-display text-center text-3xl font-extrabold text-tenderos-navy">Questions fréquentes</h2>
-      <p className="mt-3 text-center text-tenderos-slate">Tout ce qu&apos;il faut savoir avant de commencer avec TenderOS.</p>
+    <section id={sectionId} className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
+      <h2 className="font-tenderos-display text-center text-3xl font-extrabold text-tenderos-navy">{title}</h2>
+      <p className="mt-3 text-center text-tenderos-slate">{subtitle}</p>
 
       <div className="mt-10 divide-y divide-tenderos-navy/10 border-t border-tenderos-navy/10">
-        {LANDING_FAQ.map((item) => (
+        {items.map((item) => (
           <details key={item.question} className="tenderos-faq-item group py-4">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tenderos-blue">
               <span className="font-tenderos-display text-sm font-semibold text-tenderos-navy sm:text-base">{item.question}</span>

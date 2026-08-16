@@ -16,6 +16,9 @@ export type UserPersistenceData = {
   lastLoginAt: Date | null;
   termsAcceptedAt: Date | null;
   termsAcceptedVersion: string | null;
+  tourStartedAt: Date | null;
+  tourCompletedAt: Date | null;
+  tourDismissedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -38,6 +41,9 @@ export class UserPersistenceMapper {
       lastLoginAt: record.lastLoginAt ?? undefined,
       termsAcceptedAt: record.termsAcceptedAt ?? undefined,
       termsAcceptedVersion: record.termsAcceptedVersion ?? undefined,
+      tourStartedAt: record.tourStartedAt ?? undefined,
+      tourCompletedAt: record.tourCompletedAt ?? undefined,
+      tourDismissedAt: record.tourDismissedAt ?? undefined,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });
@@ -56,6 +62,9 @@ export class UserPersistenceMapper {
       lastLoginAt: user.lastLoginAt ?? null,
       termsAcceptedAt: user.termsAcceptedAt ?? null,
       termsAcceptedVersion: user.termsAcceptedVersion ?? null,
+      tourStartedAt: user.tourStartedAt ?? null,
+      tourCompletedAt: user.tourCompletedAt ?? null,
+      tourDismissedAt: user.tourDismissedAt ?? null,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

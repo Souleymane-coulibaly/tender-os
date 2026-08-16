@@ -37,6 +37,7 @@ function inMemoryDocumentRepository(seed: AdministrativeDocument[] = []): Admini
     listByDossier: async () => [...rows.values()],
     findByRequirementId: async () => null,
     save: async (d) => void rows.set(d.id, d),
+    existsForOrganization: async () => rows.size > 0,
   };
 }
 

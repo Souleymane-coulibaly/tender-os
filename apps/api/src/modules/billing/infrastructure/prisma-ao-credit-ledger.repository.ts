@@ -76,6 +76,47 @@ export class PrismaAoCreditLedgerRepository implements AoCreditLedgerRepository 
     });
   }
 
+  async grantTrial(input: { organizationId: string; occurredAt: Date }): Promise<{ entry: AoCreditLedgerEntry; alreadyApplied: boolean }> {
+    try {
+      return await this.prisma.withTransaction(async (tx) => {
+        const existing = await tx.aoCreditLedgerEntry.findFirst({ where: { organizationId: input.organizationId, type: AoCreditMovementType.TrialGrant } });
+        if (existing) {
+          return { entry: toDomain(existing), alreadyApplied: true };
+        }
+
+        const balanceRow = await this.ensureBalanceRow(tx, input.organizationId);
+        const balanceAfter = balanceRow.balance + 1;
+        await tx.organizationAoCreditBalance.update({ where: { organizationId: input.organizationId }, data: { balance: balanceAfter } });
+
+        const domainEntry = createAoCreditLedgerEntry({
+          id: randomUUID(),
+          organizationId: input.organizationId,
+          type: AoCreditMovementType.TrialGrant,
+          amount: 1,
+          balanceAfter,
+          occurredAt: input.occurredAt,
+        });
+        const created = await tx.aoCreditLedgerEntry.create({ data: this.toRow(domainEntry) });
+        return { entry: toDomain(created), alreadyApplied: false };
+      });
+    } catch (error) {
+      // Correctif Sprint 25 (durcissement, même motif que `reverseConsumption` — audité comme
+      // manquant sur `grant()` ci-dessus) — la SEULE protection réelle sous concurrence est l'index
+      // unique partiel `(organization_id) WHERE type = 'TRIAL_GRANT'` (migration dédiée) : deux
+      // appels réellement simultanés peuvent tous deux passer le `findFirst` ci-dessus (aucun n'a
+      // encore committé), mais un seul `INSERT` peut réussir — l'échec du second fait échouer TOUTE
+      // sa transaction (solde inclus, jamais un double crédit ni un solde orphelin). Une transaction
+      // Postgres avortée refuse toute nouvelle requête EN SON SEIN (contrairement à un simple
+      // `try/catch` local) : la relecture de l'entrée gagnante se fait donc volontairement HORS de
+      // cette transaction, une fois le rollback terminé.
+      if (isUniqueConstraintViolation(error)) {
+        const winning = await this.prisma.currentClient().aoCreditLedgerEntry.findFirstOrThrow({ where: { organizationId: input.organizationId, type: AoCreditMovementType.TrialGrant } });
+        return { entry: toDomain(winning), alreadyApplied: true };
+      }
+      throw error;
+    }
+  }
+
   async consume(input: { organizationId: string; tenderId: string; amount: number; occurredAt: Date }): Promise<{ applied: boolean; entry: AoCreditLedgerEntry | null }> {
     return this.prisma.withTransaction(async (tx) => {
       await this.ensureBalanceRow(tx, input.organizationId);

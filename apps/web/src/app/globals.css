@@ -66,3 +66,24 @@
 .tenderos-faq-item summary::-webkit-details-marker {
   display: none;
 }
+
+/* V2 Sprint 25 (Guide interactif) — mission §25.89 "reduced motion". Un léger fondu à l'apparition
+   de chaque étape (jamais de translation/rebond), désactivé entièrement si l'utilisateur préfère
+   moins de mouvement — mission "vérifier reduced motion" satisfaite par une media query, jamais
+   une détection JS supplémentaire. */
+.tenderos-tour-tooltip {
+  animation: tenderos-tour-fade-in 180ms ease-out;
+}
+@keyframes tenderos-tour-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tenderos-tour-tooltip {
+    animation: none;
+  }
+}

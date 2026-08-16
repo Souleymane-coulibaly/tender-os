@@ -52,3 +52,12 @@ export const ResetPasswordBodySchema = z
   .strict();
 
 export type ResetPasswordBody = z.infer<typeof ResetPasswordBodySchema>;
+
+/** V2 Sprint 25 (Guide interactif) — mission §25.72/§25.83. */
+export const UpdateTourStateBodySchema = z
+  .object({
+    action: z.enum(["START", "COMPLETE", "DISMISS"]),
+  })
+  .strict();
+
+export type UpdateTourStateBody = z.infer<typeof UpdateTourStateBodySchema>;

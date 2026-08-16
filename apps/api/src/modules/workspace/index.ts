@@ -19,3 +19,13 @@ export { TenderActivityType } from "./domain/tender-activity-type";
 export { ListMyApprovalsUseCase } from "./application/use-cases/list-my-approvals.use-case";
 export type { ListMyApprovalsQuery } from "./application/use-cases/list-my-approvals.use-case";
 export type { ApprovalRequestSummary } from "./application/dtos";
+
+// V2 Sprint 25 (Dashboard Premium) — mission §25.59 "Dossiers prioritaires... responsables" : même
+// motif de réexport ciblé que ci-dessus, jamais un second modèle de participants dupliqué pour le
+// Dashboard. `ListTenderParticipantsUseCase` reste par-Tender (aucune méthode batch dans le port) —
+// le Dashboard l'appelle une fois par dossier prioritaire affiché (liste déjà bornée à quelques
+// éléments), même discipline N-appels que `ListWorkspaceMembersUseCase`/`ListOrganizationMembersUseCase`
+// pour résoudre des noms d'utilisateur (aucune méthode batch `findByIds` n'existe non plus côté Identity).
+export { ListTenderParticipantsUseCase } from "./application/use-cases/list-tender-participants.use-case";
+export type { ListTenderParticipantsQuery } from "./application/use-cases/list-tender-participants.use-case";
+export type { TenderParticipantSummary } from "./application/dtos";

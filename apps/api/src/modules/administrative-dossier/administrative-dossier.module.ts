@@ -66,6 +66,7 @@ import { GetAdministrativeDocumentTypeCatalogUseCase } from "./application/use-c
 import { GetAdministrativeDossierUseCase } from "./application/use-cases/get-administrative-dossier.use-case";
 import { GetAdministrativeDossierCapabilitiesUseCase } from "./application/use-cases/get-administrative-dossier-capabilities.use-case";
 import { GetCandidateContextForPackageUseCase } from "./application/use-cases/get-candidate-context-for-package.use-case";
+import { HasAnyAdministrativeDocumentUseCase } from "./application/use-cases/has-any-administrative-document.use-case";
 import { GetDumeXmlDraftUseCase } from "./application/use-cases/get-dume-xml-draft.use-case";
 import { ListValidatedAdministrativeDocumentsForPackageUseCase } from "./application/use-cases/list-validated-administrative-documents-for-package.use-case";
 import { CreateSigningPowerUseCase, ListSigningPowersUseCase, UpdateSigningPowerUseCase, VerifySigningPowerUseCase } from "./application/use-cases/signing-power.use-cases";
@@ -175,6 +176,7 @@ import { AdministrativeDossierStructuredController } from "./interfaces/http/adm
 
     ListValidatedAdministrativeDocumentsForPackageUseCase,
     GetCandidateContextForPackageUseCase,
+    HasAnyAdministrativeDocumentUseCase,
 
     GenerateDc1DocumentUseCase,
     GenerateDc2DocumentUseCase,
@@ -222,6 +224,6 @@ import { AdministrativeDossierStructuredController } from "./interfaces/http/adm
     { provide: ADMINISTRATIVE_FORM_DRAFT_REPOSITORY, useClass: PrismaAdministrativeFormDraftRepository },
     { provide: BUYER_PROVIDED_FORM_TEMPLATE_REPOSITORY, useClass: PrismaBuyerProvidedFormTemplateRepository },
   ],
-  exports: [ListValidatedAdministrativeDocumentsForPackageUseCase, GetCandidateContextForPackageUseCase],
+  exports: [ListValidatedAdministrativeDocumentsForPackageUseCase, GetCandidateContextForPackageUseCase, HasAnyAdministrativeDocumentUseCase],
 })
 export class AdministrativeDossierModule {}

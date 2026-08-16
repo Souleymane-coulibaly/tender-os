@@ -34,7 +34,8 @@ export class GrantMonthlyAoCreditsUseCase {
 
   async execute(command: GrantMonthlyAoCreditsCommand): Promise<AoCreditLedgerEntry> {
     const subscription = await this.subscriptionRepository.findByOrganizationId(command.organizationId);
-    if (!subscription || !subscription.isActive) {
+    // V2 Sprint 25 (Trial Starter) — `isEntitled` (ACTIVE ou TRIALING), voir `entitlement.service.ts`.
+    if (!subscription || !subscription.isEntitled) {
       throw new SubscriptionNotFoundError(command.organizationId);
     }
 

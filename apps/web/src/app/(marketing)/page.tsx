@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
-import type { PublicPlanCatalogEntry } from "../../lib/billing-types";
 import { LANDING_FAQ } from "../../lib/landing-faq";
-import { publicApiFetch } from "../../lib/public-api-client";
 import { AiSection } from "./ai-section";
+import { BenefitsSection } from "./benefits-section";
 import { FaqSection } from "./faq-section";
 import { FeaturesSection } from "./features-section";
 import { FinalCtaSection } from "./final-cta-section";
 import { HeroSection } from "./hero-section";
 import { IntegrationsSection } from "./integrations-section";
-import { PricingSection } from "./pricing-section";
 import { TrustSection } from "./trust-section";
 import { WorkflowSection } from "./workflow-section";
 
@@ -33,10 +31,11 @@ export const metadata: Metadata = {
 
 /**
  * V2 Sprint 23 (landing) — mission §2 : `/` ne dépend JAMAIS d'une session (aucun appel
- * authentifié ici, contrairement à `redirect("/app")` retiré). Le catalogue Pricing est le SEUL
- * appel réseau de la page — s'il échoue (API indisponible), la Landing reste utilisable (mission
- * §2 "même si Stripe est momentanément indisponible") : `PricingSection` reçoit un tableau vide et
- * affiche un état dégradé plutôt qu'un crash de toute la page.
+ * authentifié ici, contrairement à `redirect("/app")` retiré).
+ * V2 Sprint 25 (mission §25.33) — plus aucun appel réseau sur cette page : le catalogue Pricing
+ * (et son fetch `publicApiFetch`) a été retiré avec les cards détaillées, `/pricing` (Sprint 25B)
+ * en devient la SEULE consommatrice pour la Landing/Onboarding. `BenefitsSection` est un contenu
+ * entièrement statique, jamais dépendant d'un appel réseau qui pourrait échouer.
  */
 /**
  * Mission §45 — uniquement des données réelles/vérifiables (nom, description, catégorie), jamais
@@ -66,15 +65,7 @@ const STRUCTURED_DATA = {
   ],
 };
 
-export default async function LandingPage() {
-  let planCatalog: PublicPlanCatalogEntry[] = [];
-  try {
-    const response = await publicApiFetch<{ items: PublicPlanCatalogEntry[] }>("/api/v1/billing/plan-catalog");
-    planCatalog = response.items;
-  } catch {
-    planCatalog = [];
-  }
-
+export default function LandingPage() {
   return (
     <>
       {/* JSON-LD statique, aucune donnée utilisateur interpolée */}
@@ -85,14 +76,7 @@ export default async function LandingPage() {
       <WorkflowSection />
       <AiSection />
       <IntegrationsSection />
-      {planCatalog.length > 0 ? (
-        <PricingSection items={planCatalog} />
-      ) : (
-        <section id="tarifs" className="mx-auto max-w-3xl px-4 py-20 text-center sm:px-6">
-          <h2 className="font-tenderos-display text-3xl font-extrabold text-tenderos-navy">Des offres adaptées à chaque organisation</h2>
-          <p className="mt-4 text-tenderos-slate">Nos tarifs sont momentanément indisponibles. Contactez-nous pour en savoir plus.</p>
-        </section>
-      )}
+      <BenefitsSection />
       <FaqSection />
       <FinalCtaSection />
     </>

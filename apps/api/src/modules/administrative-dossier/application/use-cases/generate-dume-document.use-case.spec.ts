@@ -28,7 +28,7 @@ function fakeDossierRepository(): AdministrativeDossierRepository {
   return { create: async () => {}, findById: async () => null, findByTenderId: async () => null, save: async () => {} };
 }
 function fakeDocumentRepository(): AdministrativeDocumentRepository {
-  return { create: async () => {}, findById: async () => null, listByDossier: async () => [], findByRequirementId: async () => null, save: async () => {} };
+  return { create: async () => {}, findById: async () => null, listByDossier: async () => [], findByRequirementId: async () => null, save: async () => {}, existsForOrganization: async () => false };
 }
 function fakeDeclarationRepository(declaration: DumeDeclaration | null): DumeDeclarationRepository {
   return { create: async () => {}, findById: async () => declaration, findByTenderId: async () => declaration, save: async () => {} };

@@ -1,7 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { BillingInterval } from "../../domain/billing-interval";
-import type { SubscriptionPlanTier } from "../../domain/plan-tier";
+import { PlanTier, type SubscriptionPlanTier } from "../../domain/plan-tier";
 import { resolveStripePassPriceId, resolveStripeSubscriptionPriceId } from "../../domain/stripe-price-registry";
+import { STARTER_TRIAL_DAYS } from "../../domain/trial-policy";
 import { assertCanManageBilling } from "../policies/assert-can-manage-billing";
 import { appBillingReturnUrls, type CheckoutReturnTarget } from "../services/app-return-urls";
 import { ORGANIZATION_SUBSCRIPTION_REPOSITORY, type OrganizationSubscriptionRepository } from "../ports/organization-subscription.repository";
@@ -63,6 +64,27 @@ export class CreateCheckoutSessionUseCase {
       });
     }
 
+    // V2 Sprint 25 (Trial Starter) — mission §2/§11 : UNIQUEMENT Starter, et UNIQUEMENT si
+    // l'organisation n'a JAMAIS eu de ligne OrganizationSubscription (au plus un Trial par
+    // organisation ; changer l'email du propriétaire n'y change rien, mission §12 — l'éligibilité
+    // n'est jamais dérivée d'un email/cookie/stockage navigateur, seulement de cette preuve
+    // serveur). Une organisation qui a déjà eu N'IMPORTE QUEL abonnement (même un Starter déjà
+    // résilié) n'est plus éligible : le checkout se poursuit normalement, sans Trial.
+    const isEligibleForStarterTrial = command.target.planTier === PlanTier.Starter && !existingSubscription;
+    const trialPeriodDays = isEligibleForStarterTrial ? STARTER_TRIAL_DAYS : undefined;
+
+    // Correctif audit Codex Checkpoint 25A (P1-001) — `!existingSubscription` ci-dessus ne protège
+    // QUE contre un second Trial une fois la subscription locale créée par le webhook Stripe : deux
+    // appels réellement simultanés de ce use case pour la même organisation passent TOUS LES DEUX
+    // ce contrôle (aucune ligne locale n'existe encore pour l'un ou l'autre). Une clé d'idempotence
+    // Stripe stable et scopée à l'organisation (jamais au plan/intervalle — l'invariant voulu est
+    // "au plus une tentative de Checkout Trial en vol par organisation", pas par variante) fait
+    // collapser deux appels concurrents sur UNE SEULE Checkout Session Stripe, jamais deux
+    // abonnements Trial distincts. Uniquement appliquée quand un Trial est effectivement en jeu :
+    // un achat normal (non-Trial) n'a pas ce risque, et Stripe rejette une réutilisation de clé avec
+    // des paramètres différents.
+    const idempotencyKey = isEligibleForStarterTrial ? `trial-starter-checkout:${command.organizationId}` : undefined;
+
     return this.stripeClient.createCheckoutSession({
       mode: "subscription",
       priceId: resolveStripeSubscriptionPriceId(command.target.planTier, command.target.billingInterval),
@@ -71,6 +93,8 @@ export class CreateCheckoutSessionUseCase {
       customerEmail: stripeCustomerId ? undefined : command.actorEmail,
       successUrl,
       cancelUrl,
+      trialPeriodDays,
+      idempotencyKey,
     });
   }
 }

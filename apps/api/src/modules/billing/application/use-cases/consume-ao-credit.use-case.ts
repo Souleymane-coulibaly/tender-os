@@ -45,7 +45,9 @@ export class ConsumeAoCreditUseCase {
   async execute(command: ConsumeAoCreditCommand): Promise<void> {
     const subscription = await this.subscriptionRepository.findByOrganizationId(command.organizationId);
 
-    if (subscription && subscription.isActive) {
+    // V2 Sprint 25 (Trial Starter) — `isEntitled` (ACTIVE ou TRIALING) : un Trial doit pouvoir
+    // consommer son crédit d'essai via ce même chemin, jamais retomber sur la branche Pass.
+    if (subscription && subscription.isEntitled) {
       const monthlyGrantLimit = getPlanQuotaLimit(subscription.planTier, QuotaType.AoMonthlyGrant);
       if (monthlyGrantLimit === UNLIMITED) {
         // Mission §14 — fair-use illimité (Enterprise) : jamais de ledger numérique, jamais bloqué.

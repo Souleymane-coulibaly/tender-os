@@ -52,7 +52,9 @@ export class DefaultEntitlementService implements EntitlementService {
 
   async getEffectivePlanTier(organizationId: string): Promise<PlanTier | null> {
     const subscription = await this.subscriptionRepository.findByOrganizationId(organizationId);
-    if (subscription && subscription.isActive) {
+    // V2 Sprint 25 (Trial Starter) — `isEntitled` (ACTIVE ou TRIALING), jamais `isActive` seul :
+    // un Trial Starter doit obtenir les entitlements Starter (mission §20), pas aucun plan.
+    if (subscription && subscription.isEntitled) {
       return subscription.planTier;
     }
     const hasAnyPass = await this.passPurchaseRepository.existsForOrganization(organizationId);
@@ -61,7 +63,7 @@ export class DefaultEntitlementService implements EntitlementService {
 
   async canOperateOnTender(organizationId: string, tenderId: string): Promise<boolean> {
     const subscription = await this.subscriptionRepository.findByOrganizationId(organizationId);
-    if (subscription && subscription.isActive) {
+    if (subscription && subscription.isEntitled) {
       return true;
     }
     const pass = await this.passPurchaseRepository.findByTenderId(organizationId, tenderId);

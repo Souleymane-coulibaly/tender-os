@@ -15,6 +15,7 @@ import { LogoutUserUseCase } from "./application/use-cases/logout-user.use-case"
 import { RegisterUserUseCase } from "./application/use-cases/register-user.use-case";
 import { RequestPasswordResetUseCase } from "./application/use-cases/request-password-reset.use-case";
 import { ResetPasswordUseCase } from "./application/use-cases/reset-password.use-case";
+import { UpdateTourStateUseCase } from "./application/use-cases/update-tour-state.use-case";
 import { JwtAccessTokenService } from "./infrastructure/jwt-access-token.service";
 import { PrismaPasswordResetTokenRepository } from "./infrastructure/prisma-password-reset-token.repository";
 import { PrismaSessionRepository } from "./infrastructure/prisma-session.repository";
@@ -45,6 +46,7 @@ import { AuthThrottlerGuard } from "./interfaces/http/auth-throttler.guard";
     CountUsersByStatusUseCase,
     RequestPasswordResetUseCase,
     ResetPasswordUseCase,
+    UpdateTourStateUseCase,
     AuthenticatedGuard,
     AuthThrottlerGuard,
     { provide: USER_REPOSITORY, useClass: PrismaUserRepository },

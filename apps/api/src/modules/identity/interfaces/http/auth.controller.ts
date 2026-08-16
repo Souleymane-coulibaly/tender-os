@@ -5,6 +5,7 @@ import { LogoutUserUseCase } from "../../application/use-cases/logout-user.use-c
 import { RegisterUserUseCase } from "../../application/use-cases/register-user.use-case";
 import { RequestPasswordResetUseCase } from "../../application/use-cases/request-password-reset.use-case";
 import { ResetPasswordUseCase } from "../../application/use-cases/reset-password.use-case";
+import { UpdateTourStateUseCase } from "../../application/use-cases/update-tour-state.use-case";
 import { AuthenticatedGuard, type AuthenticatedActor } from "./authenticated.guard";
 import { AuthThrottlerGuard } from "./auth-throttler.guard";
 import { CurrentActor } from "./current-actor.decorator";
@@ -15,10 +16,12 @@ import {
   RegisterBodySchema,
   RequestPasswordResetBodySchema,
   ResetPasswordBodySchema,
+  UpdateTourStateBodySchema,
   type LoginBody,
   type RegisterBody,
   type RequestPasswordResetBody,
   type ResetPasswordBody,
+  type UpdateTourStateBody,
 } from "./schemas";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
 
@@ -32,6 +35,7 @@ export class AuthController {
     private readonly getCurrentUserUseCase: GetCurrentUserUseCase,
     private readonly requestPasswordResetUseCase: RequestPasswordResetUseCase,
     private readonly resetPasswordUseCase: ResetPasswordUseCase,
+    private readonly updateTourStateUseCase: UpdateTourStateUseCase,
   ) {}
 
   @Post("register")
@@ -68,6 +72,19 @@ export class AuthController {
   @UseGuards(AuthenticatedGuard)
   async me(@CurrentActor() actor: AuthenticatedActor): Promise<UserResponse> {
     const result = await this.getCurrentUserUseCase.execute({ userId: actor.userId });
+
+    return presentUser(result);
+  }
+
+  /** V2 Sprint 25 (Guide interactif) — mission §25.82 "User-scoped" : jamais de contexte
+   *  organisation ici (contrairement à la quasi-totalité des autres endpoints authentifiés), la
+   *  progression de la visite guidée n'appartient qu'à L'UTILISATEUR, jamais à l'organisation
+   *  active au moment de l'appel. */
+  @Post("me/tour-state")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthenticatedGuard)
+  async updateTourState(@CurrentActor() actor: AuthenticatedActor, @Body(new ZodValidationPipe(UpdateTourStateBodySchema)) body: UpdateTourStateBody): Promise<UserResponse> {
+    const result = await this.updateTourStateUseCase.execute({ userId: actor.userId, action: body.action });
 
     return presentUser(result);
   }

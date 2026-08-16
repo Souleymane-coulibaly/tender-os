@@ -22,10 +22,14 @@ export const BILLING_INTERVAL_LABELS: Record<BillingInterval, string> = {
   YEARLY: "Annuel",
 };
 
-export type SubscriptionStatus = "ACTIVE" | "PAST_DUE" | "CANCELED";
+// V2 Sprint 25 (Trial Starter) — "TRIALING" ajouté, miroir de `SubscriptionStatus` backend
+// (`apps/api/.../billing/domain/subscription-status.ts`), jamais un second statut inventé côté
+// frontend.
+export type SubscriptionStatus = "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELED";
 
 export const SUBSCRIPTION_STATUS_LABELS: Record<SubscriptionStatus, string> = {
   ACTIVE: "Actif",
+  TRIALING: "Essai",
   PAST_DUE: "Paiement en retard",
   CANCELED: "Résilié",
 };
@@ -34,6 +38,8 @@ export function subscriptionStatusBadgeClass(status: SubscriptionStatus): string
   switch (status) {
     case "ACTIVE":
       return "bg-green-100 text-green-800";
+    case "TRIALING":
+      return "bg-tenderos-gold/15 text-tenderos-navy";
     case "PAST_DUE":
       return "bg-amber-100 text-amber-800";
     case "CANCELED":
@@ -106,9 +112,19 @@ export type OrganizationSubscriptionDto = {
   currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
   canceledAt: string | null;
+  /** V2 Sprint 25 (Trial Starter) — non-undefined UNIQUEMENT pendant TRIALING (miroir backend,
+   *  `OrganizationSubscription.trialEndsAt`), jamais un second compteur Trial calculé côté client. */
+  trialEndsAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
+
+/** V2 Sprint 25 (Dashboard Premium) — mission §25.62 "Essai Starter X jours restants", même
+ *  arrondi que le backend (`daysRemainingInTrial`, Math.ceil, jamais négatif). */
+export function daysRemainingInTrial(trialEndsAt: string, now: Date = new Date()): number {
+  const diffMs = new Date(trialEndsAt).getTime() - now.getTime();
+  return Math.max(0, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
+}
 
 export type OrganizationEntitlementsDto = {
   planTier: PlanTier | null;

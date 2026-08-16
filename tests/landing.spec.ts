@@ -78,6 +78,28 @@ test.describe.serial("Landing Page publique — flux principal", () => {
     await expect(page.getByText("Votre confidentialité compte")).toBeHidden();
   });
 
+  /**
+   * Correctif réaudit Codex Checkpoint 25E (3e tour, P1/P2) — un correctif précédent de `trackEvent`
+   * s'appuyait sur l'existence de `window.gtag` comme unique garde, alors que `site-header.tsx` et
+   * `tracked-link.tsx` appellent `trackEvent` directement au clic, SANS aucune garde de consentement
+   * locale — ils comptaient implicitement sur ce que `trackEvent` refuse d'agir avant consentement.
+   * Rendre `window.gtag` disponible avant consentement (pour corriger un autre défaut) cassait donc
+   * silencieusement cette protection. `trackEvent` est désormais gardé par un drapeau de consentement
+   * explicite (`analytics.ts`) — preuve directe ici que cliquer un CTA du header AVANT toute décision
+   * de consentement ne met RIEN en file dans `dataLayer`, jamais seulement que `window.gtag` est absent.
+   */
+  test("BLOQUANT (mission §58/§59) — cliquer un CTA du header avant consentement ne met jamais d'événement en file dans dataLayer", async ({ page }) => {
+    await gotoResilient(page, "/");
+    await expect(page.getByText("Votre confidentialité compte")).toBeVisible();
+
+    await page.getByRole("link", { name: "Se connecter" }).first().click();
+    await page.waitForURL(/\/app\/login/);
+
+    const dataLayer = await page.evaluate(() => (window as unknown as { dataLayer?: unknown[] }).dataLayer ?? []);
+    const hasAnyEvent = dataLayer.some((entry) => Array.isArray(entry) && entry[0] === "event");
+    expect(hasAnyEvent).toBe(false);
+  });
+
   test("mission §39/§42 — 'Gestion des cookies' (footer) rouvre les préférences, et un choix personnalisé (Analytics ON, Support OFF) est respecté", async ({ page }) => {
     await gotoResilient(page, "/");
     await page.getByRole("button", { name: "Tout refuser" }).click();
@@ -90,27 +112,20 @@ test.describe.serial("Landing Page publique — flux principal", () => {
     await expect(page.getByRole("dialog")).toBeHidden();
   });
 
-  test("mission §23 — le toggle Mensuel/Annuel change le prix affiché sans recalcul frontend (valeurs réelles du catalogue)", async ({ page }) => {
+  test("V2 Sprint 25 (mission §25.113) — la Landing ne contient plus aucune section Pricing détaillée, le lien Tarifs mène à /pricing, la nouvelle section bénéfices est visible", async ({ page }) => {
     await gotoResilient(page, "/");
     await page.getByRole("button", { name: "Tout refuser" }).click();
 
-    const pricingSection = page.locator("#tarifs");
-    await pricingSection.scrollIntoViewIfNeeded();
-    await expect(pricingSection.getByText("199", { exact: false })).toBeVisible();
+    // Plus de toggle Mensuel/Annuel ni de cards de prix sur la Landing (retirés mission §25.33).
+    await expect(page.locator("#tarifs")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Annuel" })).toHaveCount(0);
 
-    await pricingSection.getByRole("button", { name: "Annuel" }).click();
-    await expect(pricingSection.getByText("2 189", { exact: false })).toBeVisible();
-  });
+    const benefitsSection = page.locator("#benefices");
+    await benefitsSection.scrollIntoViewIfNeeded();
+    await expect(benefitsSection.getByRole("heading", { name: "TenderOS simplifie chaque étape de vos appels d'offres" })).toBeVisible();
+    await expect(benefitsSection.getByText("Ne cherchez plus partout")).toBeVisible();
 
-  test("V2 Sprint 24 (onboarding) — les CTA Pricing routent vers /onboarding (jamais /contact), le choix de plan est conservé", async ({ page }) => {
-    await gotoResilient(page, "/");
-    await page.getByRole("button", { name: "Tout refuser" }).click();
-
-    const pricingSection = page.locator("#tarifs");
-    await pricingSection.scrollIntoViewIfNeeded();
-    await clickAndExpectNavigation(page, pricingSection.getByRole("link", { name: "Choisir Starter" }), /\/onboarding\?plan=STARTER/);
-
-    await expect(page.getByRole("heading", { name: "Créez votre compte" })).toBeVisible();
+    await clickAndExpectNavigation(page, page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Tarifs" }), /\/pricing$/);
   });
 
   test("mission §54 — les 4 pages légales sont réellement accessibles, jamais un lien mort", async ({ page }) => {
