@@ -1,9 +1,8 @@
 import { Readable } from "node:stream";
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
-import { computeSha256 } from "../../../../shared-kernel/file-hash";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
-import { readStreamToBuffer } from "../../../../shared-kernel/read-stream-to-buffer";
+import { stageStreamToTempFile } from "../../../../shared-kernel/temp-file-staging";
 import { ClientPermission } from "../../../client-portfolio";
 import { DOCUMENT_VERSION_REPOSITORY, STORAGE_PROVIDER, type DocumentVersionRepository, type StorageProvider } from "../../../documents";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
@@ -108,9 +107,13 @@ export class GenerateResponsePackageZipUseCase {
         }
         usedPaths.add(archivePath);
 
-        const buffer = await readStreamToBuffer(await this.storageProvider.openReadStream(documentVersion.storageKey));
-        entries.push({ archivePath, content: buffer });
-        manifestItems.push({ packageItemId: item.id, label: item.label, category: item.category, archivePath, documentId: item.documentId, documentVersionId: item.documentVersionId, fileHash: computeSha256(buffer) });
+        const content = await this.storageProvider.openReadStream(documentVersion.storageKey);
+        entries.push({ archivePath, content });
+        // P2 (audit Codex, ZIP memory) — `documentVersion.checksum` est déjà un SHA-256 calculé
+        // sur ces mêmes octets au moment de l'upload (`documents/application/checksum.ts`, même
+        // algorithme que `computeSha256`) : le réutiliser évite de bufferiser/relire le fichier
+        // uniquement pour le hasher pendant l'assemblage.
+        manifestItems.push({ packageItemId: item.id, label: item.label, category: item.category, archivePath, documentId: item.documentId, documentVersionId: item.documentVersionId, fileHash: documentVersion.checksum });
       }
 
       const occurredAt = this.clock.now();
@@ -128,60 +131,68 @@ export class GenerateResponsePackageZipUseCase {
         items: manifestItems,
       };
       const manifestBuffer = Buffer.from(JSON.stringify(manifest, null, 2), "utf-8");
-      entries.push({ archivePath: "manifest.json", content: manifestBuffer });
+      entries.push({ archivePath: "manifest.json", content: Readable.from(manifestBuffer) });
 
-      const zipBuffer = await this.zipArchivePort.build(entries);
-      const checksum = computeSha256(zipBuffer);
       const fileName = `TenderOS_${pkg.tenderId}${pkg.lotId ? `_Lot${pkg.lotId.slice(0, 8)}` : ""}_V${version.versionNumber}.zip`;
       const storageKey = `response-packages/${command.organizationId}/${pkg.tenderId}/${pkg.id}/${version.id}-${this.idGenerator.generate()}.zip`;
 
-      await this.storageProvider.put({ key: storageKey, content: Readable.from(zipBuffer), contentType: "application/zip", sizeBytes: zipBuffer.length });
+      // P2 (audit Codex, ZIP memory) — le ZIP est généré en flux (jamais bufferisé entièrement) et
+      // écrit vers un fichier temporaire contrôlé, seul moyen de connaître `sizeBytes` (exigé par
+      // `StorageProvider.put()`) et le checksum de l'archive sans les recalculer d'une seconde
+      // lecture dédiée. Nettoyage garanti, y compris si `put()` échoue après le staging.
+      const zipStream = this.zipArchivePort.buildStream(entries);
+      const staged = await stageStreamToTempFile(zipStream, "response-package");
+      try {
+        await this.storageProvider.put({ key: storageKey, content: staged.readStream(), contentType: "application/zip", sizeBytes: staged.sizeBytes });
 
-      const artifact = PackageArtifact.create({
-        id: this.idGenerator.generate(),
-        organizationId: command.organizationId,
-        responsePackageVersionId: version.id,
-        storageKey,
-        fileName,
-        mimeType: "application/zip",
-        sizeBytes: zipBuffer.length,
-        checksum,
-        manifest,
-        generatedBy: command.actorId,
-        occurredAt,
-      });
-
-      pkg.markExported(occurredAt);
-
-      await this.atomicTransactionRunner.run(async () => {
-        await this.artifactRepository.create(artifact);
-        await this.packageRepository.save(pkg);
-        await this.auditLogWriter.record({
+        const artifact = PackageArtifact.create({
+          id: this.idGenerator.generate(),
           organizationId: command.organizationId,
-          actorType: "USER",
-          actorId: command.actorId,
-          action: "response_package.generated",
-          resourceType: "package_artifact",
-          resourceId: artifact.id,
-          requestId: command.requestId,
-          metadata: { responsePackageId: pkg.id, responsePackageVersionId: version.id, itemCount: manifestItems.length, checksum },
+          responsePackageVersionId: version.id,
+          storageKey,
+          fileName,
+          mimeType: "application/zip",
+          sizeBytes: staged.sizeBytes,
+          checksum: staged.sha256,
+          manifest,
+          generatedBy: command.actorId,
+          occurredAt,
         });
-        // V2 Sprint 16 (Integration Hub) — mission §87/§135 : même motif que Validate ci-dessus.
-        await this.outboxWriter.write({
-          organizationId: command.organizationId,
-          events: [
-            {
-              eventType: "response_package.generated",
-              aggregateType: "PackageArtifact",
-              aggregateId: artifact.id,
-              payload: { responsePackageId: pkg.id, responsePackageVersionId: version.id, tenderId: pkg.tenderId, lotId: pkg.lotId ?? null, clientAccountId: pkg.clientAccountId, fileName, checksum },
-              occurredAt,
-            },
-          ],
-        });
-      });
 
-      return { artifact };
+        pkg.markExported(occurredAt);
+
+        await this.atomicTransactionRunner.run(async () => {
+          await this.artifactRepository.create(artifact);
+          await this.packageRepository.save(pkg);
+          await this.auditLogWriter.record({
+            organizationId: command.organizationId,
+            actorType: "USER",
+            actorId: command.actorId,
+            action: "response_package.generated",
+            resourceType: "package_artifact",
+            resourceId: artifact.id,
+            requestId: command.requestId,
+            metadata: { responsePackageId: pkg.id, responsePackageVersionId: version.id, itemCount: manifestItems.length, checksum: staged.sha256 },
+          });
+          // V2 Sprint 16 (Integration Hub) — mission §87/§135 : même motif que Validate ci-dessus.
+          await this.outboxWriter.write({
+            organizationId: command.organizationId,
+            events: [
+              {
+                eventType: "response_package.generated",
+                aggregateType: "PackageArtifact",
+                aggregateId: artifact.id,
+                payload: { responsePackageId: pkg.id, responsePackageVersionId: version.id, tenderId: pkg.tenderId, lotId: pkg.lotId ?? null, clientAccountId: pkg.clientAccountId, fileName, checksum: staged.sha256 },
+                occurredAt,
+              },
+            ],
+          });
+        });
+
+        return { artifact };
+      } finally {
+        await staged.cleanup();
+      }
     } catch (error) {
       await this.auditLogWriter.record({
         organizationId: command.organizationId,

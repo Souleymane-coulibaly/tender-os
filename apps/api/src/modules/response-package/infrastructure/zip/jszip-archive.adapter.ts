@@ -6,10 +6,13 @@ import type { ZipArchivePort, ZipEntry } from "../../application/ports/zip-archi
 
 /** Construction RÉELLE d'une archive ZIP (jamais une simulation) — même technique que
  *  `submission-package/infrastructure/jszip-archive.adapter.ts` (Sprint 8A bis §52/§54), copiée
- *  volontairement pour ce module (décision utilisateur Sprint 14). */
+ *  volontairement pour ce module (décision utilisateur Sprint 14). P2 (audit Codex, ZIP memory) —
+ *  chaque entrée est ajoutée comme flux (jamais bufferisée), et `generateNodeStream` avec
+ *  `streamFiles: true` génère l'archive progressivement au lieu de tout construire en un seul
+ *  `Buffer` en mémoire. */
 @Injectable()
 export class JszipArchiveAdapter implements ZipArchivePort {
-  async build(entries: readonly ZipEntry[]): Promise<Buffer> {
+  buildStream(entries: readonly ZipEntry[]): NodeJS.ReadableStream {
     const zip = new JSZip();
     const seenPaths = new Set<string>();
     for (const entry of entries) {
@@ -23,6 +26,6 @@ export class JszipArchiveAdapter implements ZipArchivePort {
       seenPaths.add(entry.archivePath);
       zip.file(entry.archivePath, entry.content);
     }
-    return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+    return zip.generateNodeStream({ type: "nodebuffer", streamFiles: true, compression: "DEFLATE" });
   }
 }

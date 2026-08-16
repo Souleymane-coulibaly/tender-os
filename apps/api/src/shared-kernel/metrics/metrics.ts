@@ -88,3 +88,13 @@ export const integrationRequestsFailed = new Counter({
   labelNames: ["provider"],
   registers: [metricsRegistry],
 });
+
+/** P2 (audit Codex, Resend/Demo Request) — observabilité minimale demandée par la mission :
+ *  distingue un email de demande de démo réellement envoyé d'un échec, sans exposer le contenu du
+ *  message ni aucun secret (label `outcome` uniquement, même motif que `workerJobsTotal`). */
+export const demoRequestEmailTotal = new Counter({
+  name: "demo_request_email_total",
+  help: "Total des tentatives d'envoi de l'email de notification de demande de démo, par issue (sent/failed).",
+  labelNames: ["outcome"],
+  registers: [metricsRegistry],
+});

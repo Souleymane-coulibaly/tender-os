@@ -3,6 +3,7 @@ import { Readable } from "node:stream";
 import { STORAGE_PROVIDER, type StorageProvider } from "../../../documents";
 import { computeSha256 } from "../../../../shared-kernel/file-hash";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { stageStreamToTempFile } from "../../../../shared-kernel/temp-file-staging";
 import { PackageFile, type PackageFileSourceType } from "../../domain/package-file";
 import { SubmissionPackage } from "../../domain/submission-package.aggregate";
 import type { SubmissionPackageManifest } from "../dtos";
@@ -106,36 +107,44 @@ export class PackageAssemblyService {
     await this.submissionPackageRepository.markGenerating({ organizationId: input.organizationId, packageId });
 
     try {
-      // Assemblage ZIP HORS transaction (mission §69) : relit les octets réels de chaque source.
-      const entries: { archivePath: string; content: Buffer }[] = [];
+      // Assemblage ZIP HORS transaction (mission §69) : relit les octets réels de chaque source,
+      // en flux (jamais bufferisée — P2 audit Codex, ZIP memory).
+      const entries: { archivePath: string; content: Readable }[] = [];
       for (const source of input.sources) {
-        const stream = await this.storageProvider.openReadStream(source.sourceStorageKey);
-        const buffer = await streamToBuffer(stream);
-        entries.push({ archivePath: source.archivePath, content: buffer });
+        const content = await this.storageProvider.openReadStream(source.sourceStorageKey);
+        entries.push({ archivePath: source.archivePath, content });
       }
-      entries.push({ archivePath: manifestPath, content: manifestBuffer });
+      entries.push({ archivePath: manifestPath, content: Readable.from(manifestBuffer) });
 
-      const zipBuffer = await this.zipArchivePort.build(entries);
-      const zipHash = computeSha256(zipBuffer);
       const fileName = `package-${input.tenderId}-v${version}.zip`;
       const storageKey = `packages/${input.organizationId}/${input.tenderId}/${packageId}.zip`;
 
-      await this.storageProvider.put({ key: storageKey, content: Readable.from(zipBuffer), contentType: "application/zip", sizeBytes: zipBuffer.length });
+      // P2 (audit Codex, ZIP memory) — le ZIP est généré en flux et écrit vers un fichier
+      // temporaire contrôlé, seul moyen de connaître `sizeBytes` (exigé par `StorageProvider.put()`)
+      // et le checksum de l'archive sans les recalculer d'une seconde lecture dédiée. Nettoyage
+      // garanti, y compris si `put()` échoue après le staging.
+      const zipStream = this.zipArchivePort.buildStream(entries);
+      const staged = await stageStreamToTempFile(zipStream, "submission-package");
+      try {
+        await this.storageProvider.put({ key: storageKey, content: staged.readStream(), contentType: "application/zip", sizeBytes: staged.sizeBytes });
 
-      await this.submissionPackageRepository.completeWithArchive({
-        organizationId: input.organizationId,
-        packageId,
-        fileName,
-        mimeType: "application/zip",
-        fileSize: zipBuffer.length,
-        fileHash: zipHash,
-        storageKey,
-        manifestJson: manifest,
-        occurredAt: input.occurredAt,
-      });
-      pkg.markCompleted({ fileName, mimeType: "application/zip", fileSize: zipBuffer.length, fileHash: zipHash, storageKey, occurredAt: input.occurredAt });
+        await this.submissionPackageRepository.completeWithArchive({
+          organizationId: input.organizationId,
+          packageId,
+          fileName,
+          mimeType: "application/zip",
+          fileSize: staged.sizeBytes,
+          fileHash: staged.sha256,
+          storageKey,
+          manifestJson: manifest,
+          occurredAt: input.occurredAt,
+        });
+        pkg.markCompleted({ fileName, mimeType: "application/zip", fileSize: staged.sizeBytes, fileHash: staged.sha256, storageKey, occurredAt: input.occurredAt });
 
-      return { pkg, files };
+        return { pkg, files };
+      } finally {
+        await staged.cleanup();
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "unknown packaging error";
       await this.submissionPackageRepository.markFailed({
@@ -149,11 +158,5 @@ export class PackageAssemblyService {
       throw error;
     }
   }
-}
-
-async function streamToBuffer(stream: Readable): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  return Buffer.concat(chunks);
 }
 

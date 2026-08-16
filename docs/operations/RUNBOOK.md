@@ -169,3 +169,39 @@ sans changement de code applicatif — le branchement du provider réel en produ
 décision de déploiement différée (mission Sprint 21 §63-70, explicitement autorisée à rester
 différée). Un échec de stockage n'écrit jamais un statut `READY` en base sans le fichier réellement
 présent ; un échec d'email n'annule jamais une transaction métier déjà commitée.
+
+### 9.1 Email (Resend) — configuration et diagnostic (P2 audit Codex, Resend/Demo Request)
+
+**Variables** : `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `DEMO_REQUEST_NOTIFY_EMAIL`,
+`EMAIL_ALERT_WORKER_ENABLED` (voir `.env.example`).
+
+**Provider attendu par environnement** (`shared-kernel/email-config.ts`, signal `NODE_ENV`, jamais
+un second mécanisme de détection) :
+- development / test / `NODE_ENV` non défini : `LoggingEmailProvider` autorisé — journalise l'email
+  au lieu de l'envoyer si `RESEND_API_KEY`/`RESEND_FROM_EMAIL` sont absentes. L'application démarre
+  normalement.
+- toute autre valeur de `NODE_ENV` (staging/production) : `ResendEmailProvider` est OBLIGATOIRE.
+  `RESEND_API_KEY` ou `RESEND_FROM_EMAIL` manquante ⇒ l'application **refuse de démarrer**
+  (`SharedKernelModule`, résolution du provider `EMAIL_PROVIDER`) — jamais un email "envoyé" qui ne
+  part en réalité nulle part.
+
+**Destination Demo** (`SubmitDemoRequestUseCase`) : `DEMO_REQUEST_NOTIFY_EMAIL` suit la même règle
+— repli local (`contact@tenderos.fr`, avec avertissement journalisé) uniquement en development/
+test ; en staging/production son absence fait échouer le démarrage de l'application (le use case
+refuse de s'instancier), jamais un envoi silencieux vers une adresse non explicitement choisie.
+
+**`EMAIL_ALERT_WORKER_ENABLED`** concerne uniquement le worker périodique d'alertes de veille
+(module `market-watch`) — il est indépendant de l'envoi synchrone de l'email de demande de démo,
+qui n'en dépend jamais et continue de fonctionner que le worker soit activé ou non.
+
+**Diagnostiquer un échec** :
+1. Démarrage qui échoue avec un message mentionnant `RESEND_API_KEY`/`RESEND_FROM_EMAIL`/
+   `DEMO_REQUEST_NOTIFY_EMAIL` : configuration manquante pour l'environnement — vérifier les
+   variables déployées (jamais la valeur elle-même dans les logs, seulement le nom de la variable).
+2. Formulaire de demande de démo qui retourne une erreur générique côté visiteur : consulter les
+   logs serveur pour `Demo request notification email failed to send` (catégorie d'erreur
+   uniquement, jamais de secret) et le compteur Prometheus `demo_request_email_total{outcome="failed"}`
+   (`GET /metrics`, hors préfixe `/api/v1`).
+3. `/health/ready` ne dépend jamais de la configuration email (mission §55 "ne pas rendre l'API
+   'not ready' à cause d'un provider externe optionnel") — un problème de configuration email
+   n'apparaît jamais dans la readiness, uniquement au démarrage (point 1) ou à l'usage (point 2).
