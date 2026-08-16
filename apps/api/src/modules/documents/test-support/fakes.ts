@@ -269,3 +269,18 @@ export class InMemoryStorageProvider implements StorageProvider {
     return object ? { sizeBytes: object.content.length, contentType: object.contentType } : null;
   }
 }
+
+/**
+ * Mission P1 (audit Codex, R2/Connecteurs) — simule la SEULE différence fonctionnelle pertinente
+ * entre `LocalFilesystemStorageProvider` et `CloudflareR2StorageProvider` du point de vue des
+ * consommateurs du port : l'exposition de `generateSignedUrl` (capacité optionnelle). Utilisée pour
+ * prouver, sans dépendre du SDK R2 réel, que `DownloadDocumentVersionUseCase.execute()` continue de
+ * produire une redirection (comportement navigateur inchangé) alors que
+ * `getInternalReadStream()` continue de produire un flux direct (comportement serveur-à-serveur),
+ * quel que soit le `StorageProvider` actif.
+ */
+export class InMemoryStorageProviderWithSignedUrl extends InMemoryStorageProvider {
+  async generateSignedUrl(key: string, expiresInSeconds: number): Promise<string> {
+    return `https://fake-r2.test/${key}?expires=${expiresInSeconds}`;
+  }
+}

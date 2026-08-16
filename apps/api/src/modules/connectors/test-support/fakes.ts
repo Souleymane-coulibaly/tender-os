@@ -1,3 +1,5 @@
+import type { Clock } from "../../../shared-kernel/clock";
+import type { IdGenerator } from "../../../shared-kernel/id-generator";
 import type { CalendarSyncedEvent } from "../domain/calendar-synced-event.entity";
 import type { ConnectorProvider } from "../domain/enums";
 import type { ExternalConnection } from "../domain/external-connection.entity";
@@ -9,12 +11,37 @@ import { ConnectionStatus } from "../domain/enums";
 import { ExternalConnectionNotFoundError } from "../domain/errors";
 import type { AuditLogWriter, ConnectorAuditLogEntry } from "../application/ports/audit-log-writer";
 import type { CalendarSyncedEventRepository } from "../application/ports/calendar-synced-event.repository";
+import type {
+  ConnectorProviderAdapter,
+  DownloadedFile,
+  OAuthAccountInfo,
+  OAuthTokenResult,
+  RemoteFile,
+  RemoteFolderListing,
+} from "../application/ports/connector-provider-adapter";
 import type { CredentialCipher } from "../application/ports/credential-cipher";
 import type { ExternalConnectionRepository } from "../application/ports/external-connection.repository";
 import type { ExternalFileExportRecordRepository } from "../application/ports/external-file-export-record.repository";
 import type { ExternalFileImportRecordRepository } from "../application/ports/external-file-import-record.repository";
 import type { OAuthFlowStateRepository } from "../application/ports/oauth-flow-state.repository";
 import type { SyncConfigurationRepository } from "../application/ports/sync-configuration.repository";
+
+export const FIXED_NOW = new Date("2026-08-16T10:00:00Z");
+
+export class FixedClock implements Clock {
+  constructor(private readonly value: Date = FIXED_NOW) {}
+  now(): Date {
+    return this.value;
+  }
+}
+
+export class SequentialIdGenerator implements IdGenerator {
+  private counter = 0;
+  generate(): string {
+    this.counter += 1;
+    return `id-${this.counter}`;
+  }
+}
 
 /** Mutex par clé (mirroir `pg_advisory_xact_lock` des implémentations Prisma) — nécessaire pour que
  *  les tests de concurrence exercent réellement une exclusion mutuelle sur un `Promise.all` de deux
@@ -239,5 +266,54 @@ export class InMemoryCredentialCipher implements CredentialCipher {
   }
   decrypt(ciphertext: string): string {
     return ciphertext.replace(/^enc:/, "");
+  }
+}
+
+/**
+ * Mission P1 (audit Codex, R2/Connecteurs §12/§13) — double de test pour Microsoft/Google : enregistre
+ * exactement le contrat reçu par `uploadFile` (jamais un appel réseau réel) pour prouver que le
+ * contenu transmis au connecteur provient bien du flux résolu par TenderOS (local ou R2), avec le
+ * bon nom de fichier et le bon type MIME — jamais une URL signée transmise telle quelle.
+ */
+export class FakeConnectorProviderAdapter implements ConnectorProviderAdapter {
+  readonly uploadCalls: { containerId: string; folderId: string; filename: string; content: Buffer; mimeType: string }[] = [];
+
+  constructor(public readonly provider: ConnectorProvider) {}
+
+  buildAuthorizationUrl(): string {
+    throw new Error("not implemented in this fake");
+  }
+  async exchangeCodeForTokens(): Promise<OAuthTokenResult> {
+    throw new Error("not implemented in this fake");
+  }
+  async refreshAccessToken(): Promise<OAuthTokenResult> {
+    throw new Error("not implemented in this fake");
+  }
+  async fetchAccountInfo(): Promise<OAuthAccountInfo> {
+    throw new Error("not implemented in this fake");
+  }
+  async revokeToken(): Promise<void> {}
+  async listContainers(): Promise<never[]> {
+    return [];
+  }
+  async listFolderChildren(): Promise<RemoteFolderListing> {
+    return { folders: [], files: [] };
+  }
+  async downloadFile(): Promise<DownloadedFile> {
+    throw new Error("not implemented in this fake");
+  }
+  async createCalendarEvent(): Promise<{ externalEventId: string }> {
+    throw new Error("not implemented in this fake");
+  }
+
+  async uploadFile(_accessToken: string, input: { containerId: string; folderId: string; filename: string; content: Buffer; mimeType: string }): Promise<RemoteFile> {
+    this.uploadCalls.push(input);
+    return {
+      id: `remote-file-${this.uploadCalls.length}`,
+      name: input.filename,
+      mimeType: input.mimeType,
+      sizeBytes: input.content.length,
+      modifiedAt: new Date(),
+    };
   }
 }

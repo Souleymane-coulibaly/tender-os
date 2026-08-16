@@ -3,7 +3,7 @@ import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import { DownloadDocumentVersionUseCase } from "../../../documents";
 import { assertHasConnectorPermission, ConnectorPermission } from "../../domain/connector-permission";
-import { ExternalConnectionClientNotAllowedError, ExternalConnectionNotFoundError, ExportTargetNotFoundError, ExternalFileOperationInProgressError, ExternalFileExportNeedsReconciliationError, RemoteProviderError } from "../../domain/errors";
+import { ExternalConnectionClientNotAllowedError, ExternalConnectionNotFoundError, ExternalFileOperationInProgressError, ExternalFileExportNeedsReconciliationError, RemoteProviderError } from "../../domain/errors";
 import { ExternalFileExportRecord } from "../../domain/external-file-export-record.entity";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { CONNECTOR_PROVIDER_ADAPTERS, type ConnectorProviderAdapterMap } from "../ports/connector-provider-adapter";
@@ -100,18 +100,19 @@ export class ExportDocumentVersionUseCase {
       throw new ExternalConnectionClientNotAllowedError();
     }
 
-    const download = await this.downloadDocumentVersion.execute({
+    // Correctif audit Codex P1 (R2/Connecteurs) — `execute()` bascule en URL signée dès que le
+    // `StorageProvider` actif expose `generateSignedUrl` (R2), un contrat pensé pour un
+    // téléchargement navigateur (mission §3/§5). Un connecteur tiers a besoin d'une lecture
+    // SERVEUR-À-SERVEUR : `getInternalReadStream` réutilise EXACTEMENT la même autorisation que
+    // `execute()` mais retourne toujours un flux direct, quel que soit le `StorageProvider` actif
+    // (local ou R2) — jamais de HTTP GET du backend vers sa propre URL R2 signée (mission §3).
+    const download = await this.downloadDocumentVersion.getInternalReadStream({
       organizationId: command.organizationId,
       documentId: command.documentId,
       versionId: command.versionId,
       actorId: command.actorId,
       actorRole: command.actorRole,
     });
-    if (download.kind !== "stream") {
-      // Mission §42/§43 — un stockage à URL signée (futur R2) devrait être téléchargé côté serveur
-      // avant réexport, jamais transmis tel quel à un provider tiers non authentifié pour cette URL.
-      throw new ExportTargetNotFoundError();
-    }
 
     const filename = command.filename ?? download.filename;
 

@@ -1,7 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
+import type { Readable } from "node:stream";
 import { GetTenderUseCase } from "../../../tenders";
 import { DocumentNotFoundError, DocumentVersionNotFoundError } from "../../domain/errors";
 import { DocumentPermission } from "../../domain/document-permission";
+import type { DocumentVersion } from "../../domain/document-version.entity";
 import { assertHasDocumentPermission } from "../policies/document-authorization.policy";
 import { assertDocumentClientAccess } from "../policies/document-client-access.helper";
 import { DOCUMENT_TENDER_ASSOCIATION_REPOSITORY, type DocumentTenderAssociationRepository } from "../ports/document-tender-association.repository";
@@ -18,6 +20,17 @@ export type DownloadDocumentVersionQuery = Readonly<{
   actorId?: string | undefined;
 }>;
 
+/** Résultat d'une lecture SERVEUR-À-SERVEUR (mission P1 R2/Connecteurs) — jamais une URL, jamais
+ *  destiné à être renvoyé tel quel dans une réponse HTTP publique. Distinct de `DocumentDownload`
+ *  (qui PEUT être une redirection, pensée pour un navigateur) précisément pour qu'un appelant
+ *  interne (export connecteur) ne puisse structurellement jamais recevoir de variante `redirect`. */
+export type DocumentInternalStream = Readonly<{
+  stream: Readable;
+  contentType: string;
+  filename: string;
+  sizeBytes: number;
+}>;
+
 /**
  * Ne génère jamais d'accès (flux ou URL signée) sans avoir d'abord vérifié organisation,
  * existence du document et de la version, et permission — dans cet ordre (conception §22).
@@ -32,7 +45,56 @@ export class DownloadDocumentVersionUseCase {
     private readonly getTenderUseCase: GetTenderUseCase,
   ) {}
 
+  /** Chemin HTTP/navigateur — inchangé (mission P1 R2/Connecteurs §5 : ne jamais casser ce
+   *  comportement). Bascule en URL signée dès que le `StorageProvider` actif expose
+   *  `generateSignedUrl` (R2), sinon renvoie un flux direct (local). */
   async execute(query: DownloadDocumentVersionQuery): Promise<DocumentDownload> {
+    const version = await this.resolveAuthorizedVersion(query);
+
+    if (this.storageProvider.generateSignedUrl) {
+      const url = await this.storageProvider.generateSignedUrl(version.storageKey, 60);
+      return { kind: "redirect", url, expiresAt: new Date(Date.now() + 60_000) };
+    }
+
+    const stream = await this.storageProvider.openReadStream(version.storageKey);
+    return {
+      kind: "stream",
+      stream,
+      contentType: version.mimeType,
+      filename: version.sanitizedFilename,
+      sizeBytes: version.sizeBytes,
+    };
+  }
+
+  /**
+   * Mission P1 R2/Connecteurs — lecture SERVEUR-À-SERVEUR pour un consommateur interne (export
+   * connecteur Microsoft/Google). Réutilise EXACTEMENT la même autorisation/résolution que
+   * `execute()` (`resolveAuthorizedVersion`, jamais dupliquée) mais retourne TOUJOURS un flux
+   * direct, jamais une URL signée — un connecteur tiers ne doit jamais recevoir une redirection
+   * pensée pour un navigateur authentifié (mission §3 : ne pas confondre les deux besoins).
+   * `getMetadata` distingue explicitement "objet absent du stockage" (traduit dans le vocabulaire
+   * déjà existant du module Documents, jamais un succès silencieux) d'une autre panne de lecture
+   * (propagée telle quelle — l'appelant ne doit jamais considérer un tel échec comme un export
+   * réussi, mission §11).
+   */
+  async getInternalReadStream(query: DownloadDocumentVersionQuery): Promise<DocumentInternalStream> {
+    const version = await this.resolveAuthorizedVersion(query);
+
+    const metadata = await this.storageProvider.getMetadata(version.storageKey);
+    if (!metadata) {
+      throw new DocumentVersionNotFoundError();
+    }
+
+    const stream = await this.storageProvider.openReadStream(version.storageKey);
+    return {
+      stream,
+      contentType: version.mimeType,
+      filename: version.sanitizedFilename,
+      sizeBytes: version.sizeBytes,
+    };
+  }
+
+  private async resolveAuthorizedVersion(query: DownloadDocumentVersionQuery): Promise<DocumentVersion> {
     assertHasDocumentPermission(query.actorRole, DocumentPermission.Download);
 
     const document = await this.documentRepository.findById({
@@ -61,18 +123,6 @@ export class DownloadDocumentVersionUseCase {
       throw new DocumentVersionNotFoundError();
     }
 
-    if (this.storageProvider.generateSignedUrl) {
-      const url = await this.storageProvider.generateSignedUrl(version.storageKey, 60);
-      return { kind: "redirect", url, expiresAt: new Date(Date.now() + 60_000) };
-    }
-
-    const stream = await this.storageProvider.openReadStream(version.storageKey);
-    return {
-      kind: "stream",
-      stream,
-      contentType: version.mimeType,
-      filename: version.sanitizedFilename,
-      sizeBytes: version.sizeBytes,
-    };
+    return version;
   }
 }

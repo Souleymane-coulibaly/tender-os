@@ -25,6 +25,7 @@ export { DocumentVersionNotFoundError } from "./domain/errors";
 export { DownloadDocumentVersionUseCase } from "./application/use-cases/download-document-version.use-case";
 export type {
   DownloadDocumentVersionQuery,
+  DocumentInternalStream,
 } from "./application/use-cases/download-document-version.use-case";
 export type { DocumentDownload } from "./application/ports/storage-provider";
 
