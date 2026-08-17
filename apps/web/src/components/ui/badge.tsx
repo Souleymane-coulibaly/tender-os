@@ -2,12 +2,17 @@ import type { ReactNode } from "react";
 
 export type BadgeTone = "neutral" | "info" | "success" | "warning" | "danger" | "gold";
 
+// Design System Checkpoint B — converge sur les jetons sémantiques ajoutés au Checkpoint A
+// (`globals.css`/`tailwind.config.ts`) plutôt que les classes Tailwind brutes précédentes : MÊMES
+// valeurs exactes (green/amber/red-100/-800), donc AUCUN changement visuel, mais devient la source
+// que les 6+ fonctions `*BadgeClass()` dupliquées ailleurs (audit Checkpoint A) pourront converger
+// vers `bg-success-bg text-success-fg` etc. lors de leur migration progressive (mission §42/§43).
 const TONE_CLASSES: Record<BadgeTone, string> = {
   neutral: "bg-tenderos-light text-tenderos-slate",
-  info: "bg-tenderos-blue/10 text-tenderos-blue",
-  success: "bg-green-100 text-green-800",
-  warning: "bg-amber-100 text-amber-800",
-  danger: "bg-red-100 text-red-800",
+  info: "bg-info-bg text-info-fg",
+  success: "bg-success-bg text-success-fg",
+  warning: "bg-warning-bg text-warning-fg",
+  danger: "bg-danger-bg text-danger-fg",
   gold: "bg-tenderos-gold/15 text-tenderos-navy",
 };
 

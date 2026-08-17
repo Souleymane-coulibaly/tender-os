@@ -5,6 +5,7 @@ import { fetchEntitlements } from "../billing-actions";
 import { logoutAction } from "../actions";
 import { fetchNotifications, fetchUnreadNotificationCount } from "../notifications-actions";
 import { resolveTourSteps } from "../../../lib/tour-steps";
+import { ToastProvider } from "../../../components/ui/toast";
 import { AppShell } from "./app-shell";
 import { AuthenticatedAnalyticsLoader } from "./authenticated-analytics-loader";
 import { NotificationBell } from "./notification-bell";
@@ -50,24 +51,30 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const tourSteps = resolveTourSteps(hasApiOrWebhooksEntitlement);
 
   return (
-    <TourProvider steps={tourSteps} hasEverInteractedWithTour={hasEverInteractedWithTour}>
-      <AuthenticatedAnalyticsLoader />
-      <AppShell
-        headerActions={
-          <>
-            <RestartTourButton hasEverInteractedWithTour={hasEverInteractedWithTour} />
-            <NotificationBell initialNotifications={initialNotifications} initialUnreadCount={initialUnreadCount} />
-            <form action={logoutAction}>
-              <button type="submit" className="text-sm text-tenderos-slate hover:text-tenderos-navy hover:underline">
-                Se déconnecter
-              </button>
-            </form>
-          </>
-        }
-      >
-        {children}
-      </AppShell>
-      <TourTooltip />
-    </TourProvider>
+    // Design System Checkpoint C — câblage du `ToastProvider` (Checkpoint B, primitive déjà prête
+    // mais volontairement non montée alors) au SEUL point d'entrée réel de la surface `/app` :
+    // n'affecte aucun écran existant tant qu'aucun n'appelle `useToast()` (aucune page métier
+    // modifiée dans ce Checkpoint, mission §38/§39).
+    <ToastProvider>
+      <TourProvider steps={tourSteps} hasEverInteractedWithTour={hasEverInteractedWithTour}>
+        <AuthenticatedAnalyticsLoader />
+        <AppShell
+          headerActions={
+            <>
+              <RestartTourButton hasEverInteractedWithTour={hasEverInteractedWithTour} />
+              <NotificationBell initialNotifications={initialNotifications} initialUnreadCount={initialUnreadCount} />
+              <form action={logoutAction}>
+                <button type="submit" className="text-sm text-tenderos-slate hover:text-tenderos-navy hover:underline">
+                  Se déconnecter
+                </button>
+              </form>
+            </>
+          }
+        >
+          {children}
+        </AppShell>
+        <TourTooltip />
+      </TourProvider>
+    </ToastProvider>
   );
 }

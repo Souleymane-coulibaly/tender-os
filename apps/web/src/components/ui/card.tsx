@@ -5,6 +5,10 @@ import type { ReactNode } from "react";
  * généralisée depuis le motif déjà établi par le Dashboard Premium (Sprint 25) :
  * `rounded-2xl border border-tenderos-navy/10 bg-white p-5 shadow-sm`. Un seul point de vérité pour
  * ce motif au lieu de sa répétition ad hoc dans chaque section (mission §25F.3/§25F.4).
+ *
+ * Design System Checkpoint B — ajout `interactive` (mission §13 "interactive card"), reproduisant
+ * exactement le survol déjà utilisé par `StatCard` (`hover:shadow-md`) — jamais un second motif de
+ * survol divergent. Additif, défaut inchangé (`false`) : aucun appelant existant n'est affecté.
  */
 export function Card({
   children,
@@ -12,6 +16,7 @@ export function Card({
   description,
   actions,
   padding = "normal",
+  interactive = false,
   className = "",
 }: {
   children: ReactNode;
@@ -19,11 +24,13 @@ export function Card({
   description?: ReactNode;
   actions?: ReactNode;
   padding?: "normal" | "tight" | "none";
+  interactive?: boolean;
   className?: string;
 }) {
   const paddingClass = padding === "none" ? "" : padding === "tight" ? "p-4" : "p-5";
+  const interactiveClass = interactive ? "transition hover:shadow-md" : "";
   return (
-    <section className={`rounded-2xl border border-tenderos-navy/10 bg-white shadow-sm ${paddingClass} ${className}`}>
+    <section className={`rounded-2xl border border-tenderos-navy/10 bg-white shadow-sm ${paddingClass} ${interactiveClass} ${className}`}>
       {title || actions ? (
         <div className={`flex items-start justify-between gap-3 ${description ? "mb-1" : "mb-4"}`}>
           {title ? <h2 className="font-tenderos-display text-base font-bold text-tenderos-navy">{title}</h2> : <span />}

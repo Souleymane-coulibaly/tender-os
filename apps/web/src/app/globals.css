@@ -4,7 +4,21 @@
 
 /* V2 Sprint 23 (landing) — jetons de marque TenderOS, seule source de vérité pour la couleur
    (tailwind.config.ts ne fait que les référencer). Un seul thème assumé (mission "Premium SaaS
-   B2B", pas de mode sombre demandé) — jamais de bloc @media prefers-color-scheme ici. */
+   B2B", pas de mode sombre demandé) — jamais de bloc @media prefers-color-scheme ici.
+
+   RÔLE SÉMANTIQUE (Design System Checkpoint A, documentation uniquement, aucune nouvelle
+   variable dupliquée) — l'audit confirme que ces jetons de marque jouent déjà chacun un rôle
+   sémantique implicite et cohérent sur toute la surface Landing/App :
+     tenderos-navy  → foreground (texte principal) ET primary (boutons/liens dominants)
+     tenderos-slate → foreground-muted (texte secondaire/description)
+     tenderos-blue  → info / accent interactif (focus, liens actifs, IA)
+     tenderos-light → background de page (déjà utilisé par Login/Onboarding ; PAS encore par
+                      `/app`, qui reste actuellement 100% blanc — écart noté au rapport, PAS
+                      corrigé ici : un changement de fond de page est visible, jamais "sûr" au
+                      sens de ce Checkpoint)
+     tenderos-white → surface (fond des cards/panels)
+   Prochain Checkpoint (B) : renommer progressivement les usages vers ces rôles plutôt que
+   d'introduire un second jeu de variables parallèle. */
 :root {
   --tenderos-navy: #0a2a5b;
   --tenderos-blue: #1472ff;
@@ -13,6 +27,23 @@
   --tenderos-slate: #64748b;
   --tenderos-light: #f8fafc;
   --tenderos-white: #ffffff;
+
+  /* Design System Checkpoint A — jetons SÉMANTIQUES de statut, seule addition de ce Checkpoint
+     (mission §51 "implémentation minimale des tokens si sûre"). L'audit a trouvé le MÊME triplet
+     success/warning/danger dupliqué indépendamment à 6+ endroits (Badge, goNoGoBadgeClass ×2,
+     marketTypeBadgeClass/scoreBadgeClass, readinessBadgeClass, clientAccountStatusBadgeClass) —
+     toujours les mêmes valeurs Tailwind (green/amber/red-100/-800), jamais nommées. Ces variables
+     reproduisent EXACTEMENT ces valeurs déjà rendues (aucun changement visuel possible tant
+     qu'aucun composant ne les consomme) — Checkpoint B fera converger `Badge` et les helpers
+     dupliqués vers cette source unique, jamais l'inverse. */
+  --success-bg: #dcfce7; /* Tailwind green-100 — valeur déjà utilisée partout, jamais changée */
+  --success-fg: #166534; /* Tailwind green-800 */
+  --warning-bg: #fef3c7; /* Tailwind amber-100 */
+  --warning-fg: #92400e; /* Tailwind amber-800 */
+  --danger-bg: #fee2e2; /* Tailwind red-100 */
+  --danger-fg: #991b1b; /* Tailwind red-800 */
+  --info-bg: rgb(20 114 255 / 0.1); /* == bg-tenderos-blue/10, motif "info" déjà utilisé par Badge */
+  --info-fg: var(--tenderos-blue);
 }
 
 @media (prefers-reduced-motion: reduce) {

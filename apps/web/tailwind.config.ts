@@ -20,6 +20,16 @@ const config: Config = {
           light: "var(--tenderos-light)",
           white: "var(--tenderos-white)",
         },
+        // Design System Checkpoint A — jetons sémantiques de statut (mission §6/§51), seule
+        // addition de couleur de ce Checkpoint. Reproduisent EXACTEMENT les valeurs Tailwind déjà
+        // utilisées partout (green/amber/red-100/-800) — jamais consommés par un composant existant
+        // pour l'instant, donc zéro changement visuel actuel. Checkpoint B fera converger `Badge` et
+        // les helpers `*BadgeClass()` dupliqués (goNoGoBadgeClass, scoreBadgeClass, etc., voir
+        // rapport d'audit) vers `bg-success-bg text-success-fg` etc. plutôt que vers un 7e helper.
+        success: { bg: "var(--success-bg)", fg: "var(--success-fg)" },
+        warning: { bg: "var(--warning-bg)", fg: "var(--warning-fg)" },
+        danger: { bg: "var(--danger-bg)", fg: "var(--danger-fg)" },
+        info: { bg: "var(--info-bg)", fg: "var(--info-fg)" },
       },
       // Jamais la clé `sans` par défaut (remplacerait le corps de police de TOUTE l'application,
       // y compris /app et /platform-admin — non-régression §72). Deux clés nommées, appliquées

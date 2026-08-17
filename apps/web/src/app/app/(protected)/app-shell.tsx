@@ -41,8 +41,13 @@ export function AppShell({ headerActions, children }: { headerActions: ReactNode
         }`}
       >
         <div className="flex h-16 items-center justify-between px-5">
-          <Link href="/app" className="font-tenderos-display text-lg font-extrabold text-white">
-            TenderOS
+          {/* Design System Checkpoint C — vrai logo de marque (mission §25 "utiliser le VRAI logo
+              TenderOS déjà présent dans les assets, ne pas recréer un faux logo") : le texte brut
+              "TenderOS" rendait une identité différente de celle de la Landing (`site-header.tsx`).
+              Variante `-dark` (texte blanc + "OS" or) — même asset que `site-footer.tsx`, conçue
+              pour un fond sombre, ici `bg-tenderos-navy`. */}
+          <Link href="/app" aria-label="TenderOS">
+            <img src="/brand/tenderos-logo-horizontal-dark.svg" alt="TenderOS" className="h-7 w-auto" width={160} height={35} />
           </Link>
           <button
             type="button"
