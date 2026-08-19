@@ -52,6 +52,7 @@ describe("Dce aggregate", () => {
       organizationId: "org-1",
       tenderId: "tender-2",
       status: DceStatus.Imported,
+      revision: 3,
       createdByUserId: "user-1",
       createdAt: NOW,
       updatedAt: NOW,
@@ -59,5 +60,12 @@ describe("Dce aggregate", () => {
 
     expect(dce.status).toBe(DceStatus.Imported);
     expect(dce.id.value).toBe("dce-2");
+    expect(dce.revision).toBe(3);
+  });
+
+  it("BLOQUANT (Checkpoint 2.1-P2.1-FIX-A) — a freshly created Dce starts at revision 1, a meaningful baseline never confused with 'no revision tracked'", () => {
+    const dce = createDce();
+
+    expect(dce.revision).toBe(1);
   });
 });

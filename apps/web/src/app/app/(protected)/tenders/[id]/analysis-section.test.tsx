@@ -110,6 +110,7 @@ describe("AnalysisSection", () => {
       ...withJob({ status: "SUCCEEDED" }),
       summary: {
         analysisVersion: 1,
+        analysisFreshness: "CURRENT",
         opportunitySummary: "Marche de nettoyage, complexite moderee.",
         complexityLevel: "MEDIUM",
         mainCriteria: ["Prix (60%)"],

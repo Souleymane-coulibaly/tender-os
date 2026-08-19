@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/wordprocessingShape" mc:Ignorable="w14 wp14">
+  <w:body>
+<w:p><w:r><w:t xml:space="preserve">TenderOS 2.1 - Global Functional Audit</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Post A1 -&gt; A6.4</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Date: 2026-08-18</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Mode: strict read-only</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Executive Summary</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Verdict: PARTIALLY UNIFIED / READY FOR GLOBAL CONTINUATION WITH TRACKED DEBT.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">The A1 to A6.4 consolidation is real and substantial: CandidateCompany is now the main source of truth for candidate identity on the modern flows that were explicitly migrated. The code and tests show concrete progress on Tender, Opportunity, Checklist, GO/NO-GO, Technical Memo, Candidate Establishments and DC1/DC2/DC4 official forms.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">However, TenderOS 2.1 is not yet a perfectly single product with zero V1/V2 overlap. Legacy structures remain active by design in several places, especially around clientAccountId, company-profile capabilities, and older Tender flows. The product is therefore unified enough to continue, but not unified enough to claim that every functional path has a single source of truth with no fallback.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Git Initial State</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">BRANCH: v2/redesign-ui...origin/v2/redesign-ui</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">WORKTREE: dirty, large in-progress checkpoint tree.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">STAGED: none detected (git diff --cached --stat empty).</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">UNTRACKED: candidate-company module, 3 Prisma migrations for A1/A3/A6.2, new tender/opportunity/web sections, images, playwright staging config, staging smoke test, temporary/doc artifacts.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">AUDIT_START_STATE: post-checkpoint integration worktree, not a clean release snapshot.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Product Architecture</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Monorepo structure confirmed: apps/api (NestJS), apps/web (Next.js App Router), Prisma schema and migrations, supporting tests, workers, images, docs, infra descriptors.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Backend workers directly present in codebase: analysis stale recovery, chat stale recovery, generation stale recovery, market source sync, email alert, webhook delivery, outbox publisher, billing trial reminder.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Cross-cutting product capabilities present in repo: AI configuration and routing, analysis, chat, generation, technical memo, administrative dossier, market watch, billing/subscription, integrations/connectors/webhooks/API keys, knowledge library, documents, tenders, opportunities, validations, submission/signature, pricing.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Backend Module Findings</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">1. CandidateCompany / CandidateEstablishment is real and wired as a first-class backend module. Evidence: apps/api/src/modules/candidate-company/* plus imports from tenders.module.ts, opportunity.module.ts, technical-memo.module.ts, checklist-intelligence.module.ts.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">2. Tender now supports explicit candidate assignment changes. Evidence: apps/api/src/modules/tenders/application/use-cases/change-tender-candidate-company.use-case.ts and tenders.controller.ts route using ChangeTenderCandidateCompanyBodySchema.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">3. Checklist Intelligence modern flow respects candidate identity SOT. Evidence: find-checklist-item-document-matches.use-case.ts resolves candidate identity from candidateCompanyId, and spec explicitly keeps client company-profile only for legacy tenders with candidateCompanyId absent.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">4. Technical Memo modern flow is migrated for identity, but capabilities still use explicit legacy fallback. Evidence: technical-memo-section-context-assembler.ts contains visible qualifier text fallback legacy for migrated company-profile capabilities.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">5. Administrative dossier official forms DC1/DC2/DC4 prefer CandidateCompany/CandidateEstablishment when Tender.candidateCompanyId is present, but still rely on company-profile fields for data not carried by CandidateCompany. Evidence: dc1/dc2/dc4 official-form-resolver services.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Frontend Surface Findings</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">1. New V2.1 surfaces are clearly present: /candidate-companies, new tender tabs/sections, dedicated /tenders/[id]/analysis, /checklist, /dce, updated opportunity pages.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">2. Legacy client/company-profile surfaces still exist and remain active, not hidden dead code. Evidence: /clients/[id], /clients/[id]/company-profile, related actions and types still modified and used.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">3. UI duplication risk still exists by design: Tender keeps both candidate-company and client context sections, and the deleted legacy candidate-section.tsx has been replaced by candidate-company-section.tsx plus client-section.tsx rather than full removal of legacy client context.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Source of Truth Assessment</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">SOT WIN: CandidateCompany is the effective legal identity source for migrated modern candidate flows.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">SOT PARTIAL: clientAccountId remains a live contextual anchor across Tender, Opportunity, permissions, and some dossier/memo capabilities.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">SOT LEGACY STILL ACTIVE: company-profile remains required for capability and contact enrichment in several paths.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">CONCLUSION: single-source-of-truth is achieved for candidate identity on the migrated path, but not yet for all company data and capability evidence.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Legacy / Fallback Assessment</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Explicit and acceptable fallbacks found:</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- Checklist: legacy fallback only when candidateCompanyId is absent on older tenders.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- Technical memo: explicit fallback legacy marker when capabilities come from migrated client company-profile.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- Official forms: mixed resolution model where candidate identity is modernized, but some contact/legal fields still come from company-profile when CandidateCompany does not carry them.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Hidden fallback not proven in audited scope; remaining fallbacks are documented in code comments and tests, which is healthier than silent substitution.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Isolation / Security Assessment</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Multi-tenant guard pattern is consistently present on audited controllers: AuthenticatedGuard + OrganizationMembershipGuard on candidate-company, tenders, checklist-intelligence, technical-memo, administrative-dossier controllers.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Candidate establishment listing is properly organization-scoped and candidate-scoped. Evidence: prisma-candidate-company.repository.ts listEstablishmentsByCompany, list-candidate-establishments use case, and tenant isolation specs.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">No cross-organization bypass was observed in the audited A6.4 scope.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Key Findings</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F1 - Global unification is incomplete, not broken. V1/V2/V2.1 coexistence is still visible in active routes, active types, and fallback code paths. Severity: Medium.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F2 - Technical Memo is only partially modernized because capabilities are still sourced through a legacy company-profile bridge. Severity: Medium.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F3 - Checklist modernization is conditional on candidateCompanyId presence; older tenders still legitimately use legacy flow. Severity: Medium.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F4 - Administrative dossier forms are functionally improved but not fully independent from client/company-profile. Severity: Medium.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F5 - Worktree is not in release-clean state, so this audit validates direction and implementation quality, not a frozen release candidate. Severity: Process risk.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Positive Validations</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- Candidate establishment listing and principal selection behavior were validated in prior A6.4 audit evidence and remain coherent in code.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- Tender candidate-company change path is present end-to-end in backend.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- Opportunity and Tender aggregates both carry candidateCompanyId intentionally.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- DC1/DC2/DC4 modernized mappings are present with dedicated integration test updates.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- Controller guard posture is consistent on the audited modules.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Recommended Fix Waves</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Wave 1 - Finish SOT consolidation: define what data must live natively on CandidateCompany versus remain on company-profile, then remove mixed resolution where product requirements allow it.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Wave 2 - Remove route and UI ambiguity: document and progressively retire remaining duplicate client/candidate panels where they confuse the user journey.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Wave 3 - Convert explicit legacy fallbacks into tracked deprecation paths with product-level migration criteria and end dates.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Wave 4 - Re-audit from a clean tagged snapshot with full end-to-end execution once the worktree stabilizes.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Final Status</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">TenderOS 2.1 after A1 to A6.4 is materially more coherent and functionally closer to one product. But the repository still shows an intentional hybrid stage, not a fully completed unification. My status is therefore: validated progress, no blocking architectural rupture found in the audited scope, but global unification claim should remain qualified until legacy dependency paths are further reduced.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Proof Pointers</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/tenders/interfaces/http/tenders.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/tenders/application/use-cases/change-tender-candidate-company.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/checklist-intelligence/application/use-cases/find-checklist-item-document-matches.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/technical-memo/application/services/technical-memo-section-context-assembler.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/administrative-dossier/application/services/official-form-mappers/dc1-official-form-resolver.service.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/administrative-dossier/application/services/official-form-mappers/dc2-official-form-resolver.service.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/administrative-dossier/application/services/official-form-mappers/dc4-official-form-resolver.service.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/candidate-company/infrastructure/prisma-candidate-company.repository.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/web/src/app/app/(protected)/candidate-companies/page.tsx</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/web/src/app/app/(protected)/tenders/[id]/candidate-company-section.tsx</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/web/src/app/app/(protected)/tenders/[id]/client-section.tsx</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/web/src/app/app/(protected)/opportunities/[id]/candidate-company-section.tsx</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>

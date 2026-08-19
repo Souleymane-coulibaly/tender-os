@@ -5,6 +5,7 @@ import {
   InvalidTenderStatusTransitionError,
   TenderArchivedError,
   TenderCandidateChangeNotAllowedError,
+  TenderCandidateCompanyChangeNotAllowedError,
 } from "./errors";
 import { isAmountRangeValid, isValidAmountFormat } from "./estimated-amount";
 import { TenderId } from "./tender-id.value-object";
@@ -47,6 +48,11 @@ export type TenderProps = {
    *  UNIQUEMENT via `changeClientAccount`, jamais via `updateDetails` (volontairement absent de
    *  `TenderDetailsUpdate`), et seulement tant que le Tender est en DRAFT/IN_ANALYSIS. */
   clientAccountId: string;
+  /** V2 Sprint 26 (Checkpoint 2.1-A3) — entreprise candidate (SOT `CandidateCompany`), distincte de
+   *  `clientAccountId` (contexte client/portefeuille legacy — voir le commentaire ci-dessus).
+   *  Nullable (un Tender legacy peut ne pas en porter une) ; modifiable UNIQUEMENT via
+   *  `changeCandidateCompany`, jamais via `updateDetails`, même discipline que `clientAccountId`. */
+  candidateCompanyId?: string | undefined;
   title: string;
   reference?: string | undefined;
   buyerName?: string | undefined;
@@ -147,6 +153,7 @@ export class Tender {
     id: TenderId;
     organizationId: string;
     clientAccountId: string;
+    candidateCompanyId?: string | undefined;
     title: string;
     reference?: string | undefined;
     buyerName?: string | undefined;
@@ -197,6 +204,7 @@ export class Tender {
       id: input.id,
       organizationId: input.organizationId,
       clientAccountId: input.clientAccountId,
+      candidateCompanyId: input.candidateCompanyId,
       title: input.title,
       reference: input.reference,
       buyerName: input.buyerName,
@@ -316,6 +324,28 @@ export class Tender {
   }
 
   /**
+   * V2 Sprint 26 (Checkpoint 2.1-A3) — changement CONTRÔLÉ de l'entreprise candidate (SOT
+   * `CandidateCompany`), distinct de `changeClientAccount` ci-dessus (`clientAccountId` = contexte
+   * client/portefeuille legacy, `candidateCompanyId` = entité juridique répondante — mission §21,
+   * les deux peuvent coexister sur un même Tender). Même garde-fou de statut que
+   * `changeClientAccount` (mission §18 "ne pas inventer une grosse state machine" — réutilise la
+   * règle déjà posée plutôt que d'en inventer une seconde) : jamais via `updateDetails`, uniquement
+   * depuis DRAFT/IN_ANALYSIS. L'appelant (use case) reste responsable de vérifier que la nouvelle
+   * entreprise candidate existe, appartient à la même organisation et n'est pas archivée — cette
+   * méthode ne connaît que la RÈGLE DE STATUT, jamais les règles du module `candidate-company`
+   * (frontière de module).
+   */
+  changeCandidateCompany(candidateCompanyId: string, occurredAt: Date): void {
+    this.assertNotArchived();
+    if (!CANDIDATE_CHANGE_ALLOWED_STATUSES.includes(this.props.status)) {
+      throw new TenderCandidateCompanyChangeNotAllowedError({ status: this.props.status });
+    }
+    this.props.candidateCompanyId = candidateCompanyId;
+    this.props.updatedAt = occurredAt;
+    this.props.version += 1;
+  }
+
+  /**
    * Transition de statut explicite (mission §4) — la validation de "règles prévues" avant
    * SUBMITTED se limite ici à l'ordre du funnel (venir de READY_TO_SUBMIT) ; aucune règle de
    * complétude (checklist, pièces...) n'est documentée comme bloquante au niveau du Domain —
@@ -356,6 +386,10 @@ export class Tender {
 
   get clientAccountId(): string {
     return this.props.clientAccountId;
+  }
+
+  get candidateCompanyId(): string | undefined {
+    return this.props.candidateCompanyId;
   }
 
   get title(): string {

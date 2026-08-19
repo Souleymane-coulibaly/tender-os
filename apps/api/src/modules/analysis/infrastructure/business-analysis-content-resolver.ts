@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { DCE_REPOSITORY, type DceRepository } from "../../dce";
 import { GetDocumentAnalysisInputUseCase, type DocumentAnalysisChunk } from "../../extraction";
 import { AnalysisJob } from "../domain/analysis-job.aggregate";
 import { AnalysisScope } from "../domain/analysis-scope";
@@ -83,6 +84,7 @@ export class BusinessAnalysisContentResolver implements AnalysisContentResolver 
     private readonly getDocumentAnalysisInputUseCase: GetDocumentAnalysisInputUseCase,
     @Inject(BUSINESS_ANALYSIS_REPOSITORY) private readonly businessAnalysisRepository: BusinessAnalysisRepository,
     @Inject(PROMPT_TEMPLATE) private readonly promptTemplate: PromptTemplatePort,
+    @Inject(DCE_REPOSITORY) private readonly dceRepository: DceRepository,
   ) {}
 
   async prepare(job: AnalysisJob): Promise<PreparedAnalysisRequest> {
@@ -211,6 +213,14 @@ export class BusinessAnalysisContentResolver implements AnalysisContentResolver 
       documentVersionsByDocumentId[analysis.documentId] = analysis.documentVersionId;
     }
 
+    // Checkpoint 2.1-P2.1-FIX-A — `Dce.revision` résolue ICI, la plus tardive possible avant la
+    // persistance (même discipline que `documentVersionId` re-résolu en `handleSuccess`, jamais
+    // réutilisé depuis `prepare()`, pour minimiser la fenêtre entre "contenu réellement lu par le
+    // provider" et "revision figée") — jamais réinterrogée plus tard. Absence de Dce pour ce Tender
+    // (legacy ou race bénigne) → `undefined`, jamais un blocage de la consolidation par ailleurs
+    // valide.
+    const dce = await this.dceRepository.findByTenderId({ organizationId: job.organizationId, tenderId: job.tenderId });
+
     return {
       resultSummary,
       persist: async (tx) => {
@@ -221,6 +231,7 @@ export class BusinessAnalysisContentResolver implements AnalysisContentResolver 
           tenderId: job.tenderId,
           output: parsed,
           documentVersionsByDocumentId,
+          dceRevision: dce?.revision,
         });
       },
     };

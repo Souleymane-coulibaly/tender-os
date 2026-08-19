@@ -73,7 +73,10 @@ const TenderDetailsBodySchema = z
 // modifiable ensuite (§"changer le client d'un appel d'offres... interdit dans ce sprint") :
 // `clientAccountId` n'existe QUE sur le schéma de création, `.strict()` sur `UpdateTenderBodySchema`
 // rejette explicitement toute tentative d'en glisser un dans une modification.
-export const CreateTenderBodySchema = TenderDetailsBodySchema.extend({ clientAccountId: z.string().uuid() });
+// V2 Sprint 26 (Checkpoint 2.1-A3) — `candidateCompanyId` optionnel à la création (mission §16 "ne
+// pas inventer le moment où elle devient obligatoire"), jamais modifiable ensuite via `PATCH`
+// (même discipline que `clientAccountId` — voir `ChangeTenderCandidateCompanyBodySchema` ci-dessous).
+export const CreateTenderBodySchema = TenderDetailsBodySchema.extend({ clientAccountId: z.string().uuid(), candidateCompanyId: z.string().uuid().optional() });
 export type CreateTenderBody = z.infer<typeof CreateTenderBodySchema>;
 
 export const UpdateTenderBodySchema = TenderDetailsBodySchema.partial();
@@ -102,6 +105,15 @@ export const ChangeTenderCandidateBodySchema = z
   .object({ clientAccountId: z.string().uuid(), reason: z.string().trim().min(1).max(500).optional() })
   .strict();
 export type ChangeTenderCandidateBody = z.infer<typeof ChangeTenderCandidateBodySchema>;
+
+// V2 Sprint 26 (Checkpoint 2.1-A3) — distinct de `ChangeTenderCandidateBodySchema` ci-dessus
+// (`clientAccountId`, contexte client/portefeuille legacy) : celui-ci gouverne `candidateCompanyId`,
+// l'entreprise juridique répondante (SOT `CandidateCompany`). Jamais fusionné avec
+// `UpdateTenderBodySchema` — même discipline "changement contrôlé, permission dédiée".
+export const ChangeTenderCandidateCompanyBodySchema = z
+  .object({ candidateCompanyId: z.string().uuid(), reason: z.string().trim().min(1).max(500).optional() })
+  .strict();
+export type ChangeTenderCandidateCompanyBody = z.infer<typeof ChangeTenderCandidateCompanyBodySchema>;
 
 export const ListTendersQuerySchema = z
   .object({

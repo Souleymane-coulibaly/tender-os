@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AnalysisModule } from "../analysis/analysis.module";
+import { CandidateCompanyModule } from "../candidate-company";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { CompanyProfileModule } from "../company-profile";
 import { DocumentGenerationModule } from "../document-generation";
@@ -23,6 +24,8 @@ import { ExportTechnicalMemoUseCase } from "./application/use-cases/export-techn
 import { GenerateTechnicalMemoSectionUseCase } from "./application/use-cases/generate-technical-memo-section.use-case";
 import { GetSectionRevisionTenderRefForApprovalUseCase } from "./application/use-cases/get-section-revision-tender-ref-for-approval.use-case";
 import { GetTechnicalMemoCoverageUseCase } from "./application/use-cases/get-technical-memo-coverage.use-case";
+import { GetTechnicalMemoFreshnessUseCase } from "./application/use-cases/get-technical-memo-freshness.use-case";
+import { GetTechnicalMemoRevisionFingerprintForTenderUseCase } from "./application/use-cases/get-technical-memo-revision-fingerprint-for-tender.use-case";
 import { GetTechnicalMemoUseCase } from "./application/use-cases/get-technical-memo.use-case";
 import { ListTechnicalMemosUseCase } from "./application/use-cases/list-technical-memos.use-case";
 import { ListValidatedTechnicalMemosForPackageUseCase } from "./application/use-cases/list-validated-technical-memos-for-package.use-case";
@@ -47,7 +50,9 @@ import { TenderTechnicalMemosController } from "./interfaces/http/tender-technic
  * `ClientPortfolioModule` (dual-tier, même motif que Chat/Export/Dossier administratif),
  * `AnalysisModule` (findings DCE + `AI_PROVIDER_REGISTRY`, même port que Chat/Generation),
  * `KnowledgeBaseModule`/`CompanyProfileModule` (recherche validée + données candidat réelles,
- * mission §23-27). Réutilise `document-generation` (Sprint 10) via `DOCUMENT_TEMPLATE_REPOSITORY`
+ * mission §23-27). `CandidateCompanyModule` (Checkpoint 2.1-A4, correctif post-audit) — SOT
+ * identité candidat via `ResolveCandidateIdentityUseCase`, même discipline NEW/LEGACY FLOW que
+ * DC1/DC2/DC4. Réutilise `document-generation` (Sprint 10) via `DOCUMENT_TEMPLATE_REPOSITORY`
  * (`PrepareTechnicalMemoTemplateUseCase` crée elle-même son `DocumentTemplate`/`DocumentTemplateVersion`
  * dérivé, jamais via les use cases HTTP publics — voir le commentaire d'export dans
  * `document-generation/index.ts`). L'export DOCX final (`DocumentGenerationExecutionService.run()`)
@@ -64,11 +69,13 @@ import { TenderTechnicalMemosController } from "./interfaces/http/tender-technic
     AnalysisModule,
     KnowledgeBaseModule,
     CompanyProfileModule,
+    CandidateCompanyModule,
   ],
   controllers: [TenderTechnicalMemosController, TechnicalMemosController],
   providers: [
     CreateTechnicalMemoUseCase,
     GetTechnicalMemoUseCase,
+    GetTechnicalMemoFreshnessUseCase,
     ListTechnicalMemosUseCase,
     ListValidatedTechnicalMemosForPackageUseCase,
     PrepareTechnicalMemoTemplateUseCase,
@@ -80,6 +87,7 @@ import { TenderTechnicalMemosController } from "./interfaces/http/tender-technic
     EditTechnicalMemoSectionUseCase,
     ExportTechnicalMemoUseCase,
     GetSectionRevisionTenderRefForApprovalUseCase,
+    GetTechnicalMemoRevisionFingerprintForTenderUseCase,
 
     TechnicalMemoAccessService,
     TechnicalMemoSectionContextAssembler,
@@ -95,6 +103,14 @@ import { TenderTechnicalMemosController } from "./interfaces/http/tender-technic
   // Sprint 14 — exporte UNIQUEMENT le port en lecture seule pour `response-package` (même motif
   // que `AdministrativeDossierModule.exports`), jamais l'ensemble du module. Sprint 18 — même motif
   // pour `workspace` (validation d'une cible ApprovalRequest TECHNICAL_MEMO_SECTION_REVISION).
-  exports: [ListValidatedTechnicalMemosForPackageUseCase, GetSectionRevisionTenderRefForApprovalUseCase],
+  // Checkpoint 2.1-P2.1-FIX-E — même motif pour `validation`. Checkpoint 2.1-P2.1-FIX-F —
+  // `ListTechnicalMemosUseCase`/`GetTechnicalMemoFreshnessUseCase` réexportés pour `submission`.
+  exports: [
+    ListValidatedTechnicalMemosForPackageUseCase,
+    GetSectionRevisionTenderRefForApprovalUseCase,
+    GetTechnicalMemoRevisionFingerprintForTenderUseCase,
+    ListTechnicalMemosUseCase,
+    GetTechnicalMemoFreshnessUseCase,
+  ],
 })
 export class TechnicalMemoModule {}

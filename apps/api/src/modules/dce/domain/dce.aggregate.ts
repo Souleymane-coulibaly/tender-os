@@ -6,6 +6,11 @@ export type DceProps = {
   organizationId: string;
   tenderId: string;
   status: DceStatus;
+  /** Checkpoint 2.1-P2.1-FIX-A — révision monotone du contenu sémantique du DCE. Jamais mutée par
+   *  cet agrégat lui-même (voir `DceRepository.incrementRevision`, un `UPDATE ... SET revision =
+   *  revision + 1` atomique côté base, jamais un read-then-write applicatif) : ce getter reflète
+   *  uniquement la valeur lue, la seule source de vérité de son incrémentation reste la base. */
+  revision: number;
   createdByUserId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -32,6 +37,7 @@ export class Dce {
       organizationId: input.organizationId,
       tenderId: input.tenderId,
       status: DceStatus.Draft,
+      revision: 1,
       createdByUserId: input.createdByUserId,
       createdAt: input.occurredAt,
       updatedAt: input.occurredAt,
@@ -63,6 +69,9 @@ export class Dce {
   }
   get status(): DceStatus {
     return this.props.status;
+  }
+  get revision(): number {
+    return this.props.revision;
   }
   get createdByUserId(): string {
     return this.props.createdByUserId;

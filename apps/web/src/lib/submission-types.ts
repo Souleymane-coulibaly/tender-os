@@ -44,6 +44,21 @@ export type TenderSubmissionSummary = {
   proofs: SubmissionProofSummary[];
 };
 
+// Checkpoint 2.1-P2.1-FIX-F — miroir exact de `SubmissionReadinessReason`
+// (apps/api/.../submission/domain/submission-readiness-reason.ts). Le frontend ne recalcule
+// jamais la sévérité/le code : il affiche tel quel ce que le backend a déjà classifié.
+export type SubmissionReadinessReasonSeverity = "BLOCKING" | "WARNING" | "INFORMATIONAL";
+
+export type SubmissionReadinessAction = "REANALYZE_DCE" | "RECONCILE_CHECKLIST" | "RECALCULATE_GONOGO" | "REGENERATE_TECHNICAL_MEMO" | "REVALIDATE" | "REGENERATE_RESPONSE_PACKAGE";
+
+export type SubmissionReadinessReason = {
+  code: string;
+  severity: SubmissionReadinessReasonSeverity;
+  source: string;
+  message: string;
+  action?: SubmissionReadinessAction;
+};
+
 export type TenderSubmissionReadinessResult = {
   canSubmit: boolean;
   readinessStatus: string;
@@ -58,6 +73,41 @@ export type TenderSubmissionReadinessResult = {
   signatureRequirement: string;
   validationSummary: string;
   activeSubmissionId?: string;
+  // Checkpoint 2.1-P2.1-FIX-F — additif : dimensions DCE/Analyse/Checklist/GO-NO-GO/Mémoire
+  // technique/Validation-fraîcheur/Dossier de réponse. Leurs messages sont AUSSI déjà inclus dans
+  // `blockers`/`warnings` ci-dessus (contrat existant préservé) ; ce champ apporte le code/action
+  // structuré pour permettre un lien "corriger" par dimension.
+  fileReadinessReasons: SubmissionReadinessReason[];
+};
+
+// Checkpoint 2.1-P2.1-FIX-F — mission §81 "le frontend mappe action → route", jamais une URL
+// portée par le backend. Miroir des routes canoniques de `tender-nav-tabs.ts`. GO/NO-GO n'a pas
+// de sous-route dédiée : il vit sur la page Vue d'ensemble du dossier.
+export function submissionReadinessActionRoute(tenderId: string, action: SubmissionReadinessAction): string {
+  const base = `/app/tenders/${tenderId}`;
+  switch (action) {
+    case "REANALYZE_DCE":
+      return `${base}/analysis`;
+    case "RECONCILE_CHECKLIST":
+      return `${base}/checklist`;
+    case "RECALCULATE_GONOGO":
+      return base;
+    case "REGENERATE_TECHNICAL_MEMO":
+      return `${base}/technical-memo`;
+    case "REVALIDATE":
+      return `${base}/validation`;
+    case "REGENERATE_RESPONSE_PACKAGE":
+      return `${base}/response-package`;
+  }
+}
+
+export const SUBMISSION_READINESS_ACTION_LABELS: Record<SubmissionReadinessAction, string> = {
+  REANALYZE_DCE: "Relancer l'analyse du DCE",
+  RECONCILE_CHECKLIST: "Réconcilier la checklist",
+  RECALCULATE_GONOGO: "Recalculer le GO/NO-GO",
+  REGENERATE_TECHNICAL_MEMO: "Régénérer le mémoire technique",
+  REVALIDATE: "Revalider le dossier",
+  REGENERATE_RESPONSE_PACKAGE: "Régénérer le dossier de réponse",
 };
 
 export type TenderSubmissionCapabilities = {

@@ -5,13 +5,16 @@ import { useRouter } from "next/navigation";
 import { approveFinalVersionAction, reopenFinalVersionAction, reopenValidationIssueAction, resolveValidationIssueAction, runFinalValidationAction } from "../../../../validation-actions";
 import {
   READINESS_STATUS_LABELS,
+  VALIDATION_FRESHNESS_LABELS,
   VALIDATION_RESOLUTION_STATUS_LABELS,
   VALIDATION_SEVERITY_LABELS,
   canApproveValidation,
   canManageValidation,
   readinessStatusBadgeClass,
+  validationFreshnessBadgeClass,
   validationSeverityBadgeClass,
   type ReadinessStatusResult,
+  type ValidationFreshnessResult,
   type ValidationIssueSummary,
   type ValidationRunSummary,
 } from "../../../../../../lib/validation-types";
@@ -77,12 +80,14 @@ export function ValidationSection({
   run,
   completedPreviews,
   actorRole,
+  freshness,
 }: {
   tenderId: string;
   readiness: ReadinessStatusResult;
   run: ValidationRunSummary | undefined;
   completedPreviews: ExportJobSummary[];
   actorRole: string | undefined;
+  freshness?: ValidationFreshnessResult | null;
 }) {
   const router = useRouter();
   const canManage = canManageValidation(actorRole);
@@ -145,6 +150,11 @@ export function ValidationSection({
       <section className="flex items-center gap-3 rounded border border-neutral-200 p-4">
         <span className="text-sm font-medium text-neutral-700">Statut de préparation :</span>
         <span className={`rounded px-2 py-0.5 text-xs font-medium ${readinessStatusBadgeClass(readiness.status)}`}>{READINESS_STATUS_LABELS[readiness.status] ?? readiness.status}</span>
+        {freshness && freshness.hasActiveApproval ? (
+          <span className={`rounded px-2 py-0.5 text-xs font-medium ${validationFreshnessBadgeClass(freshness.freshness)}`} title="Fraîcheur de la dernière approbation par rapport au dossier courant (DCE/Analyse/Mémoire technique)">
+            {VALIDATION_FRESHNESS_LABELS[freshness.freshness]}
+          </span>
+        ) : null}
       </section>
 
       {canManage ? (

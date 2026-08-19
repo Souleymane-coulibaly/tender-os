@@ -8,12 +8,15 @@ import {
   CustomPlatformNameRequiredError,
   SubmissionDeadlinePassedError,
   SubmissionPackageVersionMismatchError,
+  TenderNotReadyForSubmissionError,
 } from "../../domain/errors";
+import { SubmissionReadinessReasonSeverity } from "../../domain/submission-readiness-reason";
 import { requiresCustomPlatformName, type SubmissionPlatform } from "../../domain/submission-platform";
 import { TenderSubmissionStatus } from "../../domain/tender-submission-status";
 import { toTenderSubmissionSummary, type TenderSubmissionSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { TENDER_SUBMISSION_REPOSITORY, type TenderSubmissionRepository } from "../ports/tender-submission.repository";
+import { GetTenderSubmissionReadinessUseCase } from "./get-tender-submission-readiness.use-case";
 import { SubmissionAccessService } from "../services/submission-access.service";
 import { SubmissionPackageResolverService } from "../services/submission-package-resolver.service";
 
@@ -36,12 +39,24 @@ export type RecordTenderSubmissionCommand = Readonly<{
  * démarrée par `StartTenderSubmissionUseCase` si elle existe, sinon en crée une nouvelle
  * directement à SUBMITTED (mission "un dépôt manuel peut être enregistré" en une fois). Refuse
  * silencieusement jamais un dépôt hors délai (mission §28 "ne pas l'accepter silencieusement").
+ *
+ * Checkpoint 2.1-P2.1-FIX-F.1 (ferme le P1 identifié par l'audit Codex FIX-F : la Submission
+ * Readiness V2 était calculée mais jamais consommée par CETTE action) — le guard readiness est
+ * ADDITIF aux guards legacy déjà en place ci-dessous (deadline, package `submission-package` via
+ * `packageResolver.resolveExactPackage`), jamais un remplacement : les deux pipelines
+ * (`submission-package` legacy et Candidate/Analyse/.../Response Package FIX-A..E) restent
+ * structurellement disjoints, mais l'action finale exige désormais ZÉRO raison BLOCKING sur
+ * l'UNE ET L'AUTRE dimension. Réutilise `GetTenderSubmissionReadinessUseCase.resolveFileReadinessReasons`
+ * TEL QUEL (même calcul que `GET .../submission-readiness`, mission §11 "ne jamais dupliquer les
+ * règles métier FIX-A..E ici") — recalculé à CET instant précis (mission §15 "TOCTOU : le guard
+ * doit être exécuté DANS l'action, jamais un snapshot d'une requête GET antérieure").
  */
 @Injectable()
 export class RecordTenderSubmissionUseCase {
   constructor(
     private readonly accessService: SubmissionAccessService,
     private readonly packageResolver: SubmissionPackageResolverService,
+    private readonly getReadinessUseCase: GetTenderSubmissionReadinessUseCase,
     @Inject(TENDER_SUBMISSION_REPOSITORY) private readonly submissionRepository: TenderSubmissionRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -56,6 +71,20 @@ export class RecordTenderSubmissionUseCase {
     }
     if (tender.submissionDeadline && command.submittedAt.getTime() > new Date(tender.submissionDeadline).getTime()) {
       throw new SubmissionDeadlinePassedError();
+    }
+
+    // Checkpoint 2.1-P2.1-FIX-F.1 — jamais une readiness envoyée/mise en cache par le frontend
+    // (mission §5) : recalculée ici, à l'instant T de l'action, contre l'état COURANT de chaque
+    // dimension (Candidate/Analyse/Checklist/GO-NO-GO/Mémoire technique/Validation/Response
+    // Package). Un WARNING seul (ex. GO/NO-GO = NO_GO) ne bloque jamais — seule une raison BLOCKING
+    // interrompt le dépôt, exactement la même politique que `GET .../submission-readiness`.
+    const fileReadinessReasons = await this.getReadinessUseCase.resolveFileReadinessReasons(
+      { organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: command.tenderId },
+      tender.candidateCompanyId,
+    );
+    const blockingReasons = fileReadinessReasons.filter((reason) => reason.severity === SubmissionReadinessReasonSeverity.Blocking);
+    if (blockingReasons.length > 0) {
+      throw new TenderNotReadyForSubmissionError(blockingReasons);
     }
 
     const occurredAt = this.clock.now();

@@ -1,14 +1,17 @@
 import { Module } from "@nestjs/common";
+import { AnalysisModule } from "../analysis";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { ExportModule } from "../export";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
 import { SignatureModule } from "../signature";
+import { TechnicalMemoModule } from "../technical-memo";
 import { TendersModule } from "../tenders";
 import { FINAL_APPROVAL_REPOSITORY } from "./application/ports/final-approval.repository";
 import { VALIDATION_RUN_REPOSITORY } from "./application/ports/validation-run.repository";
 import { ApproveFinalVersionUseCase } from "./application/use-cases/approve-final-version.use-case";
 import { GetReadinessStatusUseCase } from "./application/use-cases/get-readiness-status.use-case";
+import { GetValidationFreshnessUseCase } from "./application/use-cases/get-validation-freshness.use-case";
 import { GetValidationRunUseCase } from "./application/use-cases/get-validation-run.use-case";
 import { ReopenFinalVersionUseCase } from "./application/use-cases/reopen-final-version.use-case";
 import { ReopenValidationIssueUseCase } from "./application/use-cases/reopen-validation-issue.use-case";
@@ -29,7 +32,7 @@ import { ValidationController } from "./interfaces/http/validation.controller";
  * pratiquée par `submission-package` (Sprint 8A bis), jamais un second calcul divergent.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, ExportModule, SignatureModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, ExportModule, SignatureModule, AnalysisModule, TechnicalMemoModule],
   controllers: [ValidationController],
   providers: [
     RunFinalValidationUseCase,
@@ -39,6 +42,7 @@ import { ValidationController } from "./interfaces/http/validation.controller";
     ApproveFinalVersionUseCase,
     ReopenFinalVersionUseCase,
     GetReadinessStatusUseCase,
+    GetValidationFreshnessUseCase,
 
     { provide: VALIDATION_RUN_REPOSITORY, useClass: PrismaValidationRunRepository },
     { provide: FINAL_APPROVAL_REPOSITORY, useClass: PrismaFinalApprovalRepository },
@@ -47,6 +51,10 @@ import { ValidationController } from "./interfaces/http/validation.controller";
   // dernier run avant de créer un package — jamais une seconde écriture sur ces tables.
   // `GetValidationRunUseCase` réexporté en plus pour Sprint 8A.1 (Deliverables) — vue LECTURE SEULE
   // "Rapport de validation" (contrôles/blocages/avertissements du dernier run).
-  exports: [GetReadinessStatusUseCase, GetValidationRunUseCase, FINAL_APPROVAL_REPOSITORY, VALIDATION_RUN_REPOSITORY],
+  // Checkpoint 2.1-P2.1-FIX-E — `AnalysisModule`/`TechnicalMemoModule` importés UNIQUEMENT pour
+  // leurs ports de LECTURE SEULE réexportés (`GetEffectiveTenderAnalysisSummaryUseCase`/
+  // `GetTechnicalMemoRevisionFingerprintForTenderUseCase`), même motif que Sprint 14
+  // (`response-package`) — jamais un second accès direct aux repositories de ces modules.
+  exports: [GetReadinessStatusUseCase, GetValidationRunUseCase, GetValidationFreshnessUseCase, FINAL_APPROVAL_REPOSITORY, VALIDATION_RUN_REPOSITORY],
 })
 export class ValidationModule {}

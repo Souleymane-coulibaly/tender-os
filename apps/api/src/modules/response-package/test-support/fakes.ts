@@ -94,6 +94,10 @@ export class InMemoryResponsePackageRepository implements ResponsePackageReposit
 
 export class InMemoryResponsePackageVersionRepository implements ResponsePackageVersionRepository {
   readonly versions: ResponsePackageVersion[] = [];
+  async lockPackage(): Promise<void> {
+    // Pas de verrou réel en mémoire (un seul thread de test) — voir le repository Prisma réel pour
+    // le verrou consultatif Postgres (`pg_advisory_xact_lock`).
+  }
   async create(version: ResponsePackageVersion): Promise<void> {
     this.versions.push(version);
   }

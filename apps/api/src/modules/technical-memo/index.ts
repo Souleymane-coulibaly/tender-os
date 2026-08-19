@@ -12,3 +12,14 @@ export type { TechnicalMemoForPackage, ListValidatedTechnicalMemosForPackageQuer
 // demande, jamais un accès Prisma direct depuis workspace.
 export { GetSectionRevisionTenderRefForApprovalUseCase } from "./application/use-cases/get-section-revision-tender-ref-for-approval.use-case";
 export type { SectionRevisionTenderRef } from "./application/use-cases/get-section-revision-tender-ref-for-approval.use-case";
+
+// Checkpoint 2.1-P2.1-FIX-E — réexporté en LECTURE SEULE pour `validation`, même motif que les
+// réexports ci-dessus : jamais un second accès direct aux repositories technical-memo.
+export { GetTechnicalMemoRevisionFingerprintForTenderUseCase } from "./application/use-cases/get-technical-memo-revision-fingerprint-for-tender.use-case";
+
+// Checkpoint 2.1-P2.1-FIX-F — réexportés pour `submission` (agrégateur final de readiness).
+export { ListTechnicalMemosUseCase } from "./application/use-cases/list-technical-memos.use-case";
+export type { ListTechnicalMemosQuery } from "./application/use-cases/list-technical-memos.use-case";
+export { GetTechnicalMemoFreshnessUseCase } from "./application/use-cases/get-technical-memo-freshness.use-case";
+export type { TechnicalMemoFreshnessResult } from "./application/use-cases/get-technical-memo-freshness.use-case";
+export { TechnicalMemoFreshness } from "./domain/technical-memo-freshness";

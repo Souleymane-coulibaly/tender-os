@@ -79,6 +79,47 @@ describe("DeleteDceDocumentUseCase", () => {
     expect(auditLogWriter.entries[0]?.action).toBe("dce.document_deleted");
   });
 
+  it("TEST 5 (Checkpoint 2.1-P2.1-FIX-A) — deleting an active document advances the DCE revision", async () => {
+    const useCase = buildUseCase();
+    const before = await dceRepository.findById({ organizationId: "org-1", dceId: "dce-1" });
+
+    await useCase.execute({
+      organizationId: "org-1",
+      tenderId: "tender-1",
+      documentId: "document-1",
+      actorId: "user-1",
+      actorRole: "ORGANIZATION_ADMIN",
+    });
+
+    const after = await dceRepository.findById({ organizationId: "org-1", dceId: "dce-1" });
+    expect(after!.revision).toBe(before!.revision + 1);
+  });
+
+  it("BLOQUANT (correctif audit — P1 'incrément best-effort masque un vrai changement') — if incrementRevision itself fails, the delete ABORTS before touching Documents at all", async () => {
+    const failingIncrement = vi.spyOn(dceRepository, "incrementRevision").mockRejectedValueOnce(new Error("simulated DB failure"));
+    const useCase = buildUseCase();
+
+    await expect(
+      useCase.execute({ organizationId: "org-1", tenderId: "tender-1", documentId: "document-1", actorId: "user-1", actorRole: "ORGANIZATION_ADMIN" }),
+    ).rejects.toThrow("simulated DB failure");
+
+    expect(failingIncrement).toHaveBeenCalledTimes(1);
+    expect(deleteDocumentUseCase.execute).not.toHaveBeenCalled();
+  });
+
+  it("if the underlying Documents delete fails AFTER the revision already advanced, the failure direction is safe: revision stays advanced (false STALE), never a false CURRENT", async () => {
+    const before = await dceRepository.findById({ organizationId: "org-1", dceId: "dce-1" });
+    const failingDelete = { execute: vi.fn(async () => { throw new Error("simulated storage failure"); }) } as unknown as DeleteDocumentUseCase;
+    const useCase = new DeleteDceDocumentUseCase(dceRepository, dceDocumentRepository, auditLogWriter, fakeGetTenderUseCase(), failingDelete);
+
+    await expect(
+      useCase.execute({ organizationId: "org-1", tenderId: "tender-1", documentId: "document-1", actorId: "user-1", actorRole: "ORGANIZATION_ADMIN" }),
+    ).rejects.toThrow("simulated storage failure");
+
+    const after = await dceRepository.findById({ organizationId: "org-1", dceId: "dce-1" });
+    expect(after!.revision).toBe(before!.revision + 1);
+  });
+
   it("refuses when the actor lacks dce:delete (e.g. Contributor)", async () => {
     const useCase = buildUseCase();
 

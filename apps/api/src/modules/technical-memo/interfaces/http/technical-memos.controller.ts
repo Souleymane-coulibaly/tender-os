@@ -15,6 +15,7 @@ import { EditTechnicalMemoSectionUseCase } from "../../application/use-cases/edi
 import { ExportTechnicalMemoUseCase } from "../../application/use-cases/export-technical-memo.use-case";
 import { GenerateTechnicalMemoSectionUseCase } from "../../application/use-cases/generate-technical-memo-section.use-case";
 import { GetTechnicalMemoCoverageUseCase } from "../../application/use-cases/get-technical-memo-coverage.use-case";
+import { GetTechnicalMemoFreshnessUseCase } from "../../application/use-cases/get-technical-memo-freshness.use-case";
 import { GetTechnicalMemoUseCase } from "../../application/use-cases/get-technical-memo.use-case";
 import { MapTechnicalMemoSectionsUseCase } from "../../application/use-cases/map-technical-memo-sections.use-case";
 import { PrepareTechnicalMemoTemplateUseCase } from "../../application/use-cases/prepare-technical-memo-template.use-case";
@@ -36,6 +37,7 @@ import {
 export class TechnicalMemosController {
   constructor(
     private readonly getTechnicalMemoUseCase: GetTechnicalMemoUseCase,
+    private readonly getTechnicalMemoFreshnessUseCase: GetTechnicalMemoFreshnessUseCase,
     private readonly prepareTechnicalMemoTemplateUseCase: PrepareTechnicalMemoTemplateUseCase,
     private readonly mapTechnicalMemoSectionsUseCase: MapTechnicalMemoSectionsUseCase,
     private readonly generateTechnicalMemoSectionUseCase: GenerateTechnicalMemoSectionUseCase,
@@ -55,6 +57,16 @@ export class TechnicalMemosController {
   ) {
     const result = await this.getTechnicalMemoUseCase.execute({ organizationId: membership.organizationId, technicalMemoId, actorId: actor.userId, actorRole: membership.role });
     return { memo: toTechnicalMemoSummary(result.memo), sections: result.sections.map(toTechnicalMemoSectionSummary) };
+  }
+
+  @Get(":technicalMemoId/freshness")
+  @HttpCode(HttpStatus.OK)
+  async getFreshness(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("technicalMemoId", new ZodValidationPipe(IdParamSchema)) technicalMemoId: string,
+  ) {
+    return this.getTechnicalMemoFreshnessUseCase.execute({ organizationId: membership.organizationId, technicalMemoId, actorId: actor.userId, actorRole: membership.role });
   }
 
   @Post(":technicalMemoId/prepare")

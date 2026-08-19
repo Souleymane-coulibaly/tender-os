@@ -2,6 +2,7 @@ import { type ArgumentsHost, Catch, type ExceptionFilter, HttpStatus } from "@ne
 import type { Response } from "express";
 import { DomainError } from "../../../../shared-kernel/domain-error";
 import type { RequestWithId } from "../../../../shared-kernel/request-id.middleware";
+import { TenderNotReadyForSubmissionError } from "../../domain/errors";
 
 const STATUS_BY_CODE: Record<string, number> = {
   // Erreurs cross-module déléguées à Tenders/Client Portfolio/Documents/Submission Package —
@@ -40,8 +41,13 @@ export class SubmissionErrorFilter implements ExceptionFilter {
     const request = ctx.getRequest<RequestWithId>();
     const status = STATUS_BY_CODE[exception.code] ?? HttpStatus.INTERNAL_SERVER_ERROR;
 
+    // Checkpoint 2.1-P2.1-FIX-F.1 (mission §27) — contrat exploitable pour ce cas précis
+    // uniquement : les raisons structurées (code/sévérité/action) accompagnent le message, jamais
+    // un élargissement du contrat d'erreur générique des autres codes.
+    const reasons = exception instanceof TenderNotReadyForSubmissionError ? exception.reasons : undefined;
+
     response.status(status).json({
-      error: { code: exception.code, message: exception.message, requestId: request.id },
+      error: { code: exception.code, message: exception.message, requestId: request.id, ...(reasons ? { reasons } : {}) },
     });
   }
 }

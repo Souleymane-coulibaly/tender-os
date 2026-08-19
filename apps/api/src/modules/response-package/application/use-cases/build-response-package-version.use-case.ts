@@ -5,10 +5,8 @@ import { GetCandidateContextForPackageUseCase, ListValidatedAdministrativeDocume
 import { ClientPermission } from "../../../client-portfolio";
 import { ListFinalFilesForPackageUseCase } from "../../../pricing-schedule";
 import { ListValidatedTechnicalMemosForPackageUseCase } from "../../../technical-memo";
-import { CHECKLIST_ITEM_REPOSITORY, type ChecklistItemRepository } from "../../../tenders";
-import { evaluateChecklistItemQualification } from "../../domain/services/evaluate-checklist-item-qualification";
-import { mapChecklistItemTypeToCategory } from "../../domain/services/map-checklist-item-type-to-category";
-import { PackageItemApplicabilityStatus, PackageItemCategory, PackageItemRequirementType, PackageItemSourceType } from "../../domain/enums";
+import { CHECKLIST_ITEM_REPOSITORY, GetTenderUseCase, type ChecklistItemRepository } from "../../../tenders";
+import { computeExpectedPackageItems } from "../../domain/services/compute-expected-package-items";
 import { PackageItem } from "../../domain/package-item.entity";
 import { ResponsePackageVersion } from "../../domain/response-package-version.entity";
 import { assertResponsePackageAccess } from "../policies/response-package-access.policy";
@@ -29,23 +27,14 @@ export type BuildResponsePackageVersionCommand = Readonly<{
 
 export type BuildResponsePackageVersionResult = Readonly<{ version: ResponsePackageVersion; items: readonly PackageItem[] }>;
 
-/** Item d'une source "déjà produite ailleurs" (mission §15) — toujours REQUIRED+APPLICABLE+READY
- *  au moment de l'ajout (le document EXISTE déjà, c'est justement pourquoi on l'inclut). Limite
- *  honnête (mission "ne jamais prétendre supporter plus que ce qui est fait") : cette voie ne
- *  détecte jamais qu'une pièce de ce type est ATTENDUE mais absente — cette responsabilité reste
- *  entièrement portée par les `ChecklistItem` (mission §31 "Checklist : ce qu'il faut fournir"). */
-type ProducedElsewhereSource = Readonly<{ sourceId: string; lotId?: string | undefined; label: string; documentId: string; documentVersionId: string }>;
-
-function isRelevantToLot(itemLotId: string | undefined, packageLotId: string | undefined): boolean {
-  return itemLotId === undefined || itemLotId === packageLotId;
-}
-
 /**
  * Construit une NOUVELLE version APPEND-ONLY (mission §11) en collectant — jamais en recréant
  * (mission §2) — les pièces depuis : Checklist (mission §31, source de vérité des pièces
  * ATTENDUES/obligation/conditionnalité), dossier administratif validé, mémoire technique exporté,
  * fichiers financiers finaux (Sprint 13). Chaque pièce figée avec sa `documentVersionId` au moment
- * de la construction (mission §16 POINT CRITIQUE).
+ * de la construction (mission §16 POINT CRITIQUE). Le calcul des pièces ATTENDUES est délégué à
+ * `computeExpectedPackageItems` (Checkpoint 2.1-P2.1-FIX-E), pure et partagée avec
+ * `GetResponsePackageFreshnessUseCase` — jamais un second calcul divergent.
  */
 @Injectable()
 export class BuildResponsePackageVersionUseCase {
@@ -63,6 +52,7 @@ export class BuildResponsePackageVersionUseCase {
     private readonly listValidatedAdministrativeDocumentsForPackageUseCase: ListValidatedAdministrativeDocumentsForPackageUseCase,
     private readonly listValidatedTechnicalMemosForPackageUseCase: ListValidatedTechnicalMemosForPackageUseCase,
     private readonly listFinalFilesForPackageUseCase: ListFinalFilesForPackageUseCase,
+    private readonly getTenderUseCase: GetTenderUseCase,
   ) {}
 
   async execute(command: BuildResponsePackageVersionCommand): Promise<BuildResponsePackageVersionResult> {
@@ -77,93 +67,65 @@ export class BuildResponsePackageVersionUseCase {
 
     const occurredAt = this.clock.now();
     const versionId = this.idGenerator.generate();
-    const existingVersions = await this.versionRepository.list({ organizationId: command.organizationId, responsePackageId: pkg.id });
-    const nextVersionNumber = (existingVersions[0]?.versionNumber ?? 0) + 1;
 
-    const [candidateContext, adminDocs, technicalMemos, finalFiles] = await Promise.all([
-      this.getCandidateContextForPackageUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: pkg.tenderId }),
-      this.listValidatedAdministrativeDocumentsForPackageUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: pkg.tenderId }),
-      this.listValidatedTechnicalMemosForPackageUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: pkg.tenderId }),
-      this.listFinalFilesForPackageUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: pkg.tenderId, clientAccountId: pkg.clientAccountId }),
-    ]);
+    // Correctif audit (Checkpoint 2.1-P2.1-FIX-E, gap confirmé — aucun verrou n'existait ici) —
+    // TOUT le bloc critique (verrou, lecture de `nextVersionNumber`, écritures) tient dans UNE
+    // SEULE transaction courte : un `pg_advisory_xact_lock` pris HORS transaction se libère
+    // immédiatement (verrou de portée TRANSACTION, jamais session), ce qui n'offrirait AUCUNE
+    // protection réelle — même piège que documenté pour `lockSection` (technical-memo). Sérialise
+    // deux constructions concurrentes de la MÊME `ResponsePackage` : sans ce verrou, deux appels
+    // lisant `existingVersions[0]?.versionNumber` avant que l'un des deux n'ait committé calculent
+    // le MÊME `nextVersionNumber`, et le second échoue sur la contrainte unique
+    // `(responsePackageId, versionNumber)` au lieu d'obtenir proprement N+2.
+    return this.atomicTransactionRunner.run(async () => {
+      await this.versionRepository.lockPackage({ organizationId: command.organizationId, responsePackageId: pkg.id });
 
-    const checklistItems = await this.checklistItemRepository.listByTender({ organizationId: command.organizationId, tenderId: pkg.tenderId });
+      const existingVersions = await this.versionRepository.list({ organizationId: command.organizationId, responsePackageId: pkg.id });
+      const nextVersionNumber = (existingVersions[0]?.versionNumber ?? 0) + 1;
 
-    const items: PackageItem[] = [];
+      const [tender, candidateContext, adminDocs, technicalMemos, finalFiles, checklistItems] = await Promise.all([
+        this.getTenderUseCase.execute({ organizationId: command.organizationId, tenderId: pkg.tenderId, actorId: command.actorId, actorRole: command.actorRole }),
+        this.getCandidateContextForPackageUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: pkg.tenderId }),
+        this.listValidatedAdministrativeDocumentsForPackageUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: pkg.tenderId }),
+        this.listValidatedTechnicalMemosForPackageUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: pkg.tenderId }),
+        this.listFinalFilesForPackageUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: pkg.tenderId, clientAccountId: pkg.clientAccountId }),
+        this.checklistItemRepository.listByTender({ organizationId: command.organizationId, tenderId: pkg.tenderId }),
+      ]);
 
-    for (const checklistItem of checklistItems) {
-      if (!isRelevantToLot(checklistItem.lotId, pkg.lotId)) continue;
-      const qualification = evaluateChecklistItemQualification({
-        requirementLevel: checklistItem.requirementLevel,
-        complianceStatus: checklistItem.complianceStatus,
-        subjectType: checklistItem.subjectType,
-        hasDeclaredSubcontractors: candidateContext.hasDeclaredSubcontractors,
-        isConsortiumBid: candidateContext.isConsortiumBid,
-      });
-      items.push(
+      const expectedItems = computeExpectedPackageItems({ packageLotId: pkg.lotId, checklistItems, candidateContext, adminDocs, technicalMemos, finalFiles });
+      const items: PackageItem[] = expectedItems.map((expected) =>
         PackageItem.create({
           id: this.idGenerator.generate(),
           organizationId: command.organizationId,
           responsePackageVersionId: versionId,
-          category: mapChecklistItemTypeToCategory(checklistItem.type),
-          label: checklistItem.title,
-          sourceType: PackageItemSourceType.ChecklistItem,
-          sourceId: checklistItem.id,
-          documentId: checklistItem.matchedDocumentId,
-          documentVersionId: checklistItem.matchedDocumentVersionId,
-          requirementType: qualification.requirementType,
-          applicabilityStatus: qualification.applicabilityStatus,
-          conditionText: checklistItem.conditionText,
-          lotId: pkg.lotId,
-          expiresAt: checklistItem.documentExpiresAt,
+          category: expected.category,
+          label: expected.label,
+          sourceType: expected.sourceType,
+          sourceId: expected.sourceId,
+          documentId: expected.documentId,
+          documentVersionId: expected.documentVersionId,
+          requirementType: expected.requirementType,
+          applicabilityStatus: expected.applicabilityStatus,
+          conditionText: expected.conditionText,
+          lotId: expected.lotId,
+          expiresAt: expected.expiresAt,
           occurredAt,
         }),
       );
-    }
 
-    const addProducedElsewhere = (sources: readonly ProducedElsewhereSource[], category: PackageItemCategory, sourceType: PackageItemSourceType) => {
-      for (const source of sources) {
-        if (!isRelevantToLot(source.lotId, pkg.lotId)) continue;
-        items.push(
-          PackageItem.create({
-            id: this.idGenerator.generate(),
-            organizationId: command.organizationId,
-            responsePackageVersionId: versionId,
-            category,
-            label: source.label,
-            sourceType,
-            sourceId: source.sourceId,
-            documentId: source.documentId,
-            documentVersionId: source.documentVersionId,
-            requirementType: PackageItemRequirementType.Required,
-            applicabilityStatus: PackageItemApplicabilityStatus.Applicable,
-            lotId: pkg.lotId,
-            occurredAt,
-          }),
-        );
-      }
-    };
+      // Checkpoint 2.1-P2.1-FIX-E — `Tender.candidateCompanyId` figé au moment de LA CONSTRUCTION
+      // de cette version (mission §33/§73), jamais recalculé après coup.
+      const version = ResponsePackageVersion.create({
+        id: versionId,
+        organizationId: command.organizationId,
+        responsePackageId: pkg.id,
+        versionNumber: nextVersionNumber,
+        createdBy: command.actorId,
+        occurredAt,
+        candidateCompanyId: tender.candidateCompanyId,
+      });
+      pkg.advanceToVersion({ versionId, versionNumber: nextVersionNumber, occurredAt });
 
-    addProducedElsewhere(
-      adminDocs.map((d) => ({ sourceId: d.administrativeDocumentId, label: d.label, documentId: d.documentId, documentVersionId: d.documentVersionId })),
-      PackageItemCategory.Administrative,
-      PackageItemSourceType.AdministrativeDocument,
-    );
-    addProducedElsewhere(
-      technicalMemos.map((m) => ({ sourceId: m.technicalMemoId, lotId: m.lotId, label: m.label, documentId: m.documentId, documentVersionId: m.documentVersionId })),
-      PackageItemCategory.Technical,
-      PackageItemSourceType.TechnicalMemo,
-    );
-    addProducedElsewhere(
-      finalFiles.map((f) => ({ sourceId: f.pricingScheduleId, lotId: f.lotId, label: f.label, documentId: f.documentId, documentVersionId: f.documentVersionId })),
-      PackageItemCategory.Financial,
-      PackageItemSourceType.PricingScheduleFinalFile,
-    );
-
-    const version = ResponsePackageVersion.create({ id: versionId, organizationId: command.organizationId, responsePackageId: pkg.id, versionNumber: nextVersionNumber, createdBy: command.actorId, occurredAt });
-    pkg.advanceToVersion({ versionId, versionNumber: nextVersionNumber, occurredAt });
-
-    await this.atomicTransactionRunner.run(async () => {
       await this.versionRepository.create(version);
       await this.itemRepository.createMany(items);
       await this.responsePackageRepository.save(pkg);
@@ -177,8 +139,8 @@ export class BuildResponsePackageVersionUseCase {
         requestId: command.requestId,
         metadata: { responsePackageId: pkg.id, versionNumber: nextVersionNumber, itemCount: items.length },
       });
-    });
 
-    return { version, items };
+      return { version, items };
+    });
   }
 }

@@ -20,6 +20,7 @@ import type { AlertRepository } from "../application/ports/alert.repository";
 import type { AuditLogWriter, TenderAuditLogEntry } from "../application/ports/audit-log-writer";
 import type { AwardCriterionRepository } from "../application/ports/award-criterion.repository";
 import type { ChecklistItemRepository } from "../application/ports/checklist-item.repository";
+import type { ChecklistReconciliationRepository, ChecklistReconciliationState } from "../application/ports/checklist-reconciliation.repository";
 import type {
   ChecklistItemSourceRecord,
   ChecklistItemSourceRepository,
@@ -415,6 +416,33 @@ export class InMemoryChecklistItemRepository implements ChecklistItemRepository 
   // Fake mono-processus : aucune concurrence réelle à sérialiser (voir `PrismaChecklistItemRepository`
   // pour le vrai verrou `pg_advisory_xact_lock` utilisé en production).
   async lockTenderForDedup(): Promise<void> {}
+}
+
+export class InMemoryChecklistReconciliationRepository implements ChecklistReconciliationRepository {
+  private readonly byTenderId = new Map<string, ChecklistReconciliationState>();
+
+  async find(input: { organizationId: string; tenderId: string }): Promise<ChecklistReconciliationState | null> {
+    const state = this.byTenderId.get(input.tenderId);
+    return state ?? null;
+  }
+
+  async upsert(input: {
+    id: string;
+    organizationId: string;
+    tenderId: string;
+    analysisVersion: number;
+    dceRevision: number | undefined;
+    reconciledByUserId: string;
+    occurredAt: Date;
+  }): Promise<void> {
+    this.byTenderId.set(input.tenderId, {
+      tenderId: input.tenderId,
+      lastReconciledAnalysisVersion: input.analysisVersion,
+      lastReconciledDceRevision: input.dceRevision,
+      reconciledByUserId: input.reconciledByUserId,
+      reconciledAt: input.occurredAt.toISOString(),
+    });
+  }
 }
 
 export class InMemoryChecklistItemSourceRepository implements ChecklistItemSourceRepository {

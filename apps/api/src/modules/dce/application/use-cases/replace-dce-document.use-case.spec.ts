@@ -96,6 +96,44 @@ describe("ReplaceDceDocumentUseCase", () => {
     expect(auditLogWriter.entries[0]?.action).toBe("dce.document_replaced");
   });
 
+  it("TEST 4 (Checkpoint 2.1-P2.1-FIX-A) — replacing a document advances the DCE revision (semantic content change)", async () => {
+    const useCase = buildUseCase();
+    const before = await dceRepository.findById({ organizationId: "org-1", dceId: "dce-1" });
+
+    await useCase.execute(baseCommand());
+
+    const after = await dceRepository.findById({ organizationId: "org-1", dceId: "dce-1" });
+    expect(after!.revision).toBe(before!.revision + 1);
+  });
+
+  it("BLOQUANT (correctif audit — P1 'incrément best-effort masque un vrai changement') — if incrementRevision itself fails, the replace ABORTS before touching Documents at all (clean, retry-safe — never a silent CURRENT masking a real change)", async () => {
+    const failingIncrement = vi.spyOn(dceRepository, "incrementRevision").mockRejectedValueOnce(new Error("simulated DB failure"));
+    const useCase = buildUseCase();
+
+    await expect(useCase.execute(baseCommand())).rejects.toThrow("simulated DB failure");
+
+    expect(failingIncrement).toHaveBeenCalledTimes(1);
+    expect(addDocumentVersionUseCase.execute).not.toHaveBeenCalled();
+  });
+
+  it("if the underlying Documents replace fails AFTER the revision already advanced, the failure direction is safe: revision stays advanced (false STALE), never reverted to a false CURRENT", async () => {
+    const before = await dceRepository.findById({ organizationId: "org-1", dceId: "dce-1" });
+    const failingAdd = { execute: vi.fn(async () => { throw new Error("simulated storage failure"); }) } as unknown as AddDocumentVersionUseCase;
+    const useCase = new ReplaceDceDocumentUseCase(
+      dceRepository,
+      dceDocumentRepository,
+      new FakeFileSignatureDetector(null),
+      auditLogWriter,
+      fakeGetTenderUseCase(),
+      failingAdd,
+    );
+
+    await expect(useCase.execute(baseCommand())).rejects.toThrow("simulated storage failure");
+
+    const after = await dceRepository.findById({ organizationId: "org-1", dceId: "dce-1" });
+    expect(after!.revision).toBe(before!.revision + 1);
+  });
+
   it("refuses when the actor lacks dce:replace (read-only role)", async () => {
     const useCase = buildUseCase();
 

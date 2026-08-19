@@ -70,6 +70,7 @@ function cloneOpportunity(opportunity: Opportunity): Opportunity {
     id: opportunity.id,
     organizationId: opportunity.organizationId,
     clientAccountId: opportunity.clientAccountId,
+    candidateCompanyId: opportunity.candidateCompanyId,
     buyerId: opportunity.buyerId,
     title: opportunity.title,
     description: opportunity.description,
@@ -151,6 +152,7 @@ export class InMemoryOpportunityRepository implements OpportunityRepository {
       id: current.id,
       organizationId: current.organizationId,
       clientAccountId: current.clientAccountId,
+      candidateCompanyId: current.candidateCompanyId,
       buyerId: current.buyerId,
       title: current.title,
       description: current.description,
@@ -218,18 +220,23 @@ export class InMemoryOpportunityQuickScoreRepository implements OpportunityQuick
 
 export class InMemoryGoNoGoReportRepository implements GoNoGoReportRepository {
   private readonly records: GoNoGoReportRecord[] = [];
+  // Checkpoint 2.1-P2.1-FIX-C (correctif audit P1-FIXC-001) — réservations durables, indépendantes
+  // des `records` : mirroir de la table `GoNoGoReportVersionReservation` réelle (une réservation
+  // sans `create()` correspondant doit tout de même repousser le prochain numéro).
+  private readonly reservationsByTender = new Map<string, number[]>();
 
   async create(input: CreateGoNoGoReportInput): Promise<GoNoGoReportRecord> {
-    const reportVersion = (await this.getLatestVersion({ organizationId: input.organizationId, tenderId: input.tenderId })) + 1;
     const record: GoNoGoReportRecord = {
       id: input.id,
       organizationId: input.organizationId,
       tenderId: input.tenderId,
-      reportVersion,
+      reportVersion: input.reportVersion,
       analysisVersion: input.analysisVersion,
+      dceRevision: input.dceRevision,
       calculationVersion: input.calculationVersion,
       requestedByUserId: input.requestedByUserId,
       generatedAt: input.generatedAt.toISOString(),
+      candidateCompanyId: input.candidateCompanyId,
       ...input.result,
     };
     this.records.push(record);
@@ -239,6 +246,17 @@ export class InMemoryGoNoGoReportRepository implements GoNoGoReportRepository {
   async getLatestVersion(input: { organizationId: string; tenderId: string }): Promise<number> {
     const versions = this.records.filter((r) => r.organizationId === input.organizationId && r.tenderId === input.tenderId).map((r) => r.reportVersion);
     return versions.length === 0 ? 0 : Math.max(...versions);
+  }
+
+  // Fake mono-processus : pas de vrai verrou requis (aucune concurrence réelle), mais reproduit
+  // fidèlement la sémantique "réservation durable" — voir PrismaGoNoGoReportRepository.reserveVersion.
+  async reserveVersion(input: { organizationId: string; tenderId: string }): Promise<number> {
+    const key = `${input.organizationId}:${input.tenderId}`;
+    const latestReport = await this.getLatestVersion(input);
+    const latestReservation = Math.max(0, ...(this.reservationsByTender.get(key) ?? []));
+    const nextVersion = Math.max(latestReport, latestReservation) + 1;
+    this.reservationsByTender.set(key, [...(this.reservationsByTender.get(key) ?? []), nextVersion]);
+    return nextVersion;
   }
 
   async getLatest(input: { organizationId: string; tenderId: string }): Promise<GoNoGoReportRecord | null> {

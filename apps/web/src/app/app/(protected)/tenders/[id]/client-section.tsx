@@ -1,22 +1,27 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { changeTenderCandidateAction, type FormActionState } from "../../../actions";
-import { canOfferCandidateChange, type TenderStatus } from "../../../../../lib/tenders-types";
+import { changeTenderClientAction, type FormActionState } from "../../../actions";
+import { canOfferClientChange, type TenderStatus } from "../../../../../lib/tenders-types";
 
 const INITIAL_STATE: FormActionState = {};
 
 type AccessibleClient = { id: string; name: string };
 
 /**
- * V2 Sprint 3 §4/§16 — changement CONTROLE de l'entreprise candidate : jamais fusionne avec la
+ * V2 Sprint 3 §4/§16 — changement CONTROLE du CLIENT (ClientAccount) : jamais fusionne avec la
  * modification des informations generales, propose uniquement tant que la reponse n'a pas
  * vraiment commence (DRAFT/IN_ANALYSIS, miroir de Tender.CANDIDATE_CHANGE_ALLOWED_STATUSES), et
  * uniquement vers une entreprise a laquelle l'acteur a lui-meme acces (la liste fournie ici vient
  * deja de /api/v1/clients, qui ne renvoie que les entreprises accessibles a l'acteur courant — le
  * backend revalide de toute facon l'acces sur l'ancien ET le nouveau client).
+ *
+ * Checkpoint 2.1-A5 — renomme depuis `CandidateSection`/"Entreprise candidate" : ce composant gere
+ * le CLIENT (ClientAccount, relation commerciale/portefeuille) du Tender, jamais la
+ * CandidateCompany (l'entité juridique qui répond, voir `CandidateCompanySection`). Les deux
+ * concepts restent strictement distincts à l'écran (mission A5 §11/§52).
  */
-export function CandidateSection({
+export function ClientSection({
   tenderId,
   status,
   currentClientAccountId,
@@ -32,22 +37,22 @@ export function CandidateSection({
   canChange: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const boundAction = changeTenderCandidateAction.bind(null, tenderId);
+  const boundAction = changeTenderClientAction.bind(null, tenderId);
   const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
 
   const otherClients = accessibleClients.filter((client) => client.id !== currentClientAccountId);
-  const offerChange = canChange && canOfferCandidateChange(status) && otherClients.length > 0;
+  const offerChange = canChange && canOfferClientChange(status) && otherClients.length > 0;
 
   return (
     <section className="flex flex-col gap-2 rounded border border-neutral-200 p-4">
-      <h2 className="text-sm font-semibold text-neutral-700">Entreprise candidate</h2>
+      <h2 className="text-sm font-semibold text-neutral-700">Client</h2>
       <p className="text-sm text-neutral-900">{currentClientName}</p>
 
       {offerChange ? (
         open ? (
           <form action={formAction} className="mt-2 flex flex-col gap-2 rounded border border-amber-200 bg-amber-50 p-3">
             <label htmlFor="candidate-clientAccountId" className="text-xs font-medium text-amber-900">
-              Nouvelle entreprise candidate
+              Nouveau client
             </label>
             <select
               id="candidate-clientAccountId"
@@ -93,14 +98,12 @@ export function CandidateSection({
             onClick={() => setOpen(true)}
             className="self-start text-xs font-medium text-neutral-700 underline hover:text-neutral-900"
           >
-            Changer d&apos;entreprise candidate
+            Changer de client
           </button>
         )
       ) : (
         <p className="text-xs text-neutral-500">
-          {canChange
-            ? "Le changement d'entreprise candidate n'est plus possible une fois la preparation de la reponse commencee."
-            : null}
+          {canChange ? "Le changement de client n'est plus possible une fois la preparation de la reponse commencee." : null}
         </p>
       )}
     </section>

@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { BillingModule } from "../billing";
+import { CandidateCompanyModule } from "../candidate-company";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
@@ -11,6 +12,7 @@ import { AWARD_CRITERION_REPOSITORY } from "./application/ports/award-criterion.
 import { BUYER_REPOSITORY } from "./application/ports/buyer.repository";
 import { CHECKLIST_ITEM_REPOSITORY } from "./application/ports/checklist-item.repository";
 import { CHECKLIST_ITEM_SOURCE_REPOSITORY } from "./application/ports/checklist-item-source.repository";
+import { CHECKLIST_RECONCILIATION_REPOSITORY } from "./application/ports/checklist-reconciliation.repository";
 import { MILESTONE_REPOSITORY } from "./application/ports/milestone.repository";
 import { REQUESTED_DOCUMENT_REPOSITORY } from "./application/ports/requested-document.repository";
 import { RISK_REPOSITORY } from "./application/ports/risk.repository";
@@ -23,6 +25,7 @@ import { ArchiveTenderUseCase } from "./application/use-cases/archive-tender.use
 import { RestoreTenderUseCase } from "./application/use-cases/restore-tender.use-case";
 import { ChangeTenderStatusUseCase } from "./application/use-cases/change-tender-status.use-case";
 import { ChangeTenderClientAccountUseCase } from "./application/use-cases/change-tender-client-account.use-case";
+import { ChangeTenderCandidateCompanyUseCase } from "./application/use-cases/change-tender-candidate-company.use-case";
 import { CreateTenderUseCase } from "./application/use-cases/create-tender.use-case";
 import { GetTenderUseCase } from "./application/use-cases/get-tender.use-case";
 import { GetTenderProfileUseCase } from "./application/use-cases/get-tender-profile.use-case";
@@ -100,6 +103,7 @@ import { PrismaAwardCriterionRepository } from "./infrastructure/prisma-award-cr
 import { PrismaBuyerRepository } from "./infrastructure/prisma-buyer.repository";
 import { PrismaChecklistItemRepository } from "./infrastructure/prisma-checklist-item.repository";
 import { PrismaChecklistItemSourceRepository } from "./infrastructure/prisma-checklist-item-source.repository";
+import { PrismaChecklistReconciliationRepository } from "./infrastructure/prisma-checklist-reconciliation.repository";
 import { PrismaIlikeTenderSearchProvider } from "./infrastructure/prisma-ilike-tender-search.provider";
 import { PrismaMilestoneRepository } from "./infrastructure/prisma-milestone.repository";
 import { PrismaRequestedDocumentRepository } from "./infrastructure/prisma-requested-document.repository";
@@ -115,7 +119,7 @@ import { TendersController } from "./interfaces/http/tenders.controller";
 @Module({
   // V2 Sprint 22B (billing) — `CreateTenderUseCase` consomme un crédit AO au point de choc unique
   // identifié (mission §19, voir le rapport 22B), jamais un second point de consommation.
-  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, OutboxWriterModule, BillingModule],
+  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, CandidateCompanyModule, OutboxWriterModule, BillingModule],
   controllers: [TendersController, TenderLotsController, BuyersController],
   providers: [
     CreateTenderUseCase,
@@ -130,6 +134,7 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     GetTenderForPublicApiUseCase,
     ChangeTenderStatusUseCase,
     ChangeTenderClientAccountUseCase,
+    ChangeTenderCandidateCompanyUseCase,
     ArchiveTenderUseCase,
     RestoreTenderUseCase,
     ListTenderStatusHistoryUseCase,
@@ -190,6 +195,7 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     { provide: TENDER_LOT_REPOSITORY, useClass: PrismaTenderLotRepository },
     { provide: CHECKLIST_ITEM_REPOSITORY, useClass: PrismaChecklistItemRepository },
     { provide: CHECKLIST_ITEM_SOURCE_REPOSITORY, useClass: PrismaChecklistItemSourceRepository },
+    { provide: CHECKLIST_RECONCILIATION_REPOSITORY, useClass: PrismaChecklistReconciliationRepository },
     { provide: AWARD_CRITERION_REPOSITORY, useClass: PrismaAwardCriterionRepository },
     { provide: REQUESTED_DOCUMENT_REPOSITORY, useClass: PrismaRequestedDocumentRepository },
     { provide: MILESTONE_REPOSITORY, useClass: PrismaMilestoneRepository },
@@ -243,6 +249,9 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     CHECKLIST_ITEM_REPOSITORY,
     CreateChecklistItemUseCase,
     UpdateChecklistItemUseCase,
+    // Checkpoint 2.1-P2.1-FIX-B — réexporté pour `checklist-intelligence`
+    // (`ReconcileChecklistWithNewAnalysisUseCase`/`GetChecklistFreshnessUseCase`, même motif).
+    CHECKLIST_RECONCILIATION_REPOSITORY,
     AUDIT_LOG_WRITER,
 
     // V2 Sprint 15 — réexportés pour `dashboard` (voir index.ts).

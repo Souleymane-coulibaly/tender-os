@@ -95,7 +95,15 @@ describe("Checklist intelligente — real HTTP + PostgreSQL (NestJS)", () => {
     } as TenderConsolidationOutput;
   }
 
-  async function seedSucceededAnalysis(input: { organizationId: string; tenderId: string; actorId: string; output?: TenderConsolidationOutput }): Promise<void> {
+  async function seedSucceededAnalysis(input: {
+    organizationId: string;
+    tenderId: string;
+    actorId: string;
+    output?: TenderConsolidationOutput;
+    analysisVersion?: number;
+    dceRevision?: number;
+  }): Promise<void> {
+    const analysisVersion = input.analysisVersion ?? 1;
     const jobId = randomUUID();
     await prisma.analysisJob.create({
       data: {
@@ -105,7 +113,7 @@ describe("Checklist intelligente — real HTTP + PostgreSQL (NestJS)", () => {
         targetId: input.tenderId,
         scope: "TENDER",
         status: "SUCCEEDED",
-        analysisVersion: 1,
+        analysisVersion,
         promptVersion: 1,
         triggeredByRole: "OWNER",
         updatedAt: new Date(),
@@ -116,10 +124,11 @@ describe("Checklist intelligente — real HTTP + PostgreSQL (NestJS)", () => {
       repository.persistTenderConsolidation(tx, {
         organizationId: input.organizationId,
         analysisJobId: jobId,
-        analysisVersion: 1,
+        analysisVersion,
         tenderId: input.tenderId,
         output: input.output ?? minimalConsolidationOutput(),
         documentVersionsByDocumentId: {},
+        dceRevision: input.dceRevision,
       }),
     );
   }
@@ -531,5 +540,181 @@ describe("Checklist intelligente — real HTTP + PostgreSQL (NestJS)", () => {
     const suggestionsRes = await fetch(`${baseUrl}/api/v1/ai-suggestions?entityType=CHECKLIST_ITEM&parentTenderId=${tenderId}`, { headers: authHeaders(tokenOwnerA, orgAId) });
     const suggestions = (await suggestionsRes.json()) as { proposedValue: { changeKind?: string } }[];
     expect(suggestions.some((suggestion) => suggestion.proposedValue.changeKind === "NEW_REQUIREMENT")).toBe(true);
+  });
+
+  // Checkpoint 2.1-P2.1-FIX-B — scénario de bout en bout complet contre une vraie base PostgreSQL
+  // (mission §47/§60) : DCE rev1 -> analyse v1 -> checklist réconciliée + validée par un humain ->
+  // DCE rev2 (RC remplacé) -> analyse v2 (une exigence inchangée, une supprimée, une nouvelle) ->
+  // fraîcheur checklist RECONCILIATION_REQUIRED même si l'analyse elle-même est déjà CURRENT (axes
+  // orthogonaux, mission §31) -> reconcile -> travail humain préservé -> idempotence prouvée par un
+  // second reconcile sans effet.
+  it("E2E — full DCE revision -> re-analysis -> checklist reconciliation lifecycle preserves human work and is idempotent", async () => {
+    const { tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+
+    const dce = await prisma.dce.create({
+      data: { id: randomUUID(), organizationId: orgAId, tenderId, status: "IMPORTED", revision: 1, createdByUserId: ownerAUserId },
+    });
+
+    await seedSucceededAnalysis({
+      organizationId: orgAId,
+      tenderId,
+      actorId: ownerAUserId,
+      analysisVersion: 1,
+      dceRevision: 1,
+      output: minimalConsolidationOutput({
+        requirements: [
+          { category: "CERTIFICATION", label: "Certification ISO 9001", isMandatory: true, isInferred: false, confidence: 0.9 },
+          { category: "ADMINISTRATIVE", label: "Attestation URSSAF", isMandatory: true, isInferred: false, confidence: 0.9 },
+        ],
+      }),
+    });
+
+    // Avant toute réconciliation : jamais un 404, toujours RECONCILIATION_REQUIRED.
+    const freshnessBeforeRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/checklist/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(freshnessBeforeRes.status).toBe(200);
+    const freshnessBefore = (await freshnessBeforeRes.json()) as { analysisVersion: number; analysisFreshness: string; checklistFreshness: string };
+    expect(freshnessBefore.analysisVersion).toBe(1);
+    expect(freshnessBefore.analysisFreshness).toBe("CURRENT");
+    expect(freshnessBefore.checklistFreshness).toBe("RECONCILIATION_REQUIRED");
+
+    const firstReconcileRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/checklist/reconcile`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(firstReconcileRes.status).toBe(200);
+    expect(((await firstReconcileRes.json()) as { newRequirementSuggestionsCreated: number }).newRequirementSuggestionsCreated).toBe(2);
+
+    // Réconcilié : le signal repasse CURRENT.
+    const freshnessAfterFirstReconcileRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/checklist/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(((await freshnessAfterFirstReconcileRes.json()) as { checklistFreshness: string }).checklistFreshness).toBe("CURRENT");
+
+    // Travail humain : accepter les deux suggestions puis valider explicitement les deux items.
+    const suggestionsRes = await fetch(`${baseUrl}/api/v1/ai-suggestions?entityType=CHECKLIST_ITEM&parentTenderId=${tenderId}`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const pendingSuggestions = (await suggestionsRes.json()) as { id: string; proposedValue: { title: string } }[];
+    expect(pendingSuggestions).toHaveLength(2);
+    for (const suggestion of pendingSuggestions) {
+      const applyRes = await fetch(`${baseUrl}/api/v1/ai-suggestions/${suggestion.id}/apply`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({}) });
+      expect(applyRes.status).toBe(200);
+    }
+    const itemsAfterFirstReconcileRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/checklist`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const itemsAfterFirstReconcile = (await itemsAfterFirstReconcileRes.json()) as { id: string; title: string }[];
+    expect(itemsAfterFirstReconcile).toHaveLength(2);
+    const isoItem = itemsAfterFirstReconcile.find((item) => item.title === "Certification ISO 9001")!;
+    const urssafItem = itemsAfterFirstReconcile.find((item) => item.title === "Attestation URSSAF")!;
+    for (const item of [isoItem, urssafItem]) {
+      const validateRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/checklist/${item.id}/validate`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+      expect(validateRes.status).toBe(200);
+    }
+
+    // Le DCE est actualisé (remplacement de RC, simulé directement — le mécanisme d'incrément
+    // lui-même est déjà couvert par les tests FIX-A) : rev1 -> rev2.
+    await prisma.dce.update({ where: { id: dce.id }, data: { revision: { increment: 1 } } });
+
+    // Nouvelle analyse v2, rattachée à dceRevision=2 : ISO 9001 inchangée, URSSAF disparue,
+    // "Fournir RIB" nouvelle.
+    await seedSucceededAnalysis({
+      organizationId: orgAId,
+      tenderId,
+      actorId: ownerAUserId,
+      analysisVersion: 2,
+      dceRevision: 2,
+      output: minimalConsolidationOutput({
+        requirements: [
+          { category: "CERTIFICATION", label: "Certification ISO 9001", isMandatory: true, isInferred: false, confidence: 0.9 },
+          { category: "ADMINISTRATIVE", label: "Fournir RIB", isMandatory: true, isInferred: false, confidence: 0.9 },
+        ],
+      }),
+    });
+
+    // BLOQUANT (mission §31) — l'analyse elle-même est déjà CURRENT (dceRevision=2 == dce.revision
+    // actuel), mais la Checklist n'a PAS ENCORE été réconciliée contre v2 : deux axes orthogonaux.
+    const freshnessAfterNewAnalysisRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/checklist/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const freshnessAfterNewAnalysis = (await freshnessAfterNewAnalysisRes.json()) as { analysisVersion: number; analysisFreshness: string; checklistFreshness: string };
+    expect(freshnessAfterNewAnalysis.analysisVersion).toBe(2);
+    expect(freshnessAfterNewAnalysis.analysisFreshness).toBe("CURRENT");
+    expect(freshnessAfterNewAnalysis.checklistFreshness).toBe("RECONCILIATION_REQUIRED");
+
+    const secondReconcileRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/checklist/reconcile`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(secondReconcileRes.status).toBe(200);
+    const secondReconcile = (await secondReconcileRes.json()) as { newRequirementSuggestionsCreated: number; possibleRemovals: { itemId: string; title: string }[]; alreadyReconciled: boolean };
+    expect(secondReconcile.alreadyReconciled).toBe(false);
+    expect(secondReconcile.newRequirementSuggestionsCreated).toBe(1);
+    expect(secondReconcile.possibleRemovals).toEqual([{ itemId: urssafItem.id, title: "Attestation URSSAF", reason: expect.any(String) }]);
+
+    // Le travail humain n'a jamais été effacé : les deux items restent VALIDATED, seule
+    // `requirementFreshness` distingue l'exigence retrouvée de celle disparue.
+    const itemsAfterSecondReconcileRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/checklist`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const itemsAfterSecondReconcile = (await itemsAfterSecondReconcileRes.json()) as { id: string; complianceStatus: string; requirementFreshness: string }[];
+    const isoAfter = itemsAfterSecondReconcile.find((item) => item.id === isoItem.id)!;
+    const urssafAfter = itemsAfterSecondReconcile.find((item) => item.id === urssafItem.id)!;
+    expect(isoAfter.complianceStatus).toBe("VALIDATED");
+    expect(isoAfter.requirementFreshness).toBe("CURRENT");
+    expect(urssafAfter.complianceStatus).toBe("VALIDATED");
+    expect(urssafAfter.requirementFreshness).toBe("STALE");
+
+    // La checklist redevient CURRENT une fois réconciliée contre la dernière analyse.
+    const freshnessAfterSecondReconcileRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/checklist/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(((await freshnessAfterSecondReconcileRes.json()) as { checklistFreshness: string }).checklistFreshness).toBe("CURRENT");
+
+    // BLOQUANT (idempotence, mission §24-25) — un troisième reconcile sans nouveau changement est
+    // un no-op complet : aucune nouvelle suggestion, aucun re-marquage.
+    const thirdReconcileRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/checklist/reconcile`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(thirdReconcileRes.status).toBe(200);
+    const thirdReconcile = (await thirdReconcileRes.json()) as { alreadyReconciled: boolean; newRequirementSuggestionsCreated: number; possibleRemovals: unknown[] };
+    expect(thirdReconcile.alreadyReconciled).toBe(true);
+    expect(thirdReconcile.newRequirementSuggestionsCreated).toBe(0);
+    expect(thirdReconcile.possibleRemovals).toHaveLength(0);
+
+    const suggestionsAfterThirdReconcileRes = await fetch(`${baseUrl}/api/v1/ai-suggestions?entityType=CHECKLIST_ITEM&parentTenderId=${tenderId}`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const allSuggestions = (await suggestionsAfterThirdReconcileRes.json()) as unknown[];
+    // 2 (v1) + 1 (v2, "Fournir RIB") = 3, jamais un doublon créé par le 2e ou 3e appel.
+    expect(allSuggestions).toHaveLength(3);
+  });
+
+  // BLOQUANT — correctif audit P1-FIXB-001, preuve réelle contre HTTP + PostgreSQL. Scénario exact
+  // signalé par l'audit : la Checklist est réconciliée contre la dernière analysisVersion
+  // disponible (les versions correspondent), puis le DCE est actualisé SANS qu'une nouvelle
+  // analyse n'ait encore réussi — l'analyse la plus récente devient STALE. Avant le correctif,
+  // `checklistFreshness` ne comparait que les `analysisVersion` et rapportait à tort `CURRENT`.
+  it("E2E — a checklist reconciled against the latest analysisVersion is never reported CURRENT once that analysis itself goes STALE (audit P1-FIXB-001)", async () => {
+    const { tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+
+    const dce = await prisma.dce.create({
+      data: { id: randomUUID(), organizationId: orgAId, tenderId, status: "IMPORTED", revision: 1, createdByUserId: ownerAUserId },
+    });
+
+    await seedSucceededAnalysis({
+      organizationId: orgAId,
+      tenderId,
+      actorId: ownerAUserId,
+      analysisVersion: 1,
+      dceRevision: 1,
+      output: minimalConsolidationOutput({
+        requirements: [{ category: "CERTIFICATION", label: "Certification ISO 9001", isMandatory: true, isInferred: false, confidence: 0.9 }],
+      }),
+    });
+
+    const reconcileRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/checklist/reconcile`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(reconcileRes.status).toBe(200);
+
+    // Réconcilié contre l'unique analyse disponible, elle-même CURRENT : le signal est bien CURRENT.
+    const freshnessBeforeDriftRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/checklist/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const freshnessBeforeDrift = (await freshnessBeforeDriftRes.json()) as { analysisVersion: number; lastReconciledAnalysisVersion: number; analysisFreshness: string; checklistFreshness: string };
+    expect(freshnessBeforeDrift.analysisVersion).toBe(1);
+    expect(freshnessBeforeDrift.lastReconciledAnalysisVersion).toBe(1);
+    expect(freshnessBeforeDrift.analysisFreshness).toBe("CURRENT");
+    expect(freshnessBeforeDrift.checklistFreshness).toBe("CURRENT");
+
+    // Le DCE change (remplacement de RC, simulé directement — le mécanisme d'incrément lui-même est
+    // déjà couvert par FIX-A) SANS qu'une nouvelle analyse ne soit relancée : l'analyse v1, la seule
+    // et donc toujours la "dernière", devient STALE.
+    await prisma.dce.update({ where: { id: dce.id }, data: { revision: { increment: 1 } } });
+
+    const freshnessAfterDriftRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/checklist/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const freshnessAfterDrift = (await freshnessAfterDriftRes.json()) as { analysisVersion: number; lastReconciledAnalysisVersion: number; analysisFreshness: string; checklistFreshness: string };
+    // Les versions correspondent TOUJOURS exactement (1 === 1) — c'est précisément le piège que
+    // l'ancien `computeChecklistFreshness` ne détectait pas.
+    expect(freshnessAfterDrift.analysisVersion).toBe(1);
+    expect(freshnessAfterDrift.lastReconciledAnalysisVersion).toBe(1);
+    expect(freshnessAfterDrift.analysisFreshness).toBe("STALE");
+    // BLOQUANT — jamais CURRENT ici : la réconciliation s'appuie sur des Findings désormais obsolètes.
+    expect(freshnessAfterDrift.checklistFreshness).toBe("RECONCILIATION_REQUIRED");
   });
 });

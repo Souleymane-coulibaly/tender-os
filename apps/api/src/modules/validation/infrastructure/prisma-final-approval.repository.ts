@@ -48,5 +48,9 @@ function toRow(approval: FinalApproval) {
     status: approval.status,
     invalidatedAt: approval.invalidatedAt ?? null,
     invalidatedReason: approval.invalidatedReason ?? null,
+    candidateCompanyId: approval.candidateCompanyId ?? null,
+    analysisVersion: approval.analysisVersion ?? null,
+    dceRevision: approval.dceRevision ?? null,
+    technicalMemoRevisionFingerprint: approval.technicalMemoRevisionFingerprint ?? null,
   };
 }

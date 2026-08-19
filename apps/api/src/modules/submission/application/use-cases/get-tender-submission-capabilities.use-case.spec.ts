@@ -23,6 +23,7 @@ function fakeReadinessUseCase(result: Partial<TenderSubmissionReadinessResult> =
     requiredActions: [],
     signatureRequirement: "SATISFIED_OR_NOT_REQUIRED",
     validationSummary: "APPROVED",
+    fileReadinessReasons: [],
     ...result,
   };
   return { execute: vi.fn(async () => full) } as unknown as GetTenderSubmissionReadinessUseCase;

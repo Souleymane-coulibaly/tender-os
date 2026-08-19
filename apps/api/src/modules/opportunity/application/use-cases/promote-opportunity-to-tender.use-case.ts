@@ -157,6 +157,10 @@ export class PromoteOpportunityToTenderUseCase {
       actorId: command.actorId,
       actorRole: command.actorRole,
       clientAccountId: currentClientAccountId,
+      // Mission 2.1-A3 §13 — propagation explicite et testée : si l'Opportunity porte une
+      // CandidateCompany résolue, le Tender promu la reçoit directement à la création (jamais un
+      // second appel séparé, jamais une valeur par défaut inventée quand elle est absente).
+      candidateCompanyId: current.candidateCompanyId,
       title: current.title,
       buyerId: current.buyerId,
       buyerName: current.buyerName,

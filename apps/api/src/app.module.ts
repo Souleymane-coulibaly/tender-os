@@ -12,6 +12,7 @@ import { BillingModule } from "./modules/billing";
 // refermerait un cycle billing -> chat/documents -> tenders -> billing).
 import { QuotaThresholdEventConsumersModule, QUOTA_THRESHOLD_OUTBOX_HANDLERS } from "./modules/billing/quota-threshold-event-consumers.module";
 import { ChatModule } from "./modules/chat/chat.module";
+import { CandidateCompanyModule } from "./modules/candidate-company";
 import { ChecklistIntelligenceModule } from "./modules/checklist-intelligence/checklist-intelligence.module";
 import { ClientPortfolioModule } from "./modules/client-portfolio/client-portfolio.module";
 import { CockpitModule } from "./modules/cockpit";
@@ -81,6 +82,9 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     PlatformAdministrationModule,
     AiSuggestionModule,
     ClientPortfolioModule,
+    // TenderOS 2.1-A1 — Source-of-Truth entreprise candidate, additif à ClientPortfolio (aucune
+    // dépendance mutuelle, voir candidate-company.module.ts).
+    CandidateCompanyModule,
     TendersModule,
     DocumentsModule,
     DceModule,

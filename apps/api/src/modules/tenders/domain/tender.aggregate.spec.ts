@@ -5,6 +5,7 @@ import {
   InvalidTenderStatusTransitionError,
   TenderArchivedError,
   TenderCandidateChangeNotAllowedError,
+  TenderCandidateCompanyChangeNotAllowedError,
 } from "./errors";
 import { Tender } from "./tender.aggregate";
 import { TenderId } from "./tender-id.value-object";
@@ -142,6 +143,59 @@ describe("Tender#changeClientAccount (V2 Sprint 3 §4)", () => {
     tender.changeStatus(TenderStatus.Archived, new Date());
 
     expect(() => tender.changeClientAccount("client-2", new Date())).toThrow(TenderArchivedError);
+  });
+});
+
+describe("Tender#changeCandidateCompany (Checkpoint 2.1-A3)", () => {
+  it("has no candidateCompanyId by default — legacy Tenders remain valid without one", () => {
+    const tender = createTender();
+    expect(tender.candidateCompanyId).toBeUndefined();
+  });
+
+  it("accepts an optional candidateCompanyId at creation, coexisting with clientAccountId", () => {
+    const tender = createTender({ candidateCompanyId: "candidate-company-1" });
+    expect(tender.candidateCompanyId).toBe("candidate-company-1");
+    expect(tender.clientAccountId).toBe("client-1");
+  });
+
+  it("changes the candidate company while the tender is still DRAFT and bumps version/updatedAt", () => {
+    const tender = createTender();
+
+    tender.changeCandidateCompany("candidate-company-2", new Date("2026-02-01T00:00:00Z"));
+
+    expect(tender.candidateCompanyId).toBe("candidate-company-2");
+    expect(tender.version).toBe(2);
+    expect(tender.updatedAt).toEqual(new Date("2026-02-01T00:00:00Z"));
+  });
+
+  it("still allows the change while IN_ANALYSIS", () => {
+    const tender = createTender();
+    tender.changeStatus(TenderStatus.InAnalysis, new Date());
+
+    tender.changeCandidateCompany("candidate-company-2", new Date());
+
+    expect(tender.candidateCompanyId).toBe("candidate-company-2");
+  });
+
+  it("refuses the change once the tender has moved past IN_ANALYSIS (response preparation started)", () => {
+    const tender = createTender();
+    tender.changeStatus(TenderStatus.InAnalysis, new Date());
+    tender.changeStatus(TenderStatus.Ready, new Date());
+
+    expect(() => tender.changeCandidateCompany("candidate-company-2", new Date())).toThrow(TenderCandidateCompanyChangeNotAllowedError);
+  });
+
+  it("refuses the change on an archived tender", () => {
+    const tender = createTender();
+    tender.changeStatus(TenderStatus.Archived, new Date());
+
+    expect(() => tender.changeCandidateCompany("candidate-company-2", new Date())).toThrow(TenderArchivedError);
+  });
+
+  it("changing candidateCompanyId never touches clientAccountId (never a fallback/conflation between the two)", () => {
+    const tender = createTender();
+    tender.changeCandidateCompany("candidate-company-2", new Date());
+    expect(tender.clientAccountId).toBe("client-1");
   });
 });
 

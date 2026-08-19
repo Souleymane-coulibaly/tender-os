@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConsumeAoCreditUseCase } from "../../../billing";
+import { CandidateCompanyArchivedError, GetCandidateCompanyUseCase } from "../../../candidate-company";
+import { CreateCandidateCompanyUseCase } from "../../../candidate-company/application/use-cases/create-candidate-company.use-case";
+import {
+  FixedClock as CandidateFixedClock,
+  InMemoryAuditLogWriter as CandidateInMemoryAuditLogWriter,
+  InMemoryCandidateCompanyRepository,
+} from "../../../candidate-company/test-support/fakes";
+import { UuidGenerator } from "../../../../shared-kernel/id-generator";
 import {
   InvalidMarketTypeError,
   InvalidTenderCountryError,
@@ -25,6 +33,8 @@ describe("CreateTenderUseCase", () => {
   let auditLogWriter: InMemoryAuditLogWriter;
   let outboxWriter: FakeOutboxWriter;
   let consumeAoCreditUseCase: { execute: ReturnType<typeof vi.fn> };
+  let candidateCompanyRepository: InMemoryCandidateCompanyRepository;
+  let createCandidateCompanyUseCase: CreateCandidateCompanyUseCase;
   let useCase: CreateTenderUseCase;
 
   beforeEach(async () => {
@@ -32,6 +42,13 @@ describe("CreateTenderUseCase", () => {
     auditLogWriter = new InMemoryAuditLogWriter();
     outboxWriter = new FakeOutboxWriter();
     consumeAoCreditUseCase = { execute: vi.fn(async () => {}) };
+    candidateCompanyRepository = new InMemoryCandidateCompanyRepository();
+    createCandidateCompanyUseCase = new CreateCandidateCompanyUseCase(
+      candidateCompanyRepository,
+      new CandidateInMemoryAuditLogWriter(),
+      new CandidateFixedClock(),
+      new UuidGenerator(),
+    );
     const clientPortfolio = await createClientPortfolioTestFixture("org-1");
     useCase = new CreateTenderUseCase(
       tenderRepository,
@@ -44,7 +61,81 @@ describe("CreateTenderUseCase", () => {
       clientPortfolio.getClientAccountUseCase,
       clientPortfolio.assertClientAccessUseCase,
       consumeAoCreditUseCase as unknown as ConsumeAoCreditUseCase,
+      new GetCandidateCompanyUseCase(candidateCompanyRepository),
     );
+  });
+
+  it("accepts a valid, non-archived candidateCompanyId (Checkpoint 2.1-A3)", async () => {
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: "org-1", actorId: "user-1", name: "Alpha SARL" });
+
+    const result = await useCase.execute({
+      organizationId: "org-1",
+      actorId: "user-1",
+      actorRole: "BID_MANAGER",
+      clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+      candidateCompanyId: candidate.id,
+      title: "Marche de nettoyage",
+    });
+
+    expect(result.candidateCompanyId).toBe(candidate.id);
+  });
+
+  it("creates a Tender without any candidateCompanyId (never required at this stage — Checkpoint 2.1-A3 §16)", async () => {
+    const result = await useCase.execute({
+      organizationId: "org-1",
+      actorId: "user-1",
+      actorRole: "BID_MANAGER",
+      clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+      title: "Marche de nettoyage",
+    });
+
+    expect(result.candidateCompanyId).toBeUndefined();
+  });
+
+  it("refuses a candidateCompanyId that does not exist", async () => {
+    await expect(
+      useCase.execute({
+        organizationId: "org-1",
+        actorId: "user-1",
+        actorRole: "BID_MANAGER",
+        clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+        candidateCompanyId: "does-not-exist",
+        title: "Marche de nettoyage",
+      }),
+    ).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_NOT_FOUND" });
+  });
+
+  it("refuses an archived candidateCompanyId", async () => {
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: "org-1", actorId: "user-1", name: "Alpha SARL" });
+    const stored = await candidateCompanyRepository.findById({ organizationId: "org-1", candidateCompanyId: candidate.id });
+    stored!.archive(new Date());
+    await candidateCompanyRepository.save(stored!);
+
+    await expect(
+      useCase.execute({
+        organizationId: "org-1",
+        actorId: "user-1",
+        actorRole: "BID_MANAGER",
+        clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+        candidateCompanyId: candidate.id,
+        title: "Marche de nettoyage",
+      }),
+    ).rejects.toThrow(CandidateCompanyArchivedError);
+  });
+
+  it("refuses a candidateCompanyId that belongs to a different organization (cross-tenant)", async () => {
+    const otherOrgCandidate = await createCandidateCompanyUseCase.execute({ organizationId: "org-2", actorId: "user-1", name: "Beta SARL" });
+
+    await expect(
+      useCase.execute({
+        organizationId: "org-1",
+        actorId: "user-1",
+        actorRole: "BID_MANAGER",
+        clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+        candidateCompanyId: otherOrgCandidate.id,
+        title: "Marche de nettoyage",
+      }),
+    ).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_NOT_FOUND" });
   });
 
   it("creates a DRAFT tender and records an audit entry when the actor is a Bid Manager", async () => {

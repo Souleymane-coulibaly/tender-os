@@ -6,6 +6,9 @@
 export const FormFieldSource = {
   OrganizationProfile: "ORGANIZATION_PROFILE",
   ClientProfile: "CLIENT_PROFILE",
+  /** V2 Sprint 26 (Checkpoint 2.1-A4) — SOT `CandidateCompany`/`CandidateEstablishment` (A1/A3),
+   *  distincte de `ClientProfile` (`company-profile` via `ClientAccount`, legacy). */
+  CandidateCompanyProfile: "CANDIDATE_COMPANY_PROFILE",
   Tender: "TENDER",
   Lot: "LOT",
   GroupMember: "GROUP_MEMBER",

@@ -3,7 +3,7 @@ import { AssertClientAccessUseCase, ClientPermission } from "../../../client-por
 import { OpportunityQuickScoreNotFoundError } from "../../domain/errors";
 import { OpportunityPermission } from "../../domain/opportunity-permission";
 import { assertOpportunityFound } from "../../domain/opportunity.aggregate";
-import { OPPORTUNITY_QUICK_SCORE_REPOSITORY, type OpportunityQuickScoreRecord, type OpportunityQuickScoreRepository } from "../ports/opportunity-quick-score.repository";
+import { OPPORTUNITY_QUICK_SCORE_REPOSITORY, withQuickScoreCandidateStaleness, type OpportunityQuickScoreRecord, type OpportunityQuickScoreRepository } from "../ports/opportunity-quick-score.repository";
 import { OPPORTUNITY_REPOSITORY, type OpportunityRepository } from "../ports/opportunity.repository";
 import { assertHasOpportunityPermission } from "../policies/opportunity-authorization.policy";
 import { assertOpportunityClientAccessAllowed } from "../policies/opportunity-client-access.policy";
@@ -41,6 +41,6 @@ export class GetOpportunityQuickScoreUseCase {
     if (!latest) {
       throw new OpportunityQuickScoreNotFoundError();
     }
-    return latest;
+    return withQuickScoreCandidateStaleness(latest, opportunity.candidateCompanyId);
   }
 }

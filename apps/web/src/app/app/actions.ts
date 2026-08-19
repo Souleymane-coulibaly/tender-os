@@ -535,24 +535,54 @@ export async function restoreTenderAction(
 }
 
 /**
- * V2 Sprint 3 §4 — changement CONTROLE de l'entreprise candidate, jamais fusionne avec
+ * V2 Sprint 3 §4 — changement CONTROLE du CLIENT (ClientAccount), jamais fusionne avec
  * updateTenderAction (le backend rejette de toute facon tout `clientAccountId` glisse dans un
- * PATCH general). Route dediee POST /tenders/:id/candidate (ChangeTenderClientAccountUseCase).
+ * PATCH general). Route dediee POST /tenders/:id/candidate (ChangeTenderClientAccountUseCase) —
+ * nom de route backend historique, jamais renomme en A5 (aucune reprise backend).
+ * Checkpoint 2.1-A5 — renomme depuis `changeTenderCandidateAction` cote frontend uniquement.
  */
-export async function changeTenderCandidateAction(
+export async function changeTenderClientAction(
   tenderId: string,
   _prevState: FormActionState,
   formData: FormData,
 ): Promise<FormActionState> {
   const clientAccountId = formData.get("clientAccountId");
   if (typeof clientAccountId !== "string" || !clientAccountId.trim()) {
-    return { error: "Selectionnez une entreprise candidate." };
+    return { error: "Selectionnez un client." };
   }
 
   try {
     await appApiFetch(`/api/v1/tenders/${tenderId}/candidate`, {
       method: "POST",
       body: JSON.stringify({ clientAccountId, reason: optional(formData.get("reason")) }),
+    });
+  } catch (error) {
+    return { error: describeTenderActionError(error) };
+  }
+
+  revalidatePath(`/app/tenders/${tenderId}`);
+  return {};
+}
+
+/**
+ * Checkpoint 2.1-A5 — changement de la CandidateCompany (A1-A4), route dediee distincte
+ * POST /tenders/:id/candidate-company (ChangeTenderCandidateCompanyUseCase). Jamais confondu avec
+ * changeTenderClientAction ci-dessus (deux concepts, deux routes, deux use cases backend).
+ */
+export async function changeTenderCandidateCompanyAction(
+  tenderId: string,
+  _prevState: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
+  const candidateCompanyId = formData.get("candidateCompanyId");
+  if (typeof candidateCompanyId !== "string" || !candidateCompanyId.trim()) {
+    return { error: "Selectionnez une entreprise candidate." };
+  }
+
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/candidate-company`, {
+      method: "POST",
+      body: JSON.stringify({ candidateCompanyId, reason: optional(formData.get("reason")) }),
     });
   } catch (error) {
     return { error: describeTenderActionError(error) };

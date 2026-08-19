@@ -12,6 +12,7 @@ import {
   type ChecklistItemOrigin,
   type ChecklistItemStatus,
   type ChecklistItemType,
+  type ChecklistRequirementFreshness,
   type ChecklistRequirementLevel,
   type ChecklistSubjectType,
 } from "../domain/checklist-item.entity";
@@ -48,6 +49,7 @@ function toDomain(record: ChecklistItemRecord): ChecklistItem {
     documentMatchReasons: (record.documentMatchReasons as string[] | null) ?? undefined,
     documentExpiresAt: record.documentExpiresAt ?? undefined,
     documentValidityCheckedAt: record.documentValidityCheckedAt ?? undefined,
+    requirementFreshness: record.requirementFreshness as ChecklistRequirementFreshness,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   });
@@ -85,6 +87,7 @@ function toPersistence(item: ChecklistItem) {
     documentMatchReasons: (item.documentMatchReasons as unknown as Prisma.InputJsonValue) ?? Prisma.JsonNull,
     documentExpiresAt: item.documentExpiresAt ?? null,
     documentValidityCheckedAt: item.documentValidityCheckedAt ?? null,
+    requirementFreshness: item.requirementFreshness,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };

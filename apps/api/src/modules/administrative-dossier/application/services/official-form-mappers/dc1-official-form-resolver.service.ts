@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { CandidateIdentitySource, ResolveCandidateIdentityUseCase } from "../../../../candidate-company";
 import { GetCompanyProfileUseCase } from "../../../../company-profile";
 import { GetTenderUseCase } from "../../../../tenders";
 import { Dc1CandidateType } from "../../../domain/dc1-declaration.aggregate";
@@ -35,6 +36,15 @@ const DC1_MEMBER_FIELDS_NOT_APPLICABLE_REASON = "Candidat individuel — le grou
  * `dc1.mandataireSolidaireOui/Non` (`Consortium.liabilityMode` est un texte libre, non
  * mécaniquement traduisible en oui/non) — marqués `NEEDS_REVIEW`, jamais un statut `MISSING` qui
  * laisserait croire qu'il suffit de renseigner une fiche pour les résoudre.
+ *
+ * V2 Sprint 26 (Checkpoint 2.1-A4) — `candidate.siret`/`tradeName`/`address` préfèrent désormais la
+ * SOT `CandidateCompany`/`CandidateEstablishment` (A1/A3, via `ResolveCandidateIdentityUseCase`,
+ * "Candidate Context" canonique) quand `Tender.candidateCompanyId` est renseigné (NEW FLOW) ; retombe
+ * sur `company-profile.legalIdentity` (`clientAccountId`) sinon (LEGACY FLOW — Tender sans
+ * `candidateCompanyId`, jamais rétroactivement rempli, voir A2/A3). `candidate.email`/`phone`
+ * restent TOUJOURS résolus depuis `legalIdentity` : `CandidateCompany` ne porte aucun champ de
+ * contact (mission A1 §6, minimalisme) — ceci n'est jamais un fallback à supprimer plus tard, c'est
+ * la SEULE source existante pour ces deux champs.
  */
 @Injectable()
 export class Dc1OfficialFormResolver {
@@ -43,6 +53,7 @@ export class Dc1OfficialFormResolver {
     private readonly getConsortiumUseCase: GetConsortiumUseCase,
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly getCompanyProfileUseCase: GetCompanyProfileUseCase,
+    private readonly resolveCandidateIdentityUseCase: ResolveCandidateIdentityUseCase,
   ) {}
 
   async resolve(input: { organizationId: string; actorId: string; actorRole: string; tenderId: string }): Promise<Dc1OfficialFormResolution> {
@@ -51,8 +62,9 @@ export class Dc1OfficialFormResolver {
       this.getTenderUseCase.execute({ organizationId: input.organizationId, actorId: input.actorId, actorRole: input.actorRole, tenderId: input.tenderId }),
     ]);
 
-    const [companyProfile, consortium] = await Promise.all([
+    const [companyProfile, candidateIdentity, consortium] = await Promise.all([
       this.getCompanyProfileUseCase.execute({ organizationId: input.organizationId, actorId: input.actorId, actorRole: input.actorRole, clientAccountId: tender.clientAccountId }),
+      this.resolveCandidateIdentityUseCase.execute({ organizationId: input.organizationId, candidateCompanyId: tender.candidateCompanyId }),
       dc1?.candidateType === Dc1CandidateType.Consortium
         ? this.getConsortiumUseCase.execute({ organizationId: input.organizationId, actorId: input.actorId, actorRole: input.actorRole, tenderId: input.tenderId })
         : Promise.resolve(null),
@@ -60,7 +72,18 @@ export class Dc1OfficialFormResolver {
 
     const legalIdentity = companyProfile.legalIdentity;
     const isConsortium = dc1?.candidateType === Dc1CandidateType.Consortium;
-    const address = legalIdentity ? [legalIdentity.addressLine, [legalIdentity.postalCode, legalIdentity.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : undefined;
+    const usesCandidateCompany = candidateIdentity.source === CandidateIdentitySource.CandidateCompany;
+    const candidateSource = usesCandidateCompany ? FormFieldSource.CandidateCompanyProfile : FormFieldSource.ClientProfile;
+
+    const candidateTradeName = usesCandidateCompany ? candidateIdentity.displayName : (legalIdentity?.tradeName ?? legalIdentity?.legalName ?? undefined);
+    const candidateSiret = usesCandidateCompany ? candidateIdentity.principalEstablishment?.siret : (legalIdentity?.siretPrincipal ?? undefined);
+    const candidateAddress = usesCandidateCompany
+      ? candidateIdentity.principalEstablishment
+        ? [candidateIdentity.principalEstablishment.addressLine, [candidateIdentity.principalEstablishment.postalCode, candidateIdentity.principalEstablishment.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
+        : undefined
+      : legalIdentity
+        ? [legalIdentity.addressLine, [legalIdentity.postalCode, legalIdentity.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
+        : undefined;
 
     const fields: AdministrativeFormFieldReadiness[] = [];
     const data: Record<string, unknown> = {};
@@ -85,11 +108,11 @@ export class Dc1OfficialFormResolver {
 
     put("dc1.candidatSeul", "Candidat seul (case à cocher)", true, dc1 ? !isConsortium : undefined, dc1 ? FormFieldSource.AdministrativeDossier : undefined);
 
-    put("candidate.tradeName", "Nom commercial du candidat", true, legalIdentity?.tradeName ?? legalIdentity?.legalName ?? undefined, FormFieldSource.ClientProfile);
-    put("candidate.address", "Adresse du candidat", true, address, FormFieldSource.ClientProfile);
+    put("candidate.tradeName", "Nom commercial du candidat", true, candidateTradeName, candidateSource);
+    put("candidate.address", "Adresse du candidat", true, candidateAddress, candidateSource);
     put("candidate.email", "Courriel du candidat", false, legalIdentity?.generalEmail ?? undefined, FormFieldSource.ClientProfile);
     put("candidate.phone", "Téléphone du candidat", false, legalIdentity?.phone ?? undefined, FormFieldSource.ClientProfile);
-    put("candidate.siret", "SIRET du candidat", true, legalIdentity?.siretPrincipal ?? undefined, FormFieldSource.ClientProfile);
+    put("candidate.siret", "SIRET du candidat", true, candidateSiret, candidateSource);
 
     put("dc1.groupementEntreprises", "Groupement d'entreprises (case à cocher)", true, dc1 ? isConsortium : undefined, dc1 ? FormFieldSource.AdministrativeDossier : undefined);
 

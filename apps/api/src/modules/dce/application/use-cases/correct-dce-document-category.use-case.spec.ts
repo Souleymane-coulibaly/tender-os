@@ -78,6 +78,18 @@ describe("CorrectDceDocumentCategoryUseCase", () => {
     expect(link?.category).toBe(DceDocumentCategory.Technical);
   });
 
+  it("BLOQUANT (correctif audit — P1 'incrément best-effort masque un vrai changement') — if incrementRevision itself fails, the correction ABORTS before touching the category at all", async () => {
+    const failingIncrement = vi.spyOn(dceRepository, "incrementRevision").mockRejectedValueOnce(new Error("simulated DB failure"));
+    const useCase = buildUseCase();
+
+    await expect(useCase.execute(baseCommand())).rejects.toThrow("simulated DB failure");
+
+    expect(failingIncrement).toHaveBeenCalledTimes(1);
+    const link = await dceDocumentRepository.findByDceIdAndDocumentId({ organizationId: "org-1", dceId: "dce-1", documentId: "document-1" });
+    expect(link?.category).toBe(DceDocumentCategory.Other);
+    expect(auditLogWriter.entries).toHaveLength(0);
+  });
+
   it("never overwrites history: the previous category remains readable in the audit trail across two corrections", async () => {
     const useCase = buildUseCase();
     await useCase.execute(baseCommand());
@@ -88,11 +100,25 @@ describe("CorrectDceDocumentCategoryUseCase", () => {
     expect(auditLogWriter.entries[1]?.metadata).toMatchObject({ previousCategory: DceDocumentCategory.Technical, newCategory: DceDocumentCategory.Financial });
   });
 
-  it("is a no-op (idempotent, no audit entry) when the corrected category is the same as the current one", async () => {
+  it("TEST 9 (Checkpoint 2.1-P2.1-FIX-A) — an effective category change advances the DCE revision (semantic DCE_CONTENT_CHANGE, mission §9)", async () => {
     const useCase = buildUseCase();
+    const before = await dceRepository.findById({ organizationId: "org-1", dceId: "dce-1" });
+
+    await useCase.execute({ ...baseCommand(), reason: "Ce fichier est en réalité le CCTP." });
+
+    const after = await dceRepository.findById({ organizationId: "org-1", dceId: "dce-1" });
+    expect(after!.revision).toBe(before!.revision + 1);
+  });
+
+  it("TEST 10 (Checkpoint 2.1-P2.1-FIX-A) — a no-op (unchanged category) is a NON_SEMANTIC_METADATA_CHANGE: no-op, no audit entry, AND the DCE revision never advances", async () => {
+    const useCase = buildUseCase();
+    const before = await dceRepository.findById({ organizationId: "org-1", dceId: "dce-1" });
+
     await useCase.execute({ ...baseCommand(), category: DceDocumentCategory.Other });
 
     expect(auditLogWriter.entries).toHaveLength(0);
+    const after = await dceRepository.findById({ organizationId: "org-1", dceId: "dce-1" });
+    expect(after!.revision).toBe(before!.revision);
   });
 
   it("refuses a READ_ONLY actor (missing dce:replace)", async () => {

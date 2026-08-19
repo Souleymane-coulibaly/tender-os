@@ -5,6 +5,7 @@ import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { GetEffectiveTenderAnalysisSummaryUseCase, ListTenderClausesUseCase, ListTenderCriteriaUseCase, ListTenderRequirementsUseCase, ListTenderRisksUseCase } from "../../../analysis";
 import { AiSuggestionStatus, ListAiSuggestionsUseCase } from "../../../ai-suggestion";
+import { CandidateIdentitySource, ResolveCandidateIdentityUseCase } from "../../../candidate-company";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { GetCompanyProfileUseCase } from "../../../company-profile";
 import { DceNotFoundError, ListDceDocumentsUseCase } from "../../../dce";
@@ -19,10 +20,11 @@ import {
   type RequestedDocumentRepository,
   type TenderLotRepository,
 } from "../../../tenders";
+import { GoNoGoAnalysisNotCurrentError } from "../../domain/errors";
 import { bucketRiskSeverity, computeGoNoGoReport } from "../../domain/scoring/compute-go-no-go-report";
 import { mapCompanyProfileToQuickScoreInput } from "../mappers/company-profile-to-quick-score-input.mapper";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
-import { GO_NO_GO_REPORT_REPOSITORY, type GoNoGoReportRecord, type GoNoGoReportRepository } from "../ports/go-no-go-report.repository";
+import { GO_NO_GO_REPORT_REPOSITORY, withGoNoGoFreshness, type GoNoGoReportRecord, type GoNoGoReportRepository } from "../ports/go-no-go-report.repository";
 
 export type GenerateGoNoGoReportCommand = Readonly<{
   organizationId: string;
@@ -47,6 +49,26 @@ const SUBCONTRACTING_KEYWORDS = ["sous-traitance", "sous-traitant", "groupement"
  * uniquement (jamais PENDING/REJECTED comme vérité métier, mission §15), le profil entreprise
  * candidate, les pièces demandées et la volumétrie DCE/lots, puis persiste un NOUVEAU
  * `GoNoGoReport` (jamais un écrasement, mission §29).
+ *
+ * Checkpoint 2.1-A6.2 (Candidate SOT — GO/NO-GO) — même discipline NEW/LEGACY FLOW que
+ * `ComputeOpportunityQuickScoreUseCase` (Niveau 1) et qu'A6.1 (Checklist) : `tender.candidateCompanyId`
+ * résolu vers une `CandidateCompany` réelle → `companyProfile` n'est jamais chargé depuis le CLIENT
+ * (`company-profile` via `clientAccountId`) — les satellites (certifications/assurances/références/
+ * moyens) restent structurellement absents de `CandidateCompany` (DEFERRED-BE-02, hors périmètre
+ * A6.2), donc honnêtement absents du score plutôt que d'emprunter ceux d'une autre entité juridique.
+ *
+ * Checkpoint 2.1-P2.1-FIX-C — précondition (mission §28-29/§37) : l'analyse source doit être
+ * `CURRENT` (jamais STALE/UNKNOWN) pour générer OU recalculer — cette use case sert les deux cas
+ * (toujours un nouvel append-only, jamais un écrasement, donc "recalculer" EST "régénérer" ici).
+ * Bloque AVANT tout calcul coûteux, lève `GoNoGoAnalysisNotCurrentError` (jamais un rapport produit
+ * sur des Findings déjà obsolètes).
+ *
+ * Correctif audit P1-FIXC-001 — `reportVersion` est désormais réservé ATOMIQUEMENT juste après
+ * cette porte, AVANT le `Promise.all` des Findings/scoring (jamais recalculé dans
+ * `repository.create()`, voir `GoNoGoReportRepository.reserveVersion`) : un calcul démarré plus tôt
+ * (donc lisant un état DCE/analyse plus ancien) reçoit toujours un `reportVersion` plus petit qu'un
+ * calcul démarré plus tard, quel que soit l'ordre de complétion — rend `getLatest()` (`orderBy
+ * reportVersion desc`) sûr sans logique de sélection additionnelle consciente de la fraîcheur.
  */
 @Injectable()
 export class GenerateGoNoGoReportUseCase {
@@ -68,6 +90,7 @@ export class GenerateGoNoGoReportUseCase {
     private readonly listAiSuggestionsUseCase: ListAiSuggestionsUseCase,
     private readonly listDceDocumentsUseCase: ListDceDocumentsUseCase,
     private readonly getCompanyProfileUseCase: GetCompanyProfileUseCase,
+    private readonly resolveCandidateIdentityUseCase: ResolveCandidateIdentityUseCase,
   ) {}
 
   async execute(command: GenerateGoNoGoReportCommand): Promise<GoNoGoReportRecord> {
@@ -96,7 +119,22 @@ export class GenerateGoNoGoReportUseCase {
       actorRole: command.actorRole,
     });
 
+    // Checkpoint 2.1-P2.1-FIX-C (mission §28-29/§37) — jamais un GO/NO-GO produit à partir d'une
+    // analyse STALE (DCE modifié depuis) ou UNKNOWN (fraîcheur non prouvable) : bloqué AVANT tout
+    // calcul coûteux, jamais un rapport dont la provenance ne pourrait jamais être présentée CURRENT.
+    if (analysisSummary.analysisFreshness !== "CURRENT") {
+      throw new GoNoGoAnalysisNotCurrentError();
+    }
+
+    // Checkpoint 2.1-P2.1-FIX-C (correctif audit P1-FIXC-001) — réservé ICI, avant le calcul
+    // coûteux ci-dessous, jamais recalculé dans `repository.create()`. Voir la documentation du
+    // port pour la garantie d'ordre que cela procure (TEST G12, sélection out-of-order).
+    const reportVersion = await this.repository.reserveVersion({ organizationId: command.organizationId, tenderId: command.tenderId });
+
     const findingsQuery = { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, actorRole: command.actorRole, limit: FINDINGS_PAGE_LIMIT, offset: 0 };
+
+    const candidateIdentity = await this.resolveCandidateIdentityUseCase.execute({ organizationId: command.organizationId, candidateCompanyId: tender.candidateCompanyId });
+    const usesCandidateCompany = candidateIdentity.source === CandidateIdentitySource.CandidateCompany;
 
     const [requirements, criteria, risks, clauses, aiSuggestions, requestedDocuments, lots, companyProfile] = await Promise.all([
       this.listTenderRequirementsUseCase.execute(findingsQuery),
@@ -106,7 +144,9 @@ export class GenerateGoNoGoReportUseCase {
       this.listAiSuggestionsUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, parentTenderId: command.tenderId }),
       this.requestedDocumentRepository.listByTender({ organizationId: command.organizationId, tenderId: command.tenderId }),
       this.tenderLotRepository.listByTender({ organizationId: command.organizationId, tenderId: command.tenderId }),
-      this.getCompanyProfileUseCase.execute({ organizationId: command.organizationId, clientAccountId: tender.clientAccountId, actorId: command.actorId, actorRole: command.actorRole }),
+      // NEW FLOW — CandidateCompany fait autorité et ne porte aucune capacité : jamais un repli
+      // silencieux sur les satellites du CLIENT (mission A6.2, même discipline qu'A6.1 §9).
+      usesCandidateCompany ? Promise.resolve(undefined) : this.getCompanyProfileUseCase.execute({ organizationId: command.organizationId, clientAccountId: tender.clientAccountId, actorId: command.actorId, actorRole: command.actorRole }),
     ]);
 
     let dceDocumentCount = 0;
@@ -169,7 +209,9 @@ export class GenerateGoNoGoReportUseCase {
       // `Tender` n'a pas de champ "secteur" (contrairement à `Opportunity`) — le rapprochement
       // référence/secteur reste donc non applicable au Niveau 2 (limitation assumée, cohérente
       // avec le texte libre non structuré de `CompanyReference.sector`, voir le plan Sprint 5).
-      companyProfile: mapCompanyProfileToQuickScoreInput(companyProfile, undefined),
+      // Checkpoint 2.1-A6.2 — `companyProfile` absent en NEW FLOW (CandidateCompany sans satellites) :
+      // `computeGoNoGoReport` gère déjà nativement `companyProfile: undefined`, jamais un défaut inventé.
+      companyProfile: companyProfile ? mapCompanyProfileToQuickScoreInput(companyProfile, undefined) : undefined,
       subcontractingFlags,
     });
 
@@ -177,11 +219,17 @@ export class GenerateGoNoGoReportUseCase {
       id: this.idGenerator.generate(),
       organizationId: command.organizationId,
       tenderId: command.tenderId,
+      reportVersion,
       analysisVersion: analysisSummary.analysisVersion,
+      // Checkpoint 2.1-P2.1-FIX-C — provenance DCE, voir `GoNoGoReportRecord.dceRevision`.
+      dceRevision: analysisSummary.dceRevision,
       calculationVersion: GO_NO_GO_REPORT_CALCULATION_VERSION,
       requestedByUserId: command.actorId,
       generatedAt: now,
       result,
+      // Checkpoint 2.1-A6.2 (correctif audit — P2 "fraîcheur candidate") — instantané de la
+      // Candidate effectivement utilisée pour CE calcul, jamais re-résolu si elle change ensuite.
+      candidateCompanyId: usesCandidateCompany ? tender.candidateCompanyId : undefined,
     });
 
     await this.auditLogWriter.record({
@@ -206,6 +254,15 @@ export class GenerateGoNoGoReportUseCase {
       ],
     });
 
-    return record;
+    // Checkpoint 2.1-P2.1-FIX-C — un rapport tout juste généré est TOUJOURS `freshness: "CURRENT"`
+    // (la porte ci-dessus vient de le garantir), mais le calcul passe par la même fonction pure que
+    // les use cases de lecture (jamais une valeur câblée en dur qui pourrait diverger) : sans ça,
+    // la réponse `POST .../go-no-go/report` n'aurait jamais exposé `freshness` du tout (seul le
+    // `GET` l'aurait fait), laissant le frontend sans badge jusqu'au prochain rechargement.
+    return withGoNoGoFreshness(record, {
+      currentCandidateCompanyId: tender.candidateCompanyId,
+      currentAnalysisVersion: analysisSummary.analysisVersion,
+      currentAnalysisFreshness: analysisSummary.analysisFreshness,
+    });
   }
 }

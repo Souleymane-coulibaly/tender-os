@@ -5,6 +5,7 @@ import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type {
   TechnicalMemo,
   TechnicalMemoCoverage,
+  TechnicalMemoFreshnessResult,
   TechnicalMemoSection,
   TechnicalMemoSectionRequirement,
   TechnicalMemoSectionRevision,
@@ -30,6 +31,8 @@ function describeTechnicalMemoActionError(error: unknown): string {
         if (error.code === "DUPLICATE_TECHNICAL_MEMO") return "Un mémoire technique existe déjà pour ce Tender (et ce lot).";
         if (error.code === "TECHNICAL_MEMO_SECTION_ALREADY_VALIDATED") return "Cette section est déjà validée — régénérez-la explicitement si vous voulez la remplacer.";
         if (error.code === "TECHNICAL_MEMO_TEMPLATE_NOT_READY") return "Le gabarit du mémoire n'est pas encore prêt — préparez-le avant d'exporter.";
+        if (error.code === "TECHNICAL_MEMO_ANALYSIS_NOT_CURRENT") return "Le DCE a changé depuis la dernière analyse : actualisez l'analyse avant de générer cette section.";
+        if (error.code === "TECHNICAL_MEMO_STALE_EXPORT_BLOCKED") return "Ce mémoire n'est pas à jour — actualisez puis régénérez les sections obsolètes avant d'exporter la version finale.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 413:
         return "Le fichier est trop volumineux.";
@@ -53,6 +56,16 @@ export async function fetchTechnicalMemos(tenderId: string): Promise<TechnicalMe
 
 export async function fetchTechnicalMemo(technicalMemoId: string): Promise<{ memo: TechnicalMemo; sections: TechnicalMemoSection[] }> {
   return appApiFetch<{ memo: TechnicalMemo; sections: TechnicalMemoSection[] }>(`/api/v1/technical-memos/${technicalMemoId}`);
+}
+
+export async function fetchTechnicalMemoFreshness(technicalMemoId: string): Promise<TechnicalMemoFreshnessResult | null> {
+  try {
+    return await appApiFetch<TechnicalMemoFreshnessResult>(`/api/v1/technical-memos/${technicalMemoId}/freshness`);
+  } catch {
+    // Checkpoint 2.1-P2.1-FIX-D — lecture seule, jamais bloquant : dégradé à `null` (bandeau
+    // simplement absent) sur toute erreur inattendue, jamais une page cassée pour un simple signal.
+    return null;
+  }
 }
 
 export async function createTechnicalMemoAction(

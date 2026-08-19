@@ -24,6 +24,7 @@ import { CreateResponsePackageUseCase } from "./application/use-cases/create-res
 import { DownloadResponsePackageArtifactUseCase } from "./application/use-cases/download-response-package-artifact.use-case";
 import { GenerateResponsePackageZipUseCase } from "./application/use-cases/generate-response-package-zip.use-case";
 import { GetPackageCompletenessUseCase } from "./application/use-cases/get-package-completeness.use-case";
+import { GetResponsePackageFreshnessUseCase } from "./application/use-cases/get-response-package-freshness.use-case";
 import { GetResponsePackageUseCase } from "./application/use-cases/get-response-package.use-case";
 import { GetResponsePackagePortfolioSummaryForDashboardUseCase } from "./application/use-cases/get-response-package-portfolio-summary-for-dashboard.use-case";
 import { GetResponsePackageForPublicApiUseCase } from "./application/use-cases/get-response-package-for-public-api.use-case";
@@ -63,6 +64,7 @@ import { TenderResponsePackagesController } from "./interfaces/http/tender-respo
     CreateResponsePackageUseCase,
     BuildResponsePackageVersionUseCase,
     GetResponsePackageUseCase,
+    GetResponsePackageFreshnessUseCase,
     ListResponsePackagesUseCase,
     CorrectPackageItemQualificationUseCase,
     SelectPackageItemDocumentUseCase,
@@ -88,6 +90,14 @@ import { TenderResponsePackagesController } from "./interfaces/http/tender-respo
   ],
   // V2 Sprint 15/16 — réexportés pour `dashboard`/`integrations` (voir index.ts). V2 Sprint 18 —
   // même motif pour `workspace` (validation d'une cible ApprovalRequest RESPONSE_PACKAGE_VERSION).
-  exports: [GetResponsePackagePortfolioSummaryForDashboardUseCase, GetResponsePackageForPublicApiUseCase, GetVersionTenderRefForApprovalUseCase],
+  // Checkpoint 2.1-P2.1-FIX-F — `ListResponsePackagesUseCase`/`GetResponsePackageFreshnessUseCase`
+  // réexportés en LECTURE SEULE pour `submission` (agrégateur final de readiness), même motif.
+  exports: [
+    GetResponsePackagePortfolioSummaryForDashboardUseCase,
+    GetResponsePackageForPublicApiUseCase,
+    GetVersionTenderRefForApprovalUseCase,
+    ListResponsePackagesUseCase,
+    GetResponsePackageFreshnessUseCase,
+  ],
 })
 export class ResponsePackageModule {}

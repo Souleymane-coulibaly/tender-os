@@ -11,6 +11,7 @@ type ResponsePackageVersionRow = {
   createdAt: Date;
   validatedBy: string | null;
   validatedAt: Date | null;
+  candidateCompanyId: string | null;
 };
 
 export function toDomainResponsePackageVersion(record: ResponsePackageVersionRow): ResponsePackageVersion {
@@ -24,6 +25,7 @@ export function toDomainResponsePackageVersion(record: ResponsePackageVersionRow
     createdAt: record.createdAt,
     validatedBy: record.validatedBy ?? undefined,
     validatedAt: record.validatedAt ?? undefined,
+    candidateCompanyId: record.candidateCompanyId ?? undefined,
   });
 }
 
@@ -38,5 +40,6 @@ export function toResponsePackageVersionRow(version: ResponsePackageVersion) {
     createdAt: version.createdAt,
     validatedBy: version.validatedBy ?? null,
     validatedAt: version.validatedAt ?? null,
+    candidateCompanyId: version.candidateCompanyId ?? null,
   };
 }

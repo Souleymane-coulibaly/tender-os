@@ -7,6 +7,10 @@ export type DceSummary = {
   organizationId: string;
   tenderId: string;
   status: string;
+  /** Checkpoint 2.1-P2.1-FIX-A — révision monotone du contenu sémantique du DCE (voir
+   *  `Dce.revision`), exposée en lecture pour permettre à un consommateur de comparer une
+   *  révision figée (ex. `TenderAnalysisSummary.dceRevision`) à la valeur courante. */
+  revision: number;
   createdByUserId: string;
   createdAt: string;
   updatedAt: string;
@@ -18,6 +22,7 @@ export function toDceSummary(dce: Dce): DceSummary {
     organizationId: dce.organizationId,
     tenderId: dce.tenderId,
     status: dce.status,
+    revision: dce.revision,
     createdByUserId: dce.createdByUserId,
     createdAt: dce.createdAt.toISOString(),
     updatedAt: dce.updatedAt.toISOString(),

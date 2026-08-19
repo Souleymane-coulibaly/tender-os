@@ -18,6 +18,9 @@ type TechnicalMemoSectionRevisionRow = {
   outputTokenCount: number | null;
   totalTokenCount: number | null;
   missingDataNotes: Prisma.JsonValue;
+  candidateCompanyId: string | null;
+  analysisVersion: number | null;
+  dceRevision: number | null;
   createdBy: string;
   createdAt: Date;
   citations?: Parameters<typeof toDomainTechnicalMemoSectionCitation>[0][];
@@ -39,6 +42,9 @@ export function toDomainTechnicalMemoSectionRevision(record: TechnicalMemoSectio
     totalTokenCount: record.totalTokenCount ?? undefined,
     missingDataNotes: (record.missingDataNotes as unknown as string[]) ?? [],
     citations: (record.citations ?? []).map(toDomainTechnicalMemoSectionCitation),
+    candidateCompanyId: record.candidateCompanyId ?? undefined,
+    analysisVersion: record.analysisVersion ?? undefined,
+    dceRevision: record.dceRevision ?? undefined,
     createdBy: record.createdBy,
     createdAt: record.createdAt,
   });
@@ -59,6 +65,9 @@ export function toTechnicalMemoSectionRevisionRow(revision: TechnicalMemoSection
     outputTokenCount: revision.outputTokenCount ?? null,
     totalTokenCount: revision.totalTokenCount ?? null,
     missingDataNotes: revision.missingDataNotes as unknown as Prisma.InputJsonValue,
+    candidateCompanyId: revision.candidateCompanyId ?? null,
+    analysisVersion: revision.analysisVersion ?? null,
+    dceRevision: revision.dceRevision ?? null,
     createdBy: revision.createdBy,
     createdAt: revision.createdAt,
   };

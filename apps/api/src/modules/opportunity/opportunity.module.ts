@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AiSuggestionModule } from "../ai-suggestion";
 import { AnalysisModule } from "../analysis";
+import { CandidateCompanyModule } from "../candidate-company";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { CompanyProfileModule } from "../company-profile";
 import { DceModule } from "../dce";
@@ -48,7 +49,7 @@ import { OpportunitiesController } from "./interfaces/http/opportunities.control
  * que `ai-suggestion-bridge` (voir le plan Sprint 5, décision d'architecture §1).
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, TendersModule, AnalysisModule, AiSuggestionModule, CompanyProfileModule, DceModule, OutboxWriterModule],
+  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, CandidateCompanyModule, TendersModule, AnalysisModule, AiSuggestionModule, CompanyProfileModule, DceModule, OutboxWriterModule],
   controllers: [OpportunitiesController, GoNoGoController],
   providers: [
     CreateOpportunityUseCase,

@@ -175,6 +175,17 @@ export class TenderCandidateChangeNotAllowedError extends DomainError {
   }
 }
 
+/** V2 Sprint 26 (Checkpoint 2.1-A3) — changement d'entreprise candidate (`CandidateCompany`)
+ *  refusé car le Tender a dépassé DRAFT/IN_ANALYSIS. Distinct de `TenderCandidateChangeNotAllowedError`
+ *  (qui gouverne `clientAccountId`, le contexte client/portefeuille legacy) — les deux concepts ne
+ *  doivent jamais être confondus (mission §21). */
+export class TenderCandidateCompanyChangeNotAllowedError extends DomainError {
+  readonly code = "TENDER_CANDIDATE_COMPANY_CHANGE_NOT_ALLOWED";
+  constructor(input: { status: string }) {
+    super(`Impossible de changer l'entreprise candidate : ce Tender est au statut ${input.status}, seuls DRAFT et IN_ANALYSIS l'autorisent.`);
+  }
+}
+
 export class BuyerNotFoundError extends DomainError {
   readonly code = "BUYER_NOT_FOUND";
   constructor() {

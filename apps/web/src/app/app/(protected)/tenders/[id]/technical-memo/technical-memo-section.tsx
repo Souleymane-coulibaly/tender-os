@@ -8,6 +8,7 @@ import {
   exportTechnicalMemoAction,
   fetchTechnicalMemo,
   fetchTechnicalMemoCoverage,
+  fetchTechnicalMemoFreshness,
   generateTechnicalMemoSectionAction,
   mapTechnicalMemoSectionsAction,
   prepareTechnicalMemoTemplateAction,
@@ -18,15 +19,31 @@ import {
   MEMO_STATUS_LABELS,
   SECTION_CATEGORY_LABELS,
   SECTION_STATUS_LABELS,
+  TECHNICAL_MEMO_FRESHNESS_LABELS,
   TEMPLATE_ORIGIN_LABELS,
   coverageStatusBadgeClass,
   sectionStatusBadgeClass,
   type TechnicalMemo,
   type TechnicalMemoCoverage,
+  type TechnicalMemoFreshness,
+  type TechnicalMemoFreshnessResult,
   type TechnicalMemoSection as TechnicalMemoSectionModel,
   type TechnicalMemoSectionCitation,
   type TechnicalMemoTemplateOrigin,
 } from "../../../../../../lib/technical-memo-types";
+
+/** Checkpoint 2.1-P2.1-FIX-D — mêmes tons que les badges Actualisation requise Analyse/Checklist/
+ *  GO-NO-GO (mission §64 "pas de faux vert"). */
+function freshnessBadgeClass(freshness: TechnicalMemoFreshness): string {
+  switch (freshness) {
+    case "CURRENT":
+      return "bg-green-100 text-green-800";
+    case "STALE":
+      return "bg-amber-100 text-amber-800";
+    case "UNKNOWN":
+      return "bg-neutral-200 text-neutral-700";
+  }
+}
 import type { GeneratedDocumentRevisionSummary } from "../../../../../../lib/document-generation-types";
 
 /** Formulaire de création (mission §63 — deux parcours) : soit un modèle DOCX uploadé
@@ -143,10 +160,14 @@ function CoveragePanel({ coverage }: { coverage: TechnicalMemoCoverage | undefin
 function SectionCard({
   technicalMemoId,
   section,
+  sectionFreshness,
   onUpdated,
 }: {
   technicalMemoId: string;
   section: TechnicalMemoSectionModel;
+  /** Checkpoint 2.1-P2.1-FIX-D — `undefined` tant que la fraîcheur n'a pas encore chargé, jamais
+   *  un badge fabriqué en son absence. */
+  sectionFreshness?: TechnicalMemoFreshness | undefined;
   onUpdated: (updated: TechnicalMemoSectionModel, revisionContent?: string) => void;
 }) {
   const [isPending, setIsPending] = useState(false);
@@ -207,6 +228,7 @@ function SectionCard({
           <div className="mt-1 flex flex-wrap gap-1 text-xs">
             <span className="rounded bg-neutral-100 px-2 py-0.5 text-neutral-600">{SECTION_CATEGORY_LABELS[section.category]}</span>
             <span className={`rounded px-2 py-0.5 ${sectionStatusBadgeClass(section.status)}`}>{SECTION_STATUS_LABELS[section.status]}</span>
+            {sectionFreshness === "STALE" ? <span className={`rounded px-2 py-0.5 ${freshnessBadgeClass("STALE")}`}>{TECHNICAL_MEMO_FRESHNESS_LABELS.STALE}</span> : null}
             {section.isTable ? <span className="rounded bg-neutral-100 px-2 py-0.5 text-neutral-600">Tableau</span> : null}
             {section.wordLimit ? <span className="rounded bg-neutral-100 px-2 py-0.5 text-neutral-600">Limite : {section.wordLimit} mots</span> : null}
           </div>
@@ -297,6 +319,7 @@ function SectionCard({
 function MemoDetail({ tenderId, memo, sections, onMemoUpdated }: { tenderId: string; memo: TechnicalMemo; sections: TechnicalMemoSectionModel[]; onMemoUpdated: (memo: TechnicalMemo) => void }) {
   const [localSections, setLocalSections] = useState(sections);
   const [coverage, setCoverage] = useState<TechnicalMemoCoverage | undefined>();
+  const [freshness, setFreshness] = useState<TechnicalMemoFreshnessResult | null>(null);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isMapping, setIsMapping] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -315,9 +338,16 @@ function MemoDetail({ tenderId, memo, sections, onMemoUpdated }: { tenderId: str
     }
   }
 
+  // Checkpoint 2.1-P2.1-FIX-D — rechargée après CHAQUE action mutante (génération/édition/export),
+  // jamais figée depuis le premier chargement de la page (mission §64 "pas de faux vert").
+  async function loadFreshness(): Promise<void> {
+    setFreshness(await fetchTechnicalMemoFreshness(memo.id));
+  }
+
   useEffect(() => {
     void loadCoverage();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadCoverage ferme sur memo.id, stable pour ce mémoire.
+    void loadFreshness();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadCoverage/loadFreshness ferment sur memo.id, stable pour ce mémoire.
   }, [memo.id]);
 
   async function handlePrepare(): Promise<void> {
@@ -359,6 +389,11 @@ function MemoDetail({ tenderId, memo, sections, onMemoUpdated }: { tenderId: str
   const validatedCount = localSections.filter((s) => s.status === "VALIDATED").length;
   const needsReviewCount = localSections.filter((s) => s.status === "NEEDS_REVIEW").length;
   const emptyCount = localSections.filter((s) => !s.content).length;
+  const sectionFreshnessById = new Map((freshness?.sections ?? []).map((s) => [s.technicalMemoSectionId, s.freshness]));
+  // Checkpoint 2.1-P2.1-FIX-D (mission §49/§66) — jamais un export incohérent proposé : bloqué
+  // proactivement côté UI dès que la fraîcheur est chargée et non CURRENT (le backend reste la
+  // seule autorité réelle, revalidée à chaque appel).
+  const exportBlockedByFreshness = freshness !== null && freshness.freshness !== "CURRENT";
 
   return (
     <div className="flex flex-col gap-4">
@@ -366,6 +401,9 @@ function MemoDetail({ tenderId, memo, sections, onMemoUpdated }: { tenderId: str
         <div>
           <p className="text-sm font-medium">
             {TEMPLATE_ORIGIN_LABELS[memo.templateOrigin]} — <span className="text-neutral-500">{MEMO_STATUS_LABELS[memo.status]}</span>
+            {freshness ? (
+              <span className={`ml-2 rounded px-2 py-0.5 align-middle text-xs ${freshnessBadgeClass(freshness.freshness)}`}>{TECHNICAL_MEMO_FRESHNESS_LABELS[freshness.freshness]}</span>
+            ) : null}
           </p>
           <p className="text-xs text-neutral-500">
             Sections : {localSections.length} · Validées : {validatedCount} · À revoir : {needsReviewCount} · Sans contenu : {emptyCount}
@@ -378,7 +416,13 @@ function MemoDetail({ tenderId, memo, sections, onMemoUpdated }: { tenderId: str
           <button type="button" onClick={handlePrepare} disabled={isPreparing || !!memo.documentTemplateId} className="rounded border border-neutral-300 px-3 py-1.5 text-xs font-medium disabled:opacity-50">
             {memo.documentTemplateId ? "Gabarit prêt" : isPreparing ? "Préparation…" : "Préparer le gabarit"}
           </button>
-          <button type="button" onClick={handleExport} disabled={isExporting || !memo.documentTemplateId} className="rounded bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={isExporting || !memo.documentTemplateId || exportBlockedByFreshness}
+            title={exportBlockedByFreshness ? "Actualisez et régénérez les sections obsolètes avant d'exporter la version finale." : undefined}
+            className="rounded bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+          >
             {isExporting ? "Export…" : "Exporter le DOCX final"}
           </button>
         </div>
@@ -416,7 +460,11 @@ function MemoDetail({ tenderId, memo, sections, onMemoUpdated }: { tenderId: str
               key={section.id}
               technicalMemoId={memo.id}
               section={section}
-              onUpdated={(updated) => setLocalSections((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))}
+              sectionFreshness={sectionFreshnessById.get(section.id)}
+              onUpdated={(updated) => {
+                setLocalSections((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+                void loadFreshness();
+              }}
             />
           ))}
       </div>

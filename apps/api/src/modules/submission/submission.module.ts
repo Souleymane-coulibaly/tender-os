@@ -1,9 +1,14 @@
 import { Module } from "@nestjs/common";
+import { AnalysisModule } from "../analysis";
+import { ChecklistIntelligenceModule } from "../checklist-intelligence";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { DocumentsModule } from "../documents";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
+import { OpportunityModule } from "../opportunity";
+import { ResponsePackageModule } from "../response-package";
 import { SubmissionPackageModule } from "../submission-package";
+import { TechnicalMemoModule } from "../technical-memo";
 import { TendersModule } from "../tenders";
 import { ValidationModule } from "../validation";
 
@@ -43,9 +48,30 @@ import { SubmissionController } from "./interfaces/http/submission.controller";
  * directement, `ValidationModule` porte déjà cette dépendance transitive pour ses propres besoins.
  * Exporte les query use-cases nécessaires à `cockpit` (même motif que
  * `ListValidatedAdministrativeDocumentsForPackageUseCase`/`ListSubmissionPackagesUseCase`).
+ *
+ * Checkpoint 2.1-P2.1-FIX-F — `AnalysisModule`/`ChecklistIntelligenceModule`/`OpportunityModule`/
+ * `TechnicalMemoModule`/`ResponsePackageModule` importés UNIQUEMENT pour leurs ports de LECTURE
+ * SEULE réexportés (`GetEffectiveTenderAnalysisSummaryUseCase`/`GetChecklistFreshnessUseCase`/
+ * `GetGoNoGoReportUseCase`/`GetTechnicalMemoFreshnessUseCase`/`GetResponsePackageFreshnessUseCase`,
+ * etc.) — `GetTenderSubmissionReadinessUseCase` devient l'AGRÉGATEUR FINAL de fraîcheur (mission
+ * "FIX-F ne doit pas recréer... est un agrégateur final"), jamais un second moteur. Audité :
+ * aucun de ces cinq modules n'importe jamais `submission` en retour, aucun cycle Nest.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, DocumentsModule, ValidationModule, SubmissionPackageModule],
+  imports: [
+    IdentityModule,
+    MembershipsModule,
+    TendersModule,
+    ClientPortfolioModule,
+    DocumentsModule,
+    ValidationModule,
+    SubmissionPackageModule,
+    AnalysisModule,
+    ChecklistIntelligenceModule,
+    OpportunityModule,
+    TechnicalMemoModule,
+    ResponsePackageModule,
+  ],
   controllers: [SubmissionController],
   providers: [
     GetTenderSubmissionReadinessUseCase,

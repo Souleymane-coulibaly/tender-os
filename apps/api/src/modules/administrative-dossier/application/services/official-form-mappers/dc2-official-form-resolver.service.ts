@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { CandidateIdentitySource, ResolveCandidateIdentityUseCase } from "../../../../candidate-company";
 import { GetCompanyProfileUseCase } from "../../../../company-profile";
 import { GetTenderUseCase } from "../../../../tenders";
 import { AdministrativeFormFieldStatus } from "../../../domain/administrative-form-field-status";
@@ -35,6 +36,13 @@ export type Dc2OfficialFormResolution = Readonly<{
  * coordonnées structurées (adresse/email/téléphone/forme juridique, vérifié dès l'audit Sprint
  * 11A), donc ces champs restent honnêtement `MISSING` pour un membre, jamais recopiés depuis le
  * candidat ou un autre membre (mission §11 "aucune contamination").
+ *
+ * V2 Sprint 26 (Checkpoint 2.1-A4, correctif post-audit) — pour le scope CANDIDATE, `tradeName`/
+ * `siret`/`address`/`legalForm` préfèrent la SOT `CandidateCompany`/`CandidateEstablishment` (via
+ * `ResolveCandidateIdentityUseCase`) quand `Tender.candidateCompanyId` est renseigné (NEW FLOW),
+ * sinon `company-profile.legalIdentity` (LEGACY FLOW) — même discipline que `Dc1OfficialFormResolver`.
+ * Seuls `email`/`phone` restent TOUJOURS résolus depuis `legalIdentity` (aucun champ équivalent sur
+ * `CandidateCompany`). Le scope MEMBER (groupement) reste inchangé, hors périmètre A4.
  */
 @Injectable()
 export class Dc2OfficialFormResolver {
@@ -42,6 +50,7 @@ export class Dc2OfficialFormResolver {
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly getCompanyProfileUseCase: GetCompanyProfileUseCase,
     private readonly getConsortiumUseCase: GetConsortiumUseCase,
+    private readonly resolveCandidateIdentityUseCase: ResolveCandidateIdentityUseCase,
   ) {}
 
   async resolve(input: { organizationId: string; actorId: string; actorRole: string; tenderId: string; scope: Dc2OperatorScope }): Promise<Dc2OfficialFormResolution> {
@@ -60,17 +69,32 @@ export class Dc2OfficialFormResolver {
 
     if (input.scope.kind === "CANDIDATE") {
       subjectId = "candidate";
-      const companyProfile = await this.getCompanyProfileUseCase.execute({ organizationId: input.organizationId, actorId: input.actorId, actorRole: input.actorRole, clientAccountId: tender.clientAccountId });
+      const [companyProfile, candidateIdentity] = await Promise.all([
+        this.getCompanyProfileUseCase.execute({ organizationId: input.organizationId, actorId: input.actorId, actorRole: input.actorRole, clientAccountId: tender.clientAccountId }),
+        this.resolveCandidateIdentityUseCase.execute({ organizationId: input.organizationId, candidateCompanyId: tender.candidateCompanyId }),
+      ]);
       const legalIdentity = companyProfile.legalIdentity;
-      operatorLabel = legalIdentity?.tradeName ?? legalIdentity?.legalName ?? "Candidat";
-      const address = legalIdentity ? [legalIdentity.addressLine, [legalIdentity.postalCode, legalIdentity.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : undefined;
+      const usesCandidateCompany = candidateIdentity.source === CandidateIdentitySource.CandidateCompany;
+      const candidateSource = usesCandidateCompany ? FormFieldSource.CandidateCompanyProfile : FormFieldSource.ClientProfile;
 
-      put("candidate.tradeName", "Nom commercial", true, legalIdentity?.tradeName ?? legalIdentity?.legalName ?? undefined, FormFieldSource.ClientProfile);
-      put("candidate.address", "Adresse", true, address, FormFieldSource.ClientProfile);
+      const tradeName = usesCandidateCompany ? candidateIdentity.displayName : (legalIdentity?.tradeName ?? legalIdentity?.legalName ?? undefined);
+      const siret = usesCandidateCompany ? candidateIdentity.principalEstablishment?.siret : (legalIdentity?.siretPrincipal ?? undefined);
+      const address = usesCandidateCompany
+        ? candidateIdentity.principalEstablishment
+          ? [candidateIdentity.principalEstablishment.addressLine, [candidateIdentity.principalEstablishment.postalCode, candidateIdentity.principalEstablishment.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
+          : undefined
+        : legalIdentity
+          ? [legalIdentity.addressLine, [legalIdentity.postalCode, legalIdentity.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
+          : undefined;
+      operatorLabel = tradeName ?? "Candidat";
+
+      put("candidate.tradeName", "Nom commercial", true, tradeName, candidateSource);
+      put("candidate.address", "Adresse", true, address, candidateSource);
       put("candidate.email", "Courriel", false, legalIdentity?.generalEmail ?? undefined, FormFieldSource.ClientProfile);
       put("candidate.phone", "Téléphone", false, legalIdentity?.phone ?? undefined, FormFieldSource.ClientProfile);
-      put("candidate.siret", "SIRET", true, legalIdentity?.siretPrincipal ?? undefined, FormFieldSource.ClientProfile);
-      put("candidate.legalForm", "Forme juridique", false, legalIdentity?.legalForm ?? undefined, FormFieldSource.ClientProfile);
+      put("candidate.siret", "SIRET", true, siret, candidateSource);
+      const legalForm = usesCandidateCompany ? candidateIdentity.legalForm : (legalIdentity?.legalForm ?? undefined);
+      put("candidate.legalForm", "Forme juridique", false, legalForm, candidateSource);
     } else {
       const memberId = input.scope.memberId;
       subjectId = `member:${memberId}`;

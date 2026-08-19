@@ -204,6 +204,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
       data: {
         id: randomUUID(),
         ...base,
+        dceRevision: input.dceRevision ?? null,
         opportunitySummary: output.summary.opportunitySummary,
         complexityLevel: output.summary.complexityLevel,
         mainCriteria: output.summary.mainCriteria as unknown as Prisma.InputJsonValue,
@@ -445,6 +446,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
   private toSummaryRecord(record: {
     id: string;
     analysisVersion: number;
+    dceRevision: number | null;
     opportunitySummary: string;
     complexityLevel: string;
     mainCriteria: unknown;
@@ -460,6 +462,7 @@ export class PrismaBusinessAnalysisRepository implements BusinessAnalysisReposit
     return {
       id: record.id,
       analysisVersion: record.analysisVersion,
+      dceRevision: record.dceRevision ?? undefined,
       opportunitySummary: record.opportunitySummary,
       complexityLevel: record.complexityLevel,
       mainCriteria: record.mainCriteria as string[],

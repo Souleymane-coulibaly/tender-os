@@ -29,6 +29,7 @@ function readiness(overrides: Partial<TenderSubmissionReadinessResult> = {}): Te
     packageHash: "a".repeat(64),
     signatureRequirement: "SATISFIED_OR_NOT_REQUIRED",
     validationSummary: "READY_FOR_SUBMISSION",
+    fileReadinessReasons: [],
     ...overrides,
   };
 }
@@ -80,6 +81,27 @@ describe("SubmissionSection", () => {
       />,
     );
     expect(screen.getByText("Le package final est introuvable.")).toBeInTheDocument();
+  });
+
+  it("Checkpoint 2.1-P2.1-FIX-F — displays a structured file-readiness reason with a backend-provided action link, deduplicated from the plain blockers list", () => {
+    render(
+      <SubmissionSection
+        tenderId="tender-1"
+        initialReadiness={readiness({
+          readinessStatus: "BLOCKED",
+          blockers: ["L'analyse du DCE n'est plus à jour par rapport au DCE courant."],
+          fileReadinessReasons: [
+            { code: "ANALYSIS_STALE", severity: "BLOCKING", source: "ANALYSIS", message: "L'analyse du DCE n'est plus à jour par rapport au DCE courant.", action: "REANALYZE_DCE" },
+          ],
+        })}
+        initialCapabilities={capabilities({ canRecordSubmission: false, reasonsByAction: { canRecordSubmission: "Le dossier n'est pas prêt pour le dépôt." } })}
+        initialSubmissions={[]}
+      />,
+    );
+
+    expect(screen.getByText("Dossier non prêt")).toBeInTheDocument();
+    expect(screen.getAllByText("L'analyse du DCE n'est plus à jour par rapport au DCE courant.")).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Relancer l'analyse du DCE" })).toHaveAttribute("href", "/app/tenders/tender-1/analysis");
   });
 
   it("records a submission with the read-only package pinned from readiness, never a freely chosen one", async () => {

@@ -9,7 +9,7 @@ import { buildTenderNavTabs } from "../tender-nav-tabs";
 import { EstimateHistorySection } from "./estimate-history-section";
 import { PricingSection } from "./pricing-section";
 
-export const metadata: Metadata = { title: "Pricing — TenderOS" };
+export const metadata: Metadata = { title: "Estimation & coûts IA — TenderOS" };
 
 export default async function TenderPricingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: tenderId } = await params;
@@ -32,7 +32,7 @@ export default async function TenderPricingPage({ params }: { params: Promise<{ 
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
-        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Pricing" }]}
+        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Pricing & prévisions" }]}
         title="Pricing & prévisions"
         description="Coût technique IA réel de ce Tender et estimations prévisionnelles indicatives. Aucun montant affiché ici n'est un prix réel garanti du marché."
       />

@@ -45,6 +45,34 @@ export type ReadinessStatusResult = {
   activeApprovalId?: string;
 };
 
+/** Checkpoint 2.1-P2.1-FIX-E — jamais persistée côté backend, recalculée à chaque lecture. */
+export type ValidationFreshness = "CURRENT" | "STALE" | "UNKNOWN";
+
+export type ValidationFreshnessResult = {
+  freshness: ValidationFreshness;
+  hasActiveApproval: boolean;
+  activeApprovalId?: string;
+  currentAnalysisVersion?: number;
+  currentAnalysisFreshness?: "CURRENT" | "STALE" | "UNKNOWN";
+};
+
+export const VALIDATION_FRESHNESS_LABELS: Record<ValidationFreshness, string> = {
+  CURRENT: "À jour",
+  STALE: "Actualisation requise",
+  UNKNOWN: "Fraîcheur inconnue",
+};
+
+export function validationFreshnessBadgeClass(freshness: ValidationFreshness): string {
+  switch (freshness) {
+    case "CURRENT":
+      return "bg-green-100 text-green-800";
+    case "STALE":
+      return "bg-amber-100 text-amber-800";
+    default:
+      return "bg-neutral-200 text-neutral-700";
+  }
+}
+
 export const READINESS_STATUS_LABELS: Record<string, string> = {
   NOT_READY: "Non prêt",
   BLOCKED: "Bloqué",

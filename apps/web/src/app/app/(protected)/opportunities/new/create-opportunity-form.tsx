@@ -3,10 +3,11 @@
 import { useActionState } from "react";
 import { createOpportunityAction, type OpportunityFormActionState } from "../../../opportunity-actions";
 import type { ClientAccountSummary } from "../../../../../lib/client-portfolio-types";
+import { candidateCompanyDisplayName, type CandidateCompanySummary } from "../../../../../lib/candidate-company-types";
 
 const INITIAL_STATE: OpportunityFormActionState = {};
 
-export function CreateOpportunityForm({ clients }: { clients: ClientAccountSummary[] }) {
+export function CreateOpportunityForm({ clients, candidateCompanies }: { clients: ClientAccountSummary[]; candidateCompanies: CandidateCompanySummary[] }) {
   const [state, formAction, isPending] = useActionState(createOpportunityAction, INITIAL_STATE);
 
   return (
@@ -20,13 +21,27 @@ export function CreateOpportunityForm({ clients }: { clients: ClientAccountSumma
 
       <div className="flex flex-col gap-1">
         <label htmlFor="clientAccountId" className="text-sm font-medium text-neutral-700">
-          Entreprise candidate
+          Client
         </label>
         <select id="clientAccountId" name="clientAccountId" defaultValue="" className="rounded border border-neutral-300 px-3 py-2 text-sm">
-          <option value="">— Aucune (à rattacher plus tard) —</option>
+          <option value="">— Aucun (à rattacher plus tard) —</option>
           {clients.map((client) => (
             <option key={client.id} value={client.id}>
               {client.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="candidateCompanyId" className="text-sm font-medium text-neutral-700">
+          Entreprise candidate
+        </label>
+        <select id="candidateCompanyId" name="candidateCompanyId" defaultValue="" className="rounded border border-neutral-300 px-3 py-2 text-sm">
+          <option value="">— Aucune (à rattacher plus tard) —</option>
+          {candidateCompanies.map((company) => (
+            <option key={company.id} value={company.id}>
+              {candidateCompanyDisplayName(company)}
             </option>
           ))}
         </select>

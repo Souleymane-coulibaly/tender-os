@@ -497,7 +497,7 @@ export class InMemoryBusinessAnalysisRepository implements BusinessAnalysisRepos
     for (const item of input.output.questions) {
       this.questions.push({ id: randomUUID(), createdAt: now, ...item, ...base });
     }
-    this.summaries.push({ id: randomUUID(), ...base, ...input.output.summary, createdAt: now });
+    this.summaries.push({ id: randomUUID(), ...base, dceRevision: input.dceRevision, ...input.output.summary, createdAt: now });
   }
 
   async findLatestDocumentAnalyses(input: { organizationId: string; tenderId: string }): Promise<DocumentAnalysisRecord[]> {

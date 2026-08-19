@@ -63,6 +63,39 @@ describe("Validation — real HTTP + PostgreSQL, and the tenders/:id/readiness r
     return { Authorization: `Bearer ${tokenOwner}`, "X-Organization-Id": orgId, "Content-Type": "application/json" };
   }
 
+  // Checkpoint 2.1-P2.1-FIX-E — même motif que `technical-memo-http.integration.spec.ts`/
+  // `opportunity-http.integration.spec.ts` : un `Dce`/une `TenderAnalysisSummary` réels,
+  // `analysisVersion`/`dceRevision` paramétrables pour piloter le scénario de dérive DCE.
+  async function ensureDce(input: { organizationId: string; tenderId: string; actorId: string }): Promise<string> {
+    const existing = await prisma.dce.findUnique({ where: { tenderId: input.tenderId } });
+    if (existing) return existing.id;
+    const created = await prisma.dce.create({ data: { id: randomUUID(), organizationId: input.organizationId, tenderId: input.tenderId, status: "IMPORTED", revision: 1, createdByUserId: input.actorId } });
+    return created.id;
+  }
+
+  async function seedSucceededAnalysis(input: { organizationId: string; tenderId: string; actorId: string; analysisVersion: number; dceRevision: number }): Promise<{ dceId: string }> {
+    const dceId = await ensureDce(input);
+    const jobId = randomUUID();
+    await prisma.analysisJob.create({
+      data: { id: jobId, organizationId: input.organizationId, tenderId: input.tenderId, targetId: input.tenderId, scope: "TENDER", status: "SUCCEEDED", analysisVersion: input.analysisVersion, promptVersion: 1, triggeredByRole: "OWNER", updatedAt: new Date() },
+    });
+    await prisma.tenderAnalysisSummary.create({
+      data: {
+        id: randomUUID(),
+        organizationId: input.organizationId,
+        tenderId: input.tenderId,
+        analysisJobId: jobId,
+        analysisVersion: input.analysisVersion,
+        dceRevision: input.dceRevision,
+        opportunitySummary: "Marché HTTP validation.",
+        complexityLevel: "MEDIUM",
+        goNoGoRecommendation: "GO",
+        goNoGoRationale: "Dossier complet.",
+      },
+    });
+    return { dceId };
+  }
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -94,6 +127,9 @@ describe("Validation — real HTTP + PostgreSQL, and the tenders/:id/readiness r
     await prisma.exportJob.deleteMany({ where: { organizationId: orgId } });
     await prisma.exportTemplateVersion.deleteMany({ where: { organizationId: orgId } });
     await prisma.exportTemplate.deleteMany({ where: { organizationId: orgId } });
+    await prisma.tenderAnalysisSummary.deleteMany({ where: { organizationId: orgId } });
+    await prisma.analysisJob.deleteMany({ where: { organizationId: orgId } });
+    await prisma.dce.deleteMany({ where: { organizationId: orgId } });
     await prisma.tender.deleteMany({ where: { organizationId: orgId } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: orgId } });
     await prisma.auditLog.deleteMany({ where: { organizationId: orgId } });
@@ -184,5 +220,90 @@ describe("Validation — real HTTP + PostgreSQL, and the tenders/:id/readiness r
     const tendersReadiness = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/readiness`, { headers: authHeaders() });
     const tendersBody = (await tendersReadiness.json()) as Record<string, unknown>;
     expect(tendersBody).toHaveProperty("score");
+  }, 30000);
+
+  /**
+   * Checkpoint 2.1-P2.1-FIX-E — E2E réaliste (mission §94-97, §102) : une approbation reste
+   * `APPROVED` (jamais réécrite/supprimée) mais devient `STALE` dès que le DCE change et que sa
+   * dernière analyse s'en trouve elle-même obsolète — jamais un faux CURRENT après un changement
+   * de dossier réel. Réutilise le flux export/run/approve déjà exercé par le test précédent, sur un
+   * Tender/Client dédié pour rester lisible et isolé.
+   */
+  it("E2E (mission §94-97) — a DCE change makes the approved validation STALE, and a re-approval against the new state makes it CURRENT again (old approval preserved, never rewritten)", async () => {
+    const localClientId = randomUUID();
+    const localTenderId = randomUUID();
+    await prisma.clientAccount.create({ data: { id: localClientId, organizationId: orgId, name: `Client FIX-E ${localTenderId}`, nameNormalized: "client fix-e", status: "ACTIVE", createdBy: userIds[0]! } });
+    await prisma.tender.create({ data: { id: localTenderId, organizationId: orgId, clientAccountId: localClientId, title: "Tender Validation FIX-E", status: "DRAFT", tags: [], createdBy: userIds[0]! } });
+
+    const { dceId } = await seedSucceededAnalysis({ organizationId: orgId, tenderId: localTenderId, actorId: userIds[0]!, analysisVersion: 1, dceRevision: 1 });
+
+    // Étape 1a — aucune approbation encore : UNKNOWN, jamais un faux CURRENT pour un dossier jamais
+    // approuvé.
+    const freshnessEmptyRes = await fetch(`${baseUrl}/api/v1/tenders/${localTenderId}/validation/freshness`, { headers: authHeaders() });
+    expect(freshnessEmptyRes.status).toBe(200);
+    expect((await freshnessEmptyRes.json()) as { freshness: string }).toMatchObject({ freshness: "UNKNOWN", hasActiveApproval: false });
+
+    // Étape 1b — même flux export/run/approve que le test précédent, réutilisé sur ce Tender dédié.
+    const createTemplateRes = await fetch(`${baseUrl}/api/v1/exports/templates`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ documentType: "TECHNICAL_MEMO", name: `Validation FIX-E tpl ${randomUUID()}`, format: "DOCX", config: { sections: [{ id: "SUMMARY", label: "Résumé exécutif", mandatory: true, order: 0 }] } }),
+    });
+    const template = (await createTemplateRes.json()) as { id: string; versions: { id: string }[] };
+    await fetch(`${baseUrl}/api/v1/exports/templates/${template.id}/versions/${template.versions[0]!.id}/activate`, { method: "POST", headers: authHeaders() });
+
+    const previewRes = await fetch(`${baseUrl}/api/v1/tenders/${localTenderId}/exports/preview`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ exportTemplateId: template.id, sections: [{ sectionId: "SUMMARY", sourceType: "MANUAL", manualContent: "Contenu du mémoire technique, largement suffisant pour éviter tout avertissement de longueur." }] }),
+    });
+    const previewJob = (await previewRes.json()) as { id: string };
+
+    const runRes = await fetch(`${baseUrl}/api/v1/tenders/${localTenderId}/validation/run`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ exportJobId: previewJob.id }) });
+    const run = (await runRes.json()) as { id: string };
+
+    const approveRes = await fetch(`${baseUrl}/api/v1/tenders/${localTenderId}/final-approval`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ validationRunId: run.id }) });
+    expect(approveRes.status).toBe(201);
+    const { approval: approvalV1 } = (await approveRes.json()) as { approval: { id: string } };
+
+    // Étape 1c — approbation fraîchement créée contre le DCE rev1/Analyse v1 courants : CURRENT.
+    const freshnessCurrentRes = await fetch(`${baseUrl}/api/v1/tenders/${localTenderId}/validation/freshness`, { headers: authHeaders() });
+    expect((await freshnessCurrentRes.json()) as { freshness: string; activeApprovalId?: string }).toMatchObject({ freshness: "CURRENT", hasActiveApproval: true, activeApprovalId: approvalV1.id });
+
+    // Étape 2 — RC-v2 : le DCE change, AUCUNE réanalyse encore. L'analyse v1 devient elle-même
+    // STALE (dceRevision=1 ≠ Dce.revision=2), donc l'approbation qui en dépend devient STALE —
+    // jamais un faux CURRENT global (mission §15/§17/§95).
+    await prisma.dce.update({ where: { id: dceId }, data: { revision: 2 } });
+
+    const freshnessStaleRes = await fetch(`${baseUrl}/api/v1/tenders/${localTenderId}/validation/freshness`, { headers: authHeaders() });
+    expect((await freshnessStaleRes.json()) as { freshness: string }).toMatchObject({ freshness: "STALE" });
+
+    // L'approbation ELLE-MÊME reste APPROVED/ACTIVE — jamais réécrite, jamais supprimée (mission
+    // §5 "validation historique ≠ validation courante", §13 "VALIDATED + STALE").
+    const readinessStillApproved = await fetch(`${baseUrl}/api/v1/tenders/${localTenderId}/validation/readiness`, { headers: authHeaders() });
+    expect((await readinessStillApproved.json()) as { status: string }).toMatchObject({ status: "APPROVED" });
+
+    // Étape 3 — réanalyse (v2, dceRevision=2) : à elle seule, elle ne "répare" PAS rétroactivement
+    // l'approbation déjà accordée (mission §25 "exiger une nouvelle validation, jamais réactiver
+    // l'ancienne silencieusement").
+    await seedSucceededAnalysis({ organizationId: orgId, tenderId: localTenderId, actorId: userIds[0]!, analysisVersion: 2, dceRevision: 2 });
+    const freshnessStillStaleRes = await fetch(`${baseUrl}/api/v1/tenders/${localTenderId}/validation/freshness`, { headers: authHeaders() });
+    expect((await freshnessStillStaleRes.json()) as { freshness: string }).toMatchObject({ freshness: "STALE" });
+
+    // Étape 4 — une NOUVELLE approbation (V2) contre l'état courant redevient CURRENT ; V1 reste
+    // historique, interrogeable, jamais supprimée.
+    const runV2Res = await fetch(`${baseUrl}/api/v1/tenders/${localTenderId}/validation/run`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ exportJobId: previewJob.id }) });
+    const runV2 = (await runV2Res.json()) as { id: string };
+    const approveV2Res = await fetch(`${baseUrl}/api/v1/tenders/${localTenderId}/final-approval`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ validationRunId: runV2.id }) });
+    expect(approveV2Res.status).toBe(201);
+    const { approval: approvalV2 } = (await approveV2Res.json()) as { approval: { id: string } };
+    expect(approvalV2.id).not.toBe(approvalV1.id);
+
+    const freshnessCurrentAgainRes = await fetch(`${baseUrl}/api/v1/tenders/${localTenderId}/validation/freshness`, { headers: authHeaders() });
+    expect((await freshnessCurrentAgainRes.json()) as { freshness: string; activeApprovalId?: string }).toMatchObject({ freshness: "CURRENT", activeApprovalId: approvalV2.id });
+
+    // V1 reste historique/interrogeable, jamais supprimée (mission §5/§14).
+    const historicalV1 = await prisma.finalApproval.findUnique({ where: { id: approvalV1.id } });
+    expect(historicalV1).toBeTruthy();
   }, 30000);
 });

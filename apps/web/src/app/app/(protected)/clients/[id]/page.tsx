@@ -89,7 +89,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       <section className="rounded border border-neutral-200 p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-neutral-900">Entreprise candidate</h2>
+            <h2 className="text-sm font-semibold text-neutral-900">Profil entreprise du client</h2>
             <p className="mt-1 text-sm text-neutral-600">Identité légale, contacts, comptes bancaires, assurances, certifications, références et moyens.</p>
           </div>
           <Link href={`/app/clients/${client.id}/company-profile`} className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">

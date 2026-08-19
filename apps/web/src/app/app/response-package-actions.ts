@@ -9,6 +9,7 @@ import type {
   PackageItemApplicabilityStatus,
   PackageItemRequirementType,
   ResponsePackage,
+  ResponsePackageFreshnessResult,
   ResponsePackageVersion,
 } from "../../lib/response-package-types";
 
@@ -55,6 +56,16 @@ export async function fetchResponsePackage(
 
 export async function fetchPackageCompleteness(responsePackageId: string, versionId: string): Promise<PackageCompleteness> {
   return appApiFetch<PackageCompleteness>(`/api/v1/response-packages/${responsePackageId}/versions/${versionId}/completeness`);
+}
+
+export async function fetchResponsePackageFreshness(responsePackageId: string): Promise<ResponsePackageFreshnessResult | null> {
+  try {
+    return await appApiFetch<ResponsePackageFreshnessResult>(`/api/v1/response-packages/${responsePackageId}/freshness`);
+  } catch {
+    // Checkpoint 2.1-P2.1-FIX-E — lecture seule, jamais bloquant : dégradé à `null` sur toute
+    // erreur inattendue, même motif que `fetchValidationFreshness`/`fetchTechnicalMemoFreshness`.
+    return null;
+  }
 }
 
 export async function createResponsePackageAction(tenderId: string, lotId?: string): Promise<ResponsePackageActionState & { responsePackage?: ResponsePackage }> {

@@ -25,7 +25,9 @@ export type TenderCockpit = {
 export const COCKPIT_MODULE_LABELS: Record<string, string> = {
   DCE: "Documents & DCE",
   ANALYSIS: "Analyse IA",
-  PRICING: "Pricing",
+  // Checkpoint 2.1-A5 — distinct de "Chiffrage" (BPU/DPGF/DQE, prix final soumis), voir
+  // tender-nav-tabs.ts. Ce module est l'estimation précoce + coût IA réel, jamais un prix soumis.
+  PRICING: "Estimation & coûts IA",
   DELIVERABLES: "Livrables",
   EXPORT: "Export",
   VALIDATION: "Validation",

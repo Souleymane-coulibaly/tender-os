@@ -1,8 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { GetEffectiveTenderAnalysisSummaryUseCase } from "../../../analysis";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { assertHasTenderPermission, GetTenderUseCase, TenderPermission } from "../../../tenders";
 import { GoNoGoReportNotFoundError } from "../../domain/errors";
-import { GO_NO_GO_REPORT_REPOSITORY, type GoNoGoReportRecord, type GoNoGoReportRepository } from "../ports/go-no-go-report.repository";
+import { GO_NO_GO_REPORT_REPOSITORY, withGoNoGoFreshness, type GoNoGoReportRecord, type GoNoGoReportRepository } from "../ports/go-no-go-report.repository";
 
 export type GetGoNoGoReportQuery = Readonly<{
   organizationId: string;
@@ -11,12 +12,17 @@ export type GetGoNoGoReportQuery = Readonly<{
   actorRole: string;
 }>;
 
+/** Checkpoint 2.1-P2.1-FIX-C — la fraîcheur (`freshness`/`candidateStale`/`analysisStale`/
+ *  `dceStale`) est calculée ICI À LA LECTURE, jamais persistée : une nouvelle analyse ou un
+ *  changement de Candidate n'invalide jamais rétroactivement le rapport lui-même (mission §7
+ *  "historique préservé"), seulement ce que cette lecture EN DIT. */
 @Injectable()
 export class GetGoNoGoReportUseCase {
   constructor(
     @Inject(GO_NO_GO_REPORT_REPOSITORY) private readonly repository: GoNoGoReportRepository,
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
+    private readonly getEffectiveTenderAnalysisSummaryUseCase: GetEffectiveTenderAnalysisSummaryUseCase,
   ) {}
 
   async execute(query: GetGoNoGoReportQuery): Promise<GoNoGoReportRecord> {
@@ -36,6 +42,21 @@ export class GetGoNoGoReportUseCase {
     if (!latest) {
       throw new GoNoGoReportNotFoundError();
     }
-    return latest;
+
+    // Un GoNoGoReport n'existe jamais sans qu'une analyse ait déjà réussi (porte Niveau 2, mission
+    // §14) et l'historique d'analyse n'est jamais supprimé — cette résolution ne peut donc jamais
+    // échouer pour un Tender qui possède déjà un rapport.
+    const currentAnalysisSummary = await this.getEffectiveTenderAnalysisSummaryUseCase.execute({
+      organizationId: query.organizationId,
+      tenderId: query.tenderId,
+      actorId: query.actorId,
+      actorRole: query.actorRole,
+    });
+
+    return withGoNoGoFreshness(latest, {
+      currentCandidateCompanyId: tender.candidateCompanyId,
+      currentAnalysisVersion: currentAnalysisSummary.analysisVersion,
+      currentAnalysisFreshness: currentAnalysisSummary.analysisFreshness,
+    });
   }
 }

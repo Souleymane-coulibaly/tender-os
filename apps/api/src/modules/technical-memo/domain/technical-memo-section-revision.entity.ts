@@ -16,6 +16,11 @@ export type TechnicalMemoSectionRevisionProps = {
   totalTokenCount?: number | undefined;
   missingDataNotes: readonly string[];
   citations: readonly TechnicalMemoSectionCitation[];
+  /** Checkpoint 2.1-P2.1-FIX-D — provenance figée au moment de la génération/édition, voir la
+   *  documentation du modèle Prisma `TechnicalMemoSectionRevision`. */
+  candidateCompanyId?: string | undefined;
+  analysisVersion?: number | undefined;
+  dceRevision?: number | undefined;
   createdBy: string;
   createdAt: Date;
 };
@@ -41,6 +46,9 @@ export class TechnicalMemoSectionRevision {
     totalTokenCount?: number | undefined;
     missingDataNotes?: readonly string[] | undefined;
     citations?: readonly TechnicalMemoSectionCitation[] | undefined;
+    candidateCompanyId?: string | undefined;
+    analysisVersion?: number | undefined;
+    dceRevision?: number | undefined;
     createdBy: string;
     occurredAt: Date;
   }): TechnicalMemoSectionRevision {
@@ -59,6 +67,9 @@ export class TechnicalMemoSectionRevision {
       totalTokenCount: input.totalTokenCount,
       missingDataNotes: input.missingDataNotes ?? [],
       citations: input.citations ?? [],
+      candidateCompanyId: input.candidateCompanyId,
+      analysisVersion: input.analysisVersion,
+      dceRevision: input.dceRevision,
       createdBy: input.createdBy,
       createdAt: input.occurredAt,
     });
@@ -109,6 +120,15 @@ export class TechnicalMemoSectionRevision {
   }
   get citations(): readonly TechnicalMemoSectionCitation[] {
     return this.props.citations;
+  }
+  get candidateCompanyId(): string | undefined {
+    return this.props.candidateCompanyId;
+  }
+  get analysisVersion(): number | undefined {
+    return this.props.analysisVersion;
+  }
+  get dceRevision(): number | undefined {
+    return this.props.dceRevision;
   }
   get createdBy(): string {
     return this.props.createdBy;

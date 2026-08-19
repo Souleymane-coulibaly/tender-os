@@ -32,6 +32,7 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
   let requirementRepository: InMemoryTechnicalMemoSectionRequirementRepository;
   let accessService: { loadMemo: ReturnType<typeof vi.fn> };
   let contextAssembler: { assemble: ReturnType<typeof vi.fn> };
+  let getEffectiveTenderAnalysisSummaryUseCase: { execute: ReturnType<typeof vi.fn> };
   let clock: FixedClock;
 
   const memo = TechnicalMemo.rehydrate({
@@ -63,6 +64,7 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
       new SequentialIdGenerator(),
       accessService as unknown as TechnicalMemoAccessService,
       contextAssembler as unknown as TechnicalMemoSectionContextAssembler,
+      getEffectiveTenderAnalysisSummaryUseCase as never,
       routingPolicyResolver as never,
       routingDecisionWriter as never,
     );
@@ -74,11 +76,17 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
     revisionRepository = new InMemoryTechnicalMemoSectionRevisionRepository();
     requirementRepository = new InMemoryTechnicalMemoSectionRequirementRepository();
     accessService = { loadMemo: vi.fn(async () => memo) };
+    // Checkpoint 2.1-P2.1-FIX-D — le `beforeEach` ci-dessous lie TOUJOURS "section-1" à un
+    // Finding DCE (`link-1`) : la précondition de fraîcheur (`assertAnalysisPrecondition`) est donc
+    // TOUJOURS évaluée. CURRENT par défaut — les tests qui exercent spécifiquement le blocage
+    // remplacent explicitement cette valeur.
+    getEffectiveTenderAnalysisSummaryUseCase = { execute: vi.fn(async () => ({ analysisVersion: 3, dceRevision: 3, analysisFreshness: "CURRENT" })) };
     contextAssembler = {
       assemble: vi.fn(async () => ({
         sectionBlock: "Titre : Méthodologie",
         contextBlock: "## EXIGENCES DCE LIÉES\n- [FIND:REQUIREMENT:req-1] Exigence de méthodologie",
         knownReferences: new Map([["FIND:REQUIREMENT:req-1", { sourceType: "FINDING", findingType: TechnicalMemoRequirementFindingType.Requirement, findingId: "req-1", label: "Exigence 1", content: "Exigence de méthodologie" }]]),
+        provenance: { candidateCompanyId: undefined, analysisVersion: 3, dceRevision: 3, analysisFreshness: "CURRENT" },
       })),
     };
     sectionRepository.sections.push(
@@ -184,6 +192,52 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
       useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "some-other-memo", technicalMemoSectionId: "section-1" }),
     ).rejects.toThrow();
     expect(revisionRepository.revisions).toHaveLength(0);
+  });
+
+  // Checkpoint 2.1-P2.1-FIX-D (mission §22) — BLOQUANT : jamais un mémoire produit à partir d'une
+  // analyse STALE, jamais un passage GENERATING suivi d'un échec (bloqué AVANT toute mutation).
+  describe("Freshness precondition (Checkpoint 2.1-P2.1-FIX-D)", () => {
+    it("BLOQUANT — refuses to generate when the section has DCE links and the source analysis is STALE, never mutating the section's status", async () => {
+      getEffectiveTenderAnalysisSummaryUseCase.execute = vi.fn(async () => ({ analysisVersion: 3, dceRevision: 3, analysisFreshness: "STALE" }));
+      const provider = new FakeAIProvider([]);
+      const useCase = buildUseCase(provider);
+
+      await expect(useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" })).rejects.toThrow();
+
+      expect(revisionRepository.revisions).toHaveLength(0);
+      const section = sectionRepository.sections.find((s) => s.id === "section-1")!;
+      expect(section.status).not.toBe(TechnicalMemoSectionStatus.Generating);
+      expect(section.status).not.toBe(TechnicalMemoSectionStatus.Failed);
+      expect(contextAssembler.assemble).not.toHaveBeenCalled();
+    });
+
+    it("does not gate generation on analysis freshness when the section has NO DCE requirement links (never a fabricated dependency)", async () => {
+      requirementRepository.links.length = 0;
+      getEffectiveTenderAnalysisSummaryUseCase.execute = vi.fn(async () => { throw new Error("should never be called — section has no DCE links"); });
+      const provider = new FakeAIProvider([{ kind: "success", result: fakeSectionAIProviderResult({ content: JSON.stringify({ content: "Présentation de l'entreprise.", citations: [], missingDataNotes: [] }) }) }]);
+      const useCase = buildUseCase(provider);
+
+      const revision = await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
+
+      expect(revision.content).toBe("Présentation de l'entreprise.");
+    });
+
+    it("captures candidateCompanyId/analysisVersion/dceRevision from the context assembler's provenance onto the created revision", async () => {
+      contextAssembler.assemble = vi.fn(async () => ({
+        sectionBlock: "Titre : Méthodologie",
+        contextBlock: "## EXIGENCES DCE LIÉES\n(aucune)",
+        knownReferences: new Map(),
+        provenance: { candidateCompanyId: "candidate-alpha", analysisVersion: 7, dceRevision: 7, analysisFreshness: "CURRENT" },
+      }));
+      const provider = new FakeAIProvider([{ kind: "success", result: fakeSectionAIProviderResult({ content: JSON.stringify({ content: "Texte.", citations: [], missingDataNotes: [] }) }) }]);
+      const useCase = buildUseCase(provider);
+
+      const revision = await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
+
+      expect(revision.candidateCompanyId).toBe("candidate-alpha");
+      expect(revision.analysisVersion).toBe(7);
+      expect(revision.dceRevision).toBe(7);
+    });
   });
 
   describe("Consolidation IA — Checkpoint A §3/§6 (routing partagé)", () => {

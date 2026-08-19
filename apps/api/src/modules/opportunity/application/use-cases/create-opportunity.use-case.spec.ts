@@ -1,4 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { CandidateCompanyArchivedError, GetCandidateCompanyUseCase } from "../../../candidate-company";
+import { CreateCandidateCompanyUseCase } from "../../../candidate-company/application/use-cases/create-candidate-company.use-case";
+import {
+  FixedClock as CandidateFixedClock,
+  InMemoryAuditLogWriter as CandidateInMemoryAuditLogWriter,
+  InMemoryCandidateCompanyRepository,
+} from "../../../candidate-company/test-support/fakes";
+import { UuidGenerator } from "../../../../shared-kernel/id-generator";
 import { BuyerNotFoundError } from "../../../tenders";
 import { createClientPortfolioTestFixture, DEFAULT_TEST_CLIENT_ACCOUNT_ID, InMemoryBuyerRepository } from "../../../tenders/test-support/fakes";
 import { OpportunityPermissionMissingError } from "../../domain/errors";
@@ -13,6 +21,14 @@ async function buildHarness() {
   const outboxWriter = new FakeOutboxWriter();
   const buyerRepository = new InMemoryBuyerRepository();
   const clientPortfolio = await createClientPortfolioTestFixture(ORG);
+  const candidateCompanyRepository = new InMemoryCandidateCompanyRepository();
+  const createCandidateCompanyUseCase = new CreateCandidateCompanyUseCase(
+    candidateCompanyRepository,
+    new CandidateInMemoryAuditLogWriter(),
+    new CandidateFixedClock(),
+    new UuidGenerator(),
+  );
+  const getCandidateCompanyUseCase = new GetCandidateCompanyUseCase(candidateCompanyRepository);
 
   const useCase = new CreateOpportunityUseCase(
     opportunityRepository,
@@ -23,9 +39,10 @@ async function buildHarness() {
     clientPortfolio.getClientAccountUseCase,
     clientPortfolio.assertClientAccessUseCase,
     buyerRepository,
+    getCandidateCompanyUseCase,
   );
 
-  return { opportunityRepository, auditLogWriter, outboxWriter, useCase };
+  return { opportunityRepository, auditLogWriter, outboxWriter, useCase, candidateCompanyRepository, createCandidateCompanyUseCase };
 }
 
 describe("CreateOpportunityUseCase", () => {
@@ -55,6 +72,35 @@ describe("CreateOpportunityUseCase", () => {
     const result = await useCase.execute({ organizationId: ORG, actorId: "user-1", actorRole: "BID_MANAGER", title: "Avec candidat", clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID });
 
     expect(result.clientAccountId).toBe(DEFAULT_TEST_CLIENT_ACCOUNT_ID);
+  });
+
+  it("accepts a valid, non-archived candidateCompanyId (Checkpoint 2.1-A3)", async () => {
+    const { useCase, createCandidateCompanyUseCase } = await buildHarness();
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: "user-1", name: "Alpha SARL" });
+
+    const result = await useCase.execute({ organizationId: ORG, actorId: "user-1", actorRole: "BID_MANAGER", title: "Avec candidat", candidateCompanyId: candidate.id });
+
+    expect(result.candidateCompanyId).toBe(candidate.id);
+  });
+
+  it("refuses a candidateCompanyId that does not exist", async () => {
+    const { useCase } = await buildHarness();
+
+    await expect(
+      useCase.execute({ organizationId: ORG, actorId: "user-1", actorRole: "BID_MANAGER", title: "x", candidateCompanyId: "does-not-exist" }),
+    ).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_NOT_FOUND" });
+  });
+
+  it("refuses an archived candidateCompanyId", async () => {
+    const { useCase, createCandidateCompanyUseCase, candidateCompanyRepository } = await buildHarness();
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: "user-1", name: "Alpha SARL" });
+    const stored = await candidateCompanyRepository.findById({ organizationId: ORG, candidateCompanyId: candidate.id });
+    stored!.archive(new Date());
+    await candidateCompanyRepository.save(stored!);
+
+    await expect(
+      useCase.execute({ organizationId: ORG, actorId: "user-1", actorRole: "BID_MANAGER", title: "x", candidateCompanyId: candidate.id }),
+    ).rejects.toThrow(CandidateCompanyArchivedError);
   });
 
   it("refuses a buyerId that does not exist", async () => {

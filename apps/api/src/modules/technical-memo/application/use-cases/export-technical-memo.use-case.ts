@@ -10,12 +10,14 @@ import {
   type GeneratedDocumentRepository,
   type GeneratedDocumentRevision,
 } from "../../../document-generation";
-import { TechnicalMemoTemplateNotReadyError } from "../../domain/errors";
+import { TechnicalMemoStaleExportBlockedError, TechnicalMemoTemplateNotReadyError } from "../../domain/errors";
+import { TechnicalMemoFreshness } from "../../domain/technical-memo-freshness";
 import { assertTechnicalMemoAccess } from "../policies/technical-memo-access.policy";
 import { TechnicalMemoAccessService } from "../services/technical-memo-access.service";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { TECHNICAL_MEMO_REPOSITORY, type TechnicalMemoRepository } from "../ports/technical-memo.repository";
 import { TECHNICAL_MEMO_SECTION_REPOSITORY, type TechnicalMemoSectionRepository } from "../ports/technical-memo-section.repository";
+import { GetTechnicalMemoFreshnessUseCase } from "./get-technical-memo-freshness.use-case";
 
 export type ExportTechnicalMemoCommand = Readonly<{
   organizationId: string;
@@ -47,6 +49,7 @@ export class ExportTechnicalMemoUseCase {
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly accessService: TechnicalMemoAccessService,
     private readonly documentGenerationExecutionService: DocumentGenerationExecutionService,
+    private readonly getTechnicalMemoFreshnessUseCase: GetTechnicalMemoFreshnessUseCase,
   ) {}
 
   async execute(command: ExportTechnicalMemoCommand): Promise<GeneratedDocumentRevision> {
@@ -61,6 +64,14 @@ export class ExportTechnicalMemoUseCase {
 
     if (!memo.documentTemplateId) {
       throw new TechnicalMemoTemplateNotReadyError();
+    }
+
+    // Checkpoint 2.1-P2.1-FIX-D (mission §49/§110 "un mémoire STALE ne doit pas être finalisé
+    // comme document courant sans garde explicite") — bloque AVANT tout export, jamais un DOCX
+    // final produit silencieusement à partir d'un contenu obsolète.
+    const freshness = await this.getTechnicalMemoFreshnessUseCase.execute({ organizationId: command.organizationId, technicalMemoId: memo.id, actorId: command.actorId, actorRole: command.actorRole });
+    if (freshness.freshness !== TechnicalMemoFreshness.Current) {
+      throw new TechnicalMemoStaleExportBlockedError({ freshness: freshness.freshness });
     }
 
     const sections = await this.sectionRepository.listByMemoId({ organizationId: command.organizationId, technicalMemoId: memo.id });

@@ -18,6 +18,7 @@ export type Tender = {
   id: string;
   organizationId: string;
   clientAccountId: string;
+  candidateCompanyId?: string;
   title: string;
   reference?: string;
   buyerName?: string;
@@ -118,7 +119,11 @@ export type TenderCompleteness = {
 
 export const TENDER_COMPLETENESS_CATEGORY_LABELS: Record<keyof TenderCompleteness, string> = {
   generalInformation: "Informations generales",
-  candidate: "Entreprise candidate",
+  // Checkpoint 2.1-A5 — ce champ backend s'appelle "candidate" par convention historique (avant
+  // l'introduction de CandidateCompany, A1-A4) mais porte en réalité la complétude de la fiche
+  // légale du CLIENT (ClientAccount). Libellé corrigé ici ; la clé reste inchangée pour matcher le
+  // JSON de l'API (aucune modification backend en A5).
+  candidate: "Client",
   buyer: "Acheteur",
   dates: "Dates",
   lots: "Lots",
@@ -279,6 +284,11 @@ export type ChecklistItemOrigin = "MANUAL" | "AI_SUGGESTION" | "SYSTEM";
 export type ChecklistSubjectType = "CANDIDATE" | "GROUP_MEMBER" | "SUBCONTRACTOR" | "ANY_MEMBER" | "TENDER" | "LOT";
 export type ChecklistDocumentMatchStatus = "NOT_SEARCHED" | "EXACT_MATCH" | "PROBABLE_MATCH" | "MULTIPLE_CANDIDATES" | "NO_MATCH" | "MANUALLY_ATTACHED";
 
+/** Checkpoint 2.1-P2.1-FIX-B — axe ORTHOGONAL à `complianceStatus` (jamais confondus, mission
+ *  §15) : reflète si CETTE exigence a été retrouvée dans la dernière analyse réconciliée, jamais
+ *  si elle est conforme. `undefined` uniquement pour un item créé avant ce checkpoint. */
+export type ChecklistRequirementFreshness = "CURRENT" | "STALE";
+
 export type ChecklistItem = {
   id: string;
   tenderId: string;
@@ -309,6 +319,31 @@ export type ChecklistItem = {
   documentMatchReasons?: string[];
   documentExpiresAt?: string;
   documentValidityCheckedAt?: string;
+  requirementFreshness?: ChecklistRequirementFreshness;
+};
+
+/** Checkpoint 2.1-P2.1-FIX-B — lecture seule, jamais un 404 (l'onglet Checklist doit s'afficher
+ *  même avant la première analyse). Deux axes délibérément distincts (mission §31) :
+ *  `analysisFreshness` ("l'analyse est-elle à jour vs le DCE ?") et `checklistFreshness` ("la
+ *  Checklist a-t-elle été réconciliée contre la DERNIÈRE analyse ?") — une Checklist peut avoir
+ *  besoin d'une réconciliation même quand l'analyse est déjà CURRENT. */
+export type ChecklistFreshness = "CURRENT" | "RECONCILIATION_REQUIRED";
+
+export type ChecklistFreshnessResult = {
+  analysisVersion?: number;
+  analysisFreshness?: "CURRENT" | "STALE" | "UNKNOWN";
+  lastReconciledAnalysisVersion?: number;
+  checklistFreshness: ChecklistFreshness;
+};
+
+export const CHECKLIST_FRESHNESS_LABELS: Record<ChecklistFreshness, string> = {
+  CURRENT: "Réconciliée",
+  RECONCILIATION_REQUIRED: "Réconciliation requise",
+};
+
+export const CHECKLIST_REQUIREMENT_FRESHNESS_LABELS: Record<ChecklistRequirementFreshness, string> = {
+  CURRENT: "Retrouvée dans la dernière analyse",
+  STALE: "Absente de la dernière analyse",
 };
 
 export type ChecklistProgressCounts = {
@@ -570,20 +605,36 @@ export function canEditTenderDetails(role: string | undefined): boolean {
 
 /** Miroir de ClientPermission.ChangeTenderCandidate (mission §4/§16) — reserve au palier
  *  organisation ici (le detail fin CLIENT_MANAGER-vs-CONTRIBUTOR reste une decision serveur,
- *  cette fonction ne fait que grossierement afficher/masquer le controle cote UI). */
-const ROLES_ALLOWED_TO_CHANGE_CANDIDATE = ["OWNER", "ORGANIZATION_ADMIN", "BID_MANAGER"];
+ *  cette fonction ne fait que grossierement afficher/masquer le controle cote UI).
+ *  Checkpoint 2.1-A5 — renomme depuis `canChangeTenderCandidate` : cette permission gouverne le
+ *  changement du CLIENT (ClientAccount) du Tender (route legacy `/tenders/:id/candidate`, nom
+ *  backend historique), jamais la CandidateCompany (route distincte `/tenders/:id/candidate-company`,
+ *  voir `canChangeTenderCandidateCompany`). */
+const ROLES_ALLOWED_TO_CHANGE_CLIENT = ["OWNER", "ORGANIZATION_ADMIN", "BID_MANAGER"];
 
-export function canChangeTenderCandidate(role: string | undefined): boolean {
-  return role !== undefined && ROLES_ALLOWED_TO_CHANGE_CANDIDATE.includes(role);
+export function canChangeTenderClient(role: string | undefined): boolean {
+  return role !== undefined && ROLES_ALLOWED_TO_CHANGE_CLIENT.includes(role);
 }
 
 /** Miroir de Tender.CANDIDATE_CHANGE_ALLOWED_STATUSES (domain/tender.aggregate.ts) — le
- *  changement d'entreprise candidate n'est propose que tant que la preparation de la reponse n'a
- *  pas vraiment commence. Affichage seul ; le backend revalide systematiquement. */
-const CANDIDATE_CHANGE_ALLOWED_STATUSES: TenderStatus[] = ["DRAFT", "IN_ANALYSIS"];
+ *  changement de CLIENT n'est propose que tant que la preparation de la reponse n'a pas vraiment
+ *  commence. Affichage seul ; le backend revalide systematiquement.
+ *  Checkpoint 2.1-A5 — renomme depuis `canOfferCandidateChange`/`CANDIDATE_CHANGE_ALLOWED_STATUSES`. */
+const CLIENT_CHANGE_ALLOWED_STATUSES: TenderStatus[] = ["DRAFT", "IN_ANALYSIS"];
 
-export function canOfferCandidateChange(status: TenderStatus): boolean {
-  return CANDIDATE_CHANGE_ALLOWED_STATUSES.includes(status);
+export function canOfferClientChange(status: TenderStatus): boolean {
+  return CLIENT_CHANGE_ALLOWED_STATUSES.includes(status);
+}
+
+/** Checkpoint 2.1-A5 — même discipline que `canChangeTenderClient` mais pour la vraie
+ *  CandidateCompany (A1-A4), route `/tenders/:id/candidate-company`
+ *  (`ChangeTenderCandidateCompanyUseCase`, garde client-tier `assertTenderMutationAllowed`). */
+export function canChangeTenderCandidateCompany(role: string | undefined): boolean {
+  return role !== undefined && ROLES_ALLOWED_TO_CHANGE_CLIENT.includes(role);
+}
+
+export function canOfferCandidateCompanyChange(status: TenderStatus): boolean {
+  return CLIENT_CHANGE_ALLOWED_STATUSES.includes(status);
 }
 
 export type TenderFiltersState = {

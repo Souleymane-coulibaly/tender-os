@@ -72,6 +72,15 @@ export class CorrectDceDocumentCategoryUseCase {
     link.correctCategory(command.category, now);
 
     if (previousCategory !== command.category) {
+      // Checkpoint 2.1-P2.1-FIX-A (mission §9, correctif audit — P1 "incrément best-effort après
+      // coup peut masquer un vrai changement") — la révision avance D'ABORD, et son échec PROPAGE
+      // (jamais un best-effort avalé) : soit la révision avance et la mutation réelle suit, soit
+      // rien ne se passe du tout. Le seul état résiduel possible en cas d'échec de la mutation qui
+      // suit est "révision avancée sans changement réel" (faux STALE, sans danger, auto-corrigé au
+      // prochain vrai changement) — JAMAIS l'inverse ("CURRENT" affiché alors qu'un changement réel
+      // n'a pas été comptabilisé), qui serait la direction dangereuse.
+      await this.dceRepository.incrementRevision({ organizationId: command.organizationId, dceId: dce.id.value });
+
       await this.dceDocumentRepository.updateCategory({
         organizationId: command.organizationId,
         dceId: dce.id.value,

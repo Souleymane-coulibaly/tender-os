@@ -64,3 +64,24 @@ export class TechnicalMemoCitationValidationFailedError extends DomainError {
     super(`Technical memo section citation validation failed: ${input.reason}`);
   }
 }
+
+/** Checkpoint 2.1-P2.1-FIX-D (mission §22 "une Analysis STALE ne doit pas servir à produire un
+ *  nouveau mémoire CURRENT") — bloque AVANT toute mutation d'état (jamais un passage GENERATING
+ *  suivi d'un échec) UNIQUEMENT quand cette section a réellement des exigences DCE liées (mission
+ *  §12/§13, jamais une dépendance fabriquée pour une section qui n'en a aucune). */
+export class TechnicalMemoAnalysisNotCurrentError extends DomainError {
+  readonly code = "TECHNICAL_MEMO_ANALYSIS_NOT_CURRENT";
+  constructor() {
+    super("This section cannot be generated while the source analysis is not CURRENT. Refresh the DCE analysis first.");
+  }
+}
+
+/** Checkpoint 2.1-P2.1-FIX-D (mission §49 "un mémoire STALE ne doit pas être finalisé comme
+ *  document courant sans garde explicite") — bloque l'export tant que le mémoire (agrégé sur ses
+ *  sections générées) n'est pas `CURRENT`. */
+export class TechnicalMemoStaleExportBlockedError extends DomainError {
+  readonly code = "TECHNICAL_MEMO_STALE_EXPORT_BLOCKED";
+  constructor(input: { freshness: string }) {
+    super(`This technical memo cannot be exported as the current version while its freshness is ${input.freshness}. Refresh and regenerate stale sections first.`);
+  }
+}

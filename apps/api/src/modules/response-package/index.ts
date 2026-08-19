@@ -19,3 +19,10 @@ export type { GetResponsePackageForPublicApiQuery, ResponsePackagePublicSummary 
 export { GetVersionTenderRefForApprovalUseCase } from "./application/use-cases/get-version-tender-ref-for-approval.use-case";
 export type { ResponsePackageVersionTenderRef } from "./application/use-cases/get-version-tender-ref-for-approval.use-case";
 export { ResponsePackageVersionStatus } from "./domain/enums";
+
+// Checkpoint 2.1-P2.1-FIX-F — réexportés pour `submission` (agrégateur final de readiness).
+export { ListResponsePackagesUseCase } from "./application/use-cases/list-response-packages.use-case";
+export type { ListResponsePackagesQuery } from "./application/use-cases/list-response-packages.use-case";
+export { GetResponsePackageFreshnessUseCase } from "./application/use-cases/get-response-package-freshness.use-case";
+export type { ResponsePackageFreshnessResult } from "./application/use-cases/get-response-package-freshness.use-case";
+export { ResponsePackageFreshness } from "./domain/response-package-freshness";

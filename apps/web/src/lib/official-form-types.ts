@@ -89,6 +89,41 @@ export function officialFormFieldStatusBadgeClass(status: OfficialFormFieldStatu
   }
 }
 
+/** Checkpoint 2.1-A5 — libellés humains pour `FormFieldSource` (backend
+ *  `administrative-dossier/domain/form-field-source.ts`), jamais la clé technique brute affichée
+ *  telle quelle (mission §12 "uniformiser la terminologie"). `CLIENT_PROFILE` (legacy) et
+ *  `CANDIDATE_COMPANY_PROFILE` (A1-A4) restent deux libellés distincts, jamais fusionnés. */
+export function formFieldSourceLabel(source: string | undefined): string {
+  switch (source) {
+    case "ORGANIZATION_PROFILE":
+      return "Profil organisation";
+    case "CLIENT_PROFILE":
+      return "Profil entreprise du client";
+    case "CANDIDATE_COMPANY_PROFILE":
+      return "Entreprise candidate";
+    case "TENDER":
+      return "Marché";
+    case "LOT":
+      return "Lot";
+    case "GROUP_MEMBER":
+      return "Membre du groupement";
+    case "SUBCONTRACTOR":
+      return "Sous-traitant";
+    case "PRICING_VERSION":
+      return "Chiffrage";
+    case "ADMINISTRATIVE_DOSSIER":
+      return "Dossier administratif";
+    case "USER_INPUT":
+      return "Saisie manuelle";
+    case "BUYER_TEMPLATE":
+      return "Gabarit acheteur";
+    case "IMPORTED_DOCUMENT":
+      return "Document importé";
+    default:
+      return "—";
+  }
+}
+
 export function readinessBadgeClass(percentage: number): string {
   if (percentage >= 90) return "bg-green-50 text-green-700 border-green-200";
   if (percentage >= 60) return "bg-amber-50 text-amber-700 border-amber-200";

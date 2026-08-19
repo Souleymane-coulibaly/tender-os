@@ -26,7 +26,10 @@ export type { EscalationSignals } from "./domain/evaluate-escalation-conditions"
 // reconstruction approximative. Lecture seule : ces use cases s'auto-protègent déjà par
 // `roleHasAnalysisPermission` en interne.
 export { GetTenderBusinessAnalysisUseCase } from "./application/use-cases/get-tender-business-analysis.use-case";
-export type { GetTenderBusinessAnalysisQuery } from "./application/use-cases/get-tender-business-analysis.use-case";
+export type { GetTenderBusinessAnalysisQuery, TenderBusinessAnalysisWithFreshness } from "./application/use-cases/get-tender-business-analysis.use-case";
+// Checkpoint 2.1-P2.1-FIX-B — réexporté pour `checklist-intelligence`
+// (`GetChecklistFreshnessUseCase`), même motif que les autres réexports de ce fichier.
+export { AnalysisFreshness } from "./domain/analysis-freshness";
 // V2 Sprint 5 (GO/NO-GO IA) — réexporté UNIQUEMENT pour `opportunity` (Niveau 2) : fusionne la
 // synthèse IA d'origine avec la dernière révision utilisateur, sert aussi de porte d'entrée
 // ("une analyse DCE a-t-elle déjà réussi pour ce tender ?").

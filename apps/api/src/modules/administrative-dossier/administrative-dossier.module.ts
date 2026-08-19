@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { CandidateCompanyModule } from "../candidate-company";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { CompanyProfileModule } from "../company-profile";
 import { DocumentGenerationModule } from "../document-generation";
@@ -123,7 +124,20 @@ import { AdministrativeDossierStructuredController } from "./interfaces/http/adm
  * DIRECTEMENT `PdfRendererPort`/`PDF_RENDERER`, jamais un second moteur PDF.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, DocumentsModule, PricingModule, ExportModule, CompanyProfileModule, SubcontractorsModule, DocumentGenerationModule, OutboxWriterModule],
+  imports: [
+    IdentityModule,
+    MembershipsModule,
+    TendersModule,
+    ClientPortfolioModule,
+    CandidateCompanyModule,
+    DocumentsModule,
+    PricingModule,
+    ExportModule,
+    CompanyProfileModule,
+    SubcontractorsModule,
+    DocumentGenerationModule,
+    OutboxWriterModule,
+  ],
   controllers: [AdministrativeDossierController, AdministrativeDossierStructuredController, AdministrativeDossierFormFillController],
   providers: [
     EnsureAdministrativeDossierUseCase,

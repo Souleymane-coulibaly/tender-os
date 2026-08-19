@@ -1,6 +1,8 @@
-/** Mission V2 Sprint 2 — types de la fiche "Entreprise candidate", miroir des DTO exposés par
- *  `apps/api/src/modules/company-profile`. Les champs nullable côté Prisma arrivent en JSON comme
- *  `null` — traités ici comme `T | null | undefined`, même convention que `ClientAccountSummary`. */
+/** Mission V2 Sprint 2 — types de la fiche "Profil entreprise du client" (module backend
+ *  `company-profile`, historiquement appelée "Entreprise candidate" côté UI avant le Checkpoint
+ *  2.1-A5 — renommée pour ne plus entrer en collision avec CandidateCompany, voir
+ *  candidate-company-types.ts). Les champs nullable côté Prisma arrivent en JSON comme `null` —
+ *  traités ici comme `T | null | undefined`, même convention que `ClientAccountSummary`. */
 
 export type CompanyLegalIdentity = {
   id: string;

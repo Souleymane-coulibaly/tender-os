@@ -8,6 +8,11 @@ export type OpportunityProps = {
   id: OpportunityId;
   organizationId: string;
   clientAccountId?: string | undefined;
+  /** V2 Sprint 26 (Checkpoint 2.1-A3) — entreprise candidate (SOT `CandidateCompany`), distincte de
+   *  `clientAccountId` (contexte client/portefeuille legacy). Reste nullable tout au long du cycle
+   *  de vie, même motif que `clientAccountId` (mission §15 "une Opportunity de veille peut exister
+   *  avant qu'une entreprise candidate ne soit sélectionnée"). */
+  candidateCompanyId?: string | undefined;
   buyerId?: string | undefined;
   title: string;
   description?: string | undefined;
@@ -34,6 +39,7 @@ export type OpportunityProps = {
 
 export type OpportunityDetailsUpdate = {
   clientAccountId?: string | undefined;
+  candidateCompanyId?: string | undefined;
   buyerId?: string | undefined;
   title?: string | undefined;
   description?: string | undefined;
@@ -65,6 +71,7 @@ export class Opportunity {
     id: OpportunityId;
     organizationId: string;
     clientAccountId?: string | undefined;
+    candidateCompanyId?: string | undefined;
     buyerId?: string | undefined;
     title: string;
     description?: string | undefined;
@@ -89,6 +96,7 @@ export class Opportunity {
       id: input.id,
       organizationId: input.organizationId,
       clientAccountId: input.clientAccountId,
+      candidateCompanyId: input.candidateCompanyId,
       buyerId: input.buyerId,
       title: input.title,
       description: input.description,
@@ -122,6 +130,7 @@ export class Opportunity {
     this.assertNotArchived();
 
     if (update.clientAccountId !== undefined) this.props.clientAccountId = update.clientAccountId;
+    if (update.candidateCompanyId !== undefined) this.props.candidateCompanyId = update.candidateCompanyId;
     if (update.buyerId !== undefined) this.props.buyerId = update.buyerId;
     if (update.title !== undefined) this.props.title = update.title;
     if (update.description !== undefined) this.props.description = update.description;
@@ -193,6 +202,10 @@ export class Opportunity {
 
   get clientAccountId(): string | undefined {
     return this.props.clientAccountId;
+  }
+
+  get candidateCompanyId(): string | undefined {
+    return this.props.candidateCompanyId;
   }
 
   get buyerId(): string | undefined {

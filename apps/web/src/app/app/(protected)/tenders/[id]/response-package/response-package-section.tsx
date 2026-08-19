@@ -8,6 +8,7 @@ import {
   createResponsePackageAction,
   fetchPackageCompleteness,
   fetchResponsePackage,
+  fetchResponsePackageFreshness,
   generateResponsePackageZipAction,
   validateResponsePackageVersionAction,
 } from "../../../../response-package-actions";
@@ -16,15 +17,18 @@ import { APPROVAL_STATUS_LABELS, type ApprovalRequest, type TenderParticipant } 
 import {
   APPLICABILITY_LABELS,
   CATEGORY_LABELS,
+  RESPONSE_PACKAGE_FRESHNESS_LABELS,
   RESPONSE_PACKAGE_STATUS_LABELS,
   REQUIREMENT_TYPE_LABELS,
   packageItemStatusBadge,
+  responsePackageFreshnessBadgeClass,
   responsePackageStatusBadgeClass,
   type PackageCompleteness,
   type PackageItem,
   type PackageItemApplicabilityStatus,
   type PackageItemRequirementType,
   type ResponsePackage,
+  type ResponsePackageFreshnessResult,
   type ResponsePackageVersion,
 } from "../../../../../../lib/response-package-types";
 
@@ -336,6 +340,19 @@ function PackageDetail({
   const [isValidating, setIsValidating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [actionError, setActionError] = useState<string | undefined>();
+  // Checkpoint 2.1-P2.1-FIX-E — lecture seule, jamais bloquant : dégradé à `null` (bandeau
+  // simplement absent) sur toute erreur inattendue.
+  const [freshness, setFreshness] = useState<ResponsePackageFreshnessResult | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchResponsePackageFreshness(responsePackage.id).then((result) => {
+      if (!cancelled) setFreshness(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [responsePackage.id, responsePackage.currentVersionId]);
 
   const isValidated = currentVersion?.status === "VALIDATED";
 
@@ -384,7 +401,17 @@ function PackageDetail({
           <h3 className="text-sm font-semibold">Dossier de réponse</h3>
           <p className="text-xs text-neutral-500">{currentVersion ? `Version ${currentVersion.versionNumber}` : "Aucune version construite pour l'instant"}</p>
         </div>
-        <span className={`rounded px-2 py-1 text-xs ${responsePackageStatusBadgeClass(responsePackage.status)}`}>{RESPONSE_PACKAGE_STATUS_LABELS[responsePackage.status]}</span>
+        <div className="flex items-center gap-2">
+          <span className={`rounded px-2 py-1 text-xs ${responsePackageStatusBadgeClass(responsePackage.status)}`}>{RESPONSE_PACKAGE_STATUS_LABELS[responsePackage.status]}</span>
+          {freshness && freshness.currentVersionId ? (
+            <span
+              className={`rounded px-2 py-1 text-xs ${responsePackageFreshnessBadgeClass(freshness.freshness)}`}
+              title="Fraîcheur de la version courante par rapport aux pièces réellement attendues aujourd'hui"
+            >
+              {RESPONSE_PACKAGE_FRESHNESS_LABELS[freshness.freshness]}
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {actionError ? (

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Injectable } from "@nestjs/common";
 import type { GoNoGoReport as GoNoGoReportModel, Prisma } from "@prisma/client";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
@@ -31,6 +32,8 @@ function toRecord(row: GoNoGoReportModel): GoNoGoReportRecord {
     subcontractingFlags: row.subcontractingFlags as unknown as GoNoGoReportRecord["subcontractingFlags"],
     recommendation: row.recommendation as GoNoGoReportRecord["recommendation"],
     recommendationRationale: row.recommendationRationale,
+    candidateCompanyId: row.candidateCompanyId ?? undefined,
+    dceRevision: row.dceRevision ?? undefined,
   };
 }
 
@@ -39,13 +42,17 @@ export class PrismaGoNoGoReportRepository implements GoNoGoReportRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(input: CreateGoNoGoReportInput): Promise<GoNoGoReportRecord> {
+    // Checkpoint 2.1-P2.1-FIX-C (correctif audit P1-FIXC-001) — `input.reportVersion` a DÉJÀ été
+    // réservé atomiquement par `reserveVersion` avant le calcul coûteux ; aucune relecture/verrou
+    // nécessaire ici. Le `@@unique` du schéma reste un filet de sécurité.
     const created = await this.prisma.currentClient().goNoGoReport.create({
       data: {
         id: input.id,
         organizationId: input.organizationId,
         tenderId: input.tenderId,
-        reportVersion: (await this.getLatestVersion({ organizationId: input.organizationId, tenderId: input.tenderId })) + 1,
+        reportVersion: input.reportVersion,
         analysisVersion: input.analysisVersion,
+        dceRevision: input.dceRevision ?? null,
         globalScore: input.result.globalScore,
         confidence: input.result.confidence,
         complexity: input.result.complexity,
@@ -63,6 +70,7 @@ export class PrismaGoNoGoReportRepository implements GoNoGoReportRepository {
         calculationVersion: input.calculationVersion,
         requestedByUserId: input.requestedByUserId ?? null,
         generatedAt: input.generatedAt,
+        candidateCompanyId: input.candidateCompanyId ?? null,
       },
     });
     return toRecord(created);
@@ -75,6 +83,28 @@ export class PrismaGoNoGoReportRepository implements GoNoGoReportRepository {
       select: { reportVersion: true },
     });
     return latest?.reportVersion ?? 0;
+  }
+
+  async reserveVersion(input: { organizationId: string; tenderId: string }): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      // Verrou consultatif scopé au Tender (même motif que
+      // AnalysisJobRepository.runExclusiveForTarget) — tenu seulement le temps de cette
+      // réservation, jamais pendant le calcul coûteux qui suit.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`go_no_go_report_version:${input.tenderId}`}))`;
+      // Le maximum est cherché sur LES DEUX tables : un rapport déjà créé (cycle précédent) OU une
+      // réservation déjà posée mais pas encore concrétisée en `GoNoGoReport` (calcul en cours)
+      // doivent tous deux repousser le prochain numéro — sinon deux réservations concurrentes
+      // pourraient recalculer le même "max + 1" avant qu'aucune n'ait de rapport correspondant.
+      const [latestReport, latestReservation] = await Promise.all([
+        tx.goNoGoReport.findFirst({ where: { organizationId: input.organizationId, tenderId: input.tenderId }, orderBy: { reportVersion: "desc" }, select: { reportVersion: true } }),
+        tx.goNoGoReportVersionReservation.findFirst({ where: { organizationId: input.organizationId, tenderId: input.tenderId }, orderBy: { reportVersion: "desc" }, select: { reportVersion: true } }),
+      ]);
+      const nextVersion = Math.max(latestReport?.reportVersion ?? 0, latestReservation?.reportVersion ?? 0) + 1;
+      await tx.goNoGoReportVersionReservation.create({
+        data: { id: randomUUID(), organizationId: input.organizationId, tenderId: input.tenderId, reportVersion: nextVersion },
+      });
+      return nextVersion;
+    });
   }
 
   async getLatest(input: { organizationId: string; tenderId: string }): Promise<GoNoGoReportRecord | null> {

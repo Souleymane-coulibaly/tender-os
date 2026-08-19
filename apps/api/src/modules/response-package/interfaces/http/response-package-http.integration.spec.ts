@@ -184,6 +184,88 @@ describe("Dossier de réponse (response-package) — real HTTP + PostgreSQL (Nes
     await prisma.$disconnect();
   }, 60000);
 
+  /**
+   * Checkpoint 2.1-P2.1-FIX-E — E2E réaliste (mission §104-111) : un package fraîchement construit
+   * est CURRENT, puis devient STALE dès qu'un document administratif source change de version
+   * (simule une re-qualification Checklist après remplacement), sans jamais bloquer faussement une
+   * régénération — la nouvelle version redevient CURRENT, l'ancienne reste historique/interrogeable,
+   * son ZIP/manifest/checksum restent inchangés (mission §48/§60, "P8 IMMUTABILITY").
+   */
+  it("E2E (mission §104-111) — a source document version change makes the built package STALE, a rebuild makes it CURRENT again (old version's ZIP/manifest/checksum untouched)", async () => {
+    const { tenderId, lotId } = await createClientTenderAndLot({ organizationId: orgAId, userId: ownerAUserId });
+    const docV1 = await uploadDocument({ token: tokenOwnerA, organizationId: orgAId, filename: "DC1.pdf" });
+    const checklistItemId = await seedChecklistItem({
+      organizationId: orgAId,
+      tenderId,
+      lotId,
+      title: "DC1",
+      requirementLevel: "MANDATORY",
+      matchedDocumentId: docV1.documentId,
+      matchedDocumentVersionId: docV1.documentVersionId,
+      createdBy: ownerAUserId,
+    });
+
+    const createRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/response-packages`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ lotId }) });
+    const pkg = (await createRes.json()) as { id: string };
+
+    // Étape 1a — aucune version construite encore : UNKNOWN.
+    const freshnessEmptyRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(freshnessEmptyRes.status).toBe(200);
+    expect((await freshnessEmptyRes.json()) as { freshness: string }).toMatchObject({ freshness: "UNKNOWN" });
+
+    // Étape 1b — construction V1 : CURRENT (correspond exactement à l'état Checklist/documents
+    // courant).
+    const buildRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(buildRes.status).toBe(201);
+    const built = (await buildRes.json()) as { version: { id: string; versionNumber: number }; items: { id: string; label: string }[] };
+
+    const freshnessCurrentRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessCurrentRes.json()) as { freshness: string; currentVersionNumber: number }).toMatchObject({ freshness: "CURRENT", currentVersionNumber: 1 });
+
+    // Génère le ZIP V1 réel (validé d'abord — un seul item MANDATORY déjà disponible) pour prouver
+    // ensuite son immuabilité après la régénération.
+    const validateRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/versions/${built.version.id}/validate`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(validateRes.status).toBe(200);
+    const generateV1Res = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/versions/${built.version.id}/generate`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(generateV1Res.status).toBe(201);
+    const artifactV1 = (await generateV1Res.json()) as { checksum: string; manifest?: unknown };
+    const artifactV1Row = await prisma.packageArtifact.findFirst({ where: { organizationId: orgAId, responsePackageVersionId: built.version.id } });
+    const manifestV1Before = artifactV1Row!.manifest;
+
+    // Étape 2 — le document source DC1 est remplacé par une NOUVELLE version (nouveau fichier),
+    // et la Checklist est re-qualifiée en conséquence (simulation directe — la mécanique de
+    // réconciliation Checklist elle-même est hors périmètre de ce test, déjà couverte ailleurs).
+    const docV2 = await uploadDocument({ token: tokenOwnerA, organizationId: orgAId, filename: "DC1-v2.pdf" });
+    await prisma.tenderChecklistItem.update({ where: { id: checklistItemId }, data: { matchedDocumentId: docV2.documentId, matchedDocumentVersionId: docV2.documentVersionId } });
+
+    const freshnessStaleRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessStaleRes.json()) as { freshness: string }).toMatchObject({ freshness: "STALE" });
+
+    // Étape 3 — régénère une NOUVELLE version (V2) contre l'état courant : CURRENT à nouveau.
+    // L'ANCIENNE version (V1) n'est jamais réutilisée/écrasée (mission §47/§49).
+    const buildV2Res = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(buildV2Res.status).toBe(201);
+    const builtV2 = (await buildV2Res.json()) as { version: { id: string; versionNumber: number } };
+    expect(builtV2.version.versionNumber).toBe(2);
+    expect(builtV2.version.id).not.toBe(built.version.id);
+
+    const freshnessCurrentAgainRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessCurrentAgainRes.json()) as { freshness: string; currentVersionNumber: number }).toMatchObject({ freshness: "CURRENT", currentVersionNumber: 2 });
+
+    // Étape 4 (P8 IMMUTABILITY) — le ZIP/manifest/checksum de V1 restent STRICTEMENT inchangés
+    // après la construction de V2.
+    const artifactV1After = await prisma.packageArtifact.findFirst({ where: { organizationId: orgAId, responsePackageVersionId: built.version.id } });
+    expect(artifactV1After!.checksum).toBe(artifactV1.checksum);
+    expect(artifactV1After!.manifest).toEqual(manifestV1Before);
+
+    // V1 reste historique/interrogeable, jamais supprimée.
+    const versionsListRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}?versionId=${built.version.id}`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(versionsListRes.status).toBe(200);
+    const versionsList = (await versionsListRes.json()) as { versions: { id: string }[] };
+    expect(versionsList.versions.map((v) => v.id)).toContain(built.version.id);
+    expect(versionsList.versions.map((v) => v.id)).toContain(builtV2.version.id);
+  }, 30000);
+
   it("main flow: Checklist real qualification → build → completeness → blocked validation → correction → validated → real ZIP → download", async () => {
     const { tenderId, lotId } = await createClientTenderAndLot({ organizationId: orgAId, userId: ownerAUserId });
     const doc = await uploadDocument({ token: tokenOwnerA, organizationId: orgAId, filename: "DC1.pdf" });

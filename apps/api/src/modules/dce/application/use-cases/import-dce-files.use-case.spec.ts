@@ -141,6 +141,66 @@ describe("ImportDceFilesUseCase", () => {
     expect(result.accepted).toHaveLength(2);
   });
 
+  it("TEST 3 (Checkpoint 2.1-P2.1-FIX-A) — the DCE revision advances once per accepted file, never for a rejected duplicate", async () => {
+    const useCase = buildUseCase();
+    const before = await dceRepository.findByTenderId({ organizationId: "org-1", tenderId: "tender-1" });
+
+    const result = await useCase.execute(
+      baseCommand([
+        { buffer: PDF_BYTES, originalFilename: "cctp.pdf", mimeType: "application/pdf" },
+        { buffer: Buffer.from("png bytes"), originalFilename: "plan.png", mimeType: "image/png" },
+      ]),
+    );
+    expect(result.accepted).toHaveLength(2);
+
+    const afterTwoAccepted = await dceRepository.findByTenderId({ organizationId: "org-1", tenderId: "tender-1" });
+    expect(afterTwoAccepted!.revision).toBe(before!.revision + 2);
+
+    // Ré-importer le MÊME contenu est rejeté comme doublon (mission P1-2) — la révision n'avance
+    // jamais pour un fichier effectivement rejeté.
+    const duplicateResult = await useCase.execute(baseCommand([{ buffer: PDF_BYTES, originalFilename: "cctp.pdf", mimeType: "application/pdf" }]));
+    expect(duplicateResult.rejected).toHaveLength(1);
+
+    const afterDuplicate = await dceRepository.findByTenderId({ organizationId: "org-1", tenderId: "tender-1" });
+    expect(afterDuplicate!.revision).toBe(afterTwoAccepted!.revision);
+  });
+
+  it("BLOQUANT (correctif audit — P1 'incrément best-effort masque un vrai changement') — if incrementRevision itself fails, nothing is created at all for that file (clean, retry-safe)", async () => {
+    vi.spyOn(dceRepository, "incrementRevision").mockRejectedValueOnce(new Error("simulated DB failure"));
+    const useCase = buildUseCase();
+
+    await expect(useCase.execute(baseCommand([{ buffer: PDF_BYTES, originalFilename: "cctp.pdf", mimeType: "application/pdf" }]))).rejects.toThrow(
+      "simulated DB failure",
+    );
+
+    expect(createDocumentUseCase.execute).not.toHaveBeenCalled();
+    const dce = await dceRepository.findByTenderId({ organizationId: "org-1", tenderId: "tender-1" });
+    expect(dce!.status).not.toBe(DceStatus.Imported);
+  });
+
+  it("if document creation fails AFTER the revision already advanced, the failure direction is safe: revision stays advanced (false STALE), never a false CURRENT", async () => {
+    const before = await dceRepository.findByTenderId({ organizationId: "org-1", tenderId: "tender-1" });
+    const failingCreate = { execute: vi.fn(async () => { throw new Error("simulated storage failure"); }) } as unknown as CreateDocumentWithFirstVersionUseCase;
+    const useCase = new ImportDceFilesUseCase(
+      dceRepository,
+      dceDocumentRepository,
+      new FakeFileSignatureDetector(null),
+      auditLogWriter,
+      new FixedClock(),
+      new SequentialIdGenerator(),
+      fakeGetTenderUseCase(),
+      failingCreate,
+      internalDocumentCleanupService,
+    );
+
+    await expect(
+      useCase.execute(baseCommand([{ buffer: PDF_BYTES, originalFilename: "cctp.pdf", mimeType: "application/pdf" }])),
+    ).rejects.toThrow("simulated storage failure");
+
+    const after = await dceRepository.findByTenderId({ organizationId: "org-1", tenderId: "tender-1" });
+    expect(after!.revision).toBe(before!.revision + 1);
+  });
+
   it("classifies each accepted file and assigns a processing status that reflects its real format (mission P1-3)", async () => {
     const useCase = buildUseCase();
 

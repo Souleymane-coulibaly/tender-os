@@ -102,6 +102,9 @@ describe("Administrative Dossier — structured sub-domains (real HTTP + Postgre
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: orgId } });
+    // Checkpoint 2.1-A4 (correctif hygiène de test) — voir le commentaire identique dans
+    // administrative-dossier-generation-http.integration.spec.ts.
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: orgId } });
     await prisma.organization.deleteMany({ where: { id: orgId } });
     await app.close();
   });

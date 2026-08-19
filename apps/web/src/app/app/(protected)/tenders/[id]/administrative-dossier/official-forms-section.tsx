@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { generateDc1Action, generateDc2CandidateAction, generateDc2MemberAction, generateDc4Action } from "../../../../official-form-actions";
 import {
+  formFieldSourceLabel,
   officialFormFieldStatusBadgeClass,
   officialFormFieldStatusLabel,
   readinessBadgeClass,
@@ -29,7 +30,7 @@ function FieldRow({ field }: { field: OfficialFormReadiness["fields"][number] })
     <tr className="border-b border-neutral-100">
       <td className="py-1 pr-4 text-neutral-700">{field.label}</td>
       <td className="py-1 pr-4">{typeof field.value === "boolean" ? (field.value ? "Oui" : "Non") : (field.value ?? <span className="text-neutral-400">—</span>)}</td>
-      <td className="py-1 pr-4 text-neutral-500">{field.source ?? "—"}</td>
+      <td className="py-1 pr-4 text-neutral-500">{formFieldSourceLabel(field.source)}</td>
       <td className="py-1 pr-4">
         <span className={`rounded border px-2 py-0.5 text-xs font-medium ${officialFormFieldStatusBadgeClass(field.status)}`}>{officialFormFieldStatusLabel(field.status)}</span>
       </td>
@@ -42,6 +43,8 @@ function FieldRow({ field }: { field: OfficialFormReadiness["fields"][number] })
 function sourceHint(source: string | undefined): string | undefined {
   switch (source) {
     case "CLIENT_PROFILE":
+      return "Compléter la fiche entreprise du client";
+    case "CANDIDATE_COMPANY_PROFILE":
       return "Compléter la fiche entreprise candidate";
     case "GROUP_MEMBER":
       return "Compléter le groupement (membre)";

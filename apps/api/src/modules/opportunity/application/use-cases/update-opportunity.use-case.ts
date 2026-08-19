@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import { AssertClientAccessUseCase, ClientAccountArchivedError, ClientPermission, GetClientAccountUseCase } from "../../../client-portfolio";
+import { CandidateCompanyArchivedError, GetCandidateCompanyUseCase } from "../../../candidate-company";
 import { BUYER_REPOSITORY, BuyerNotFoundError, type BuyerRepository } from "../../../tenders";
 import { OpportunityPermission } from "../../domain/opportunity-permission";
 import { parseOpportunitySource } from "../../domain/opportunity-source";
@@ -18,6 +19,7 @@ export type UpdateOpportunityCommand = Readonly<{
   actorId: string;
   actorRole: string;
   clientAccountId?: string | undefined;
+  candidateCompanyId?: string | undefined;
   buyerId?: string | undefined;
   title?: string | undefined;
   description?: string | undefined;
@@ -45,6 +47,7 @@ export class UpdateOpportunityUseCase {
     private readonly getClientAccountUseCase: GetClientAccountUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
     @Inject(BUYER_REPOSITORY) private readonly buyerRepository: BuyerRepository,
+    private readonly getCandidateCompanyUseCase: GetCandidateCompanyUseCase,
   ) {}
 
   async execute(command: UpdateOpportunityCommand): Promise<OpportunitySummary> {
@@ -62,6 +65,16 @@ export class UpdateOpportunityUseCase {
       actorRole: command.actorRole,
       permission: ClientPermission.ManageOpportunity,
     });
+
+    if (command.candidateCompanyId !== undefined) {
+      const candidateCompany = await this.getCandidateCompanyUseCase.execute({
+        organizationId: command.organizationId,
+        candidateCompanyId: command.candidateCompanyId,
+      });
+      if (candidateCompany.status === "ARCHIVED") {
+        throw new CandidateCompanyArchivedError();
+      }
+    }
 
     if (command.clientAccountId !== undefined) {
       const client = await this.getClientAccountUseCase.execute({
@@ -94,6 +107,7 @@ export class UpdateOpportunityUseCase {
     opportunity.updateDetails(
       {
         clientAccountId: command.clientAccountId,
+        candidateCompanyId: command.candidateCompanyId,
         buyerId: command.buyerId,
         title: command.title,
         description: command.description,

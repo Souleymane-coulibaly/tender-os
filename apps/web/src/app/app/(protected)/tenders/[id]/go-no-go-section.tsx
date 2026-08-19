@@ -5,10 +5,12 @@ import { generateGoNoGoReportAction, recordTenderGoNoGoDecisionAction } from "..
 import {
   DOCUMENTARY_LOAD_LABELS,
   GO_NO_GO_DECISION_LABELS,
+  GO_NO_GO_FRESHNESS_LABELS,
   LEVEL_2_CATEGORY_LABELS,
   PREP_TIME_LABELS,
   type GoNoGoDecision,
   type GoNoGoDecisionValue,
+  type GoNoGoFreshness,
   type GoNoGoRecommendation,
   type GoNoGoReport,
   type Level2Category,
@@ -37,6 +39,19 @@ function decisionTone(value: GoNoGoDecisionValue | GoNoGoRecommendation): BadgeT
       return "warning";
     case "NO_GO":
       return "danger";
+  }
+}
+
+/** Checkpoint 2.1-P2.1-FIX-C — même discipline que les badges Actualisation requise
+ *  Analyse/Checklist (mission §38 "pas de faux vert"). */
+function freshnessTone(freshness: GoNoGoFreshness): BadgeTone {
+  switch (freshness) {
+    case "CURRENT":
+      return "success";
+    case "STALE":
+      return "warning";
+    case "UNKNOWN":
+      return "neutral";
   }
 }
 
@@ -120,8 +135,13 @@ export function GoNoGoSection({
       title="Rapport GO / NO-GO (analyse complète)"
       actions={
         canGenerate ? (
-          <Button variant="secondary" disabled={isPending} onClick={handleGenerate}>
-            {isPending ? "Génération…" : report ? "Régénérer le rapport" : "Générer le rapport"}
+          <Button
+            variant="secondary"
+            disabled={isPending || report?.dceStale === true}
+            onClick={handleGenerate}
+            title={report?.dceStale ? "Actualisez d'abord l'analyse IA du DCE avant de recalculer le GO/NO-GO." : undefined}
+          >
+            {isPending ? "Génération…" : report ? "Recalculer le GO/NO-GO" : "Générer le rapport"}
           </Button>
         ) : null
       }
@@ -144,7 +164,24 @@ export function GoNoGoSection({
               <span className="text-xs text-tenderos-slate">Confiance {Math.round(report.confidence * 100)}% — Complexité {report.complexity}/5</span>
               <span className="text-xs text-tenderos-slate">Charge documentaire : {DOCUMENTARY_LOAD_LABELS[report.documentaryLoad]}</span>
               <span className="text-xs text-tenderos-slate/70">v{report.reportVersion}</span>
+              {/* Checkpoint 2.1-P2.1-FIX-C — jamais un faux vert (mission §38) : ce badge reflète
+                  la fraîcheur réelle vis-à-vis du DCE/de l'analyse/du candidat courants, calculée à
+                  chaque lecture, jamais figée avec le rapport. */}
+              {report.freshness ? <Badge tone={freshnessTone(report.freshness)}>{GO_NO_GO_FRESHNESS_LABELS[report.freshness]}</Badge> : null}
             </div>
+
+            {report.freshness === "STALE" ? (
+              <p className="text-xs text-amber-700">
+                {[
+                  report.dceStale ? "Le DCE a été modifié depuis ce rapport." : null,
+                  report.analysisStale ? "Une analyse plus récente est disponible." : null,
+                  report.candidateStale ? "L'entreprise candidate a changé depuis ce rapport." : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ")}{" "}
+                Actualisez l&apos;analyse puis recalculez le GO/NO-GO.
+              </p>
+            ) : null}
 
             <div className="rounded-xl bg-tenderos-light p-3">
               <div className="flex items-center gap-2">

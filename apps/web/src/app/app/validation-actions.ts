@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
-import type { FinalApprovalSummary, ValidationRunSummary } from "../../lib/validation-types";
+import type { FinalApprovalSummary, ValidationFreshnessResult, ValidationRunSummary } from "../../lib/validation-types";
 
 function describeValidationActionError(error: unknown): string {
   if (error instanceof AppApiError) {
@@ -79,6 +79,17 @@ export async function approveFinalVersionAction(tenderId: string, validationRunI
     return { approval };
   } catch (error) {
     return { error: describeValidationActionError(error) };
+  }
+}
+
+export async function fetchValidationFreshness(tenderId: string): Promise<ValidationFreshnessResult | null> {
+  try {
+    return await appApiFetch<ValidationFreshnessResult>(`/api/v1/tenders/${tenderId}/validation/freshness`);
+  } catch {
+    // Checkpoint 2.1-P2.1-FIX-E — lecture seule, jamais bloquant : dégradé à `null` (bandeau
+    // simplement absent) sur toute erreur inattendue, même motif que
+    // `fetchTechnicalMemoFreshness`.
+    return null;
   }
 }
 

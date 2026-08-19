@@ -23,11 +23,12 @@ function describeOpportunityActionError(error: unknown): string {
         if (error.code === "OPPORTUNITY_PROMOTION_REQUIRES_GO_DECISION") return "Une décision GO ou GO conditionnel est requise avant de promouvoir cette opportunité.";
         if (error.code === "OPPORTUNITY_PROMOTION_CONFLICT") return "Cette opportunité n'est plus dans un état permettant la promotion.";
         if (error.code === "TENDER_BUSINESS_ANALYSIS_NOT_FOUND") return "L'analyse IA du DCE doit d'abord réussir avant de générer un rapport GO/NO-GO.";
+        if (error.code === "GO_NO_GO_ANALYSIS_NOT_CURRENT") return "Le DCE a changé depuis la dernière analyse : actualisez l'analyse avant de recalculer le GO/NO-GO.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
         if (error.code === "GO_NO_GO_DECISION_JUSTIFICATION_REQUIRED") return "Une justification est obligatoire pour une décision NO GO.";
         if (error.code === "GO_NO_GO_DECISION_CONDITIONS_REQUIRED") return "Des conditions sont obligatoires pour une décision GO conditionnel.";
-        if (error.code === "OPPORTUNITY_MISSING_CLIENT_ACCOUNT") return "Une entreprise candidate doit être rattachée avant de promouvoir cette opportunité.";
+        if (error.code === "OPPORTUNITY_MISSING_CLIENT_ACCOUNT") return "Un client doit être rattaché avant de promouvoir cette opportunité.";
         if (error.code === "GO_NO_GO_ADMIN_BYPASS_JUSTIFICATION_REQUIRED") {
           return "Vous n'êtes pas affecté comme gestionnaire sur ce client : une justification est obligatoire pour agir via votre privilège d'administration.";
         }
@@ -64,6 +65,7 @@ export async function fetchOpportunityDecisions(id: string): Promise<GoNoGoDecis
 export type CreateOpportunityInput = {
   title: string;
   clientAccountId?: string;
+  candidateCompanyId?: string;
   buyerName?: string;
   description?: string;
   sector?: string;
@@ -98,6 +100,7 @@ export async function createOpportunityAction(_prevState: OpportunityFormActionS
       body: JSON.stringify({
         title: title.trim(),
         clientAccountId: optional(formData.get("clientAccountId")),
+        candidateCompanyId: optional(formData.get("candidateCompanyId")),
         buyerName: optional(formData.get("buyerName")),
         description: optional(formData.get("description")),
         sector: optional(formData.get("sector")),

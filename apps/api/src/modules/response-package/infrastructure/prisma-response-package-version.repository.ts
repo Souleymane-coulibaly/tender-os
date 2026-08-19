@@ -8,6 +8,10 @@ import { toDomainResponsePackageVersion, toResponsePackageVersionRow } from "./r
 export class PrismaResponsePackageVersionRepository implements ResponsePackageVersionRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  async lockPackage(input: { organizationId: string; responsePackageId: string }): Promise<void> {
+    await this.prisma.currentClient().$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${input.organizationId}:${input.responsePackageId}`}))`;
+  }
+
   async create(version: ResponsePackageVersion): Promise<void> {
     await this.prisma.currentClient().responsePackageVersion.create({ data: toResponsePackageVersionRow(version) });
   }

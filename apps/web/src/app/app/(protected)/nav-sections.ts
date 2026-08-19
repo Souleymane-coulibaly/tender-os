@@ -28,6 +28,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
       { href: "/app/documents", label: "Documents", tourTarget: "documents" },
       { href: "/app/knowledge", label: "Base de connaissances", tourTarget: "knowledge" },
       { href: "/app/clients", label: "Clients" },
+      { href: "/app/candidate-companies", label: "Entreprises candidates" },
       { href: "/app/subcontractor-profiles", label: "Sous-traitants" },
     ],
   },

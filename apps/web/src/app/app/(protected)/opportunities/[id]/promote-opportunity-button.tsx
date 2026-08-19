@@ -36,7 +36,7 @@ export function PromoteOpportunityButton({ opportunityId }: { opportunityId: str
   return (
     <section className="flex flex-col gap-2 rounded border border-green-200 bg-green-50 p-4">
       <p className="text-sm text-green-800">
-        Cette opportunité peut être promue en appel d&apos;offres. La promotion crée un NOUVEAU dossier appel d&apos;offres et rattache automatiquement l&apos;entreprise candidate.
+        Cette opportunité peut être promue en appel d&apos;offres. La promotion crée un NOUVEAU dossier appel d&apos;offres et rattache automatiquement le client et l&apos;entreprise candidate déjà sélectionnés.
       </p>
       {error ? (
         <p role="alert" className="text-xs text-red-600">

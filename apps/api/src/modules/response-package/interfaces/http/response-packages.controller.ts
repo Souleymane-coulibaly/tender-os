@@ -8,6 +8,7 @@ import { BuildResponsePackageVersionUseCase } from "../../application/use-cases/
 import { CorrectPackageItemQualificationUseCase } from "../../application/use-cases/correct-package-item-qualification.use-case";
 import { GenerateResponsePackageZipUseCase } from "../../application/use-cases/generate-response-package-zip.use-case";
 import { GetPackageCompletenessUseCase } from "../../application/use-cases/get-package-completeness.use-case";
+import { GetResponsePackageFreshnessUseCase } from "../../application/use-cases/get-response-package-freshness.use-case";
 import { GetResponsePackageUseCase } from "../../application/use-cases/get-response-package.use-case";
 import { SelectPackageItemDocumentUseCase } from "../../application/use-cases/select-package-item-document.use-case";
 import { ValidateResponsePackageVersionUseCase } from "../../application/use-cases/validate-response-package-version.use-case";
@@ -32,6 +33,7 @@ export class ResponsePackagesController {
     private readonly getCompletenessUseCase: GetPackageCompletenessUseCase,
     private readonly validateVersionUseCase: ValidateResponsePackageVersionUseCase,
     private readonly generateZipUseCase: GenerateResponsePackageZipUseCase,
+    private readonly getFreshnessUseCase: GetResponsePackageFreshnessUseCase,
   ) {}
 
   @Get(":responsePackageId")
@@ -55,6 +57,20 @@ export class ResponsePackagesController {
       items: result.items.map(toPackageItemSummary),
       artifacts: result.artifacts.map(toPackageArtifactSummary),
     };
+  }
+
+  // Checkpoint 2.1-P2.1-FIX-E — lecture seule, jamais persistée (voir
+  // `GetResponsePackageFreshnessUseCase`) : la version COURANTE du package reste-t-elle CURRENT par
+  // rapport aux pièces réellement attendues aujourd'hui (Checklist/dossier administratif/mémoire
+  // technique/chiffrage final) et au Candidate courant ?
+  @Get(":responsePackageId/freshness")
+  @HttpCode(HttpStatus.OK)
+  async freshness(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("responsePackageId", new ZodValidationPipe(IdParamSchema)) responsePackageId: string,
+  ) {
+    return this.getFreshnessUseCase.execute({ organizationId: membership.organizationId, responsePackageId, actorId: actor.userId, actorRole: membership.role });
   }
 
   @Post(":responsePackageId/build")

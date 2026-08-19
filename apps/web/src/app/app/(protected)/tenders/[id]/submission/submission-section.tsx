@@ -10,10 +10,13 @@ import {
   uploadSubmissionProofAction,
   withdrawTenderSubmissionAction,
 } from "../../../../submission-actions";
+import Link from "next/link";
 import {
   SUBMISSION_PLATFORM_LABELS,
   SUBMISSION_PROOF_TYPE_LABELS,
   SUBMISSION_REJECTION_CATEGORY_LABELS,
+  SUBMISSION_READINESS_ACTION_LABELS,
+  submissionReadinessActionRoute,
   TENDER_SUBMISSION_STATUS_LABELS,
   type TenderSubmissionCapabilities,
   type TenderSubmissionReadinessResult,
@@ -45,40 +48,98 @@ function formatRemainingTime(ms: number | undefined): string | undefined {
   return `${days} j ${hours} h`;
 }
 
-function ReadinessCard({ readiness }: { readiness: TenderSubmissionReadinessResult }) {
+// Checkpoint 2.1-P2.1-FIX-F — la case "Dossier complet" (mission §121-130) reflète l'agrégation
+// backend `fileReadinessReasons`, jamais un calcul frontend : `dossierComplet` est dérivé
+// uniquement de l'absence de raison BLOCKING dans ce que le backend a déjà classifié.
+function FileReadinessSummary({ tenderId, reasons }: { tenderId: string; reasons: TenderSubmissionReadinessResult["fileReadinessReasons"] }) {
+  const blocking = reasons.filter((r) => r.severity === "BLOCKING");
+  const warning = reasons.filter((r) => r.severity === "WARNING");
+  const dossierComplet = blocking.length === 0;
+
   return (
     <div className="flex flex-col gap-2 rounded border border-neutral-200 p-4 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="font-medium">État de préparation</span>
-        <span className="rounded bg-neutral-100 px-2 py-1 text-xs font-medium">{readiness.readinessStatus}</span>
+        <span className="font-medium">Dossier prêt au dépôt</span>
+        <span className={`rounded px-2 py-1 text-xs font-medium ${dossierComplet ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}`}>
+          {dossierComplet ? "Dossier complet" : "Dossier non prêt"}
+        </span>
       </div>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-neutral-700 sm:grid-cols-4">
-        <dt className="text-neutral-500">Package</dt>
-        <dd>{readiness.packageId ? `v${readiness.packageVersion}` : "—"}</dd>
-        <dt className="text-neutral-500">Hash (court)</dt>
-        <dd className="truncate">{readiness.packageHash ? readiness.packageHash.slice(0, 12) : "—"}</dd>
-        <dt className="text-neutral-500">Date limite</dt>
-        <dd>{formatDateTime(readiness.deadline)}</dd>
-        <dt className="text-neutral-500">Temps restant</dt>
-        <dd>{formatRemainingTime(readiness.remainingTimeMs) ?? "—"}</dd>
-      </dl>
-      {readiness.blockers.length > 0 ? (
-        <ul className="list-disc pl-4 text-xs text-red-700">
-          {readiness.blockers.map((blocker) => (
-            <li key={blocker}>{blocker}</li>
+      {blocking.length > 0 ? (
+        <ul className="flex flex-col gap-1 text-xs text-red-700">
+          {blocking.map((reason) => (
+            <li key={reason.code} className="flex flex-wrap items-center justify-between gap-2 rounded bg-red-50 px-2 py-1">
+              <span>{reason.message}</span>
+              {reason.action ? (
+                <Link href={submissionReadinessActionRoute(tenderId, reason.action)} className="shrink-0 text-red-800 underline">
+                  {SUBMISSION_READINESS_ACTION_LABELS[reason.action]}
+                </Link>
+              ) : null}
+            </li>
           ))}
         </ul>
       ) : null}
-      {readiness.warnings.length > 0 ? (
-        <ul className="list-disc pl-4 text-xs text-amber-700">
-          {readiness.warnings.map((warning) => (
-            <li key={warning}>{warning}</li>
+      {warning.length > 0 ? (
+        <ul className="flex flex-col gap-1 text-xs text-amber-700">
+          {warning.map((reason) => (
+            <li key={reason.code} className="flex flex-wrap items-center justify-between gap-2 rounded bg-amber-50 px-2 py-1">
+              <span>{reason.message}</span>
+              {reason.action ? (
+                <Link href={submissionReadinessActionRoute(tenderId, reason.action)} className="shrink-0 text-amber-800 underline">
+                  {SUBMISSION_READINESS_ACTION_LABELS[reason.action]}
+                </Link>
+              ) : null}
+            </li>
           ))}
         </ul>
       ) : null}
-      {readiness.requiredActions.length > 0 ? (
-        <p className="text-xs text-neutral-600">Prochaines actions : {readiness.requiredActions.join(" → ")}</p>
-      ) : null}
+    </div>
+  );
+}
+
+function ReadinessCard({ tenderId, readiness }: { tenderId: string; readiness: TenderSubmissionReadinessResult }) {
+  // Les messages déjà couverts par `fileReadinessReasons` (rendus par FileReadinessSummary
+  // ci-dessus) ne sont pas dupliqués ici — seuls les blockers/warnings historiques (package,
+  // signature, date limite) restent affichés dans cette liste générique.
+  const fileReasonMessages = new Set(readiness.fileReadinessReasons.map((r) => r.message));
+  const otherBlockers = readiness.blockers.filter((b) => !fileReasonMessages.has(b));
+  const otherWarnings = readiness.warnings.filter((w) => !fileReasonMessages.has(w));
+
+  return (
+    <div className="flex flex-col gap-4">
+      <FileReadinessSummary tenderId={tenderId} reasons={readiness.fileReadinessReasons} />
+      <div className="flex flex-col gap-2 rounded border border-neutral-200 p-4 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-medium">État de préparation</span>
+          <span className="rounded bg-neutral-100 px-2 py-1 text-xs font-medium">{readiness.readinessStatus}</span>
+        </div>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-neutral-700 sm:grid-cols-4">
+          <dt className="text-neutral-500">Package</dt>
+          <dd>{readiness.packageId ? `v${readiness.packageVersion}` : "—"}</dd>
+          <dt className="text-neutral-500">Hash (court)</dt>
+          <dd className="truncate">{readiness.packageHash ? readiness.packageHash.slice(0, 12) : "—"}</dd>
+          <dt className="text-neutral-500">Date limite</dt>
+          <dd>{formatDateTime(readiness.deadline)}</dd>
+          <dt className="text-neutral-500">Temps restant</dt>
+          <dd>{formatRemainingTime(readiness.remainingTimeMs) ?? "—"}</dd>
+        </dl>
+        {otherBlockers.length > 0 ? (
+          <ul className="list-disc pl-4 text-xs text-red-700">
+            {otherBlockers.map((blocker) => (
+              <li key={blocker}>{blocker}</li>
+            ))}
+          </ul>
+        ) : null}
+        {otherWarnings.length > 0 ? (
+          <ul className="list-disc pl-4 text-xs text-amber-700">
+            {otherWarnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        ) : null}
+        {readiness.requiredActions.length > 0 ? (
+          <p className="text-xs text-neutral-600">Prochaines actions : {readiness.requiredActions.join(" → ")}</p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -457,7 +518,7 @@ export function SubmissionSection({
 
   return (
     <div className="flex flex-col gap-6">
-      <ReadinessCard readiness={readiness} />
+      <ReadinessCard tenderId={tenderId} readiness={readiness} />
 
       {activeSubmission ? (
         <ActiveSubmissionCard tenderId={tenderId} submission={activeSubmission} capabilities={capabilities} onUpdated={applyUpdatedSubmission} />

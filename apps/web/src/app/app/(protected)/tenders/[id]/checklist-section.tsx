@@ -15,16 +15,18 @@ import {
 } from "../../../actions";
 import { createTaskFromChecklistItemAction } from "../../../workspace-actions";
 import { KNOWLEDGE_CATEGORY_LABELS } from "../../../../../lib/knowledge-types";
-import type {
-  ChecklistComplianceStatus,
-  ChecklistDocumentMatchResult,
-  ChecklistItem,
-  ChecklistItemCriticality,
-  ChecklistItemStatus,
-  ChecklistItemType,
-  ChecklistProgress,
-  ChecklistRequirementLevel,
-  TenderLot,
+import {
+  CHECKLIST_FRESHNESS_LABELS,
+  type ChecklistComplianceStatus,
+  type ChecklistDocumentMatchResult,
+  type ChecklistFreshnessResult,
+  type ChecklistItem,
+  type ChecklistItemCriticality,
+  type ChecklistItemStatus,
+  type ChecklistItemType,
+  type ChecklistProgress,
+  type ChecklistRequirementLevel,
+  type TenderLot,
 } from "../../../../../lib/tenders-types";
 import { Badge, type BadgeTone } from "../../../../../components/ui/badge";
 import { Button } from "../../../../../components/ui/button";
@@ -181,6 +183,12 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
             <Badge tone={complianceTone(item.complianceStatus)}>{complianceStatusLabel(item.complianceStatus)}</Badge>
             {lot ? <Badge tone="info">{lot.title}</Badge> : <Badge tone="neutral">Global</Badge>}
             {item.origin === "AI_SUGGESTION" ? <Badge tone="gold">Suggéré par l&apos;IA</Badge> : null}
+            {/* Checkpoint 2.1-P2.1-FIX-B — signal ADDITIF, jamais une rétrogradation de
+                complianceStatus (mission §20/§21) : un item validé reste affiché "Validé" ci-dessus,
+                ce badge attire seulement l'attention sur une exigence disparue/changée depuis. */}
+            {item.requirementFreshness === "STALE" ? (
+              <Badge tone="warning">Absente de la dernière analyse</Badge>
+            ) : null}
           </div>
           {item.conditionText ? <p className="text-xs italic text-tenderos-slate">Condition : {item.conditionText}</p> : null}
           {item.matchedDocumentId ? (
@@ -437,11 +445,15 @@ export function ChecklistSection({
   items,
   lots,
   progress,
+  freshness,
 }: {
   tenderId: string;
   items: ChecklistItem[];
   lots: TenderLot[];
   progress: ChecklistProgress | null;
+  /** Checkpoint 2.1-P2.1-FIX-B — optionnel : `undefined` pour les tests existants et tout appelant
+   *  antérieur à ce checkpoint, jamais un bandeau fabriqué en son absence. */
+  freshness?: ChecklistFreshnessResult | null;
 }) {
   const boundAction = createChecklistItemAction.bind(null, tenderId);
   const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
@@ -458,21 +470,29 @@ export function ChecklistSection({
     <Card
       title="Checklist"
       actions={
-        <Button
-          variant="secondary"
-          onClick={async () => {
-            const result = await reconcileChecklistWithNewAnalysisAction(tenderId);
-            if (result.error) {
-              setReconcileMessage(result.error);
-            } else if (result.result) {
-              setReconcileMessage(
-                `${result.result.newRequirementSuggestionsCreated} nouvelle(s) suggestion(s), ${result.result.possibleRemovals.length} élément(s) à vérifier.`,
-              );
-            }
-          }}
-        >
-          Comparer avec la dernière analyse
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Checkpoint 2.1-P2.1-FIX-B (mission §31) — axe distinct de la fraîcheur de l'analyse
+              elle-même (déjà affichée dans l'onglet Analyse) : la Checklist peut avoir besoin
+              d'une réconciliation même quand l'analyse est déjà à jour. */}
+          {freshness?.checklistFreshness === "RECONCILIATION_REQUIRED" ? (
+            <Badge tone="warning">{CHECKLIST_FRESHNESS_LABELS.RECONCILIATION_REQUIRED}</Badge>
+          ) : null}
+          <Button
+            variant="secondary"
+            onClick={async () => {
+              const result = await reconcileChecklistWithNewAnalysisAction(tenderId);
+              if (result.error) {
+                setReconcileMessage(result.error);
+              } else if (result.result) {
+                setReconcileMessage(
+                  `${result.result.newRequirementSuggestionsCreated} nouvelle(s) suggestion(s), ${result.result.possibleRemovals.length} élément(s) à vérifier.`,
+                );
+              }
+            }}
+          >
+            Comparer avec la dernière analyse
+          </Button>
+        </div>
       }
     >
       <div className="flex flex-col gap-3">

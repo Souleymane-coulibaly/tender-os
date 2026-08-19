@@ -20,7 +20,7 @@ function describeCompanyProfileActionError(error: unknown): string {
       case 404:
         return "Cette ressource est introuvable ou vous n'y avez pas accès.";
       case 409:
-        if (error.code === "DUPLICATE_SIRET_IN_ORGANIZATION") return "Une autre entreprise candidate de votre organisation utilise déjà ce SIRET.";
+        if (error.code === "DUPLICATE_SIRET_IN_ORGANIZATION") return "Un autre client de votre organisation utilise déjà ce SIRET.";
         return "Cette action entre en conflit avec l'état actuel de cette ressource.";
       case 422:
         if (error.code === "INVALID_COMPANY_IDENTIFIER_FORMAT") return "Le format du SIREN/SIRET/TVA saisi est invalide.";

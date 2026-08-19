@@ -12,12 +12,28 @@ export function buildTenderNavTabs(tenderId: string): readonly TabItem[] {
   const base = `/app/tenders/${tenderId}`;
   return [
     { label: "Vue d'ensemble", href: base },
+    // Checkpoint 2.1-A5 (wave 2, Tender Workspace) — DCE devient un onglet canonique, à parité avec
+    // Administratif/Chiffrage/Mémoire technique qui en disposaient déjà (mission §23, structure
+    // cible "Vue d'ensemble / DCE / Analyse / ..."). Positionné juste après Vue d'ensemble, dans
+    // l'ordre du flux métier réel (DCE avant Analyse, avant tout le reste).
+    { label: "DCE", href: `${base}/dce` },
+    // Checkpoint 2.1-A5 (wave 2) — même motif que DCE : mission §23/§28, juste après DCE (l'analyse
+    // porte sur les documents DCE déjà importés).
+    { label: "Analyse", href: `${base}/analysis` },
+    // Checkpoint 2.1-A5 (wave 2) — checklist GÉNÉRIQUE du Tender (mission §29), distincte de la
+    // checklist ADMINISTRATIVE (documents DC1/DC2/DC4 requis, sous administrative-dossier/checklist)
+    // — deux fonctionnalités réellement différentes (confirmé wave 1), jamais fusionnées.
+    { label: "Checklist", href: `${base}/checklist` },
     { label: "Workspace", href: `${base}/workspace` },
     { label: "Assistant IA", href: `${base}/assistant` },
     { label: "Rédaction IA du mémoire", href: `${base}/technical-memo` },
     { label: "Dossier administratif", href: `${base}/administrative-dossier` },
+    // Checkpoint 2.1-A5 — "Chiffrage" (BPU/DPGF/DQE, prix final soumis à l'acheteur) et
+    // "Estimation & coûts IA" (estimation précoce interne + coût IA réel de TenderOS sur ce Tender,
+    // jamais un prix soumis) sont deux fonctionnalités RÉELLEMENT distinctes qui partageaient
+    // jusqu'ici le mot "Pricing", ambigu côte à côte — jamais fusionnées, seul le libellé change.
     { label: "Chiffrage", href: `${base}/pricing-schedule` },
-    { label: "Pricing", href: `${base}/pricing` },
+    { label: "Estimation & coûts IA", href: `${base}/pricing` },
     { label: "Livrables", href: `${base}/deliverables` },
     { label: "Générations", href: `${base}/generations` },
     { label: "Documents générés", href: `${base}/documents-generated` },

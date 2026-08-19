@@ -1,4 +1,5 @@
 import { DomainError } from "../../../shared-kernel/domain-error";
+import type { SubmissionReadinessReason } from "./submission-readiness-reason";
 
 export class TenderSubmissionNotFoundError extends DomainError {
   readonly code = "TENDER_SUBMISSION_NOT_FOUND";
@@ -14,11 +15,14 @@ export class SubmissionProofNotFoundError extends DomainError {
   }
 }
 
-/** Mission §8/§39 — le dossier n'est pas prêt (readiness bloquante). */
+/** Checkpoint 2.1-P2.1-FIX-F.1 — le dossier n'est pas prêt (au moins une raison BLOCKING parmi
+ *  les 7 dimensions FIX-A..E, réévaluées à l'instant T de l'action, jamais un snapshot frontend).
+ *  `reasons` porte les raisons structurées (code/sévérité/source/message/action) pour un contrat
+ *  d'erreur exploitable (mission §27) — jamais un second contrat HTTP élargi au-delà de ça. */
 export class TenderNotReadyForSubmissionError extends DomainError {
   readonly code = "TENDER_NOT_READY_FOR_SUBMISSION";
-  constructor(reason: string) {
-    super(`Le dossier n'est pas prêt pour le dépôt : ${reason}`);
+  constructor(readonly reasons: readonly SubmissionReadinessReason[]) {
+    super(`Le dossier n'est pas prêt pour le dépôt : ${reasons.map((r) => r.message).join(" ")}`);
   }
 }
 

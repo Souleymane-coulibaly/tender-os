@@ -80,6 +80,15 @@ export class ReplaceDceDocumentUseCase {
       throw new UnsupportedFileTypeError({ filename: command.file.originalFilename });
     }
 
+    // Checkpoint 2.1-P2.1-FIX-A (mission §7, correctif audit — P1 "incrément best-effort après coup
+    // peut masquer un vrai changement") — la révision avance AVANT l'appel à Documents, et son échec
+    // PROPAGE (jamais avalé) : soit rien n'est encore remplacé (retry sûr, aucune DocumentVersion
+    // créée), soit la révision a avancé et le remplacement suit. Si LE REMPLACEMENT échoue ensuite,
+    // le pire état résiduel est "révision avancée sans remplacement réel" (faux STALE, sans danger,
+    // auto-corrigé au prochain vrai changement) — jamais l'inverse ("CURRENT" affiché alors qu'un
+    // remplacement réel n'a pas été comptabilisé), qui serait la direction dangereuse.
+    await this.dceRepository.incrementRevision({ organizationId: command.organizationId, dceId: dce.id.value });
+
     await this.addDocumentVersionUseCase.execute({
       organizationId: command.organizationId,
       documentId: command.documentId,

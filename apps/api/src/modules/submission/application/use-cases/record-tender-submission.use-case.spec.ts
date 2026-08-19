@@ -1,7 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import { RecordTenderSubmissionUseCase } from "./record-tender-submission.use-case";
+import type { GetTenderSubmissionReadinessUseCase } from "./get-tender-submission-readiness.use-case";
 import { TenderSubmission } from "../../domain/tender-submission.aggregate";
-import { ActiveTenderSubmissionAlreadyExistsError, CustomPlatformNameRequiredError, SubmissionDeadlinePassedError, SubmissionPackageMissingError, SubmissionPackageOutdatedError, SubmissionPackageVersionMismatchError } from "../../domain/errors";
+import {
+  ActiveTenderSubmissionAlreadyExistsError,
+  CustomPlatformNameRequiredError,
+  SubmissionDeadlinePassedError,
+  SubmissionPackageMissingError,
+  SubmissionPackageOutdatedError,
+  SubmissionPackageVersionMismatchError,
+  TenderNotReadyForSubmissionError,
+} from "../../domain/errors";
+import type { SubmissionReadinessReason } from "../../domain/submission-readiness-reason";
 import { SubmissionPlatform } from "../../domain/submission-platform";
 import { TenderSubmissionStatus } from "../../domain/tender-submission-status";
 import type { AuditLogWriter } from "../ports/audit-log-writer";
@@ -34,6 +44,31 @@ function resolverWith(packages: readonly SubmissionPackageSummary[]): Submission
   const listUseCase = { execute: vi.fn(async () => packages) } as unknown as ListSubmissionPackagesUseCase;
   return new SubmissionPackageResolverService(listUseCase);
 }
+// Checkpoint 2.1-P2.1-FIX-F.1 — par défaut "dossier complet" (aucune raison, jamais bloquant), pour
+// que les tests existants (qui exercent d'AUTRES guards) restent inchangés. Un test dédié fournit
+// des raisons BLOCKING pour prouver le NOUVEAU guard, sans dupliquer la logique de classification
+// (déjà prouvée par `evaluate-file-readiness.spec.ts`) — ici on teste uniquement le CÂBLAGE.
+function fakeReadinessUseCase(reasons: readonly SubmissionReadinessReason[] = []): { useCase: GetTenderSubmissionReadinessUseCase; resolveSpy: ReturnType<typeof vi.fn> } {
+  const resolveSpy = vi.fn(async () => reasons);
+  return { useCase: { resolveFileReadinessReasons: resolveSpy } as unknown as GetTenderSubmissionReadinessUseCase, resolveSpy };
+}
+function buildUseCase(input: {
+  accessService?: SubmissionAccessService;
+  resolver: SubmissionPackageResolverService;
+  repository: TenderSubmissionRepository;
+  readinessUseCase?: GetTenderSubmissionReadinessUseCase;
+}): RecordTenderSubmissionUseCase {
+  return new RecordTenderSubmissionUseCase(
+    input.accessService ?? fakeAccessService(),
+    input.resolver,
+    input.readinessUseCase ?? fakeReadinessUseCase().useCase,
+    input.repository,
+    fakeAuditLogWriter(),
+    fakeClock(),
+    fakeIdGenerator(),
+  );
+}
+
 function inMemoryRepository(seed: TenderSubmission | null = null): TenderSubmissionRepository {
   let active = seed;
   return {
@@ -53,7 +88,7 @@ function inMemoryRepository(seed: TenderSubmission | null = null): TenderSubmiss
 describe("RecordTenderSubmissionUseCase", () => {
   it("creates a fresh SUBMITTED submission pinned to the exact latest completed package", async () => {
     const repository = inMemoryRepository();
-    const useCase = new RecordTenderSubmissionUseCase(fakeAccessService(), resolverWith([completedPackage()]), repository, fakeAuditLogWriter(), fakeClock(), fakeIdGenerator());
+    const useCase = buildUseCase({ resolver: resolverWith([completedPackage()]), repository });
 
     const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW });
 
@@ -64,7 +99,7 @@ describe("RecordTenderSubmissionUseCase", () => {
 
   it("mission §18/§29 (correctif audit Codex P1) — resolves and persists the manifest's own hash, never left empty", async () => {
     const repository = inMemoryRepository();
-    const useCase = new RecordTenderSubmissionUseCase(fakeAccessService(), resolverWith([completedPackage()]), repository, fakeAuditLogWriter(), fakeClock(), fakeIdGenerator());
+    const useCase = buildUseCase({ resolver: resolverWith([completedPackage()]), repository });
 
     const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW });
 
@@ -73,43 +108,43 @@ describe("RecordTenderSubmissionUseCase", () => {
 
   it("mission §29 (correctif audit Codex P1) — refuses a package with no manifest.json entry at all, never fabricating a hash", async () => {
     const packageWithoutManifest = completedPackage({ files: [] });
-    const useCase = new RecordTenderSubmissionUseCase(fakeAccessService(), resolverWith([packageWithoutManifest]), inMemoryRepository(), fakeAuditLogWriter(), fakeClock(), fakeIdGenerator());
+    const useCase = buildUseCase({ resolver: resolverWith([packageWithoutManifest]), repository: inMemoryRepository() });
     await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW })).rejects.toBeInstanceOf(SubmissionPackageMissingError);
   });
 
   it("refuses a package that is no longer the latest COMPLETED version", async () => {
     const older = completedPackage({ id: "pkg-old", version: 1 });
     const newer = completedPackage({ id: "pkg-new", version: 2 });
-    const useCase = new RecordTenderSubmissionUseCase(fakeAccessService(), resolverWith([older, newer]), inMemoryRepository(), fakeAuditLogWriter(), fakeClock(), fakeIdGenerator());
+    const useCase = buildUseCase({ resolver: resolverWith([older, newer]), repository: inMemoryRepository() });
 
     await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-old", platform: SubmissionPlatform.Place, submittedAt: NOW })).rejects.toBeInstanceOf(SubmissionPackageOutdatedError);
   });
 
   it("refuses a package that does not exist or is not COMPLETED", async () => {
-    const useCase = new RecordTenderSubmissionUseCase(fakeAccessService(), resolverWith([]), inMemoryRepository(), fakeAuditLogWriter(), fakeClock(), fakeIdGenerator());
+    const useCase = buildUseCase({ resolver: resolverWith([]), repository: inMemoryRepository() });
     await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "missing", platform: SubmissionPlatform.Place, submittedAt: NOW })).rejects.toBeInstanceOf(SubmissionPackageMissingError);
   });
 
   it("refuses OTHER platform without a custom name", async () => {
-    const useCase = new RecordTenderSubmissionUseCase(fakeAccessService(), resolverWith([completedPackage()]), inMemoryRepository(), fakeAuditLogWriter(), fakeClock(), fakeIdGenerator());
+    const useCase = buildUseCase({ resolver: resolverWith([completedPackage()]), repository: inMemoryRepository() });
     await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Other, submittedAt: NOW })).rejects.toBeInstanceOf(CustomPlatformNameRequiredError);
   });
 
   it("refuses a submission recorded after the deadline, never silently", async () => {
-    const useCase = new RecordTenderSubmissionUseCase(fakeAccessService("2020-01-01T00:00:00.000Z"), resolverWith([completedPackage()]), inMemoryRepository(), fakeAuditLogWriter(), fakeClock(), fakeIdGenerator());
+    const useCase = buildUseCase({ accessService: fakeAccessService("2020-01-01T00:00:00.000Z"), resolver: resolverWith([completedPackage()]), repository: inMemoryRepository() });
     await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW })).rejects.toBeInstanceOf(SubmissionDeadlinePassedError);
   });
 
   it("refuses a fresh record while a submission is already SUBMITTED/RECEIPT_CONFIRMED — must use replace instead", async () => {
     const existing = TenderSubmission.record({ id: "sub-existing", organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, packageId: "pkg-1", packageVersion: 1, packageHash: "a".repeat(64), submittedByUserId: "user-1", submittedAt: NOW, platform: SubmissionPlatform.Place, occurredAt: NOW });
-    const useCase = new RecordTenderSubmissionUseCase(fakeAccessService(), resolverWith([completedPackage()]), inMemoryRepository(existing), fakeAuditLogWriter(), fakeClock(), fakeIdGenerator());
+    const useCase = buildUseCase({ resolver: resolverWith([completedPackage()]), repository: inMemoryRepository(existing) });
     await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW })).rejects.toBeInstanceOf(ActiveTenderSubmissionAlreadyExistsError);
   });
 
   it("completes a SUBMISSION_IN_PROGRESS row in place (READY_FOR_SUBMISSION -> SUBMITTED transition)", async () => {
     const started = TenderSubmission.start({ id: "sub-1", organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, packageId: "pkg-1", packageVersion: 1, packageHash: "a".repeat(64), startedByUserId: "user-1", platform: SubmissionPlatform.Place, occurredAt: NOW });
     const repository = inMemoryRepository(started);
-    const useCase = new RecordTenderSubmissionUseCase(fakeAccessService(), resolverWith([completedPackage()]), repository, fakeAuditLogWriter(), fakeClock(), fakeIdGenerator());
+    const useCase = buildUseCase({ resolver: resolverWith([completedPackage()]), repository });
 
     const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.AwsAchat, submittedAt: NOW });
 
@@ -121,7 +156,7 @@ describe("RecordTenderSubmissionUseCase", () => {
 
   it("refuses to complete an IN_PROGRESS row with a DIFFERENT package than the one pinned at start", async () => {
     const started = TenderSubmission.start({ id: "sub-1", organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, packageId: "pkg-1", packageVersion: 1, packageHash: "a".repeat(64), startedByUserId: "user-1", platform: SubmissionPlatform.Place, occurredAt: NOW });
-    const useCase = new RecordTenderSubmissionUseCase(fakeAccessService(), resolverWith([completedPackage({ id: "pkg-2" })]), inMemoryRepository(started), fakeAuditLogWriter(), fakeClock(), fakeIdGenerator());
+    const useCase = buildUseCase({ resolver: resolverWith([completedPackage({ id: "pkg-2" })]), repository: inMemoryRepository(started) });
     await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-2", platform: SubmissionPlatform.Place, submittedAt: NOW })).rejects.toBeInstanceOf(SubmissionPackageVersionMismatchError);
   });
 
@@ -129,7 +164,59 @@ describe("RecordTenderSubmissionUseCase", () => {
     const started = TenderSubmission.start({ id: "sub-1", organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, packageId: "pkg-1", packageVersion: 1, packageHash: "a".repeat(64), startedByUserId: "user-1", platform: SubmissionPlatform.Place, occurredAt: NOW });
     const stalePinned = completedPackage({ id: "pkg-1", version: 1 });
     const newerGeneratedSinceStart = completedPackage({ id: "pkg-2", version: 2 });
-    const useCase = new RecordTenderSubmissionUseCase(fakeAccessService(), resolverWith([stalePinned, newerGeneratedSinceStart]), inMemoryRepository(started), fakeAuditLogWriter(), fakeClock(), fakeIdGenerator());
+    const useCase = buildUseCase({ resolver: resolverWith([stalePinned, newerGeneratedSinceStart]), repository: inMemoryRepository(started) });
     await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW })).rejects.toBeInstanceOf(SubmissionPackageOutdatedError);
+  });
+
+  describe("Checkpoint 2.1-P2.1-FIX-F.1 — readiness backend obligatoire (ferme le P1 Codex)", () => {
+    it("TEST 1 — a BLOCKING reason from the readiness authority refuses the deposit, carrying the reasons on the error", async () => {
+      const blocking: SubmissionReadinessReason = { code: "ANALYSIS_STALE", severity: "BLOCKING", source: "ANALYSIS", message: "L'analyse du DCE n'est plus à jour.", action: "REANALYZE_DCE" };
+      const useCase = buildUseCase({ resolver: resolverWith([completedPackage()]), repository: inMemoryRepository(), readinessUseCase: fakeReadinessUseCase([blocking]).useCase });
+
+      const call = useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW });
+      await expect(call).rejects.toBeInstanceOf(TenderNotReadyForSubmissionError);
+      await expect(call.catch((error: TenderNotReadyForSubmissionError) => error.reasons)).resolves.toEqual([blocking]);
+    });
+
+    it("TEST 7 — a WARNING-only reason (e.g. GO/NO-GO = NO_GO) never blocks the deposit", async () => {
+      const warningOnly: SubmissionReadinessReason = { code: "GONOGO_NO_GO", severity: "WARNING", source: "GO_NO_GO", message: "La dernière recommandation GO/NO-GO était NO-GO." };
+      const repository = inMemoryRepository();
+      const useCase = buildUseCase({ resolver: resolverWith([completedPackage()]), repository, readinessUseCase: fakeReadinessUseCase([warningOnly]).useCase });
+
+      const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW });
+      expect(result.status).toBe(TenderSubmissionStatus.Submitted);
+    });
+
+    it("mission §15/§38 (TOCTOU) — the readiness authority is queried fresh on EVERY call, never cached across two invocations of the same use case instance", async () => {
+      let currentReasons: SubmissionReadinessReason[] = [];
+      const readinessUseCase = { resolveFileReadinessReasons: vi.fn(async () => currentReasons) } as unknown as GetTenderSubmissionReadinessUseCase;
+      const useCase = buildUseCase({ resolver: resolverWith([completedPackage()]), repository: inMemoryRepository(), readinessUseCase });
+
+      // T0 — dossier prêt : succès.
+      const first = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW });
+      expect(first.status).toBe(TenderSubmissionStatus.Submitted);
+
+      // T1 — mutation : la dimension Analyse devient STALE entre les deux appels (jamais un
+      // snapshot figé au premier appel).
+      currentReasons = [{ code: "ANALYSIS_STALE", severity: "BLOCKING", source: "ANALYSIS", message: "L'analyse du DCE n'est plus à jour." }];
+
+      // T2 — un second dépôt (Tender différent, même use case instance) doit revalider l'état
+      // COURANT, jamais réutiliser le résultat mis en cache au premier appel.
+      const secondCall = useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: "tender-2", packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW });
+      await expect(secondCall).rejects.toBeInstanceOf(TenderNotReadyForSubmissionError);
+      expect(readinessUseCase.resolveFileReadinessReasons).toHaveBeenCalledTimes(2);
+    });
+
+    it("preserves the legacy deadline guard even when the readiness authority reports zero blocking reasons", async () => {
+      const useCase = buildUseCase({ accessService: fakeAccessService("2020-01-01T00:00:00.000Z"), resolver: resolverWith([completedPackage()]), repository: inMemoryRepository(), readinessUseCase: fakeReadinessUseCase([]).useCase });
+      await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW })).rejects.toBeInstanceOf(SubmissionDeadlinePassedError);
+    });
+
+    it("preserves the legacy outdated-package guard even when the readiness authority reports zero blocking reasons", async () => {
+      const older = completedPackage({ id: "pkg-old", version: 1 });
+      const newer = completedPackage({ id: "pkg-new", version: 2 });
+      const useCase = buildUseCase({ resolver: resolverWith([older, newer]), repository: inMemoryRepository(), readinessUseCase: fakeReadinessUseCase([]).useCase });
+      await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-old", platform: SubmissionPlatform.Place, submittedAt: NOW })).rejects.toBeInstanceOf(SubmissionPackageOutdatedError);
+    });
   });
 });

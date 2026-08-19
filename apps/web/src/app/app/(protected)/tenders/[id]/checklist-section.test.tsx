@@ -161,4 +161,33 @@ describe("ChecklistSection", () => {
     );
     expect(await screen.findByText("Ajoutée à la bibliothèque — voir l'entrée")).toBeInTheDocument();
   });
+
+  it("shows a 'Réconciliation requise' badge when the checklist freshness signal says so", () => {
+    render(
+      <ChecklistSection tenderId="tender-1" items={ITEMS} lots={LOTS} progress={PROGRESS} freshness={{ checklistFreshness: "RECONCILIATION_REQUIRED" }} />,
+    );
+    expect(screen.getByText("Réconciliation requise")).toBeInTheDocument();
+  });
+
+  it("never shows the reconciliation badge when the checklist is already CURRENT or freshness is unavailable", () => {
+    const { rerender } = render(
+      <ChecklistSection tenderId="tender-1" items={ITEMS} lots={LOTS} progress={PROGRESS} freshness={{ checklistFreshness: "CURRENT" }} />,
+    );
+    expect(screen.queryByText("Réconciliation requise")).not.toBeInTheDocument();
+
+    rerender(<ChecklistSection tenderId="tender-1" items={ITEMS} lots={LOTS} progress={PROGRESS} freshness={null} />);
+    expect(screen.queryByText("Réconciliation requise")).not.toBeInTheDocument();
+  });
+
+  it("flags an item whose requirement was not found in the last reconciled analysis, without touching its compliance badge", () => {
+    render(<ChecklistSection tenderId="tender-1" items={[baseItem({ complianceStatus: "VALIDATED", requirementFreshness: "STALE" })]} lots={LOTS} progress={PROGRESS} />);
+
+    expect(screen.getByText("Absente de la dernière analyse")).toBeInTheDocument();
+    expect(screen.getByText("Validé")).toBeInTheDocument();
+  });
+
+  it("never shows the requirement-freshness badge for a CURRENT item", () => {
+    render(<ChecklistSection tenderId="tender-1" items={[baseItem({ requirementFreshness: "CURRENT" })]} lots={LOTS} progress={PROGRESS} />);
+    expect(screen.queryByText("Absente de la dernière analyse")).not.toBeInTheDocument();
+  });
 });

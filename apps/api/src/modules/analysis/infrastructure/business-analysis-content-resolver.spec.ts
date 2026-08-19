@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { DceRepository } from "../../dce";
 import type { DocumentAnalysisInput, GetDocumentAnalysisInputUseCase } from "../../extraction";
 import { AnalysisJob } from "../domain/analysis-job.aggregate";
 import { AnalysisScope } from "../domain/analysis-scope";
@@ -20,6 +21,13 @@ const DOCUMENT = randomUUID();
 const DCE = randomUUID();
 const DOCUMENT_VERSION = randomUUID();
 const NOW = new Date("2026-07-30T10:00:00Z");
+const DCE_REVISION = 4;
+
+/** Checkpoint 2.1-P2.1-FIX-A — fake minimal, seul `findByTenderId` est consommé par le resolver
+ *  (résolution de `Dce.revision` au moment de `handleSuccess`, scope TENDER uniquement). */
+function fakeDceRepository(revision: number | undefined = DCE_REVISION): DceRepository {
+  return { findByTenderId: async () => (revision === undefined ? null : ({ revision } as never)) } as unknown as DceRepository;
+}
 
 function fakeDocumentInput(overrides?: Partial<DocumentAnalysisInput>): DocumentAnalysisInput {
   return {
@@ -89,6 +97,7 @@ describe("BusinessAnalysisContentResolver", () => {
       getDocumentAnalysisInputUseCase as unknown as GetDocumentAnalysisInputUseCase,
       businessAnalysisRepository,
       new StaticPromptTemplateProvider(),
+      fakeDceRepository(),
     );
   });
 
@@ -321,6 +330,7 @@ describe("BusinessAnalysisContentResolver", () => {
         getDocumentAnalysisInputUseCase as unknown as GetDocumentAnalysisInputUseCase,
         spyRepository,
         new StaticPromptTemplateProvider(),
+        fakeDceRepository(),
       );
       const successFromSpy = await spyResolver.handleSuccess(job, raw);
       await successFromSpy.persist({} as never);
@@ -331,6 +341,8 @@ describe("BusinessAnalysisContentResolver", () => {
       // documentVersionId à partir de `consolidatedAnalyses` (déjà chargé pour la validation de
       // provenance), jamais une seconde résolution I/O au moment du mapping.
       expect(capturedInput?.documentVersionsByDocumentId).toEqual({ [DOCUMENT]: DOCUMENT_VERSION });
+      // Checkpoint 2.1-P2.1-FIX-A — la révision DCE courante est capturée sur la consolidation.
+      expect(capturedInput?.dceRevision).toBe(DCE_REVISION);
     });
 
     it("throws AiProvenanceValidationFailedError when a finding cites a documentId never consolidated for this tender (invented source)", async () => {

@@ -11,6 +11,9 @@ export type ResponsePackageVersionProps = {
   createdAt: Date;
   validatedBy?: string | undefined;
   validatedAt?: Date | undefined;
+  /** Checkpoint 2.1-P2.1-FIX-E — `Tender.candidateCompanyId` résolu au moment de la construction de
+   *  cette version, `undefined` pour une version écrite avant ce checkpoint. */
+  candidateCompanyId?: string | undefined;
 };
 
 /** Historique APPEND-ONLY (mission §11) — une fois VALIDATED (mission §50), cette version devient
@@ -19,7 +22,15 @@ export type ResponsePackageVersionProps = {
 export class ResponsePackageVersion {
   private constructor(private props: ResponsePackageVersionProps) {}
 
-  static create(input: { id: string; organizationId: string; responsePackageId: string; versionNumber: number; createdBy: string; occurredAt: Date }): ResponsePackageVersion {
+  static create(input: {
+    id: string;
+    organizationId: string;
+    responsePackageId: string;
+    versionNumber: number;
+    createdBy: string;
+    occurredAt: Date;
+    candidateCompanyId?: string | undefined;
+  }): ResponsePackageVersion {
     return new ResponsePackageVersion({
       id: input.id,
       organizationId: input.organizationId,
@@ -28,6 +39,7 @@ export class ResponsePackageVersion {
       status: ResponsePackageVersionStatus.Draft,
       createdBy: input.createdBy,
       createdAt: input.occurredAt,
+      candidateCompanyId: input.candidateCompanyId,
     });
   }
 
@@ -83,5 +95,8 @@ export class ResponsePackageVersion {
   }
   get isValidated(): boolean {
     return this.props.status === ResponsePackageVersionStatus.Validated;
+  }
+  get candidateCompanyId(): string | undefined {
+    return this.props.candidateCompanyId;
   }
 }

@@ -138,6 +138,8 @@ describe("Administrative Dossier — V2 Sprint 11 DC4 real official form fill (r
     await prisma.documentVersion.deleteMany({ where: { organizationId: orgId } });
     await prisma.document.deleteMany({ where: { organizationId: orgId } });
     await prisma.tender.deleteMany({ where: { organizationId: orgId } });
+    await prisma.candidateEstablishment.deleteMany({ where: { organizationId: orgId } });
+    await prisma.candidateCompany.deleteMany({ where: { organizationId: orgId } });
     await prisma.clientAssignment.deleteMany({ where: { organizationId: orgId } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: orgId } });
     await prisma.auditLog.deleteMany({ where: { organizationId: orgId } });
@@ -224,5 +226,63 @@ describe("Administrative Dossier — V2 Sprint 11 DC4 real official form fill (r
     const documentXml = await zip.file("word/document.xml")?.async("string");
     expect(documentXml).toContain("Travaux de peinture");
     expect(documentXml).not.toContain("M. Dupont");
+  }, 15000); // Checkpoint 2.1-A4 (correctif post-audit) — prepare/profile/declaration/readiness/
+  // generate/download dans un seul test, désormais dépassé par l'appel best-effort supplémentaire
+  // à ResolveCandidateIdentityUseCase dans le résolveur DC4 (même discipline que la note identique
+  // dans administrative-dossier-official-form-fill-http.integration.spec.ts).
+
+  it("BLOCKING (audit post-A4, correctif P1/P2-01) — a Tender linked to a CandidateCompany resolves titulaire.tradeName/siret/address/legalForm from CandidateCompany, NEVER from the ClientAccount's legal identity", async () => {
+    const clientAccount = await prisma.clientAccount.create({
+      data: { id: randomUUID(), organizationId: orgId, name: `Client DC4 Moderne ${randomUUID()}`, nameNormalized: "client dc4 moderne", status: "ACTIVE", createdBy: userIds[0]! },
+    });
+    const tender = await prisma.tender.create({
+      data: { id: randomUUID(), organizationId: orgId, clientAccountId: clientAccount.id, title: "Marche DC4 - candidate moderne", buyerName: "Commune de Test", status: "DRAFT", tags: [], createdBy: userIds[0]! },
+    });
+    const legalIdentityRes = await fetch(`${baseUrl}/api/v1/clients/${clientAccount.id}/legal-identity`, {
+      method: "PATCH",
+      headers: jsonHeaders(tokenOwner),
+      body: JSON.stringify({ legalName: "Client Legacy Legal SAS", tradeName: "Client Legacy Legal SAS", siren: "356000000", siretPrincipal: "35600000000048", addressLine: "1 rue du Titulaire", postalCode: "75001", city: "Paris", confirmDuplicate: true }),
+    });
+    expect(legalIdentityRes.status).toBe(200);
+
+    const candidateCompany = await prisma.candidateCompany.create({
+      data: { id: randomUUID(), organizationId: orgId, name: "Titulaire Moderne SAS", nameNormalized: "titulaire moderne sas", legalName: "Titulaire Moderne SAS", siren: "321000000", legalForm: "SAS", status: "ACTIVE", createdBy: userIds[0]! },
+    });
+    await prisma.candidateEstablishment.create({
+      data: { id: randomUUID(), organizationId: orgId, candidateCompanyId: candidateCompany.id, siret: "32100000000014", isPrincipal: true, addressLine: "5 rue du Titulaire Moderne", postalCode: "44000", city: "Nantes", country: "FR", createdBy: userIds[0]! },
+    });
+    await prisma.tender.update({ where: { id_organizationId: { id: tender.id, organizationId: orgId } }, data: { candidateCompanyId: candidateCompany.id } });
+
+    const profileRes = await fetch(`${baseUrl}/api/v1/subcontractor-profiles`, {
+      method: "POST",
+      headers: jsonHeaders(tokenOwner),
+      body: JSON.stringify({ legalName: "Sous-Traitant Moderne SARL", tradeName: "Sous-Traitant Moderne SARL", siret: "35600000000048", addressLine: "2 rue du Sous-traitant", postalCode: "69001", city: "Lyon", contactEmail: "st2@example.test", confirmDuplicate: true }),
+    });
+    expect(profileRes.status).toBe(201);
+    const profile = (await profileRes.json()) as { id: string };
+
+    const declarationRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/administrative-subcontractors`, {
+      method: "POST",
+      headers: jsonHeaders(tokenOwner),
+      body: JSON.stringify({ subcontractorName: "Sous-Traitant Moderne SARL", servicesDescription: "Travaux electriques", amountValue: 5000, amountCurrency: "EUR", subcontractorProfileId: profile.id }),
+    });
+    expect(declarationRes.status).toBe(201);
+    const declaration = (await declarationRes.json()) as { id: string };
+
+    const readinessRes = await fetch(`${baseUrl}/api/v1/subcontractor-declarations/${declaration.id}/official-forms/dc4/readiness`, { headers: jsonHeaders(tokenOwner) });
+    expect(readinessRes.status).toBe(200);
+    const readiness = (await readinessRes.json()) as { fields: { fieldKey: string; status: string; value?: unknown }[] };
+    expect(readiness.fields.find((f) => f.fieldKey === "titulaire.tradeName")).toMatchObject({ status: "AVAILABLE", value: "Titulaire Moderne SAS" });
+    expect(readiness.fields.find((f) => f.fieldKey === "titulaire.siret")).toMatchObject({ status: "AVAILABLE", value: "32100000000014" });
+    expect(readiness.fields.find((f) => f.fieldKey === "titulaire.legalForm")).toMatchObject({ status: "AVAILABLE", value: "SAS" });
+
+    const generateRes = await fetch(`${baseUrl}/api/v1/subcontractor-declarations/${declaration.id}/official-forms/dc4/generate`, { method: "POST", headers: jsonHeaders(tokenOwner) });
+    expect(generateRes.status).toBe(201);
+    const generated = (await generateRes.json()) as { revisions: { artifactDocumentId?: string }[] };
+    const downloadRes = await fetch(`${baseUrl}/api/v1/documents/${generated.revisions[0]!.artifactDocumentId}/download`, { headers: jsonHeaders(tokenOwner) });
+    const zip = await JSZip.loadAsync(Buffer.from(await downloadRes.arrayBuffer()));
+    const documentXml = await zip.file("word/document.xml")?.async("string");
+    expect(documentXml).toContain("Titulaire Moderne SAS");
+    expect(documentXml).not.toContain("Client Legacy Legal SAS");
   });
 });

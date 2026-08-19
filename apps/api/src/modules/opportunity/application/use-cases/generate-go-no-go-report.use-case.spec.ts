@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import type { CompanyProfileSummary, GetCompanyProfileUseCase } from "../../../company-profile";
+import { describe, expect, it, vi } from "vitest";
+import { CandidateIdentitySource, type CandidateIdentitySummary, type ResolveCandidateIdentityUseCase } from "../../../candidate-company";
+import { TemporalValidityStatus, type CompanyProfileSummary, type GetCompanyProfileUseCase } from "../../../company-profile";
 import type { DceDocumentSummary } from "../../../dce";
 import { DceNotFoundError, type ListDceDocumentsUseCase } from "../../../dce";
 import type {
@@ -15,6 +16,7 @@ import type { AiSuggestionSummary, ListAiSuggestionsUseCase } from "../../../ai-
 import { Tender } from "../../../tenders/domain/tender.aggregate";
 import { TenderId } from "../../../tenders/domain/tender-id.value-object";
 import { GetTenderUseCase, TenderPermissionMissingError } from "../../../tenders";
+import { GoNoGoAnalysisNotCurrentError } from "../../domain/errors";
 import {
   createClientPortfolioTestFixture,
   DEFAULT_TEST_CLIENT_ACCOUNT_ID,
@@ -32,6 +34,11 @@ function analysisSummary(overrides: Partial<EffectiveTenderAnalysisSummary> = {}
   return {
     id: "summary-1",
     analysisVersion: 3,
+    dceRevision: 3,
+    // Checkpoint 2.1-P2.1-FIX-C — CURRENT par défaut : ces tests exercent la génération normale
+    // (candidat, scoring, DCE), jamais la précondition de fraîcheur elle-même (voir la suite dédiée
+    // "Freshness precondition" plus bas, qui override explicitement ce champ).
+    analysisFreshness: "CURRENT",
     opportunitySummary: "Marché de nettoyage de bureaux.",
     complexityLevel: "MEDIUM",
     mainCriteria: [],
@@ -48,7 +55,7 @@ function analysisSummary(overrides: Partial<EffectiveTenderAnalysisSummary> = {}
   };
 }
 
-function emptyCompanyProfileSummary(): CompanyProfileSummary {
+function emptyCompanyProfileSummary(overrides: Partial<CompanyProfileSummary> = {}): CompanyProfileSummary {
   return {
     clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
     legalIdentity: null,
@@ -61,7 +68,36 @@ function emptyCompanyProfileSummary(): CompanyProfileSummary {
     materialResources: [],
     documents: [],
     completeness: { identity: "MISSING", banking: "MISSING", insurances: "MISSING", certifications: "MISSING", references: "MISSING", resources: "MISSING", documents: "MISSING" },
+    ...overrides,
   };
+}
+
+/** CLIENT-X : profil entreprise avec une certification valide (sans échéance) — signal net pour
+ *  distinguer une catégorie "certifications" alimentée (score 100) d'une catégorie non alimentée
+ *  (score 0, `!companyProfile` dans `scoreCertificationsFromProfile`). */
+function companyProfileWithValidCertification(): CompanyProfileSummary {
+  return emptyCompanyProfileSummary({
+    certifications: [
+      {
+        id: "cert-1",
+        organizationId: ORG,
+        clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+        name: "Qualibat",
+        issuer: null,
+        number: null,
+        type: null,
+        scope: null,
+        obtainedAt: null,
+        expiresAt: null,
+        documentId: null,
+        status: "ACTIVE",
+        createdBy: "user-1",
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+        updatedAt: new Date("2026-01-01T00:00:00Z"),
+        temporalStatus: TemporalValidityStatus.Valid,
+      },
+    ],
+  });
 }
 
 class FakeEffectiveAnalysisUseCase {
@@ -95,14 +131,38 @@ class FakeListDceDocumentsUseCase {
 }
 
 class FakeGetCompanyProfileUseCase {
+  calls: unknown[] = [];
   constructor(private readonly summary: CompanyProfileSummary = emptyCompanyProfileSummary()) {}
-  async execute(): Promise<CompanyProfileSummary> {
+  async execute(input: unknown): Promise<CompanyProfileSummary> {
+    this.calls.push(input);
     return this.summary;
   }
 }
 
-async function buildHarness(options: { analysis?: EffectiveTenderAnalysisSummary | Error; dce?: readonly DceDocumentSummary[] | Error } = {}) {
-  const reportRepository = new InMemoryGoNoGoReportRepository();
+class FakeResolveCandidateIdentityUseCase {
+  calls: unknown[] = [];
+  constructor(private readonly result: CandidateIdentitySummary) {}
+  async execute(input: unknown): Promise<CandidateIdentitySummary> {
+    this.calls.push(input);
+    return this.result;
+  }
+}
+
+async function buildHarness(
+  options: {
+    analysis?: EffectiveTenderAnalysisSummary | Error;
+    dce?: readonly DceDocumentSummary[] | Error;
+    candidateCompanyId?: string | undefined;
+    candidateIdentity?: CandidateIdentitySummary;
+    companyProfile?: CompanyProfileSummary;
+    tenderId?: string;
+    /** Checkpoint 2.1-P2.1-FIX-C — permet à deux harnesses de partager le MÊME
+     *  `GoNoGoReportRepository` (même tenderId) pour tester l'ordre de réservation de version entre
+     *  deux exécutions distinctes, sans dupliquer toute la construction du harness. */
+    reportRepository?: InMemoryGoNoGoReportRepository;
+  } = {},
+) {
+  const reportRepository = options.reportRepository ?? new InMemoryGoNoGoReportRepository();
   const auditLogWriter = new InMemoryAuditLogWriter();
   const outboxWriter = new FakeOutboxWriter();
   const requestedDocumentRepository = new InMemoryRequestedDocumentRepository();
@@ -111,9 +171,10 @@ async function buildHarness(options: { analysis?: EffectiveTenderAnalysisSummary
   const clientPortfolio = await createClientPortfolioTestFixture(ORG);
 
   const tender = Tender.create({
-    id: TenderId.from(TENDER_ID),
+    id: TenderId.from(options.tenderId ?? TENDER_ID),
     organizationId: ORG,
     clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+    candidateCompanyId: options.candidateCompanyId,
     title: "Marché de nettoyage",
     createdBy: "user-1",
     occurredAt: new Date("2026-01-01T00:00:00Z"),
@@ -121,6 +182,8 @@ async function buildHarness(options: { analysis?: EffectiveTenderAnalysisSummary
   await tenderRepository.seed(tender);
 
   const getTenderUseCase = new GetTenderUseCase(tenderRepository, clientPortfolio.assertClientAccessUseCase);
+  const fakeGetCompanyProfileUseCase = new FakeGetCompanyProfileUseCase(options.companyProfile ?? emptyCompanyProfileSummary());
+  const fakeResolveCandidateIdentityUseCase = new FakeResolveCandidateIdentityUseCase(options.candidateIdentity ?? { source: CandidateIdentitySource.None });
 
   const useCase = new GenerateGoNoGoReportUseCase(
     reportRepository,
@@ -139,10 +202,11 @@ async function buildHarness(options: { analysis?: EffectiveTenderAnalysisSummary
     new FakeFindingsUseCase() as unknown as ListTenderClausesUseCase,
     new FakeListAiSuggestionsUseCase() as unknown as ListAiSuggestionsUseCase,
     new FakeListDceDocumentsUseCase(options.dce ?? []) as unknown as ListDceDocumentsUseCase,
-    new FakeGetCompanyProfileUseCase() as unknown as GetCompanyProfileUseCase,
+    fakeGetCompanyProfileUseCase as unknown as GetCompanyProfileUseCase,
+    fakeResolveCandidateIdentityUseCase as unknown as ResolveCandidateIdentityUseCase,
   );
 
-  return { reportRepository, auditLogWriter, outboxWriter, useCase };
+  return { reportRepository, auditLogWriter, outboxWriter, useCase, fakeGetCompanyProfileUseCase, fakeResolveCandidateIdentityUseCase };
 }
 
 describe("GenerateGoNoGoReportUseCase", () => {
@@ -195,5 +259,182 @@ describe("GenerateGoNoGoReportUseCase", () => {
 
     expect(auditLogWriter.entries[0]?.action).toBe("opportunity.go_no_go_report_generated");
     expect(outboxWriter.writes[0]?.events[0]?.eventType).toBe("GoNoGoReportGenerated");
+  });
+
+  describe("Candidate SOT (Checkpoint 2.1-A6.2)", () => {
+    it("BLOQUANT (test SOT critique) — a Tender with a resolved CandidateCompany NEVER calls GetCompanyProfileUseCase, even though clientAccountId is always set", async () => {
+      const { useCase, fakeGetCompanyProfileUseCase, fakeResolveCandidateIdentityUseCase } = await buildHarness({
+        candidateCompanyId: "candidate-alpha",
+        candidateIdentity: { source: CandidateIdentitySource.CandidateCompany, candidateCompanyId: "candidate-alpha", legalName: "CANDIDATE-ALPHA" },
+      });
+
+      const record = await useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" });
+
+      expect(fakeGetCompanyProfileUseCase.calls).toHaveLength(0);
+      expect(fakeResolveCandidateIdentityUseCase.calls).toEqual([{ organizationId: ORG, candidateCompanyId: "candidate-alpha" }]);
+      expect(record.reportVersion).toBe(1);
+    });
+
+    it("LEGACY FLOW — a Tender without candidateCompanyId keeps resolving capacities from clientAccountId exactly as before A6.2", async () => {
+      const { useCase, fakeGetCompanyProfileUseCase } = await buildHarness();
+
+      await useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" });
+
+      expect(fakeGetCompanyProfileUseCase.calls).toHaveLength(1);
+      expect(fakeGetCompanyProfileUseCase.calls[0]).toMatchObject({ clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID });
+    });
+
+    it("a candidateCompanyId that fails to resolve (archived/not found) degrades to source=NONE and falls back to clientAccountId — never a hard crash", async () => {
+      const { useCase, fakeGetCompanyProfileUseCase } = await buildHarness({ candidateCompanyId: "candidate-deleted", candidateIdentity: { source: CandidateIdentitySource.None } });
+
+      const record = await useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" });
+
+      expect(fakeGetCompanyProfileUseCase.calls).toHaveLength(1);
+      expect(record.reportVersion).toBe(1);
+    });
+
+    it("BLOQUANT (F-A6.2-02, divergence CLIENT-X/CANDIDATE-ALPHA) — CLIENT-X's valid certification never inflates the certifications score once CANDIDATE-ALPHA is resolved for this Tender", async () => {
+      const clientXProfile = companyProfileWithValidCertification();
+
+      // LEGACY-Z: no candidate at all, company-profile (CLIENT-X) drives the certifications score.
+      const legacy = await buildHarness({ companyProfile: clientXProfile, candidateIdentity: { source: CandidateIdentitySource.None } });
+      const legacyRecord = await legacy.useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" });
+
+      // CANDIDATE-ALPHA resolved: same CLIENT-X profile data exists, but must never be used.
+      const modern = await buildHarness({
+        companyProfile: clientXProfile,
+        candidateCompanyId: "candidate-alpha",
+        candidateIdentity: { source: CandidateIdentitySource.CandidateCompany, candidateCompanyId: "candidate-alpha", legalName: "CANDIDATE-ALPHA" },
+      });
+      const modernRecord = await modern.useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" });
+
+      // LEGACY-Z benefits from CLIENT-X's valid certification (score 100, established behavior via
+      // scoreCertificationsFromProfile). CANDIDATE-ALPHA must NOT inherit that score — no profile is
+      // ever consulted for a resolved CandidateCompany, so the category degrades to `!companyProfile` (0).
+      expect(legacyRecord.categoryScores.certifications.score).toBe(100);
+      expect(modernRecord.categoryScores.certifications.score).toBe(0);
+    });
+
+    it("BLOQUANT (F-A6.2-03, multi-candidate isolation) — two Tenders resolving two different CandidateCompanies never cross-contaminate each other's GO/NO-GO report", async () => {
+      const tenderAlpha = await buildHarness({
+        tenderId: "tender-alpha",
+        candidateCompanyId: "candidate-alpha",
+        candidateIdentity: { source: CandidateIdentitySource.CandidateCompany, candidateCompanyId: "candidate-alpha", legalName: "CANDIDATE-ALPHA" },
+      });
+      const tenderBeta = await buildHarness({
+        tenderId: "tender-beta",
+        candidateCompanyId: "candidate-beta",
+        candidateIdentity: { source: CandidateIdentitySource.CandidateCompany, candidateCompanyId: "candidate-beta", legalName: "CANDIDATE-BETA" },
+      });
+
+      await tenderAlpha.useCase.execute({ organizationId: ORG, tenderId: "tender-alpha", actorId: "user-1", actorRole: "BID_MANAGER" });
+      await tenderBeta.useCase.execute({ organizationId: ORG, tenderId: "tender-beta", actorId: "user-1", actorRole: "BID_MANAGER" });
+
+      expect(tenderAlpha.fakeResolveCandidateIdentityUseCase.calls).toEqual([{ organizationId: ORG, candidateCompanyId: "candidate-alpha" }]);
+      expect(tenderBeta.fakeResolveCandidateIdentityUseCase.calls).toEqual([{ organizationId: ORG, candidateCompanyId: "candidate-beta" }]);
+      expect(tenderAlpha.fakeGetCompanyProfileUseCase.calls).toHaveLength(0);
+      expect(tenderBeta.fakeGetCompanyProfileUseCase.calls).toHaveLength(0);
+
+      const alphaVersions = await tenderAlpha.reportRepository.listVersions({ organizationId: ORG, tenderId: "tender-alpha" });
+      const betaVersions = await tenderBeta.reportRepository.listVersions({ organizationId: ORG, tenderId: "tender-beta" });
+      expect(alphaVersions).toHaveLength(1);
+      expect(betaVersions).toHaveLength(1);
+    });
+  });
+
+  // Checkpoint 2.1-P2.1-FIX-C (mission §28-29/§37, TEST G15) — bloque AVANT tout calcul coûteux.
+  describe("Freshness precondition (Checkpoint 2.1-P2.1-FIX-C)", () => {
+    it("BLOQUANT (TEST G15) — refuses to generate/recalculate when the source analysis is STALE", async () => {
+      const { useCase, reportRepository } = await buildHarness({ analysis: analysisSummary({ analysisFreshness: "STALE" }) });
+
+      await expect(useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" })).rejects.toThrow(GoNoGoAnalysisNotCurrentError);
+
+      const versions = await reportRepository.listVersions({ organizationId: ORG, tenderId: TENDER_ID });
+      expect(versions).toHaveLength(0);
+    });
+
+    it("refuses to generate when the source analysis freshness is UNKNOWN (mission §37 — never a false CURRENT)", async () => {
+      const { useCase } = await buildHarness({ analysis: analysisSummary({ analysisFreshness: "UNKNOWN" }) });
+
+      await expect(useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" })).rejects.toThrow(GoNoGoAnalysisNotCurrentError);
+    });
+
+    it("captures dceRevision from the effective analysis summary onto the persisted report (provenance)", async () => {
+      const { useCase } = await buildHarness({ analysis: analysisSummary({ dceRevision: 7 }) });
+
+      const record = await useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" });
+
+      expect(record.dceRevision).toBe(7);
+    });
+
+    // Correctif — sans cet enrichissement, la réponse POST n'exposait jamais `freshness` (seul le
+    // GET le calculait), laissant le frontend sans badge jusqu'au prochain rechargement de page.
+    it("the freshly generated record itself already reports freshness=CURRENT, never left to the next GET to compute it", async () => {
+      const { useCase } = await buildHarness();
+
+      const record = await useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" });
+
+      expect(record.freshness).toBe("CURRENT");
+      expect(record.dceStale).toBe(false);
+      expect(record.analysisStale).toBe(false);
+      expect(record.candidateStale).toBe(false);
+    });
+  });
+
+  // Correctif audit P1-FIXC-001 (mission §33/§34, TEST G12) — `reportVersion` est désormais
+  // réservé ATOMIQUEMENT et DURABLEMENT (voir `GoNoGoReportVersionReservation`) juste après la
+  // porte de fraîcheur, AVANT le calcul coûteux, jamais recalculé dans `create()`. Deux preuves
+  // déterministes (jamais une simulation fragile d'ordonnancement de microtâches) : (1) le
+  // mécanisme de réservation lui-même garantit un ordre correct au niveau repository ; (2) le use
+  // case appelle bien ce mécanisme AVANT le `Promise.all` coûteux, jamais après.
+  describe("Out-of-order version reservation (Checkpoint 2.1-P2.1-FIX-C, TEST G12 — correctif audit P1-FIXC-001)", () => {
+    it("BLOQUANT (TEST G12) — a version reserved FIRST is always lower than one reserved LATER, and getLatest() honors reservation order regardless of create() insertion order", async () => {
+      const reportRepository = new InMemoryGoNoGoReportRepository();
+      const minimalResult = {
+        globalScore: 50,
+        confidence: 0.5,
+        complexity: 3,
+        documentaryLoad: "MEDIUM",
+        estimatedPrepTime: {} as never,
+        categoryScores: {} as never,
+        positiveCauses: [],
+        negativeCauses: [],
+        risks: [],
+        blockers: [],
+        missingInfo: [],
+        subcontractingFlags: [],
+        recommendation: "GO",
+        recommendationRationale: "Dossier complet.",
+      } as const;
+
+      // "older" (DCE rev2) réserve EN PREMIER — avant que le DCE ne change.
+      const olderReserved = await reportRepository.reserveVersion({ organizationId: ORG, tenderId: TENDER_ID });
+      // "newer" (DCE rev3, après le changement) réserve ENSUITE.
+      const newerReserved = await reportRepository.reserveVersion({ organizationId: ORG, tenderId: TENDER_ID });
+      expect(olderReserved).toBeLessThan(newerReserved);
+
+      // "newer" termine son calcul EN PREMIER et s'insère avant "older" — l'ordre d'INSERTION est
+      // inversé par rapport à l'ordre de RÉSERVATION, exactement le scénario TEST G12.
+      const newerRecord = await reportRepository.create({ id: "report-newer", organizationId: ORG, tenderId: TENDER_ID, reportVersion: newerReserved, analysisVersion: 3, dceRevision: 3, calculationVersion: "1.0.0", generatedAt: new Date("2026-01-01T00:00:00Z"), result: minimalResult });
+      const olderRecord = await reportRepository.create({ id: "report-older", organizationId: ORG, tenderId: TENDER_ID, reportVersion: olderReserved, analysisVersion: 2, dceRevision: 2, calculationVersion: "1.0.0", generatedAt: new Date("2026-01-01T00:00:01Z"), result: minimalResult });
+
+      // BLOQUANT — `getLatest()` sélectionne toujours "newer" (réservé en second, donc reportVersion
+      // le plus élevé), jamais "older" qui s'est pourtant inséré en dernier.
+      const effective = await reportRepository.getLatest({ organizationId: ORG, tenderId: TENDER_ID });
+      expect(effective?.id).toBe(newerRecord.id);
+      expect(newerRecord.reportVersion).toBeGreaterThan(olderRecord.reportVersion);
+    });
+
+    it("the use case reserves the version via the repository BEFORE fetching findings/scoring, never inside create()", async () => {
+      const { useCase, reportRepository } = await buildHarness();
+      const reserveSpy = vi.spyOn(reportRepository, "reserveVersion");
+      const createSpy = vi.spyOn(reportRepository, "create");
+
+      await useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" });
+
+      expect(reserveSpy).toHaveBeenCalledTimes(1);
+      expect(createSpy).toHaveBeenCalledTimes(1);
+      expect(reserveSpy.mock.invocationCallOrder[0]).toBeLessThan(createSpy.mock.invocationCallOrder[0]!);
+    });
   });
 });

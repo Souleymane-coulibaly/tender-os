@@ -98,11 +98,16 @@ export { CHECKLIST_ITEM_REPOSITORY } from "./application/ports/checklist-item.re
 export type { ChecklistItemRepository } from "./application/ports/checklist-item.repository";
 export { findChecklistDedupMatch } from "./application/services/checklist-dedup";
 export { assertTenderMutationAllowed, assertLotBelongsToTender } from "./application/policies/tender-mutation-client-access.helper";
-export { ChecklistItem, ChecklistItemType, ChecklistRequirementLevel, ChecklistItemCriticality, ChecklistComplianceStatus, ChecklistDocumentStatus, ChecklistItemOrigin, ChecklistSubjectType, ChecklistDocumentMatchStatus } from "./domain/checklist-item.entity";
+export { ChecklistItem, ChecklistItemType, ChecklistRequirementLevel, ChecklistItemCriticality, ChecklistComplianceStatus, ChecklistDocumentStatus, ChecklistItemOrigin, ChecklistSubjectType, ChecklistDocumentMatchStatus, ChecklistRequirementFreshness } from "./domain/checklist-item.entity";
 export type { ChecklistDocumentMatch } from "./domain/checklist-item.entity";
 export { ChecklistItemNotFoundError, ChecklistSubcontractorSubjectNotFoundError, InvalidChecklistSubjectError } from "./domain/errors";
 export type { ChecklistItemSummary } from "./application/dtos";
 export { toChecklistItemSummary } from "./application/dtos";
+// Checkpoint 2.1-P2.1-FIX-B — état de réconciliation Checklist/Analysis, réexporté pour
+// `checklist-intelligence` (même motif que ci-dessus, jamais un second port divergent).
+export { CHECKLIST_RECONCILIATION_REPOSITORY } from "./application/ports/checklist-reconciliation.repository";
+export type { ChecklistReconciliationRepository, ChecklistReconciliationState } from "./application/ports/checklist-reconciliation.repository";
+export { computeChecklistFreshness, ChecklistFreshness } from "./domain/checklist-freshness";
 // V2 Sprint 6 (correctif audit Codex P2) — port réexporté UNIQUEMENT pour le pont @Global()
 // `SubcontractorSubjectValidationBridgeModule` (module `subcontractors`), qui fournit
 // l'implémentation réelle sans jamais créer de cycle Nest (voir subcontractor-subject-validator.ts).

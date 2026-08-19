@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { fetchAnalysisSectionData, retryAnalysisAction, startTenderAnalysisAction } from "../../../analysis-actions";
 import {
+  ANALYSIS_FRESHNESS_LABELS,
   ANALYSIS_STATUS_LABELS,
   COMPLEXITY_LABELS,
   GO_NO_GO_LABELS,
+  type AnalysisFreshness,
   type AnalysisSectionData,
   type AnalysisStatus,
   type ClauseFinding,
@@ -31,6 +33,19 @@ function statusBadgeClass(status: AnalysisStatus): string {
       return "bg-neutral-200 text-neutral-700";
     default:
       return "bg-blue-100 text-blue-800";
+  }
+}
+
+/** Checkpoint 2.1-P2.1-FIX-A — indicateur minimal (mission §17 "pas de gros workflow Refresh, juste
+ *  afficher Actualisé / Actualisation requise"). */
+function freshnessBadgeClass(freshness: AnalysisFreshness): string {
+  switch (freshness) {
+    case "CURRENT":
+      return "bg-green-100 text-green-800";
+    case "STALE":
+      return "bg-amber-100 text-amber-800";
+    case "UNKNOWN":
+      return "bg-neutral-200 text-neutral-700";
   }
 }
 
@@ -289,6 +304,9 @@ export function AnalysisSection({
             </span>
             <span className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-900">
               {GO_NO_GO_LABELS[summary.goNoGoRecommendation]}
+            </span>
+            <span className={`rounded px-2 py-1 text-xs font-medium ${freshnessBadgeClass(summary.analysisFreshness)}`}>
+              {ANALYSIS_FRESHNESS_LABELS[summary.analysisFreshness]}
             </span>
           </div>
           <p className="text-xs italic text-neutral-500">

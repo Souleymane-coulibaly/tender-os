@@ -12,6 +12,7 @@ export type TenderSummary = {
   id: string;
   organizationId: string;
   clientAccountId: string;
+  candidateCompanyId?: string | undefined;
   title: string;
   reference?: string | undefined;
   buyerName?: string | undefined;
@@ -63,6 +64,7 @@ export function toTenderSummary(tender: Tender): TenderSummary {
     id: tender.id.value,
     organizationId: tender.organizationId,
     clientAccountId: tender.clientAccountId,
+    candidateCompanyId: tender.candidateCompanyId,
     title: tender.title,
     reference: tender.reference,
     buyerName: tender.buyerName,
@@ -246,6 +248,7 @@ export type ChecklistItemSummary = {
   documentMatchReasons?: readonly string[] | undefined;
   documentExpiresAt?: string | undefined;
   documentValidityCheckedAt?: string | undefined;
+  requirementFreshness: string;
 };
 
 export function toChecklistItemSummary(item: ChecklistItem): ChecklistItemSummary {
@@ -279,6 +282,7 @@ export function toChecklistItemSummary(item: ChecklistItem): ChecklistItemSummar
     documentMatchReasons: item.documentMatchReasons,
     documentExpiresAt: item.documentExpiresAt?.toISOString(),
     documentValidityCheckedAt: item.documentValidityCheckedAt?.toISOString(),
+    requirementFreshness: item.requirementFreshness,
   };
 }
 

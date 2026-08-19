@@ -74,8 +74,45 @@ export class InMemoryDceRepository implements DceRepository {
     return dce;
   }
 
+  /** Miroir de `PrismaDceRepository.save` (mission Checkpoint 2.1-P2.1-FIX-A) — écrit UNIQUEMENT
+   *  `status`/`updatedAt`, JAMAIS `revision` : un remplacement complet de l'objet en mémoire
+   *  écraserait silencieusement toute incrémentation de révision survenue depuis la lecture de
+   *  `dce` par l'appelant (même risque que la vraie base si `save` faisait un UPDATE non scopé aux
+   *  colonnes réellement concernées). */
   async save(dce: Dce): Promise<void> {
-    this.byId.set(dce.id.value, dce);
+    const current = this.byId.get(dce.id.value);
+    if (!current) return;
+    this.byId.set(
+      dce.id.value,
+      Dce.rehydrate({
+        id: current.id,
+        organizationId: current.organizationId,
+        tenderId: current.tenderId,
+        status: dce.status,
+        revision: current.revision,
+        createdByUserId: current.createdByUserId,
+        createdAt: current.createdAt,
+        updatedAt: dce.updatedAt,
+      }),
+    );
+  }
+
+  async incrementRevision(input: { organizationId: string; dceId: string }): Promise<void> {
+    const dce = await this.findById(input);
+    if (!dce) return;
+    this.byId.set(
+      dce.id.value,
+      Dce.rehydrate({
+        id: dce.id,
+        organizationId: dce.organizationId,
+        tenderId: dce.tenderId,
+        status: dce.status,
+        revision: dce.revision + 1,
+        createdByUserId: dce.createdByUserId,
+        createdAt: dce.createdAt,
+        updatedAt: dce.updatedAt,
+      }),
+    );
   }
 }
 
@@ -102,19 +139,31 @@ export class InMemoryDceDocumentRepository implements DceDocumentRepository {
     return link;
   }
 
+  /** Rehydrate une COPIE (mission Checkpoint 2.1-P2.1-FIX-A, correctif audit) — miroir de
+   *  `PrismaDceDocumentRepository`, qui lit toujours une ligne fraîche depuis la base : muter
+   *  l'entité domaine retournée (ex. `correctCategory`) ne doit JAMAIS modifier silencieusement ce
+   *  que ce fake considère comme "persisté" tant que `updateCategory` n'a pas été explicitement
+   *  appelé — sinon un appelant qui abandonne après une mutation domaine mais avant l'écriture
+   *  réelle verrait un état incohérent avec la production. */
   async findByDceIdAndDocumentId(input: {
     organizationId: string;
     dceId: string;
     documentId: string;
   }): Promise<DceDocument | null> {
-    return (
-      this.links.find(
-        (link) =>
-          link.organizationId === input.organizationId &&
-          link.dceId === input.dceId &&
-          link.documentId === input.documentId,
-      ) ?? null
+    const stored = this.links.find(
+      (link) => link.organizationId === input.organizationId && link.dceId === input.dceId && link.documentId === input.documentId,
     );
+    if (!stored) return null;
+    return DceDocument.rehydrate({
+      dceId: stored.dceId,
+      documentId: stored.documentId,
+      organizationId: stored.organizationId,
+      createdByUserId: stored.createdByUserId,
+      category: stored.category,
+      processingStatus: stored.processingStatus,
+      createdAt: stored.createdAt,
+      updatedAt: stored.updatedAt,
+    });
   }
 
   private toSummary(link: DceDocument): DceDocumentSummary | null {
@@ -176,11 +225,21 @@ export class InMemoryDceDocumentRepository implements DceDocumentRepository {
     processingStatus: string;
     updatedAt: Date;
   }): Promise<void> {
-    const link = await this.findByDceIdAndDocumentId(input);
-    if (!link) {
-      return;
-    }
-    link.transitionProcessingStatus(input.processingStatus as DceDocumentProcessingStatus, input.updatedAt);
+    const index = this.links.findIndex(
+      (link) => link.organizationId === input.organizationId && link.dceId === input.dceId && link.documentId === input.documentId,
+    );
+    if (index === -1) return;
+    const stored = this.links[index]!;
+    this.links[index] = DceDocument.rehydrate({
+      dceId: stored.dceId,
+      documentId: stored.documentId,
+      organizationId: stored.organizationId,
+      createdByUserId: stored.createdByUserId,
+      category: stored.category,
+      processingStatus: input.processingStatus as DceDocumentProcessingStatus,
+      createdAt: stored.createdAt,
+      updatedAt: input.updatedAt,
+    });
   }
 
   async updateCategory(input: {
@@ -190,11 +249,21 @@ export class InMemoryDceDocumentRepository implements DceDocumentRepository {
     category: string;
     updatedAt: Date;
   }): Promise<void> {
-    const link = await this.findByDceIdAndDocumentId(input);
-    if (!link) {
-      return;
-    }
-    link.correctCategory(input.category as DceDocumentCategory, input.updatedAt);
+    const index = this.links.findIndex(
+      (link) => link.organizationId === input.organizationId && link.dceId === input.dceId && link.documentId === input.documentId,
+    );
+    if (index === -1) return;
+    const stored = this.links[index]!;
+    this.links[index] = DceDocument.rehydrate({
+      dceId: stored.dceId,
+      documentId: stored.documentId,
+      organizationId: stored.organizationId,
+      createdByUserId: stored.createdByUserId,
+      category: input.category as DceDocumentCategory,
+      processingStatus: stored.processingStatus,
+      createdAt: stored.createdAt,
+      updatedAt: input.updatedAt,
+    });
   }
 
   /** Ne simule aucun verrou réel (mono-thread, pas de concurrence possible en mémoire) —

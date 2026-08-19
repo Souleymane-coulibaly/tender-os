@@ -141,6 +141,10 @@ export type TechnicalMemoSectionRevisionSummary = Readonly<{
   promptVersion?: number | undefined;
   missingDataNotes: readonly string[];
   citations: readonly TechnicalMemoSectionCitationSummary[];
+  /** Checkpoint 2.1-P2.1-FIX-D — provenance figée au moment de la génération/édition. */
+  candidateCompanyId?: string | undefined;
+  analysisVersion?: number | undefined;
+  dceRevision?: number | undefined;
   createdBy: string;
   createdAt: string;
 }>;
@@ -157,6 +161,9 @@ export function toTechnicalMemoSectionRevisionSummary(revision: TechnicalMemoSec
     promptVersion: revision.promptVersion,
     missingDataNotes: revision.missingDataNotes,
     citations: revision.citations.map(toTechnicalMemoSectionCitationSummary),
+    candidateCompanyId: revision.candidateCompanyId,
+    analysisVersion: revision.analysisVersion,
+    dceRevision: revision.dceRevision,
     createdBy: revision.createdBy,
     createdAt: revision.createdAt.toISOString(),
   };

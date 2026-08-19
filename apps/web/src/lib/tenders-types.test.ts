@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   ALLOWED_TENDER_TRANSITIONS,
-  canChangeTenderCandidate,
+  canChangeTenderClient,
   canChangeTenderStatus,
   canEditTenderDetails,
-  canOfferCandidateChange,
+  canOfferClientChange,
   DEFAULT_TENDER_COUNTRY,
   DEFAULT_TENDER_CURRENCY,
   DEFAULT_TENDER_LANGUAGE,
@@ -50,21 +50,21 @@ describe("ALLOWED_TENDER_TRANSITIONS — ARCHIVED (V2 Sprint 3 §7/§29 correcti
   });
 });
 
-describe("canOfferCandidateChange (mirror of Tender.CANDIDATE_CHANGE_ALLOWED_STATUSES)", () => {
+describe("canOfferClientChange (mirror of Tender.CANDIDATE_CHANGE_ALLOWED_STATUSES)", () => {
   it("offers the change only for DRAFT and IN_ANALYSIS", () => {
-    expect(canOfferCandidateChange("DRAFT")).toBe(true);
-    expect(canOfferCandidateChange("IN_ANALYSIS")).toBe(true);
-    expect(canOfferCandidateChange("READY")).toBe(false);
-    expect(canOfferCandidateChange("ARCHIVED")).toBe(false);
+    expect(canOfferClientChange("DRAFT")).toBe(true);
+    expect(canOfferClientChange("IN_ANALYSIS")).toBe(true);
+    expect(canOfferClientChange("READY")).toBe(false);
+    expect(canOfferClientChange("ARCHIVED")).toBe(false);
   });
 });
 
-describe("canChangeTenderCandidate", () => {
+describe("canChangeTenderClient", () => {
   it("mirrors the same role gate as canChangeTenderStatus (display-only, backend revalidates)", () => {
-    expect(canChangeTenderCandidate("OWNER")).toBe(true);
-    expect(canChangeTenderCandidate("BID_MANAGER")).toBe(true);
-    expect(canChangeTenderCandidate("READ_ONLY")).toBe(false);
-    expect(canChangeTenderCandidate(undefined)).toBe(false);
+    expect(canChangeTenderClient("OWNER")).toBe(true);
+    expect(canChangeTenderClient("BID_MANAGER")).toBe(true);
+    expect(canChangeTenderClient("READ_ONLY")).toBe(false);
+    expect(canChangeTenderClient(undefined)).toBe(false);
   });
 });
 

@@ -108,6 +108,12 @@ describe("Administrative Dossier — Phase 3 PDF/XML generation (real HTTP + Pos
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: orgId } });
+    // Checkpoint 2.1-A4 (correctif hygiène de test) — `CreateTenderUseCase` écrit un événement
+    // Outbox (`TenderCreated`) à chaque Tender réel créé via l'API ; sans ce nettoyage,
+    // `organization.deleteMany` échoue sur la FK `outbox_events_organization_id_fkey` (gap
+    // pré-existant, jamais déclenché tant qu'un bug de démarrage bloquait ce fichier avant même
+    // d'atteindre `afterAll`).
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: orgId } });
     await prisma.organization.deleteMany({ where: { id: orgId } });
     await app.close();
   });

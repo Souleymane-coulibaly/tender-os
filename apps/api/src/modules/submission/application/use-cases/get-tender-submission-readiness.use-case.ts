@@ -1,7 +1,14 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { GetEffectiveTenderAnalysisSummaryUseCase, TenderBusinessAnalysisNotFoundError } from "../../../analysis";
+import { GetChecklistFreshnessUseCase } from "../../../checklist-intelligence";
 import { ClientPermission } from "../../../client-portfolio";
-import { GetReadinessStatusUseCase, ReadinessStatus } from "../../../validation";
+import { GetGoNoGoReportUseCase, GoNoGoReportNotFoundError } from "../../../opportunity";
+import { GetResponsePackageFreshnessUseCase, ListResponsePackagesUseCase } from "../../../response-package";
+import { GetTechnicalMemoFreshnessUseCase, ListTechnicalMemosUseCase } from "../../../technical-memo";
+import { GetReadinessStatusUseCase, GetValidationFreshnessUseCase, ReadinessStatus } from "../../../validation";
 import { ListSubmissionPackagesUseCase, PackageStatus, type SubmissionPackageSummary } from "../../../submission-package";
+import { evaluateFileReadinessReasons, type FileReadinessInput } from "../../domain/evaluate-file-readiness";
+import { SubmissionReadinessReasonSeverity, type SubmissionReadinessReason } from "../../domain/submission-readiness-reason";
 import { isInFlightTenderSubmissionStatus, TenderSubmissionStatus } from "../../domain/tender-submission-status";
 import { TENDER_SUBMISSION_REPOSITORY, type TenderSubmissionRepository } from "../ports/tender-submission.repository";
 import { SubmissionAccessService } from "../services/submission-access.service";
@@ -31,6 +38,12 @@ export type TenderSubmissionReadinessResult = Readonly<{
   signatureRequirement: string;
   validationSummary: string;
   activeSubmissionId?: string | undefined;
+  /** Checkpoint 2.1-P2.1-FIX-F — raisons structurées (mission §78-79), additives : `blockers`/
+   *  `warnings` ci-dessus restent inchangés (contrat existant préservé, mission §119), ces raisons
+   *  couvrent en PLUS les dimensions DCE/Analyse/Checklist/GO-NO-GO/Technical Memo/Validation
+   *  fraîcheur/Response Package — jamais un second calcul divergent (voir
+   *  `evaluateFileReadinessReasons`, pure, aucune E/S). */
+  fileReadinessReasons: readonly SubmissionReadinessReason[];
 }>;
 
 const SIGNATURE_GATING_STATUSES = new Set<string>([ReadinessStatus.ReadyForSignature, ReadinessStatus.SignatureInProgress, ReadinessStatus.PartiallySigned]);
@@ -53,20 +66,93 @@ export class GetTenderSubmissionReadinessUseCase {
     private readonly getReadinessStatusUseCase: GetReadinessStatusUseCase,
     private readonly listSubmissionPackagesUseCase: ListSubmissionPackagesUseCase,
     @Inject(TENDER_SUBMISSION_REPOSITORY) private readonly submissionRepository: TenderSubmissionRepository,
+    private readonly getEffectiveTenderAnalysisSummaryUseCase: GetEffectiveTenderAnalysisSummaryUseCase,
+    private readonly getChecklistFreshnessUseCase: GetChecklistFreshnessUseCase,
+    private readonly getGoNoGoReportUseCase: GetGoNoGoReportUseCase,
+    private readonly listTechnicalMemosUseCase: ListTechnicalMemosUseCase,
+    private readonly getTechnicalMemoFreshnessUseCase: GetTechnicalMemoFreshnessUseCase,
+    private readonly getValidationFreshnessUseCase: GetValidationFreshnessUseCase,
+    private readonly listResponsePackagesUseCase: ListResponsePackagesUseCase,
+    private readonly getResponsePackageFreshnessUseCase: GetResponsePackageFreshnessUseCase,
   ) {}
+
+  /**
+   * Checkpoint 2.1-P2.1-FIX-F — résout le sous-état de CHAQUE dimension via son AUTORITÉ métier
+   * existante (mission §1 "AGRÉGATEUR FINAL, jamais un nouveau moteur"), puis délègue la
+   * classification à `evaluateFileReadinessReasons` (pure). Utilisée à l'IDENTIQUE par `GET
+   * readiness` (ici) et par le guard `assertTenderSubmissionFileReady` (mission §94 "le guard doit
+   * réutiliser le même calcul que GET readiness") — jamais un second calcul.
+   */
+  async resolveFileReadinessReasons(query: GetTenderSubmissionReadinessQuery, candidateCompanyId: string | undefined): Promise<readonly SubmissionReadinessReason[]> {
+    const base = { organizationId: query.organizationId, tenderId: query.tenderId, actorId: query.actorId, actorRole: query.actorRole };
+
+    const [analysisResult, checklistResult, goNoGoResult, technicalMemos, validationResult, responsePackages] = await Promise.all([
+      this.getEffectiveTenderAnalysisSummaryUseCase.execute(base).catch((error) => {
+        if (error instanceof TenderBusinessAnalysisNotFoundError) return undefined;
+        throw error;
+      }),
+      this.getChecklistFreshnessUseCase.execute(base),
+      this.getGoNoGoReportUseCase.execute(base).catch((error) => {
+        if (error instanceof GoNoGoReportNotFoundError) return undefined;
+        throw error;
+      }),
+      this.listTechnicalMemosUseCase.execute(base),
+      this.getValidationFreshnessUseCase.execute(base),
+      this.listResponsePackagesUseCase.execute(base),
+    ]);
+
+    // Mission "le PIRE signal parmi tous les mémoires/packages du tender s'il y en a plusieurs" —
+    // même granularité tender-wide que le reste de ce use case (jamais un scope Lot inventé ici,
+    // mission §111-112 "prouver l'architecture existante").
+    const technicalMemoFreshnesses = await Promise.all(
+      technicalMemos.map((memo) => this.getTechnicalMemoFreshnessUseCase.execute({ organizationId: query.organizationId, technicalMemoId: memo.id, actorId: query.actorId, actorRole: query.actorRole })),
+    );
+    const worstTechnicalMemoFreshness = technicalMemoFreshnesses.length === 0 ? undefined : technicalMemoFreshnesses.some((f) => f.freshness === "STALE") ? "STALE" : technicalMemoFreshnesses.some((f) => f.freshness === "UNKNOWN") ? "UNKNOWN" : "CURRENT";
+
+    const responsePackageFreshnesses = await Promise.all(
+      responsePackages.map((pkg) => this.getResponsePackageFreshnessUseCase.execute({ organizationId: query.organizationId, responsePackageId: pkg.id, actorId: query.actorId, actorRole: query.actorRole })),
+    );
+    const worstResponsePackageFreshness =
+      responsePackageFreshnesses.length === 0 ? undefined : responsePackageFreshnesses.some((f) => f.freshness === "STALE") ? "STALE" : responsePackageFreshnesses.some((f) => f.freshness === "UNKNOWN") ? "UNKNOWN" : "CURRENT";
+    // Une version courante existe-t-elle, et est-elle VALIDATED, pour CHAQUE package du tender qui a
+    // une version courante ? (mission §63 "généré, complet, CURRENT").
+    const anyCurrentVersionNotValidated = responsePackages.some((pkg) => pkg.currentVersionId !== undefined && pkg.status !== "VALIDATED" && pkg.status !== "EXPORTED");
+
+    const input: FileReadinessInput = {
+      candidateCompanyId,
+      analysis: { exists: analysisResult !== undefined, freshness: analysisResult?.analysisFreshness },
+      checklist: { freshness: checklistResult.checklistFreshness },
+      goNoGo: { exists: goNoGoResult !== undefined, freshness: goNoGoResult?.freshness, recommendation: goNoGoResult?.recommendation },
+      technicalMemo: { exists: technicalMemos.length > 0, freshness: worstTechnicalMemoFreshness },
+      validation: { hasActiveApproval: validationResult.hasActiveApproval, freshness: validationResult.freshness },
+      responsePackage: { exists: responsePackages.length > 0, freshness: worstResponsePackageFreshness, isCurrentVersionValidated: responsePackages.length === 0 ? undefined : !anyCurrentVersionNotValidated },
+    };
+
+    return evaluateFileReadinessReasons(input);
+  }
 
   async execute(query: GetTenderSubmissionReadinessQuery): Promise<TenderSubmissionReadinessResult> {
     const tender = await this.accessService.assertTenderAccess({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: query.tenderId, permission: ClientPermission.ReadSubmission });
 
-    const [validationResult, packages, activeSubmission] = await Promise.all([
+    const [validationResult, packages, activeSubmission, fileReadinessReasons] = await Promise.all([
       this.getReadinessStatusUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: query.tenderId }),
       this.listSubmissionPackagesUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: query.tenderId }),
       this.submissionRepository.findActiveForTender({ organizationId: query.organizationId, tenderId: query.tenderId }),
+      this.resolveFileReadinessReasons(query, tender.candidateCompanyId),
     ]);
 
     const blockers: string[] = [];
     const warnings: string[] = [];
     const requiredActions: string[] = [];
+
+    // Checkpoint 2.1-P2.1-FIX-F — les raisons BLOCKING du dossier (DCE/Analyse/Checklist/GO-NO-GO/
+    // Technical Memo/Validation-fraîcheur/Response Package) alimentent le MÊME calcul de
+    // `readinessStatus` que les blockers historiques ci-dessous — jamais une seconde vérité
+    // parallèle qui pourrait diverger (mission §8 "ne pas laisser deux moteurs contradictoires").
+    for (const reason of fileReadinessReasons) {
+      if (reason.severity === SubmissionReadinessReasonSeverity.Blocking) blockers.push(reason.message);
+      else if (reason.severity === SubmissionReadinessReasonSeverity.Warning) warnings.push(reason.message);
+    }
 
     const validationBlocking = validationResult.status === ReadinessStatus.NotReady || validationResult.status === ReadinessStatus.Blocked;
     if (validationBlocking) {
@@ -120,6 +206,7 @@ export class GetTenderSubmissionReadinessUseCase {
       signatureRequirement: SIGNATURE_GATING_STATUSES.has(validationResult.status) ? validationResult.status : "SATISFIED_OR_NOT_REQUIRED",
       validationSummary: validationResult.status,
       activeSubmissionId: activeSubmission?.id,
+      fileReadinessReasons,
     };
   }
 }

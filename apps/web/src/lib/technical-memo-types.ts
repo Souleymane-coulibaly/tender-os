@@ -89,8 +89,30 @@ export type TechnicalMemoSectionRevision = {
   promptVersion?: number;
   missingDataNotes: string[];
   citations: TechnicalMemoSectionCitation[];
+  candidateCompanyId?: string;
+  analysisVersion?: number;
+  dceRevision?: number;
   createdBy: string;
   createdAt: string;
+};
+
+/** Checkpoint 2.1-P2.1-FIX-D — jamais persistée côté backend, recalculée à chaque lecture.
+ *  Checklist/GO-NO-GO délibérément absents : le mémoire technique ne les consomme jamais
+ *  directement (audit ciblé confirmé). */
+export type TechnicalMemoFreshness = "CURRENT" | "STALE" | "UNKNOWN";
+
+export type TechnicalMemoSectionFreshnessSummary = {
+  technicalMemoSectionId: string;
+  freshness: TechnicalMemoFreshness;
+  candidateStale: boolean;
+  analysisStale?: boolean;
+};
+
+export type TechnicalMemoFreshnessResult = {
+  freshness: TechnicalMemoFreshness;
+  sections: TechnicalMemoSectionFreshnessSummary[];
+  currentAnalysisVersion?: number;
+  currentAnalysisFreshness?: "CURRENT" | "STALE" | "UNKNOWN";
 };
 
 export type TechnicalMemoSectionRequirement = {
@@ -161,6 +183,12 @@ export const COVERAGE_STATUS_LABELS: Record<TechnicalMemoCoverageStatus, string>
   NOT_COVERED: "Non couverte",
   NOT_APPLICABLE: "Non applicable",
   NEEDS_REVIEW: "À vérifier",
+};
+
+export const TECHNICAL_MEMO_FRESHNESS_LABELS: Record<TechnicalMemoFreshness, string> = {
+  CURRENT: "À jour",
+  STALE: "Actualisation requise",
+  UNKNOWN: "Fraîcheur inconnue",
 };
 
 export const CITATION_SOURCE_LABELS: Record<TechnicalMemoCitationSourceType, string> = {

@@ -27,6 +27,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   INVALID_TENDER_SOURCE: HttpStatus.UNPROCESSABLE_ENTITY,
   INVALID_LOT_ESTIMATED_AMOUNT: HttpStatus.UNPROCESSABLE_ENTITY,
   TENDER_CANDIDATE_CHANGE_NOT_ALLOWED: HttpStatus.CONFLICT,
+  // V2 Sprint 26 (Checkpoint 2.1-A3) — distinct de TENDER_CANDIDATE_CHANGE_NOT_ALLOWED ci-dessus
+  // (clientAccountId) : celui-ci gouverne candidateCompanyId (SOT CandidateCompany).
+  TENDER_CANDIDATE_COMPANY_CHANGE_NOT_ALLOWED: HttpStatus.CONFLICT,
   BUYER_NOT_FOUND: HttpStatus.NOT_FOUND,
   INVALID_TENDER_ESTIMATED_AMOUNT: HttpStatus.UNPROCESSABLE_ENTITY,
   INVALID_TENDER_AMOUNT_RANGE: HttpStatus.UNPROCESSABLE_ENTITY,
@@ -46,6 +49,12 @@ const STATUS_BY_CODE: Record<string, number> = {
   CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,
   CLIENT_ACCOUNT_ARCHIVED: HttpStatus.CONFLICT,
   CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
+
+  // V2 Sprint 26 (Checkpoint 2.1-A3) — Tenders délègue à `candidate-company`
+  // (CreateTenderUseCase/ChangeTenderCandidateCompanyUseCase), même motif que Client Portfolio
+  // ci-dessus : ses erreurs remontent telles quelles, jamais retraduites.
+  CANDIDATE_COMPANY_NOT_FOUND: HttpStatus.NOT_FOUND,
+  CANDIDATE_COMPANY_ARCHIVED: HttpStatus.CONFLICT,
 
   // V2 Sprint 22B (billing) — CreateTenderUseCase consomme désormais un crédit AO au point de choc
   // unique identifié (mission §19, voir le rapport 22B) ; 402 (jamais 403) — un problème de

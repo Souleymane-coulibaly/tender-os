@@ -4,6 +4,7 @@ import type { ExportJobSummary } from "../../../../../../lib/export-types";
 import type { ReadinessStatusResult, ValidationRunSummary } from "../../../../../../lib/validation-types";
 import { PageHeader } from "../../../../../../components/ui/page-header";
 import { TabsNav } from "../../../../../../components/ui/tabs-nav";
+import { fetchValidationFreshness } from "../../../../validation-actions";
 import { ApiErrorState } from "../../../api-error-state";
 import { buildTenderNavTabs } from "../tender-nav-tabs";
 import { ValidationSection } from "./validation-section";
@@ -36,6 +37,9 @@ export default async function TenderValidationPage({ params }: { params: Promise
     }
   }
 
+  // Checkpoint 2.1-P2.1-FIX-E — lecture seule, dégradée à `null` sur erreur (jamais bloquant).
+  const freshness = await fetchValidationFreshness(tenderId);
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -44,7 +48,7 @@ export default async function TenderValidationPage({ params }: { params: Promise
         description="Vérifie la conformité d'un aperçu avant approbation (pièces obligatoires, contenu non validé) et fige la version approuvée — jamais un contournement du contrôle bloquant."
       />
       <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/validation`} />
-      <ValidationSection tenderId={tenderId} readiness={readiness} run={run} completedPreviews={exportHistory.items.filter((j) => j.status === "COMPLETED")} actorRole={actorRole} />
+      <ValidationSection tenderId={tenderId} readiness={readiness} run={run} completedPreviews={exportHistory.items.filter((j) => j.status === "COMPLETED")} actorRole={actorRole} freshness={freshness} />
     </div>
   );
 }

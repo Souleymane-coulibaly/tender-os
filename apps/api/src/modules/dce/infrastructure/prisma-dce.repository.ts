@@ -13,6 +13,7 @@ function toDomain(record: DceRecord): Dce {
     organizationId: record.organizationId,
     tenderId: record.tenderId,
     status: parseDceStatus(record.status),
+    revision: record.revision,
     createdByUserId: record.createdByUserId,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -49,6 +50,7 @@ export class PrismaDceRepository implements DceRepository {
           organizationId: dce.organizationId,
           tenderId: dce.tenderId,
           status: dce.status,
+          revision: dce.revision,
           createdByUserId: dce.createdByUserId,
           createdAt: dce.createdAt,
           updatedAt: dce.updatedAt,
@@ -67,6 +69,16 @@ export class PrismaDceRepository implements DceRepository {
     await this.prisma.dce.update({
       where: { id: dce.id.value },
       data: { status: dce.status, updatedAt: dce.updatedAt },
+    });
+  }
+
+  async incrementRevision(input: { organizationId: string; dceId: string }): Promise<void> {
+    // Atomique côté base (`SET revision = revision + 1`, jamais un read-then-write applicatif) —
+    // le verrou de ligne Postgres implicite d'un UPDATE garantit qu'aucune incrémentation
+    // concurrente n'est jamais perdue (mission FIX-A §11).
+    await this.prisma.dce.update({
+      where: { id_organizationId: { id: input.dceId, organizationId: input.organizationId } },
+      data: { revision: { increment: 1 } },
     });
   }
 }

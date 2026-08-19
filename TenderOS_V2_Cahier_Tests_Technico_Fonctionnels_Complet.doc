@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>TenderOS V2 - Cahier de tests technico-fonctionnels complet</title>
+<style>
+@page { size: A4; margin: 1.8cm; }
+body { font-family: Aptos, Calibri, Arial, sans-serif; color:#172033; line-height:1.35; font-size:10.5pt; }
+h1 { font-size:24pt; color:#0f3b66; margin:0 0 8px 0; }
+h2 { font-size:16pt; color:#174a7c; border-bottom:1px solid #c8d6e5; padding-bottom:4px; margin-top:24px; }
+h3 { font-size:12.5pt; color:#1f5b89; margin-top:16px; }
+table { border-collapse:collapse; width:100%; margin:10px 0 16px 0; table-layout:fixed; }
+th { background:#174a7c; color:white; border:1px solid #174a7c; padding:6px; vertical-align:top; }
+td { border:1px solid #c8d6e5; padding:6px; vertical-align:top; word-wrap:break-word; }
+tr:nth-child(even) td { background:#f7fafc; }
+.cover { border:2px solid #174a7c; padding:28px; margin-bottom:24px; }
+.meta { color:#5b6778; }
+.p0 { color:#9b1c1c; font-weight:700; }
+.p1 { color:#b45309; font-weight:700; }
+.p2 { color:#1d4ed8; font-weight:700; }
+code { font-family:Consolas, monospace; background:#eef2f7; padding:1px 3px; }
+</style>
+</head>
+<body>
+<div class="cover">
+<h1>TenderOS V2<br>Cahier de tests technico-fonctionnels complet</h1>
+<p class="meta"><b>Objet :</b> recette globale avant fin de développement couvrant les parcours métier, le front, l'API, la sécurité, l'IA, les documents, la facturation, les intégrations et la non-régression.</p>
+<p class="meta"><b>Version :</b> 1.0 - <b>Date :</b> 14/08/2026 - <b>Produit :</b> TenderOS exclusivement.</p>
+<p class="meta"><b>Public :</b> QA, Product Owner, Lead Tech, développeurs backend/frontend, équipe recette métier AO.</p>
+</div>
+
+<h2>1. Objectifs et périmètre</h2>
+<p>Ce cahier de tests définit la recette technico-fonctionnelle complète de TenderOS V2. Il couvre le cycle de vie complet d'un appel d'offres : veille, opportunité, décision Go/No-Go, tender, DCE, analyse IA, dossier administratif, mémoire technique, chiffrage, validations, collaboration, réponse finale, dépôt manuel, intégrations, billing et exploitation.</p>
+<p>Les tests sont conçus pour être exécutés en recette manuelle, semi-automatisée ou automatisée. Les P0 bloquent toute mise en production. Les P1 bloquent la release sauf dérogation formelle et tracée.</p>
+
+<h2>2. Règles absolues de validation</h2>
+<table>
+<tr><th>Règle</th><th>Attendu</th><th>Criticité</th></tr>
+<tr><td>Isolation multi-tenant</td><td>Aucune donnée d'une organisation ne doit être visible, téléchargeable, listée ou inférée depuis une autre organisation.</td><td class="p0">P0</td></tr>
+<tr><td>Isolation inter-client</td><td>Dans une même organisation, un utilisateur limité à un client ne voit aucun objet d'un autre client.</td><td class="p0">P0</td></tr>
+<tr><td>Provenance IA</td><td>Toute citation IA correspond à un document, un chunk, une page/section et une citation verbatim réellement présents dans le DCE du tender.</td><td class="p1">P1</td></tr>
+<tr><td>Documents générés</td><td>DC1, DC2 si activé, DUME, mémoire, BPU, DPGF, acte d'engagement et package final doivent être lisibles, complets, versionnés et rattachés au bon tender.</td><td class="p1">P1</td></tr>
+<tr><td>Billing Stripe</td><td>Webhooks signés, idempotents, fail-closed, sans open redirect et sans double crédit AO.</td><td class="p1">P1</td></tr>
+<tr><td>Auditabilité</td><td>Actions sensibles tracées avec acteur, organisation, cible, action, date et métadonnées utiles sans secret.</td><td class="p1">P1</td></tr>
+<tr><td>Non-régression</td><td>Lint, typecheck, build, migrations, tests ciblés et parcours métier critiques doivent passer avec preuves.</td><td class="p1">P1</td></tr>
+</table>
+
+<h2>3. Environnements et jeux de données</h2>
+<table>
+<tr><th>Environnement</th><th>Usage</th><th>Contraintes</th></tr>
+<tr><td>Local développeur</td><td>Unitaires, intégration locale, debug.</td><td>PostgreSQL local dédié, données fictives, aucune base distante pour migrations dangereuses.</td></tr>
+<tr><td>Staging recette</td><td>Parcours E2E, Playwright, validation métier.</td><td>Données fictives, secrets sandbox, monitoring actif.</td></tr>
+<tr><td>Stripe sandbox</td><td>Checkout, Customer Portal, webhooks, plans, Pass AO.</td><td>Signature webhook obligatoire, prix résolus serveur.</td></tr>
+<tr><td>Connecteurs sandbox</td><td>Microsoft 365, Google Workspace, API publique.</td><td>Comptes de test, scopes minimaux, révocation vérifiée.</td></tr>
+</table>
+<p><b>Données minimales :</b> deux organisations, deux clients dans l'organisation A, un utilisateur par rôle, un owner dans l'organisation B, trois DCE fictifs, un profil entreprise complet, un sous-traitant, des plans billing et un Pass AO.</p>
+
+<h2>4. Rôles à tester</h2>
+<table>
+<tr><th>Rôle</th><th>Droits attendus</th><th>Tests clés</th></tr>
+<tr><td>OWNER</td><td>Administration complète, billing, membres, clients, configurations critiques.</td><td>Billing, bypass Go/No-Go avec justification, audit log.</td></tr>
+<tr><td>ORGANIZATION_ADMIN</td><td>Administration opérationnelle de l'organisation.</td><td>Gestion membres, clients, configuration, bypass autorisé avec justification.</td></tr>
+<tr><td>BID_MANAGER</td><td>Pilotage AO, DCE, analyse, production dossier, validations selon périmètre.</td><td>Pas de bypass non autorisé, isolation client, génération documentaire.</td></tr>
+<tr><td>CONTRIBUTOR</td><td>Contribution documentaire, tâches, commentaires, pièces assignées.</td><td>Accès limité, pas d'administration, pas de bypass.</td></tr>
+<tr><td>PLATFORM_ADMIN</td><td>Administration plateforme hors tenant.</td><td>Pas d'exposition secrets ni documents clients hors politique.</td></tr>
+</table>
+
+<h2>5. Parcours E2E prioritaires</h2>
+<table>
+<tr><th>ID</th><th>Parcours</th><th>Étapes</th><th>Résultats attendus</th><th>Criticité</th></tr>
+<tr><td>E2E-01</td><td>Réponse AO standard complète</td><td>Créer opportunité, qualifier GO, promouvoir en tender, importer DCE PDF, analyser IA, compléter checklist, générer DC1, mémoire, pricing, BPU/DPGF/AE, valider, assembler package, marquer dépôt manuel.</td><td>Statuts cohérents, documents téléchargeables, package complet, audit log, dashboard à jour.</td><td class="p1">P1</td></tr>
+<tr><td>E2E-02</td><td>AO complexe multi-lots avec sous-traitance</td><td>Créer tender multi-lots, importer DCE complexe, extraire lots/critères, rattacher sous-traitant, chiffrer par lot, générer pièces et package.</td><td>Lots, montants, pourcentages et pièces cohérents ; refus si sous-traitance hors tolérance.</td><td class="p1">P1</td></tr>
+<tr><td>E2E-03</td><td>Erreur IA puis correction manuelle</td><td>Simuler erreur provider, relancer, refuser suggestion, corriger manuellement, régénérer document.</td><td>Erreur tracée, pas de persistance partielle incohérente, l'humain reste autorité.</td><td class="p1">P1</td></tr>
+<tr><td>E2E-04</td><td>Multi-tenant et inter-client strict</td><td>Créer objets Org A/Org B et Client Alpha/Beta, tenter accès par ID, URL front, téléchargement, chat, package, billing, workspace.</td><td>403/404 contrôlé, aucune métadonnée sensible retournée.</td><td class="p0">P0</td></tr>
+<tr><td>E2E-05</td><td>Billing complet</td><td>Checkout Pass AO, webhook succès, replay webhook, abonnement mensuel/annuel, portal, unknown price, signature invalide.</td><td>Crédits corrects, idempotence, fail-closed, permissions strictes.</td><td class="p1">P1</td></tr>
+</table>
+
+<h2>6. Tests détaillés par domaine</h2>
+<h3>6.1 Authentification, organisations, permissions</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>AUTH-01</td><td>Connexion utilisateur valide puis accès dashboard.</td><td>Session créée, organisation courante résolue, navigation protégée accessible.</td><td>P1</td></tr>
+<tr><td>AUTH-02</td><td>Connexion invalide.</td><td>Refus sans révéler si l'email existe, aucun secret en log.</td><td>P1</td></tr>
+<tr><td>AUTH-03</td><td>Route protégée sans session.</td><td>Redirection login ou 401 API.</td><td>P1</td></tr>
+<tr><td>AUTH-04</td><td>Changer l'organisation dans l'en-tête API.</td><td>Refus si l'utilisateur n'est pas membre actif.</td><td>P0</td></tr>
+<tr><td>AUTH-05</td><td>Tester chaque rôle sur actions admin, billing, DCE, génération, validation.</td><td>Permissions strictement conformes, aucune escalade.</td><td>P1</td></tr>
+<tr><td>AUTH-06</td><td>Utilisateur suspendu ou membership inactif.</td><td>Accès refusé immédiatement.</td><td>P1</td></tr>
+</table>
+
+<h3>6.2 Client Portfolio</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>CLIENT-01</td><td>Créer, modifier, archiver un client.</td><td>Normalisation du nom, statuts cohérents, audit log.</td><td>P1</td></tr>
+<tr><td>CLIENT-02</td><td>Créer tender sans client.</td><td>Refus si client obligatoire.</td><td>P1</td></tr>
+<tr><td>CLIENT-03</td><td>Utilisateur assigné Client Alpha uniquement.</td><td>Aucun tender Client Beta visible.</td><td>P0</td></tr>
+<tr><td>CLIENT-04</td><td>Accès direct à un tender Client Beta par ID.</td><td>403/404 sans fuite de titre.</td><td>P0</td></tr>
+<tr><td>CLIENT-05</td><td>Listes front opportunités, tenders, documents, dashboard.</td><td>Filtrage client appliqué partout.</td><td>P0</td></tr>
+</table>
+
+<h3>6.3 Opportunités et Go/No-Go</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>OPP-01</td><td>Créer opportunité avec acheteur, échéance, montant, client.</td><td>Opportunité créée et visible dans le pipeline.</td><td>P1</td></tr>
+<tr><td>OPP-02</td><td>Renseigner scoring et décision.</td><td>Score calculé, justification conservée.</td><td>P1</td></tr>
+<tr><td>OPP-03</td><td>Décision NO_GO puis promotion.</td><td>Promotion refusée sauf bypass autorisé.</td><td>P1</td></tr>
+<tr><td>OPP-04</td><td>Bypass OWNER/ORGANIZATION_ADMIN avec justification.</td><td>Autorisé uniquement avec justification obligatoire et AuditLog explicite.</td><td>P1</td></tr>
+<tr><td>OPP-05</td><td>Bypass CONTRIBUTOR/BID_MANAGER.</td><td>Refus systématique.</td><td>P1</td></tr>
+<tr><td>OPP-06</td><td>Promotion GO en Tender.</td><td>Tender créé avec client, acheteur, échéances et lien opportunité.</td><td>P1</td></tr>
+</table>
+
+<h3>6.4 Tenders, lots, acheteur</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>TENDER-01</td><td>Créer Tender manuellement.</td><td>Champs obligatoires validés, dates cohérentes, client obligatoire.</td><td>P1</td></tr>
+<tr><td>TENDER-02</td><td>Ajouter plusieurs lots.</td><td>Lots ordonnés, actifs, archivables.</td><td>P1</td></tr>
+<tr><td>TENDER-03</td><td>Modifier acheteur et critères.</td><td>Cockpit à jour, audit selon action.</td><td>P2</td></tr>
+<tr><td>TENDER-04</td><td>Archiver un Tender.</td><td>Retiré des listes actives, historique conservé.</td><td>P1</td></tr>
+<tr><td>TENDER-05</td><td>Vue tender responsive.</td><td>Aucun chevauchement, actions accessibles.</td><td>P2</td></tr>
+</table>
+
+<h3>6.5 DCE</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>DCE-01</td><td>Importer un PDF plat.</td><td>Document créé, version initiale, statut cohérent.</td><td>P1</td></tr>
+<tr><td>DCE-02</td><td>Importer PDF complexe multi-pages.</td><td>Pages/chunks extraits, progression visible, pas de timeout UI.</td><td>P1</td></tr>
+<tr><td>DCE-03</td><td>Importer fichier non autorisé.</td><td>Refus clair, aucune persistance partielle non maîtrisée.</td><td>P1</td></tr>
+<tr><td>DCE-04</td><td>Erreur extraction.</td><td>Statut FAILED/PARTIAL, message utilisateur, relance possible.</td><td>P1</td></tr>
+<tr><td>DCE-05</td><td>Document d'un autre tenant référencé.</td><td>Refus strict.</td><td>P0</td></tr>
+<tr><td>DCE-06</td><td>Mise à jour DCE après analyse.</td><td>Analyse ancienne obsolète/versionnée.</td><td>P1</td></tr>
+<tr><td>DCE-07</td><td>Front upload/liste/statuts/erreurs.</td><td>États loading, success, failed, retry complets.</td><td>P2</td></tr>
+</table>
+
+<h3>6.6 Analyse IA et provenance</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>AI-01</td><td>Lancer analyse IA sur DCE valide.</td><td>Job créé, statuts progressifs, résultats structurés.</td><td>P1</td></tr>
+<tr><td>AI-02</td><td>Citation absente du chunk.</td><td>Validation déterministe échoue, pas de persistance partielle.</td><td>P1</td></tr>
+<tr><td>AI-03</td><td>chunkSequence inexistant.</td><td>Refus provenance.</td><td>P1</td></tr>
+<tr><td>AI-04</td><td>Document hors tender ou autre tenant.</td><td>Refus strict.</td><td>P0</td></tr>
+<tr><td>AI-05</td><td>Date IA invalide.</td><td>Erreur schema contrôlée, job en échec lisible.</td><td>P1</td></tr>
+<tr><td>AI-06</td><td>Afficher clauses paginées.</td><td>Pagination stable, version d'analyse cohérente.</td><td>P1</td></tr>
+<tr><td>AI-07</td><td>Fallback provider.</td><td>Fallback selon politique ou erreur contrôlée.</td><td>P1</td></tr>
+</table>
+
+<h3>6.7 AI Benchmark et routing</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>AIB-01</td><td>Créer modèle depuis catalogue.</td><td>Aucun provider/model libre dangereux.</td><td>P1</td></tr>
+<tr><td>AIB-02</td><td>Ajouter snapshot tarifaire.</td><td>Historique conservé, benchmark existant garde prix gelé.</td><td>P1</td></tr>
+<tr><td>AIB-03</td><td>Créer suite benchmark synthétique.</td><td>Pas de corpus client réel.</td><td>P1</td></tr>
+<tr><td>AIB-04</td><td>Activer politique routing.</td><td>Activation atomique, une seule active par clé.</td><td>P1</td></tr>
+<tr><td>AIB-05</td><td>Routing utilisé par Analyse DCE.</td><td>Modèle résolu conforme à la politique.</td><td>P1</td></tr>
+</table>
+
+<h3>6.8 Knowledge Library et Chat IA</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>KNOW-01</td><td>Importer document de connaissance.</td><td>Indexation, statut et permissions corrects.</td><td>P1</td></tr>
+<tr><td>KNOW-02</td><td>Valider/rejeter connaissance.</td><td>Seules connaissances validées alimentent le RAG.</td><td>P1</td></tr>
+<tr><td>KNOW-03</td><td>Accès connaissance autre client/tenant.</td><td>Impossible.</td><td>P0</td></tr>
+<tr><td>CHAT-01</td><td>Question sur DCE avec source.</td><td>Réponse avec citations valides ou refus si source absente.</td><td>P1</td></tr>
+<tr><td>CHAT-02</td><td>Prompt injection dans DCE/message.</td><td>Pas de divulgation secrets ni contournement de périmètre.</td><td>P1</td></tr>
+<tr><td>CHAT-03</td><td>Conversation d'un autre tender.</td><td>Historique et contexte isolés.</td><td>P0</td></tr>
+</table>
+
+<h3>6.9 Dossier administratif, DC1, DC2, DUME</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>ADM-01</td><td>Initialiser dossier administratif.</td><td>Checklist générée, readiness cohérente.</td><td>P1</td></tr>
+<tr><td>ADM-02</td><td>Préremplir DC1 complet.</td><td>PDF/DOCX lisible, champs candidat, acheteur, objet, lots, mandataire cohérents.</td><td>P1</td></tr>
+<tr><td>ADM-03</td><td>Regénérer DC1 après modification.</td><td>Nouvelle version, ancienne non écrasée.</td><td>P1</td></tr>
+<tr><td>ADM-04</td><td>Préremplir DC2 si activé.</td><td>Données capacités, références et sous-traitance cohérentes ; sinon hors périmètre explicite.</td><td>P2</td></tr>
+<tr><td>ADM-05</td><td>Générer DUME XML draft.</td><td>XML valide et téléchargeable selon règle.</td><td>P2</td></tr>
+<tr><td>ADM-06</td><td>Pièce expirée.</td><td>Dossier non READY si pièce obligatoire invalide.</td><td>P1</td></tr>
+<tr><td>ADM-07</td><td>Signature non câblée.</td><td>Aucun appel fournisseur, pas de faux statut signé.</td><td>P1</td></tr>
+</table>
+
+<h3>6.10 Mémoire technique</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>MEM-01</td><td>Créer mémoire depuis modèle.</td><td>Structure attendue et sections initialisées.</td><td>P1</td></tr>
+<tr><td>MEM-02</td><td>Générer section IA.</td><td>Texte cohérent, sources autorisées, brouillon.</td><td>P1</td></tr>
+<tr><td>MEM-03</td><td>Modifier manuellement.</td><td>Pas d'écrasement par régénération sans consentement.</td><td>P1</td></tr>
+<tr><td>MEM-04</td><td>Valider version finale.</td><td>Version verrouillée, utilisable dans package.</td><td>P1</td></tr>
+<tr><td>MEM-05</td><td>Exporter PDF/DOCX.</td><td>Mise en page lisible, pas de texte tronqué.</td><td>P2</td></tr>
+</table>
+
+<h3>6.11 Pricing, BPU, DPGF, DQE, acte d'engagement</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>PRI-01</td><td>Créer estimation.</td><td>Version créée, devise, hypothèses conservées.</td><td>P1</td></tr>
+<tr><td>PRI-02</td><td>Ajouter lignes BPU/DPGF.</td><td>Totaux HT/TTC, arrondis et lots cohérents.</td><td>P1</td></tr>
+<tr><td>PRI-03</td><td>Modifier estimation validée.</td><td>Nouvelle version ou refus, pas de mutation silencieuse.</td><td>P1</td></tr>
+<tr><td>PRI-04</td><td>Geler pricing dans acte d'engagement.</td><td>Version et montant figés.</td><td>P1</td></tr>
+<tr><td>PRI-05</td><td>Exporter BPU/DPGF/DQE/AE.</td><td>Fichiers lisibles, totaux identiques au backend.</td><td>P1</td></tr>
+</table>
+
+<h3>6.12 Response Package et dépôt manuel</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>PKG-01</td><td>Créer package.</td><td>Package rattaché au tender, version draft.</td><td>P1</td></tr>
+<tr><td>PKG-02</td><td>Inclure pièces validées.</td><td>Seules versions validées/gelées incluses.</td><td>P1</td></tr>
+<tr><td>PKG-03</td><td>Inclure pièce non validée.</td><td>Refus ou warning bloquant selon règle.</td><td>P1</td></tr>
+<tr><td>PKG-04</td><td>Exporter package final.</td><td>Fichier téléchargeable, nommage et contenu cohérents.</td><td>P1</td></tr>
+<tr><td>PKG-05</td><td>Marquer dépôt manuel avec reçu.</td><td>Statut soumis, reçu stocké, acteur et date tracés.</td><td>P1</td></tr>
+<tr><td>PKG-06</td><td>Modifier pièce après dépôt.</td><td>Package déposé non altéré, nouvelle version obligatoire.</td><td>P1</td></tr>
+</table>
+
+<h3>6.13 Workspace et validations</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>WOR-01</td><td>Ajouter participant.</td><td>Membre éligible uniquement.</td><td>P1</td></tr>
+<tr><td>WOR-02</td><td>Créer tâche depuis checklist.</td><td>Contexte prérempli, assignation possible.</td><td>P2</td></tr>
+<tr><td>WOR-03</td><td>Commentaire avec mention.</td><td>Mention dans le même périmètre, notification créée.</td><td>P1</td></tr>
+<tr><td>WOR-04</td><td>Demander approbation sur version.</td><td>Cible immuable, reviewer autorisé.</td><td>P1</td></tr>
+<tr><td>WOR-05</td><td>Rejet avec raison.</td><td>Raison obligatoire, audit log.</td><td>P1</td></tr>
+<tr><td>WOR-06</td><td>Accès workspace autre client.</td><td>Aucune fuite.</td><td>P0</td></tr>
+</table>
+
+<h3>6.14 Dashboard</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>DAS-01</td><td>Afficher KPIs tenders, opportunités, tâches, validations, crédits.</td><td>Données cohérentes avec backend.</td><td>P1</td></tr>
+<tr><td>DAS-02</td><td>Filtrer par client.</td><td>Pas de fuite inter-client.</td><td>P0</td></tr>
+<tr><td>DAS-03</td><td>Responsive mobile/tablette/desktop.</td><td>Aucun chevauchement, actions accessibles.</td><td>P2</td></tr>
+<tr><td>DAS-04</td><td>Erreur API partielle.</td><td>État d'erreur local, reste exploitable.</td><td>P2</td></tr>
+</table>
+
+<h3>6.15 Connecteurs et API publique</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>INT-01</td><td>Créer API key.</td><td>Secret affiché une seule fois, hash stocké.</td><td>P1</td></tr>
+<tr><td>INT-02</td><td>Révoquer API key.</td><td>Accès immédiatement refusé, audit log.</td><td>P1</td></tr>
+<tr><td>INT-03</td><td>Scope insuffisant.</td><td>403 sans fuite.</td><td>P1</td></tr>
+<tr><td>INT-04</td><td>Connecter M365/Google sandbox.</td><td>Scopes cohérents, révocation possible.</td><td>P1</td></tr>
+<tr><td>INT-05</td><td>Webhook non signé.</td><td>Refus, aucun effet métier.</td><td>P1</td></tr>
+<tr><td>INT-06</td><td>Rate limit API publique.</td><td>Limite appliquée, logs sans secret.</td><td>P2</td></tr>
+</table>
+
+<h3>6.16 Billing Stripe</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>BIL-01</td><td>Checkout Pass AO.</td><td>Price ID résolu serveur, pas de prix arbitraire front.</td><td>P1</td></tr>
+<tr><td>BIL-02</td><td>Checkout abonnement mensuel/annuel.</td><td>Mode subscription, catalogue serveur, organisation autorisée.</td><td>P1</td></tr>
+<tr><td>BIL-03</td><td>Webhook signature invalide.</td><td>Refus 400, aucun changement.</td><td>P1</td></tr>
+<tr><td>BIL-04</td><td>Rejouer webhook traité.</td><td>Idempotence, pas de double crédit.</td><td>P1</td></tr>
+<tr><td>BIL-05</td><td>Webhook échoue puis retry.</td><td>Retry autorisé si FAILED, traitement possible.</td><td>P1</td></tr>
+<tr><td>BIL-06</td><td>Unknown Stripe Price.</td><td>Fail-closed, pas d'assignation plan/crédit.</td><td>P1</td></tr>
+<tr><td>BIL-07</td><td>URL malveillante dans body.</td><td>Ignorée/refusée, URL serveur.</td><td>P1</td></tr>
+<tr><td>BIL-08</td><td>Portal par non-admin.</td><td>Refus permissions.</td><td>P1</td></tr>
+<tr><td>BIL-09</td><td>Checkout cross-tenant.</td><td>Impossible.</td><td>P0</td></tr>
+</table>
+
+<h3>6.17 Sécurité, observabilité, performance</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>SEC-01</td><td>IDOR sur endpoints critiques.</td><td>Refus contrôlé, aucune fuite.</td><td>P0</td></tr>
+<tr><td>SEC-02</td><td>Recherche secrets dans logs/réponses/audit.</td><td>Aucun token, clé API, secret Stripe/OpenAI.</td><td>P1</td></tr>
+<tr><td>SEC-03</td><td>Upload volumineux/corrompu.</td><td>Limite appliquée, erreur propre.</td><td>P1</td></tr>
+<tr><td>SEC-04</td><td>XSS sur titres/commentaires/mémoire.</td><td>Échappement correct.</td><td>P1</td></tr>
+<tr><td>OBS-01</td><td>Logs jobs IA/DCE/génération.</td><td>Corrélation jobId/tenderId/orgId sans contenu sensible excessif.</td><td>P2</td></tr>
+<tr><td>PERF-01</td><td>Dashboard volumineux.</td><td>Temps acceptable, pagination/limites.</td><td>P2</td></tr>
+<tr><td>PERF-02</td><td>Import DCE complexe.</td><td>Requête non bloquée si async, statut consultable.</td><td>P1</td></tr>
+</table>
+
+<h2>7. Tests front et UX</h2>
+<table>
+<tr><th>ID</th><th>Zone</th><th>Scénarios</th><th>Résultat attendu</th></tr>
+<tr><td>FR-01</td><td>Navigation</td><td>Login, dashboard, tenders, opportunités, clients, pricing, admin dossier, workspace, settings.</td><td>Navigation fluide, aucun lien mort.</td></tr>
+<tr><td>FR-02</td><td>Formulaires</td><td>Créer/éditer tender, client, opportunité, pricing, tâches, documents.</td><td>Validation client et serveur, erreurs lisibles, pas de double submit.</td></tr>
+<tr><td>FR-03</td><td>Asynchrone</td><td>DCE import, analyse IA, génération PDF, package export.</td><td>Loading, polling, success, failed, retry ; pas de spinner infini.</td></tr>
+<tr><td>FR-04</td><td>Responsive</td><td>1440x900, 1280x800, 768x1024, 390x844.</td><td>Aucun chevauchement, tableaux scrollables, actions accessibles.</td></tr>
+<tr><td>FR-05</td><td>Accessibilité</td><td>Clavier, labels, contrastes, focus visible.</td><td>Parcours principal utilisable sans souris.</td></tr>
+<tr><td>FR-06</td><td>Téléchargements</td><td>DC1, mémoire, BPU, package, reçu dépôt.</td><td>Fichiers non vides, bons noms, bons types MIME.</td></tr>
+<tr><td>FR-07</td><td>Erreurs API</td><td>401, 403, 404, 422, 500.</td><td>Messages sobres, pas de stack trace, récupération possible.</td></tr>
+</table>
+
+<h2>8. Tests API et contrats</h2>
+<table>
+<tr><th>Famille</th><th>Contrôles obligatoires</th></tr>
+<tr><td>Validation payload</td><td>Champs requis, types, dates ISO, enums, tailles max, schémas stricts pour données sensibles.</td></tr>
+<tr><td>Authentification</td><td>401 sans token, 403 rôle insuffisant, 404/403 ID hors périmètre.</td></tr>
+<tr><td>Pagination</td><td>Limites, ordre stable, pas de doublons, pas de fuite via total.</td></tr>
+<tr><td>Idempotence</td><td>Webhooks, imports, génération, outbox, consommation crédit.</td></tr>
+<tr><td>Transactions</td><td>Rollback sur erreur métier, pas de persistance partielle.</td></tr>
+<tr><td>Audit logs</td><td>Action, acteur, organisation, cible, timestamp, métadonnées, aucun secret.</td></tr>
+<tr><td>Téléchargement</td><td>Type MIME, nom fichier, autorisation, version correcte, contenu non vide.</td></tr>
+</table>
+
+<h2>9. Tests migrations et base de données</h2>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>DB-01</td><td>Replay migrations sur PostgreSQL local vierge.</td><td>Toutes migrations passent sans modification manuelle.</td><td>P1</td></tr>
+<tr><td>DB-02</td><td>Upgrade depuis dump anonymisé version précédente.</td><td>Migration déployable, backfills corrects.</td><td>P1</td></tr>
+<tr><td>DB-03</td><td>Prisma validate et format check.</td><td>OK.</td><td>P1</td></tr>
+<tr><td>DB-04</td><td>Contraintes uniques partielles/checks.</td><td>Incohérences empêchées même en concurrence.</td><td>P1</td></tr>
+<tr><td>DB-05</td><td>Tests concurrentiels : routing, webhook Stripe, consommation crédit, validations.</td><td>Un seul gagnant, état final cohérent.</td><td>P1</td></tr>
+</table>
+
+<h2>10. Suite de non-régression recommandée</h2>
+<ul>
+<li><code>pnpm lint</code></li>
+<li><code>pnpm typecheck</code></li>
+<li><code>pnpm --dir apps/api exec prisma validate</code></li>
+<li><code>pnpm --dir apps/api exec prisma format --check</code></li>
+<li><code>pnpm --dir apps/api exec nest build</code></li>
+<li><code>pnpm --dir apps/web build</code></li>
+<li><code>pnpm test</code> si stable ; sinon suites ciblées par module avec justification.</li>
+<li><code>pnpm exec playwright test</code> sur parcours E2E critiques.</li>
+</ul>
+
+<h2>11. Cas extrêmes, limites, non passants et charge</h2>
+<p>Cette section doit être exécutée en complément des parcours nominaux. Elle vise à casser volontairement les hypothèses simples : DCE très volumineux, pages techniques denses, scans imparfaits, schémas, croquis, formules, tableaux larges, imports simultanés, erreurs provider, quotas, timeouts et permissions agressées.</p>
+
+<h3>11.1 DCE techniques très complexes</h3>
+<table>
+<tr><th>ID</th><th>Scénario extrême</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>EXT-DCE-01</td><td>DCE PDF de 300 à 800 pages avec CCTP, CCAP, RC, BPU, DPGF, annexes et plans.</td><td>Import accepté selon limite configurée ou refus clair avant traitement ; pas de blocage UI ; statut job consultable ; pas de corruption de données.</td><td>P1</td></tr>
+<tr><td>EXT-DCE-02</td><td>PDF avec pages A3/A2, plans techniques, croquis, schémas électriques, réseaux, coupes, détails de structure.</td><td>Extraction textuelle robuste si texte présent ; pages graphiques référencées sans hallucination ; l'IA ne doit pas inventer des mesures non extraites.</td><td>P1</td></tr>
+<tr><td>EXT-DCE-03</td><td>PDF scanné basse qualité, rotation 90/180 degrés, bruit, tampons, annotations manuscrites.</td><td>Statut PARTIAL/FAILED si OCR insuffisant ; message clair ; aucune donnée inventée ; possibilité de remplacer le document.</td><td>P1</td></tr>
+<tr><td>EXT-DCE-04</td><td>DCE rempli de formules mathématiques, unités, symboles grecs, exposants, indices, fractions et tolérances techniques.</td><td>Les formules sont préservées si extraites ; sinon signalées comme non fiables ; aucune transformation silencieuse des unités ou valeurs.</td><td>P1</td></tr>
+<tr><td>EXT-DCE-05</td><td>Tableaux BPU/DPGF très larges sur plusieurs pages avec colonnes fusionnées.</td><td>Extraction stable ou refus partiel contrôlé ; totaux non recalculés depuis une extraction incertaine sans validation humaine.</td><td>P1</td></tr>
+<tr><td>EXT-DCE-06</td><td>DCE avec deux échéances contradictoires dans RC et CCAP.</td><td>Analyse IA remonte contradiction et cite les deux sources ; pas de choix arbitraire non justifié.</td><td>P1</td></tr>
+<tr><td>EXT-DCE-07</td><td>DCE contenant des images avec texte important non OCRisé.</td><td>Le système indique les limites d'extraction ; aucune clause issue d'image non lue n'est affirmée comme certaine.</td><td>P1</td></tr>
+<tr><td>EXT-DCE-08</td><td>DCE multilingue français/anglais avec unités mixtes.</td><td>Langues conservées, unités non converties sans règle explicite, exigences identifiées par langue si nécessaire.</td><td>P2</td></tr>
+</table>
+
+<h3>11.2 Analyse IA en conditions difficiles</h3>
+<table>
+<tr><th>ID</th><th>Scénario extrême</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>EXT-AI-01</td><td>Analyse d'un DCE de plusieurs centaines de chunks.</td><td>Pagination, batching ou limitation maîtrisée ; pas de dépassement non capturé ; job en erreur contrôlée si limite atteinte.</td><td>P1</td></tr>
+<tr><td>EXT-AI-02</td><td>Provider retourne une citation approximative, reformulée ou tronquée.</td><td>Validation provenance échoue ; aucune persistance partielle.</td><td>P1</td></tr>
+<tr><td>EXT-AI-03</td><td>Provider retourne des JSON très volumineux, champs inconnus, dates invalides, nombres en texte.</td><td>Schéma strict, erreur lisible, job non considéré comme réussi.</td><td>P1</td></tr>
+<tr><td>EXT-AI-04</td><td>Prompt injection dans le DCE : instruction demandant d'ignorer les règles TenderOS.</td><td>Instruction ignorée, périmètre et politiques conservés, aucune fuite de secret.</td><td>P1</td></tr>
+<tr><td>EXT-AI-05</td><td>Timeout provider ou quota dépassé pendant analyse.</td><td>Retry/fallback selon politique, statut final cohérent, pas de boucle infinie.</td><td>P1</td></tr>
+<tr><td>EXT-AI-06</td><td>Deux analyses lancées simultanément sur le même Tender.</td><td>Concurrence maîtrisée : verrou, versionnement ou refus ; pas de résultats mélangés.</td><td>P1</td></tr>
+</table>
+
+<h3>11.3 Limites fichiers, charge et volumétrie</h3>
+<table>
+<tr><th>ID</th><th>Scénario</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>LOAD-01</td><td>Importer 20 DCE en parallèle sur 20 tenders distincts.</td><td>Jobs isolés, pas de fuite, files d'attente stables, temps de réponse UI acceptable.</td><td>P1</td></tr>
+<tr><td>LOAD-02</td><td>Importer un fichier au-delà de la taille maximale.</td><td>Refus immédiat, message clair, aucune écriture partielle lourde.</td><td>P1</td></tr>
+<tr><td>LOAD-03</td><td>Générer simultanément 10 packages finaux volumineux.</td><td>Pas de collision de fichiers, versions correctes, erreurs isolées.</td><td>P1</td></tr>
+<tr><td>LOAD-04</td><td>Dashboard avec 5 000 tenders, 20 000 tâches et 100 000 activités.</td><td>Pagination/agrégats efficaces, pas de timeout, UI lisible.</td><td>P2</td></tr>
+<tr><td>LOAD-05</td><td>Workspace avec 1 000 commentaires et mentions.</td><td>Pagination, recherche et notifications restent utilisables.</td><td>P2</td></tr>
+<tr><td>LOAD-06</td><td>Facturation : replay massif du même webhook Stripe.</td><td>Idempotence stricte, aucune double écriture, logs non saturés.</td><td>P1</td></tr>
+</table>
+
+<h3>11.4 Non passants métier et sécurité</h3>
+<table>
+<tr><th>ID</th><th>Scénario non passant</th><th>Résultat attendu</th><th>Criticité</th></tr>
+<tr><td>NEG-01</td><td>DCE sans RC ni deadline détectable.</td><td>Analyse indique l'absence ou l'incertitude ; pas de deadline inventée.</td><td>P1</td></tr>
+<tr><td>NEG-02</td><td>DC1 demandé alors que profil entreprise incomplet.</td><td>Génération refusée ou document marqué incomplet avec champs manquants explicites.</td><td>P1</td></tr>
+<tr><td>NEG-03</td><td>Package final demandé avec mémoire non validé ou pricing non gelé.</td><td>Blocage clair, liste des prérequis manquants.</td><td>P1</td></tr>
+<tr><td>NEG-04</td><td>Utilisateur modifie un ID client/tender/document dans l'URL.</td><td>403/404 sans fuite.</td><td>P0</td></tr>
+<tr><td>NEG-05</td><td>Upload PDF contenant JavaScript, liens externes ou contenu actif.</td><td>Contenu traité comme fichier passif ; aucune exécution ; avertissement si nécessaire.</td><td>P1</td></tr>
+<tr><td>NEG-06</td><td>Nom de fichier très long, caractères spéciaux, accents, emojis, chemins relatifs.</td><td>Normalisation sécurisée, pas de path traversal, téléchargement correct.</td><td>P1</td></tr>
+<tr><td>NEG-07</td><td>Formules ou montants avec séparateurs ambigus : 1.234,56 / 1,234.56.</td><td>Validation ou demande de confirmation ; pas de conversion silencieuse dangereuse.</td><td>P1</td></tr>
+<tr><td>NEG-08</td><td>Dates ambiguës 03/04/2026 dans DCE.</td><td>Incertitude remontée ou format local explicite ; pas d'interprétation arbitraire.</td><td>P1</td></tr>
+</table>
+
+<h3>11.5 Critères d'acceptation des cas extrêmes</h3>
+<ul>
+<li>Un échec contrôlé est acceptable ; un crash, une fuite, un état incohérent ou une hallucination persistée ne l'est pas.</li>
+<li>Tout résultat IA incertain doit être marqué comme tel et rester soumis à validation humaine.</li>
+<li>Les limites de taille, pages, tokens, durée et concurrence doivent être documentées côté produit et testées.</li>
+<li>Les gros DCE ne doivent jamais bloquer durablement le serveur web ni empêcher les autres utilisateurs de travailler.</li>
+<li>Les fichiers techniques contenant schémas, croquis ou formules ne doivent pas produire de fausses certitudes.</li>
+</ul>
+
+<h2>12. Critères GO / NO GO release</h2>
+<table>
+<tr><th>Critère</th><th>GO</th><th>NO GO</th></tr>
+<tr><td>P0</td><td>Aucun P0 ouvert.</td><td>Fuite tenant/client, IDOR critique, secret exposé.</td></tr>
+<tr><td>P1</td><td>Aucun P1 ouvert ou dérogation formelle.</td><td>Migration non déployable, provenance IA non fiable, génération documentaire cassée, billing non idempotent.</td></tr>
+<tr><td>Tests</td><td>Gates techniques et parcours métier critiques verts.</td><td>Suite critique KO, flakiness non expliquée, preuve manquante.</td></tr>
+<tr><td>Documents</td><td>DC1, mémoire, pricing, package relus.</td><td>PDF/DOCX vide, tronqué, mauvais tenant, mauvaise version.</td></tr>
+<tr><td>Sécurité</td><td>Logs propres, secrets absents, permissions validées.</td><td>Secret/log sensible, bypass non tracé, webhook non signé accepté.</td></tr>
+</table>
+
+<h2>13. Journal d'exécution</h2>
+<table>
+<tr><th>ID test</th><th>Date</th><th>Environnement</th><th>Exécutant</th><th>Résultat</th><th>Preuve</th><th>Anomalie</th><th>Décision</th></tr>
+<tr><td>E2E-01</td><td></td><td>Staging</td><td></td><td>OK/KO</td><td>Screenshot, logs, fichier</td><td>Ticket</td><td>GO/NO GO</td></tr>
+</table>
+
+<h2>14. Conclusion</h2>
+<p>TenderOS ne doit être considéré prêt que lorsque les parcours E2E critiques, les tests multi-tenant/inter-client, les générations documentaires, les tests IA/provenance, les tests billing Stripe, les connecteurs et la non-régression technique sont validés avec preuves. Les P0 bloquent systématiquement. Les P1 bloquent sauf arbitrage formel documenté, temporaire et tracé.</p>
+</body>
+</html>

@@ -9,6 +9,7 @@ export const GO_NO_GO_DECISION_VALUES = ["GO", "GO_CONDITIONAL", "NO_GO"] as con
 
 const OpportunityDetailsBodySchema = z.object({
   clientAccountId: z.string().uuid().optional(),
+  candidateCompanyId: z.string().uuid().optional(),
   buyerId: z.string().uuid().optional(),
   title: z.string().trim().min(1).max(500),
   description: z.string().trim().min(1).optional(),

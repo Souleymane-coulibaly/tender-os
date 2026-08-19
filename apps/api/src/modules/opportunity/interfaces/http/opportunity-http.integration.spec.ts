@@ -76,7 +76,15 @@ describe("Opportunity / GO-NO-GO — real HTTP + PostgreSQL (NestJS)", () => {
     });
   }
 
-  async function seedSucceededAnalysis(input: { organizationId: string; tenderId: string; actorId: string }): Promise<void> {
+  // Checkpoint 2.1-P2.1-FIX-C — un `Dce` est désormais requis pour que l'analyse résolue soit
+  // `CURRENT` (sans DCE, `computeAnalysisFreshness` renvoie `UNKNOWN`, ce qui bloque maintenant la
+  // génération GO/NO-GO, mission §28-29/§37) : toujours créé ici, `analysisVersion`/`dceRevision`
+  // paramétrables pour les scénarios de dérive DCE/reanalyse (E2E ci-dessous).
+  async function seedSucceededAnalysis(input: { organizationId: string; tenderId: string; actorId: string; analysisVersion?: number; dceRevision?: number; recommendation?: string; dceId?: string }): Promise<{ dceId: string }> {
+    const analysisVersion = input.analysisVersion ?? 1;
+    const dceId = input.dceId ?? (await ensureDce({ organizationId: input.organizationId, tenderId: input.tenderId, actorId: input.actorId }));
+    const dceRevision = input.dceRevision ?? (await prisma.dce.findUniqueOrThrow({ where: { id: dceId }, select: { revision: true } })).revision;
+
     const jobId = randomUUID();
     await prisma.analysisJob.create({
       data: {
@@ -86,7 +94,7 @@ describe("Opportunity / GO-NO-GO — real HTTP + PostgreSQL (NestJS)", () => {
         targetId: input.tenderId,
         scope: "TENDER",
         status: "SUCCEEDED",
-        analysisVersion: 1,
+        analysisVersion,
         promptVersion: 1,
         triggeredByRole: "BID_MANAGER",
         updatedAt: new Date(),
@@ -98,13 +106,24 @@ describe("Opportunity / GO-NO-GO — real HTTP + PostgreSQL (NestJS)", () => {
         organizationId: input.organizationId,
         tenderId: input.tenderId,
         analysisJobId: jobId,
-        analysisVersion: 1,
+        analysisVersion,
+        dceRevision,
         opportunitySummary: "Marché de nettoyage de bureaux, DCE complet.",
         complexityLevel: "MEDIUM",
-        goNoGoRecommendation: "GO",
+        goNoGoRecommendation: input.recommendation ?? "GO",
         goNoGoRationale: "Dossier complet, aucun signal bloquant détecté.",
       },
     });
+    return { dceId };
+  }
+
+  async function ensureDce(input: { organizationId: string; tenderId: string; actorId: string }): Promise<string> {
+    const existing = await prisma.dce.findUnique({ where: { tenderId: input.tenderId } });
+    if (existing) return existing.id;
+    const created = await prisma.dce.create({
+      data: { id: randomUUID(), organizationId: input.organizationId, tenderId: input.tenderId, status: "IMPORTED", revision: 1, createdByUserId: input.actorId },
+    });
+    return created.id;
   }
 
   beforeAll(async () => {
@@ -149,6 +168,10 @@ describe("Opportunity / GO-NO-GO — real HTTP + PostgreSQL (NestJS)", () => {
   afterAll(async () => {
     await prisma.goNoGoDecision.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.goNoGoReport.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    // Checkpoint 2.1-P2.1-FIX-C (correctif audit P1-FIXC-001) — aucune FK Prisma déclarée (simple
+    // pointeur indexé, même discipline que `GoNoGoReport.candidateCompanyId`), donc jamais purgée
+    // en cascade par la suppression de l'organisation ci-dessous : nettoyage explicite requis.
+    await prisma.goNoGoReportVersionReservation.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.opportunityQuickScore.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.opportunity.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.tenderAnalysisSummary.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -360,5 +383,116 @@ describe("Opportunity / GO-NO-GO — real HTTP + PostgreSQL (NestJS)", () => {
 
     const reloadedTender = await prisma.tender.findUniqueOrThrow({ where: { id: tender.id } });
     expect(reloadedTender.status).toBe("IN_ANALYSIS");
+  });
+
+  // Checkpoint 2.1-P2.1-FIX-C (mission §59) — scénario de bout en bout complet contre une vraie
+  // base PostgreSQL : DCE rev1 -> analyse CURRENT -> GO/NO-GO GO -> confirmation humaine -> DCE
+  // rev2 (contrainte bloquante ajoutée) -> l'ancien GO/NO-GO devient STALE IMMÉDIATEMENT, avant
+  // toute réanalyse -> réanalyse -> recalcul GO/NO-GO -> nouvelle recommandation potentiellement
+  // NO_GO -> l'ancien GO reste historique/auditable, jamais la décision courante.
+  it("E2E — a DCE change makes the old GO/NO-GO immediately STALE, blocks recalculation until reanalysis, and the historical GO decision is preserved (never silently reattributed)", async () => {
+    const clientAccount = await prisma.clientAccount.create({
+      data: { id: randomUUID(), organizationId: orgAId, name: "Client E2E FIX-C", nameNormalized: "client e2e fix-c", status: "ACTIVE", createdBy: ownerAUserId },
+    });
+    await assignClientManager({ organizationId: orgAId, clientAccountId: clientAccount.id, userId: ownerAUserId });
+    const tender = await prisma.tender.create({
+      data: { id: randomUUID(), organizationId: orgAId, clientAccountId: clientAccount.id, title: "Tender E2E FIX-C", status: "IN_ANALYSIS", tags: [], createdBy: ownerAUserId },
+    });
+
+    const { dceId } = await seedSucceededAnalysis({ organizationId: orgAId, tenderId: tender.id, actorId: ownerAUserId, analysisVersion: 1, dceRevision: 1 });
+
+    const firstReportRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/go-no-go/report`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(firstReportRes.status).toBe(200);
+    const g1 = (await firstReportRes.json()) as { id: string; reportVersion: number; freshness: string; recommendation: string };
+    expect(g1.freshness).toBe("CURRENT");
+
+    const decisionOnG1Res = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/go-no-go/decisions`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ decision: "GO", linkedReportId: g1.id }),
+    });
+    expect(decisionOnG1Res.status).toBe(201);
+    const decisionOnG1 = (await decisionOnG1Res.json()) as { id: string; linkedReportId: string };
+    expect(decisionOnG1.linkedReportId).toBe(g1.id);
+
+    // Le DCE change (RC-v2, simulé directement — le mécanisme d'incrément lui-même est déjà
+    // couvert par FIX-A) : rev1 -> rev2.
+    await prisma.dce.update({ where: { id: dceId }, data: { revision: { increment: 1 } } });
+
+    // BLOQUANT (mission §10) — G1 devient STALE IMMÉDIATEMENT, avant toute réanalyse.
+    const g1AfterDceChangeRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/go-no-go/report`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(g1AfterDceChangeRes.status).toBe(200);
+    const g1AfterDceChange = (await g1AfterDceChangeRes.json()) as { id: string; freshness: string; dceStale: boolean };
+    expect(g1AfterDceChange.id).toBe(g1.id);
+    expect(g1AfterDceChange.freshness).toBe("STALE");
+    expect(g1AfterDceChange.dceStale).toBe(true);
+
+    // BLOQUANT (mission §28-29) — le recalcul est refusé tant que l'analyse n'est pas réactualisée.
+    const blockedRecalcRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/go-no-go/report`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(blockedRecalcRes.status).toBe(409);
+    expect(((await blockedRecalcRes.json()) as { error: { code: string } }).error.code).toBe("GO_NO_GO_ANALYSIS_NOT_CURRENT");
+
+    // Réanalyse : nouvelle TenderAnalysisSummary rattachée à dceRevision=2, recommandation NO_GO
+    // (RC-v2 a introduit une contrainte bloquante).
+    await seedSucceededAnalysis({ organizationId: orgAId, tenderId: tender.id, actorId: ownerAUserId, analysisVersion: 2, dceRevision: 2, recommendation: "NO_GO", dceId });
+
+    const g2Res = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/go-no-go/report`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(g2Res.status).toBe(200);
+    const g2 = (await g2Res.json()) as { id: string; reportVersion: number; freshness: string; analysisVersion: number };
+    expect(g2.freshness).toBe("CURRENT");
+    expect(g2.analysisVersion).toBe(2);
+    expect(g2.id).not.toBe(g1.id);
+
+    const decisionOnG2Res = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/go-no-go/decisions`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ decision: "NO_GO", justification: "RC-v2 ajoute une contrainte bloquante.", linkedReportId: g2.id }),
+    });
+    expect(decisionOnG2Res.status).toBe(201);
+
+    // BLOQUANT — l'historique complet reste consultable et cohérent : G1 toujours STALE, la
+    // décision GO sur G1 jamais réattribuée à G2, les deux rapports et les deux décisions coexistent.
+    const historyRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/go-no-go/reports`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const history = (await historyRes.json()) as { id: string; reportVersion: number; freshness: string }[];
+    expect(history).toHaveLength(2);
+    const historicalG1 = history.find((r) => r.id === g1.id)!;
+    const currentG2 = history.find((r) => r.id === g2.id)!;
+    expect(historicalG1.freshness).toBe("STALE");
+    expect(currentG2.freshness).toBe("CURRENT");
+
+    const decisionsRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/go-no-go/decisions`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const decisions = (await decisionsRes.json()) as { id: string; decision: string; linkedReportId?: string }[];
+    expect(decisions).toHaveLength(2);
+    expect(decisions.find((d) => d.id === decisionOnG1.id)?.linkedReportId).toBe(g1.id);
+    expect(decisions.find((d) => d.id === decisionOnG1.id)?.decision).toBe("GO");
+    expect(decisions.find((d) => d.linkedReportId === g2.id)?.decision).toBe("NO_GO");
+  });
+
+  // Correctif audit P1-FIXC-001 — preuve réelle contre PostgreSQL avec deux vraies requêtes HTTP
+  // concurrentes (jamais une simulation séquentielle) : le verrou consultatif de `reserveVersion`
+  // garantit qu'aucune collision de `reportVersion` ne survient jamais, même sous charge réelle.
+  it("concurrency: two simultaneous GO/NO-GO generation requests for the same Tender never collide on reportVersion (real PostgreSQL advisory lock)", async () => {
+    const clientAccount = await prisma.clientAccount.create({
+      data: { id: randomUUID(), organizationId: orgAId, name: "Client Concurrence GO/NO-GO", nameNormalized: "client concurrence go no go", status: "ACTIVE", createdBy: ownerAUserId },
+    });
+    await assignClientManager({ organizationId: orgAId, clientAccountId: clientAccount.id, userId: ownerAUserId });
+    const tender = await prisma.tender.create({
+      data: { id: randomUUID(), organizationId: orgAId, clientAccountId: clientAccount.id, title: "Tender Concurrence GO/NO-GO", status: "IN_ANALYSIS", tags: [], createdBy: ownerAUserId },
+    });
+    await seedSucceededAnalysis({ organizationId: orgAId, tenderId: tender.id, actorId: ownerAUserId });
+
+    const [firstRes, secondRes] = await Promise.all([
+      fetch(`${baseUrl}/api/v1/tenders/${tender.id}/go-no-go/report`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) }),
+      fetch(`${baseUrl}/api/v1/tenders/${tender.id}/go-no-go/report`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) }),
+    ]);
+    expect([firstRes.status, secondRes.status].every((s) => s === 200)).toBe(true);
+    const results = (await Promise.all([firstRes.json(), secondRes.json()])) as { id: string; reportVersion: number }[];
+
+    expect(results[0]!.reportVersion).not.toBe(results[1]!.reportVersion);
+    expect(new Set(results.map((r) => r.reportVersion)).size).toBe(2);
+
+    const versions = await prisma.goNoGoReport.findMany({ where: { organizationId: orgAId, tenderId: tender.id }, select: { reportVersion: true } });
+    expect(versions).toHaveLength(2);
+    expect(new Set(versions.map((v) => v.reportVersion))).toEqual(new Set([1, 2]));
   });
 });

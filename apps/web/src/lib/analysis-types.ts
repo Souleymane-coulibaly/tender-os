@@ -41,8 +41,16 @@ export type ComplexityLevel = "LOW" | "MEDIUM" | "HIGH";
 
 export type TenderAnalysisConflict = { category: string; description: string; documentIds: string[] };
 
+/** Checkpoint 2.1-P2.1-FIX-A — jamais persistée côté backend, recalculée à chaque lecture en
+ *  comparant la révision DCE figée à la persistance à la révision DCE courante. `UNKNOWN` pour une
+ *  analyse écrite avant ce checkpoint ou si le DCE n'a pas pu être résolu — jamais un CURRENT/STALE
+ *  fabriqué. */
+export type AnalysisFreshness = "CURRENT" | "STALE" | "UNKNOWN";
+
 export type TenderAnalysisSummary = {
   analysisVersion: number;
+  dceRevision?: number;
+  analysisFreshness: AnalysisFreshness;
   opportunitySummary: string;
   complexityLevel: ComplexityLevel;
   mainCriteria: string[];
@@ -159,6 +167,12 @@ export const GO_NO_GO_LABELS: Record<GoNoGoRecommendation, string> = {
 };
 
 export const COMPLEXITY_LABELS: Record<ComplexityLevel, string> = { LOW: "Faible", MEDIUM: "Moyenne", HIGH: "Elevee" };
+
+export const ANALYSIS_FRESHNESS_LABELS: Record<AnalysisFreshness, string> = {
+  CURRENT: "Actualisé",
+  STALE: "Actualisation requise",
+  UNKNOWN: "Fraîcheur inconnue",
+};
 
 export type AnalysisCapability = { taskType: "ANALYZE_DOCUMENT" | "CONSOLIDATE_TENDER_ANALYSIS"; ready: boolean; reasonCode?: string };
 

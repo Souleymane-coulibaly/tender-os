@@ -22,6 +22,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   OPPORTUNITY_MISSING_CLIENT_ACCOUNT: HttpStatus.UNPROCESSABLE_ENTITY,
   OPPORTUNITY_PROMOTION_CONFLICT: HttpStatus.CONFLICT,
   GO_NO_GO_REPORT_NOT_FOUND: HttpStatus.NOT_FOUND,
+  // Checkpoint 2.1-P2.1-FIX-C — même famille que TENDER_BUSINESS_ANALYSIS_NOT_FOUND ci-dessous :
+  // état actuel (analyse pas encore actualisée) empêche l'action, jamais une erreur de validation.
+  GO_NO_GO_ANALYSIS_NOT_CURRENT: HttpStatus.CONFLICT,
   OPPORTUNITY_QUICK_SCORE_NOT_FOUND: HttpStatus.NOT_FOUND,
 
   // Cross-module (mission §14 : le Niveau 2 exige qu'une analyse IA du DCE ait déjà réussi).
@@ -34,6 +37,11 @@ const STATUS_BY_CODE: Record<string, number> = {
   CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,
   CLIENT_ACCOUNT_ARCHIVED: HttpStatus.CONFLICT,
   CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
+
+  // V2 Sprint 26 (Checkpoint 2.1-A3) — Opportunity délègue à `candidate-company`
+  // (CreateOpportunityUseCase/UpdateOpportunityUseCase), même motif que Client Portfolio ci-dessus.
+  CANDIDATE_COMPANY_NOT_FOUND: HttpStatus.NOT_FOUND,
+  CANDIDATE_COMPANY_ARCHIVED: HttpStatus.CONFLICT,
 };
 
 @Catch(DomainError)

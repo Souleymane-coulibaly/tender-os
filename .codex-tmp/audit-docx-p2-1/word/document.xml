@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/wordprocessingShape" mc:Ignorable="w14 wp14">
+  <w:body>
+<w:p><w:r><w:t xml:space="preserve">TenderOS 2.1 - Audit P2-1</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">DCE Refresh / Synchronization / Re-analysis</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Date: 2026-08-18</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Mode: strict read-only</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Executive Verdict</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Verdict: NO, TenderOS does not currently guarantee DCE current state equals derived business state current after a DCE change.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">The initial DCE pipeline is real and reasonably structured: upload creates a Document plus first version, creates a DceDocument link, classifies the file, computes initial processing status, then best-effort auto-triggers extraction for accepted imports.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">The gap appears after the first analysis. Replacing or deleting a DCE document does not automatically trigger a fresh extraction, a fresh analysis, or a systematic invalidation of downstream derived state. The product preserves historical snapshots well, but it does not keep all downstream business state synchronized automatically with the current DCE state.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Git Initial State</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">BRANCH: v2/redesign-ui...origin/v2/redesign-ui</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">WORKTREE: dirty integration tree. 79 tracked files changed in current diff stat.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">STAGED: none detected.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">UNTRACKED: includes candidate-company work, migrations, tests and local audit artifacts.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">DCE Architecture Matrix</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Controllers: apps/api/src/modules/dce/interfaces/http/dce.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Use cases: create-dce, import-dce-files, start/process zip import, list/get/download, replace-dce-document, delete-dce-document, correct-dce-document-category.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Repositories: DceRepository, DceDocumentRepository, DceImportJobRepository with Prisma implementations.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Workers/async: zip import dispatcher is in-process; extraction trigger is delegated through DocumentExtractionTrigger; no dedicated DCE refresh orchestrator found.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Frontend: dedicated /tenders/[id]/dce page and DCE section exist in web tree.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Document Source of Truth</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Metadata SOT: DceDocument link + Document aggregate metadata. DceDocument carries DCE-specific category and processing status; Document/DocumentVersion carry canonical file/version data.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Binary SOT: DocumentVersion.storageKey in the documents module storage layer.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Version SOT: Document.currentVersionId and append-only DocumentVersion history. Replacement creates a new version; it does not overwrite bytes in place.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Status SOT: DceDocument.processingStatus for extraction/analysis readiness on the DCE side; Document.deletedAt for logical deletion.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Storage</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Driver selection is explicit through DOCUMENT_STORAGE_DRIVER with local default and optional Cloudflare R2. Evidence: .env.example and storage-provider.factory.ts.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Local path variable: DOCUMENT_LOCAL_STORAGE_PATH is documented in .env.example and read by LocalFilesystemStorageProvider.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">No secret values are exposed in this audit.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Document Identity / Versioning / Duplicate Handling</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Different document vs same document version: replacement uses AddDocumentVersionUseCase and preserves history under the same documentId.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Replacement: same documentId, new currentVersionId, old versions remain readable.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Duplicate: import path checks active checksum under a DCE-scoped advisory lock before creating a new document.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Deletion: logical deletion delegated to DeleteDocumentUseCase; DceDocument itself has no separate deleted flag.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Document Types / Categories</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Deterministic DCE categorization exists via classifyDceDocument and manual correction via correct-dce-document-category use case. The repository strongly suggests categories for RC, CCTP, CCAP, BPU, DPGF, DQE, AE and related tender files are handled through the classifier plus manual override path.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Initial Pipeline - Proven Flow</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">1. Upload import creates a Document with first version through CreateDocumentWithFirstVersionUseCase.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">2. DceDocument link is created with classified category and processing status.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">3. Accepted imports mark the DCE as imported.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">4. Auto-extraction is triggered best-effort for each accepted document. Evidence: import-dce-files.use-case.ts lines 255-278.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">5. Extraction persists a snapshot tied to a concrete documentVersionId and moves DceDocument to READY_FOR_ANALYSIS or READY_FOR_ANALYSIS_WITH_WARNINGS. Evidence: process-document-extraction use case and extraction ports.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">6. Analysis starts from extracted content and creates versioned findings keyed by analysisVersion and documentVersionId snapshots.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">What Happens When The DCE Changes</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">AJOUT: a newly imported document follows the initial path and auto-triggers extraction. This part is wired.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">REMPLACEMENT: replace-dce-document.use-case only validates the incoming file, calls AddDocumentVersionUseCase, writes an audit log and returns the updated summary. No extraction trigger call is present, no downstream invalidation is performed, no re-analysis is started automatically.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">SUPPRESSION: delete-dce-document.use-case delegates to DeleteDocumentUseCase and writes audit. No downstream invalidation or reconciliation is triggered there either.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">MODIFICATION OF CATEGORY: category correction exists, but no evidence was found here of automatic downstream recomputation caused solely by category change.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Analysis / Findings / Consolidation Behavior</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Analysis data is versioned, not self-healing. Findings and summaries are stored by analysisVersion, with documentVersionId provenance snapshots.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">GET business-analysis routes resolve the latest analysisVersion by default, but they also allow explicit historical queries via ?analysisVersion=.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">This means the analysis layer can preserve history cleanly, but it does not mean it follows current DCE state automatically after replacement or deletion.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Downstream Impact Assessment</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">AiSuggestion: no proof of automatic invalidation when DCE changes. Mapping exists from analysis findings, but re-mapping depends on a new analysis or explicit action.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Checklist: partial manual synchronization exists. ReconcileChecklistWithNewAnalysisUseCase compares the latest analysis to current checklist and can create suggestions or possible removals, but it is manually triggered and never auto-invalidates validated items.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">GO/NO-GO: uses analysis-derived data by analysisVersion. No automatic recomputation on DCE replacement/deletion was proven.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Administrative requirements: no automatic DCE-change invalidation found in this pass.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Pricing schedules: strongly snapshot-based. CreatePricingScheduleUseCase pins sourceDocumentVersionId to the current DCE document version at creation time. If the DCE source document is later replaced, existing pricing schedules are not automatically re-pointed.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Technical Memo: no evidence found here of automatic invalidation/rebuild when DCE changes. Memo revisions are versioned and export-oriented.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Generated documents: snapshot-oriented, not current-DCE-oriented by default.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Validation: submission readiness depends on validation status plus latest completed submission package, not on raw DCE freshness itself.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Response Package: explicitly snapshot-based. BuildResponsePackageVersionUseCase freezes documentVersionId for checklist matches, validated admin docs, technical memos and final pricing files at build time.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Submission readiness: looks at validation result plus latest completed package. It does not verify that this package still matches the latest DCE state.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Core Findings</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F1 - BLOCKING product consistency gap: replacing a DCE document creates a new DocumentVersion but does not auto-trigger extraction or re-analysis. Derived state can remain based on an older version while the DCE current version has changed.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F2 - BLOCKING product consistency gap: deleting a DCE document does not auto-invalidate existing analysis findings, checklist mappings, pricing schedules, generated outputs or package composition built from earlier snapshots.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F3 - DESIGN CHOICE, not a bug by itself: many downstream modules are intentionally append-only or snapshot-based. That is safe for auditability, but unsafe if the product claim is current DCE equals current derived state without an explicit regeneration workflow.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F4 - Partial mitigation only: checklist has a manual reconcile flow with the latest analysis, but it is opt-in and conservative. It never enforces full downstream consistency.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F5 - Submission/finalization can remain green on stale packaged artifacts because readiness is computed from validation plus latest completed package, not from DCE freshness versus package freshness.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Positive Points</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- Initial import pipeline is cleaner than the refresh path: upload, classification, version creation, extraction trigger and audit logging are all explicit.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- Version provenance is strong: analysis findings, pricing final files and response-package items preserve documentVersionId snapshots.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- The system is better at preserving history than at synchronizing state after change.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Final Answer To The Checkpoint Question</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">What happens when the DCE changes after a first analysis?</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Answer: TenderOS preserves the new file version or deletion event, but it does not automatically propagate that change through extraction, analysis and all business derivatives. The platform keeps historical and package snapshots coherent, yet it does not guarantee that derived business state always reflects the current DCE state.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Readiness Conclusion</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">P2-1 status: FAIL for strict synchronization guarantee.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">P2-1 status: PASS for append-only traceability and snapshot provenance.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Overall interpretation: good auditability, incomplete synchronization.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Primary Proof Files</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/dce/application/use-cases/import-dce-files.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/dce/application/use-cases/replace-dce-document.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/dce/application/use-cases/delete-dce-document.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/extraction/application/use-cases/process-document-extraction.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/extraction/application/use-cases/get-document-analysis-input.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/analysis/interfaces/http/analysis.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/checklist-intelligence/application/use-cases/reconcile-checklist-with-new-analysis.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/pricing-schedule/application/use-cases/create-pricing-schedule.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/response-package/application/use-cases/build-response-package-version.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/submission/application/use-cases/get-tender-submission-readiness.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- .env.example</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/documents/infrastructure/storage-provider.factory.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/documents/infrastructure/local-filesystem-storage.provider.ts</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>

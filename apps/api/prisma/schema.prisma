@@ -150,6 +150,10 @@ model Organization {
   auditLogs            AuditLog[]
   knowledgeSpaces      KnowledgeSpace[]
   clientAccounts       ClientAccount[]
+  /// V2 Sprint 26 (Checkpoint 2.1-A1) — entreprise(s) candidate(s) juridique(s) de l'organisation,
+  /// concept Source-of-Truth distinct de ClientAccount (portefeuille commercial). Additif : aucune
+  /// donnée ClientAccount déplacée ou supprimée (voir CandidateCompany).
+  candidateCompanies   CandidateCompany[]
   benchmarkRuns        BenchmarkRun[]
   modelRecommendations ModelRecommendation[]
   routingPolicies      RoutingPolicy[]
@@ -335,6 +339,14 @@ model Tender {
   clientAccountId String        @map("client_account_id") @db.Uuid
   clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
 
+  /// V2 Sprint 26 (Checkpoint 2.1-A3) — entreprise candidate (SOT `CandidateCompany`), distincte de
+  /// `clientAccountId` (contexte client/portefeuille legacy, voir le commentaire ci-dessus).
+  /// Nullable : un Tender legacy peut ne pas en porter une ; modifiable UNIQUEMENT via
+  /// `changeCandidateCompany` (même discipline que `changeClientAccount`), jamais via
+  /// `updateDetails`.
+  candidateCompanyId String?           @map("candidate_company_id") @db.Uuid
+  candidateCompany   CandidateCompany? @relation(fields: [candidateCompanyId, organizationId], references: [id, organizationId])
+
   title       String  @db.VarChar(500)
   reference   String? @db.VarChar(255)
   buyerName   String? @map("buyer_name") @db.VarChar(300)
@@ -427,6 +439,7 @@ model Tender {
 
   lots                       TenderLot[]
   checklistItems             TenderChecklistItem[]
+  checklistReconciliation    TenderChecklistReconciliation?
   awardCriteria              TenderAwardCriterion[]
   requestedDocuments         TenderRequestedDocument[]
   milestones                 TenderMilestone[]
@@ -506,6 +519,7 @@ model Tender {
   @@index([organizationId, updatedAt])
   /// Filtre "client" (mission Sprint 5.1 §"filtre client") — liste des Tenders d'un client donné.
   @@index([organizationId, clientAccountId])
+  @@index([organizationId, candidateCompanyId])
   @@map("tenders")
 }
 
@@ -694,6 +708,18 @@ model TenderChecklistItem {
   /// manuelle d'une création issue d'une AiSuggestion acceptée/modifiée.
   origin String @default("MANUAL") @db.VarChar(15)
 
+  /// Checkpoint 2.1-P2.1-FIX-B — CURRENT | STALE — CHECK (migration). Axe ORTHOGONAL à
+  /// `complianceStatus` (même discipline que `AnalysisStatus` vs `analysisFreshness`, mission §15
+  /// "ne jamais confondre status et freshness") : reflète si CETTE exigence a été retrouvée dans la
+  /// DERNIÈRE analyse réconciliée, jamais si elle est conforme. Écrit UNIQUEMENT par
+  /// `ReconcileChecklistWithNewAnalysisUseCase`, jamais par un appelant HTTP direct. Toujours
+  /// `CURRENT` pour un item `origin = MANUAL` (jamais dérivé du DCE, donc jamais évalué par le
+  /// reconcile — mission §23). `STALE` ne mute JAMAIS `complianceStatus` (un item VALIDATED reste
+  /// VALIDATED, mission §20 "ne pas effacer le travail humain sans nécessité") — seulement un signal
+  /// additif que l'exigence source a disparu ou changé matériellement (mission §21), à surfacer
+  /// explicitement côté UI, jamais un silence.
+  requirementFreshness String @default("CURRENT") @map("requirement_freshness") @db.VarChar(10)
+
   /// V2 Sprint 6 §13-15 — sujet concerné par l'exigence, jamais une entreprise inventée. CANDIDATE |
   /// GROUP_MEMBER | SUBCONTRACTOR | ANY_MEMBER | TENDER | LOT — CHECK (migration).
   /// `subjectSubcontractorProfileId` : pointeur dénormalisé (jamais de FK stricte, même motif que
@@ -770,6 +796,33 @@ model TenderChecklistItemSource {
 
   @@index([organizationId, checklistItemId])
   @@map("tender_checklist_item_sources")
+}
+
+/// Checkpoint 2.1-P2.1-FIX-B — une seule ligne par Tender (upsert), trace la DERNIÈRE `analysisVersion`
+/// contre laquelle `ReconcileChecklistWithNewAnalysisUseCase` a réellement tourné. Aucun champ existant
+/// (ni sur TenderChecklistItem, ni sur AiSuggestion) ne permet de répondre de façon fiable à "la
+/// Checklist a-t-elle déjà été réconciliée contre CETTE analyse ?" (mission §26 "ne pas ajouter une
+/// colonne si le modèle existant permet déjà une preuve fiable" — vérifié, aucun ne le permet). Sert
+/// à la fois de garde d'idempotence (mission §24-25 : un second appel sur la MÊME analysisVersion est
+/// un no-op complet) et de source pour `checklistFreshness` (CURRENT si `lastReconciledAnalysisVersion`
+/// == analysisVersion courante, RECONCILIATION_REQUIRED sinon). `lastReconciledDceRevision` est
+/// dénormalisé pour l'observabilité uniquement (jamais recalculé, jamais consulté par la logique de
+/// fraîcheur elle-même, qui ne compare que des `analysisVersion`).
+model TenderChecklistReconciliation {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @unique @map("tender_id") @db.Uuid
+  tender         Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  lastReconciledAnalysisVersion Int      @map("last_reconciled_analysis_version")
+  lastReconciledDceRevision     Int?     @map("last_reconciled_dce_revision")
+  reconciledByUserId            String   @map("reconciled_by_user_id") @db.Uuid
+  reconciledAt                  DateTime @map("reconciled_at")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@map("tender_checklist_reconciliations")
 }
 
 /// V2 Sprint 7 (Workspace collaboratif) §7 — utilisateur explicitement affecté à ce Tender. Source
@@ -1345,6 +1398,18 @@ model Dce {
   /// DRAFT | IMPORTED — voir dce/domain/dce-status.ts pour la justification du sous-ensemble
   /// volontairement restreint à cette tranche.
   status String @db.VarChar(20)
+
+  /// Checkpoint 2.1-P2.1-FIX-A — révision monotone du CONTENU sémantique du DCE (jamais
+  /// décrémentée, jamais réinitialisée). Incrémentée de façon atomique (`UPDATE ... SET revision =
+  /// revision + 1`, jamais un read-then-write) à chaque changement susceptible d'invalider un état
+  /// métier dérivé (Analysis/Checklist/GO-NO-GO/Mémoire technique...) : ajout de document, remplacement
+  /// (nouvelle DocumentVersion promue), suppression, correction de catégorie. Ne représente PAS un
+  /// verrou de concurrence optimiste (pas de compare-and-set, voir Tender.version pour ce motif
+  /// distinct, jamais consommé comme précondition dans ce dépôt) : uniquement un compteur de
+  /// fraîcheur, comparé en LECTURE par les consommateurs (même discipline que
+  /// `GoNoGoReport.candidateCompanyId`/`withGoNoGoCandidateStaleness`, jamais un recalcul en cascade
+  /// automatique — voir DEFERRED_TO_FIX_B..F).
+  revision Int @default(1)
 
   createdByUserId String   @map("created_by_user_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at")
@@ -2053,6 +2118,15 @@ model TenderAnalysisSummary {
   analysisJob     AnalysisJob @relation(fields: [analysisJobId], references: [id], onDelete: Cascade)
   analysisVersion Int         @map("analysis_version")
 
+  /// Checkpoint 2.1-P2.1-FIX-A — `Dce.revision` LUE au moment de la persistance de CETTE synthèse
+  /// (même point de résolution que `documentVersionsByDocumentId`, jamais recalculée après coup).
+  /// `NULL` pour toute ligne écrite avant ce checkpoint (colonne additive nullable, mission §22
+  /// "ne jamais inventer une précision historique fausse") — lue en LECTURE SEULE par
+  /// `GetEffectiveTenderAnalysisSummaryUseCase` pour comparer à la révision DCE courante et
+  /// produire `analysisFreshness` (`CURRENT`/`STALE`/`UNKNOWN`), jamais un recalcul automatique en
+  /// cascade (différé, voir DEFERRED_TO_FIX_B..F).
+  dceRevision Int? @map("dce_revision")
+
   opportunitySummary String @map("opportunity_summary")
   /// LOW | MEDIUM | HIGH — protégée par une contrainte CHECK (migration).
   complexityLevel    String @map("complexity_level") @db.VarChar(20)
@@ -2429,6 +2503,98 @@ model ClientAccount {
   @@index([organizationId, status])
   @@index([organizationId, archivedAt])
   @@map("client_accounts")
+}
+
+/// V2 Sprint 26 (Checkpoint 2.1-A1) — entreprise candidate : la personne morale juridique qui répond
+/// réellement aux appels d'offres (SIREN, forme juridique), Source-of-Truth distincte de ClientAccount
+/// (portefeuille commercial/relationnel, non touché par ce modèle — voir mission 2.1-A1 §5). Rattachée
+/// directement à Organization (1→N), jamais à ClientAccount : un même candidat légal peut répondre pour
+/// plusieurs ClientAccount, et inversement, ce qui interdit une relation 1→1 ou N→1 vers ClientAccount.
+model CandidateCompany {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  name           String  @db.VarChar(200)
+  nameNormalized String  @map("name_normalized") @db.VarChar(200)
+  legalName      String? @map("legal_name") @db.VarChar(240)
+
+  /// SIREN (9 chiffres, niveau entreprise) — le SIRET (établissement) vit sur CandidateEstablishment,
+  /// jamais dupliqué ici (mission §7 : pas d'ambiguïté SIREN/SIRET). Validé en domaine via
+  /// company-profile/domain/french-company-identifiers.ts (réutilisé, jamais réimplémenté).
+  siren     String? @db.VarChar(9)
+  vatNumber String? @map("vat_number") @db.VarChar(20)
+  legalForm String? @map("legal_form") @db.VarChar(120)
+
+  /// ACTIVE | ARCHIVED — protégée par une contrainte CHECK (migration). Volontairement à 2 états
+  /// (pas INACTIVE comme ClientAccount) : aucun besoin métier identifié en A1 pour un 3ème état.
+  status String @db.VarChar(20)
+
+  /// MIGRATION_COMPATIBILITY_FIELD (mission §12) — traçabilité/idempotence du backfill A2 depuis
+  /// ClientAccount. Jamais une source de vérité métier, jamais lu par du code hors A2. Pas de
+  /// relation Prisma déclarée (même discipline que RoutingDecision.analysisId/generationId) : un
+  /// simple pointeur indexé, pas un couplage structurel avec ClientAccount.
+  sourceClientAccountId String? @map("source_client_account_id") @db.Uuid
+
+  createdBy String  @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  establishments CandidateEstablishment[]
+
+  /// V2 Sprint 26 (Checkpoint 2.1-A3) — Opportunity/Tender pouvant référencer cette entreprise
+  /// candidate comme entité juridique répondante (distinct de ClientAccount, voir Opportunity/Tender
+  /// ci-dessous). Nullable des deux côtés : la relation est additive, jamais rétroactivement remplie.
+  opportunities Opportunity[]
+  tenders       Tender[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, nameNormalized])
+  @@unique([organizationId, sourceClientAccountId])
+  @@index([organizationId, status])
+  @@index([organizationId, siren])
+  @@map("candidate_companies")
+}
+
+/// V2 Sprint 26 (Checkpoint 2.1-A1) — établissement d'une CandidateCompany : SIRET, adresse, et
+/// caractère principal ou non (mission §8). Le SIRET est unique par organisation (pas seulement par
+/// entreprise candidate) : deux entreprises candidates distinctes ne peuvent structurellement pas
+/// partager un même SIRET (identifiant INSEE réel, jamais réutilisable), donc l'unicité au niveau
+/// organisation est la contrainte la plus forte et la plus correcte, pas seulement la plus simple.
+model CandidateEstablishment {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  candidateCompanyId String           @map("candidate_company_id") @db.Uuid
+  candidateCompany   CandidateCompany @relation(fields: [candidateCompanyId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// SIRET (14 chiffres, SIREN + NIC) — validé en domaine via
+  /// company-profile/domain/french-company-identifiers.ts (réutilisé, jamais réimplémenté).
+  siret String @db.VarChar(14)
+
+  label String? @db.VarChar(200)
+
+  /// Établissement principal déclaré (siège ou établissement de rattachement pour la réponse) —
+  /// au plus un par CandidateCompany, imposé par un index unique partiel (migration, WHERE
+  /// is_principal = true) : non exprimable dans le DSL Prisma, donc écrit à la main.
+  isPrincipal Boolean @default(false) @map("is_principal")
+
+  addressLine String? @map("address_line") @db.VarChar(300)
+  postalCode  String? @map("postal_code") @db.VarChar(20)
+  city        String? @db.VarChar(120)
+  country     String? @db.VarChar(10)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, siret])
+  @@index([organizationId, candidateCompanyId])
+  @@map("candidate_establishments")
 }
 
 /// Affectation d'un utilisateur à un client (mission Sprint 5.1) — porte le rôle CLIENT, distinct
@@ -3532,6 +3698,22 @@ model FinalApproval {
   status            String    @default("ACTIVE") @db.VarChar(11)
   invalidatedAt     DateTime? @map("invalidated_at")
   invalidatedReason String?   @map("invalidated_reason")
+
+  /// Checkpoint 2.1-P2.1-FIX-E — provenance MINIMALE du dossier métier réellement résolu au moment
+  /// de l'approbation humaine (jamais relue après coup, mission §11 "ce que l'humain a réellement
+  /// validé") : `Tender.candidateCompanyId` (identité candidate), `analysisVersion`/`dceRevision`
+  /// (dernière analyse SUCCEEDED au moment de l'approbation, `NULL` si aucune analyse n'a jamais
+  /// réussi pour ce tender — jamais une dépendance DCE fabriquée), `technicalMemoRevisionFingerprint`
+  /// (empreinte SHA-256 de l'état courant des révisions de section de TOUS les mémoires techniques
+  /// du tender, `NULL` si aucun mémoire n'existe — jamais un numéro de version de mémoire inventé,
+  /// voir Checkpoint FIX-D "le mémoire technique n'a pas de version globale"). `NULL` pour toute
+  /// ligne écrite avant ce checkpoint (colonnes additives nullables) : lue en LECTURE SEULE par
+  /// `GetValidationFreshnessUseCase` pour produire `ValidationFreshness` (`CURRENT`/`STALE`/
+  /// `UNKNOWN`), jamais recalculée en cascade automatique.
+  candidateCompanyId               String? @map("candidate_company_id") @db.Uuid
+  analysisVersion                  Int?    @map("analysis_version")
+  dceRevision                      Int?    @map("dce_revision")
+  technicalMemoRevisionFingerprint String? @map("technical_memo_revision_fingerprint") @db.VarChar(64)
 
   submissionPackages SubmissionPackage[]
 
@@ -5189,6 +5371,12 @@ model Opportunity {
   clientAccountId String?        @map("client_account_id") @db.Uuid
   clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId])
 
+  /// V2 Sprint 26 (Checkpoint 2.1-A3) — entreprise candidate (SOT `CandidateCompany`), distincte de
+  /// `clientAccountId` (contexte client/portefeuille legacy). Nullable : une Opportunity de veille
+  /// peut exister avant qu'une entreprise candidate ne soit sélectionnée (mission §15).
+  candidateCompanyId String?           @map("candidate_company_id") @db.Uuid
+  candidateCompany   CandidateCompany? @relation(fields: [candidateCompanyId, organizationId], references: [id, organizationId])
+
   buyerId String? @map("buyer_id") @db.Uuid
   buyer   Buyer?  @relation(fields: [buyerId, organizationId], references: [id, organizationId])
 
@@ -5243,6 +5431,7 @@ model Opportunity {
   @@unique([tenderId, organizationId])
   @@index([organizationId, status])
   @@index([organizationId, clientAccountId])
+  @@index([organizationId, candidateCompanyId])
   @@index([organizationId, submissionDeadline])
   @@index([organizationId, createdAt])
   @@map("opportunities")
@@ -5313,6 +5502,24 @@ model GoNoGoReport {
   /// re-résolue même si une nouvelle analyse DCE survient ensuite.
   analysisVersion Int @map("analysis_version")
 
+  /// Checkpoint 2.1-A6.2 (correctif audit — P2 "fraîcheur candidate") — `Tender.candidateCompanyId`
+  /// AU MOMENT du calcul, instantané jamais re-résolu (même discipline qu'`analysisVersion`
+  /// ci-dessus). `NULL` si aucune CandidateCompany n'était résolue à ce moment (LEGACY FLOW). Pas de
+  /// relation Prisma déclarée (même discipline que `RoutingDecision.analysisId`/`generationId`) : un
+  /// simple pointeur indexé, jamais un couplage structurel. Permet de détecter à la lecture qu'un
+  /// changement de Candidate est survenu depuis ce rapport (`candidateCompanyId` courant du Tender ≠
+  /// cette valeur) — jamais un recalcul automatique, la décision humaine reste souveraine.
+  candidateCompanyId String? @map("candidate_company_id") @db.Uuid
+
+  /// Checkpoint 2.1-P2.1-FIX-C — `Dce.revision` (via `EffectiveTenderAnalysisSummary.dceRevision`)
+  /// AU MOMENT du calcul, instantané, jamais re-résolu (même discipline que `analysisVersion`/
+  /// `candidateCompanyId` ci-dessus). `NULL` pour un rapport généré avant ce checkpoint (provenance
+  /// insuffisante -> fraîcheur `UNKNOWN` en lecture, jamais `CURRENT` par défaut, voir
+  /// `computeGoNoGoFreshness`). Sert UNIQUEMENT à la provenance/l'historique (mission §24) : le
+  /// calcul de fraîcheur en lecture compare `analysisVersion` + `AnalysisFreshness` de l'analyse
+  /// effective courante, pas directement cette colonne contre `Dce.revision`.
+  dceRevision Int? @map("dce_revision")
+
   globalScore Float @map("global_score")
   confidence  Float
   /// 1..5 — CHECK (migration).
@@ -5358,7 +5565,32 @@ model GoNoGoReport {
   @@unique([id, organizationId])
   @@unique([organizationId, tenderId, reportVersion])
   @@index([organizationId, tenderId, generatedAt])
+  @@index([organizationId, candidateCompanyId])
   @@map("go_no_go_reports")
+}
+
+/// Checkpoint 2.1-P2.1-FIX-C (correctif audit P1-FIXC-001) — ticket de réservation ATOMIQUE d'un
+/// `reportVersion`, jamais le rapport lui-même (aucune colonne de score/JSON ici). Un
+/// `GenerateGoNoGoReportUseCase` réserve son numéro ICI, via un verrou consultatif Postgres, AVANT
+/// le calcul coûteux (Promise.all findings/scoring) — jamais à l'intérieur de `GoNoGoReport.create()`.
+/// Comme cette table est écrite (durablement, visible aux réservations suivantes) plutôt que
+/// seulement lue, deux calculs concurrents pour le même Tender ne peuvent JAMAIS recevoir le même
+/// numéro ni un ordre inversé par rapport à leur ordre de RÉSERVATION (donc de démarrage) — même
+/// garantie que `AnalysisJob.analysisVersion` (assignée à l'ouverture), sans dupliquer son cycle de
+/// vie à deux phases (PENDING -> SUCCEEDED) : `GoNoGoReport` reste créé en un seul temps, complet,
+/// jamais un brouillon partiellement rempli. Lignes jamais supprimées (simple registre séquentiel,
+/// pas une file de travail).
+model GoNoGoReportVersionReservation {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  tenderId       String @map("tender_id") @db.Uuid
+
+  reportVersion Int      @map("report_version")
+  reservedAt    DateTime @default(now()) @map("reserved_at")
+
+  @@unique([organizationId, tenderId, reportVersion])
+  @@index([organizationId, tenderId])
+  @@map("go_no_go_report_version_reservations")
 }
 
 /// Décision humaine (mission §18) — partagée entre les deux niveaux via `level`. Append-only :
@@ -6444,6 +6676,23 @@ model TechnicalMemoSectionRevision {
   /// validation utilisateur.
   missingDataNotes Json @default("[]") @map("missing_data_notes")
 
+  /// Checkpoint 2.1-P2.1-FIX-D — provenance figée AU MOMENT de la génération/édition (jamais
+  /// relue à la fin, mission §18 "les sources RÉELLEMENT consommées PENDANT la génération, pas
+  /// les sources courantes relues quand la génération se termine"). `Tender.candidateCompanyId`
+  /// résolu AU LANCEMENT — capturé pour AI_GENERATED/AI_REGENERATED ET MANUAL (une édition
+  /// manuelle décrit toujours l'entreprise candidate active à ce moment). `NULL` pour une révision
+  /// écrite avant ce checkpoint (provenance insuffisante -> fraîcheur `UNKNOWN` en lecture, jamais
+  /// `CURRENT` par défaut, voir `computeTechnicalMemoSectionFreshness`).
+  candidateCompanyId String? @map("candidate_company_id") @db.Uuid
+
+  /// Checkpoint 2.1-P2.1-FIX-D — `analysisVersion`/`dceRevision` de l'analyse effective au moment
+  /// de la génération, capturés UNIQUEMENT si cette section avait au moins un lien
+  /// `TechnicalMemoSectionRequirement` (mission §12/§13 "ne pas créer artificiellement une
+  /// dépendance à une source non réellement consommée") — `NULL` pour une révision MANUAL (aucun
+  /// contexte DCE assemblé, mission §32) ou une section sans exigence DCE liée.
+  analysisVersion Int? @map("analysis_version")
+  dceRevision     Int? @map("dce_revision")
+
   createdBy String   @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -6722,9 +6971,12 @@ model PricingScheduleFinalFile {
 /// Racine d'agrégat — un dossier de réponse par (Tender, lot optionnel, candidate). `lotId` null =
 /// package "global" (mission §9 — pièces communes à plusieurs lots, jamais dupliquées
 /// physiquement : le PackageItem référence la même DocumentVersion, seul le snapshot par version
-/// diffère). `clientAccountId` dénormalisé depuis `Tender.clientAccountId` (mission §10 — pas de
-/// `CandidateCompany` dédié dans ce dépôt, confirmé par audit : le candidat EST le ClientAccount du
-/// Tender), immuable après création.
+/// diffère). `clientAccountId` dénormalisé depuis `Tender.clientAccountId`, immuable après création.
+/// CORRECTIF (Checkpoint 2.1-A4) — commentaire historique obsolète corrigé : `CandidateCompany`
+/// existe désormais (A1, voir plus haut dans ce fichier) et `Tender.candidateCompanyId` porte
+/// l'entreprise candidate réelle depuis A3 ; `ResponsePackage` n'a simplement pas encore été migré
+/// pour la porter lui aussi (aucune donnée candidate n'y est actuellement lue/écrite — voir
+/// l'inventaire A4, "DEFERRED_FROM_A4"), ce n'est plus une limitation architecturale du dépôt.
 model ResponsePackage {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
@@ -6780,6 +7032,13 @@ model ResponsePackageVersion {
   createdAt   DateTime  @default(now()) @map("created_at")
   validatedBy String?   @map("validated_by") @db.Uuid
   validatedAt DateTime? @map("validated_at")
+
+  /// Checkpoint 2.1-P2.1-FIX-E — `Tender.candidateCompanyId` résolu au moment de la CONSTRUCTION de
+  /// cette version (mission §33/§73), jamais recalculé après coup. `NULL` pour toute version écrite
+  /// avant ce checkpoint ou pour un Tender LEGACY FLOW sans candidate résolue — comparé en LECTURE
+  /// SEULE par `GetResponsePackageFreshnessUseCase`, même discipline que les autres checkpoints de
+  /// fraîcheur (FIX-C/FIX-D) : une provenance absente ne vaut jamais CURRENT par défaut.
+  candidateCompanyId String? @map("candidate_company_id") @db.Uuid
 
   items     PackageItem[]
   artifacts PackageArtifact[]

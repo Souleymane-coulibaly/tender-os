@@ -1,6 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { GetEffectiveTenderAnalysisSummaryUseCase, TenderBusinessAnalysisNotFoundError } from "../../../analysis";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { EXPORT_JOB_REPOSITORY, ExportJobNotFoundError, GenerateFinalExportUseCase, type ExportJobRepository } from "../../../export";
+import { GetTechnicalMemoRevisionFingerprintForTenderUseCase } from "../../../technical-memo";
 import { GetTenderUseCase } from "../../../tenders";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
@@ -50,7 +52,42 @@ export class ApproveFinalVersionUseCase {
     private readonly generateFinalExportUseCase: GenerateFinalExportUseCase,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    private readonly getEffectiveTenderAnalysisSummaryUseCase: GetEffectiveTenderAnalysisSummaryUseCase,
+    private readonly getTechnicalMemoRevisionFingerprintForTenderUseCase: GetTechnicalMemoRevisionFingerprintForTenderUseCase,
   ) {}
+
+  /**
+   * Checkpoint 2.1-P2.1-FIX-E — résout la provenance MINIMALE du dossier métier (mission §10-11)
+   * juste avant de créer la `FinalApproval` réellement persistée. `undefined` sur l'analyse si
+   * aucune n'a jamais réussi pour ce tender (dimension non applicable, jamais une dépendance
+   * fabriquée — `TenderBusinessAnalysisNotFoundError` est le signal EXPLICITE de ce cas, jamais une
+   * erreur inattendue à laisser remonter et bloquer une approbation par ailleurs légitime).
+   */
+  private async resolveDossierProvenance(input: {
+    organizationId: string;
+    actorId: string;
+    actorRole: string;
+    tenderId: string;
+  }): Promise<{ analysisVersion: number | undefined; dceRevision: number | undefined; technicalMemoRevisionFingerprint: string | undefined }> {
+    let analysisVersion: number | undefined;
+    let dceRevision: number | undefined;
+    try {
+      const analysis = await this.getEffectiveTenderAnalysisSummaryUseCase.execute({ organizationId: input.organizationId, tenderId: input.tenderId, actorId: input.actorId, actorRole: input.actorRole });
+      analysisVersion = analysis.analysisVersion;
+      dceRevision = analysis.dceRevision;
+    } catch (error) {
+      if (!(error instanceof TenderBusinessAnalysisNotFoundError)) throw error;
+    }
+
+    const technicalMemoRevisionFingerprint = await this.getTechnicalMemoRevisionFingerprintForTenderUseCase.execute({
+      organizationId: input.organizationId,
+      tenderId: input.tenderId,
+      actorId: input.actorId,
+      actorRole: input.actorRole,
+    });
+
+    return { analysisVersion, dceRevision, technicalMemoRevisionFingerprint };
+  }
 
   async execute(command: ApproveFinalVersionCommand): Promise<ApproveFinalVersionResult> {
     const tender = await this.getTenderUseCase.execute({ organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, actorRole: command.actorRole });
@@ -99,14 +136,19 @@ export class ApproveFinalVersionUseCase {
     // d'approbation, jamais par un contrôleur HTTP exposé directement (voir docstring de
     // `GenerateFinalExportUseCase`, module Export — évite tout cycle de modules). Si cet appel
     // échoue, l'exception se propage immédiatement et rien n'est écrit.
-    const finalExport = await this.generateFinalExportUseCase.execute({
-      organizationId: command.organizationId,
-      actorId: command.actorId,
-      actorRole: command.actorRole,
-      tenderId: command.tenderId,
-      basedOnExportJobId: run.exportJobId,
-      expectedManifestHash: found.artifact.fileHash,
-    });
+    // Checkpoint 2.1-P2.1-FIX-E — la résolution de provenance (lecture seule, indépendante du
+    // figeage de l'export) est menée EN PARALLÈLE, jamais un aller-retour séquentiel supplémentaire.
+    const [finalExport, dossierProvenance] = await Promise.all([
+      this.generateFinalExportUseCase.execute({
+        organizationId: command.organizationId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        tenderId: command.tenderId,
+        basedOnExportJobId: run.exportJobId,
+        expectedManifestHash: found.artifact.fileHash,
+      }),
+      this.resolveDossierProvenance({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: command.tenderId }),
+    ]);
     if (!finalExport.artifact) {
       // Ne devrait jamais se produire (le pipeline de rendu échoue explicitement sinon), mais
       // jamais supposé silencieusement — voir mission "aucune substitution silencieuse".
@@ -128,6 +170,10 @@ export class ApproveFinalVersionUseCase {
       nextStatus: ReadinessStatus.Approved,
       occurredAt,
       currentIssues: run.issues,
+      candidateCompanyId: tender.candidateCompanyId,
+      analysisVersion: dossierProvenance.analysisVersion,
+      dceRevision: dossierProvenance.dceRevision,
+      technicalMemoRevisionFingerprint: dossierProvenance.technicalMemoRevisionFingerprint,
     });
 
     await this.finalApprovalRepository.create(approval);

@@ -25,6 +25,17 @@ describe("Opportunity.create", () => {
     expect(opportunity.tenderId).toBeUndefined();
     expect(opportunity.archivedAt).toBeUndefined();
   });
+
+  it("has no candidateCompanyId by default — a market-watch Opportunity can exist before a candidate is known (Checkpoint 2.1-A3)", () => {
+    const opportunity = createOpportunity();
+    expect(opportunity.candidateCompanyId).toBeUndefined();
+  });
+
+  it("accepts an optional candidateCompanyId at creation, coexisting with clientAccountId", () => {
+    const opportunity = createOpportunity({ clientAccountId: "client-1", candidateCompanyId: "candidate-company-1" });
+    expect(opportunity.candidateCompanyId).toBe("candidate-company-1");
+    expect(opportunity.clientAccountId).toBe("client-1");
+  });
 });
 
 describe("Opportunity#updateDetails", () => {
@@ -36,6 +47,14 @@ describe("Opportunity#updateDetails", () => {
     expect(opportunity.title).toBe("Fourniture de mobilier — révisé");
     expect(opportunity.version).toBe(2);
     expect(opportunity.updatedAt).toEqual(new Date("2026-02-01T00:00:00Z"));
+  });
+
+  it("sets candidateCompanyId via updateDetails, freely (unlike Tender, no status gate at this stage)", () => {
+    const opportunity = createOpportunity();
+
+    opportunity.updateDetails({ candidateCompanyId: "candidate-company-1" }, new Date());
+
+    expect(opportunity.candidateCompanyId).toBe("candidate-company-1");
   });
 
   it("refuses to update an archived opportunity", () => {

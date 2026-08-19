@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { CandidateIdentitySource, ResolveCandidateIdentityUseCase } from "../../../../candidate-company";
 import { GetCompanyProfileUseCase } from "../../../../company-profile";
 import { GetTenderUseCase } from "../../../../tenders";
 import { GetSubcontractorProfileUseCase, SubcontractorProfileNotFoundError } from "../../../../subcontractors";
@@ -31,6 +32,13 @@ export type Dc4OfficialFormResolution = Readonly<{
  * sauf si le modèle métier le prévoit explicitement" — aucun champ "signataire" dédié n'existe sur
  * `SubcontractorProfile`, donc aucune donnée fiable à proposer) : reste `NEEDS_REVIEW`, jamais
  * auto-rempli dans `data`, un humain doit le renseigner explicitement.
+ *
+ * V2 Sprint 26 (Checkpoint 2.1-A4, correctif post-audit) — `titulaire.tradeName`/`siret`/`address`/
+ * `legalForm` préfèrent la SOT `CandidateCompany`/`CandidateEstablishment` (via
+ * `ResolveCandidateIdentityUseCase`) quand `Tender.candidateCompanyId` est renseigné (NEW FLOW),
+ * sinon `company-profile.legalIdentity` (LEGACY FLOW) — même discipline que DC1/DC2.
+ * `subcontractor.*` reste ENTIÈREMENT inchangé : le sous-traitant n'est jamais une `CandidateCompany`
+ * (mission A4 §16 "ne pas confondre CandidateCompany et Subcontractor").
  */
 @Injectable()
 export class Dc4OfficialFormResolver {
@@ -39,6 +47,7 @@ export class Dc4OfficialFormResolver {
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly getCompanyProfileUseCase: GetCompanyProfileUseCase,
     private readonly getSubcontractorProfileUseCase: GetSubcontractorProfileUseCase,
+    private readonly resolveCandidateIdentityUseCase: ResolveCandidateIdentityUseCase,
   ) {}
 
   async resolve(input: { organizationId: string; actorId: string; actorRole: string; subcontractorDeclarationId: string }): Promise<Dc4OfficialFormResolution> {
@@ -46,7 +55,10 @@ export class Dc4OfficialFormResolver {
     if (!declaration) throw new SubcontractorDeclarationNotFoundError();
 
     const tender = await this.getTenderUseCase.execute({ organizationId: input.organizationId, tenderId: declaration.tenderId, actorId: input.actorId, actorRole: input.actorRole });
-    const companyProfile = await this.getCompanyProfileUseCase.execute({ organizationId: input.organizationId, actorId: input.actorId, actorRole: input.actorRole, clientAccountId: tender.clientAccountId });
+    const [companyProfile, candidateIdentity] = await Promise.all([
+      this.getCompanyProfileUseCase.execute({ organizationId: input.organizationId, actorId: input.actorId, actorRole: input.actorRole, clientAccountId: tender.clientAccountId }),
+      this.resolveCandidateIdentityUseCase.execute({ organizationId: input.organizationId, candidateCompanyId: tender.candidateCompanyId }),
+    ]);
 
     let subcontractorProfile: Awaited<ReturnType<GetSubcontractorProfileUseCase["execute"]>> | undefined;
     if (declaration.subcontractorProfileId) {
@@ -61,7 +73,17 @@ export class Dc4OfficialFormResolver {
     }
 
     const legalIdentity = companyProfile.legalIdentity;
-    const titulaireAddress = legalIdentity ? [legalIdentity.addressLine, [legalIdentity.postalCode, legalIdentity.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : undefined;
+    const usesCandidateCompany = candidateIdentity.source === CandidateIdentitySource.CandidateCompany;
+    const candidateSource = usesCandidateCompany ? FormFieldSource.CandidateCompanyProfile : FormFieldSource.ClientProfile;
+    const titulaireTradeName = usesCandidateCompany ? candidateIdentity.displayName : (legalIdentity?.tradeName ?? legalIdentity?.legalName ?? undefined);
+    const titulaireSiret = usesCandidateCompany ? candidateIdentity.principalEstablishment?.siret : (legalIdentity?.siretPrincipal ?? undefined);
+    const titulaireAddress = usesCandidateCompany
+      ? candidateIdentity.principalEstablishment
+        ? [candidateIdentity.principalEstablishment.addressLine, [candidateIdentity.principalEstablishment.postalCode, candidateIdentity.principalEstablishment.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
+        : undefined
+      : legalIdentity
+        ? [legalIdentity.addressLine, [legalIdentity.postalCode, legalIdentity.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
+        : undefined;
     const subAddress = subcontractorProfile ? [subcontractorProfile.addressLine, [subcontractorProfile.postalCode, subcontractorProfile.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : undefined;
 
     const fields: AdministrativeFormFieldReadiness[] = [];
@@ -76,12 +98,13 @@ export class Dc4OfficialFormResolver {
     put("tender.buyerIdentification", "Identification de l'acheteur", true, tender.buyerName, FormFieldSource.Tender);
     put("tender.marketObject", "Objet du marché", true, tender.title, FormFieldSource.Tender);
 
-    put("titulaire.tradeName", "Nom commercial du titulaire", true, legalIdentity?.tradeName ?? legalIdentity?.legalName ?? undefined, FormFieldSource.ClientProfile);
-    put("titulaire.address", "Adresse du titulaire", true, titulaireAddress, FormFieldSource.ClientProfile);
+    put("titulaire.tradeName", "Nom commercial du titulaire", true, titulaireTradeName, candidateSource);
+    put("titulaire.address", "Adresse du titulaire", true, titulaireAddress, candidateSource);
     put("titulaire.email", "Courriel du titulaire", false, legalIdentity?.generalEmail ?? undefined, FormFieldSource.ClientProfile);
     put("titulaire.phone", "Téléphone du titulaire", false, legalIdentity?.phone ?? undefined, FormFieldSource.ClientProfile);
-    put("titulaire.siret", "SIRET du titulaire", true, legalIdentity?.siretPrincipal ?? undefined, FormFieldSource.ClientProfile);
-    put("titulaire.legalForm", "Forme juridique du titulaire", false, legalIdentity?.legalForm ?? undefined, FormFieldSource.ClientProfile);
+    put("titulaire.siret", "SIRET du titulaire", true, titulaireSiret, candidateSource);
+    const titulaireLegalForm = usesCandidateCompany ? candidateIdentity.legalForm : (legalIdentity?.legalForm ?? undefined);
+    put("titulaire.legalForm", "Forme juridique du titulaire", false, titulaireLegalForm, candidateSource);
 
     put("subcontractor.tradeName", "Nom commercial du sous-traitant", true, subcontractorProfile?.tradeName ?? subcontractorProfile?.legalName ?? declaration.subcontractorName, FormFieldSource.Subcontractor);
     put("subcontractor.address", "Adresse du sous-traitant", true, subAddress, FormFieldSource.Subcontractor);

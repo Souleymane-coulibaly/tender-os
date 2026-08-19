@@ -78,6 +78,58 @@ describe("Mémoire technique IA — real HTTP + PostgreSQL (NestJS)", () => {
     return { clientAccountId: clientAccount.id, tenderId: tender.id };
   }
 
+  // Checkpoint 2.1-P2.1-FIX-D — même motif que `opportunity-http.integration.spec.ts`
+  // (`seedSucceededAnalysis`) : un `Dce`/une `TenderAnalysisSummary` réels, `analysisVersion`/
+  // `dceRevision` paramétrables pour piloter les scénarios de dérive DCE/réanalyse de l'E2E ci-dessous.
+  async function ensureDce(input: { organizationId: string; tenderId: string; actorId: string }): Promise<string> {
+    const existing = await prisma.dce.findUnique({ where: { tenderId: input.tenderId } });
+    if (existing) return existing.id;
+    const created = await prisma.dce.create({
+      data: { id: randomUUID(), organizationId: input.organizationId, tenderId: input.tenderId, status: "IMPORTED", revision: 1, createdByUserId: input.actorId },
+    });
+    return created.id;
+  }
+
+  async function seedSucceededAnalysis(input: {
+    organizationId: string;
+    tenderId: string;
+    actorId: string;
+    analysisVersion: number;
+    dceRevision: number;
+  }): Promise<{ dceId: string; analysisJobId: string }> {
+    const dceId = await ensureDce({ organizationId: input.organizationId, tenderId: input.tenderId, actorId: input.actorId });
+    const jobId = randomUUID();
+    await prisma.analysisJob.create({
+      data: {
+        id: jobId,
+        organizationId: input.organizationId,
+        tenderId: input.tenderId,
+        targetId: input.tenderId,
+        scope: "TENDER",
+        status: "SUCCEEDED",
+        analysisVersion: input.analysisVersion,
+        promptVersion: 1,
+        triggeredByRole: "OWNER",
+        updatedAt: new Date(),
+      },
+    });
+    await prisma.tenderAnalysisSummary.create({
+      data: {
+        id: randomUUID(),
+        organizationId: input.organizationId,
+        tenderId: input.tenderId,
+        analysisJobId: jobId,
+        analysisVersion: input.analysisVersion,
+        dceRevision: input.dceRevision,
+        opportunitySummary: "Marché de nettoyage de bureaux, DCE complet.",
+        complexityLevel: "MEDIUM",
+        goNoGoRecommendation: "GO",
+        goNoGoRationale: "Dossier complet, aucun signal bloquant détecté.",
+      },
+    });
+    return { dceId, analysisJobId: jobId };
+  }
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -114,6 +166,18 @@ describe("Mémoire technique IA — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.technicalMemoSectionRevision.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.technicalMemoSection.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.technicalMemo.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    // Le test E2E (Checkpoint 2.1-P2.1-FIX-D) exerce `/prepare` (gabarit dérivé TENDEROS_SYSTEM) et
+    // `/export` — `DocumentTemplate`/`GeneratedDocument` n'ont aucune FK Prisma déclarée vers
+    // Organization/Tender pour la première, cascade réelle depuis Tender pour la seconde ; nettoyage
+    // explicite pour ne jamais laisser d'orphelines, même motif que Document/DocumentVersion plus bas.
+    await prisma.generatedDocumentRevision.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.generatedDocument.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.documentTemplateVersion.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.documentTemplate.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.tenderRequirementFinding.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.tenderAnalysisSummary.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.analysisJob.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.dce.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.tender.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAssignment.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -315,4 +379,190 @@ describe("Mémoire technique IA — real HTTP + PostgreSQL (NestJS)", () => {
       ]);
     },
   );
+
+  /**
+   * Checkpoint 2.1-P2.1-FIX-D — E2E réaliste (mission §90), adapté à la contrainte déjà en tête de
+   * fichier ("aucun appel IA réel dans cette suite") : les générations/régénérations de section ne
+   * peuvent pas être obtenues via un VRAI appel IA ici — elles sont donc simulées par une écriture
+   * directe de `TechnicalMemoSectionRevision` avec la provenance qu'une génération réussie aurait
+   * capturée (même motif que `assertAnalysisPrecondition`/`finalize()` dans le use case réel), ce
+   * qui permet de prouver EXACTEMENT ce que la mission demande sans dépendance à une clé API :
+   *   1. DCE rev1 + Analyse v1 CURRENT, une exigence réelle liée à UNE section → mémoire CURRENT
+   *      une fois toutes les sections "générées".
+   *   2. RC-v2 (bump `Dce.revision`, aucune réanalyse encore) → la section dépendante devient STALE,
+   *      jamais silencieusement CURRENT (mission §9-10) ; le mémoire global devient STALE.
+   *   3. Une régénération de la section dépendante est BLOQUÉE (409, gate AVANT tout appel IA — donc
+   *      testable via un VRAI appel HTTP même sans provider IA configuré) tant que l'analyse n'est
+   *      pas CURRENT.
+   *   4. Un export est REFUSÉ (409) tant que le mémoire est STALE — jamais un DOCX final produit à
+   *      partir d'un contenu obsolète (mission §49/§110).
+   *   5. Réanalyse (v2, dceRevision=2) puis régénération réelle de la SEULE section dépendante → le
+   *      mémoire redevient CURRENT, l'ANCIENNE révision reste interrogeable (jamais supprimée,
+   *      mission §23/§51), et l'export réussit de nouveau.
+   */
+  it("E2E (mission §90) — DCE/analyse change makes an already-generated section STALE, blocks regeneration and export until reanalysis, then CURRENT again after real regeneration (old revision preserved)", async () => {
+    const { tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+
+    const { dceId, analysisJobId: analysisJobV1 } = await seedSucceededAnalysis({ organizationId: orgAId, tenderId, actorId: ownerAUserId, analysisVersion: 1, dceRevision: 1 });
+    const findingId = randomUUID();
+    await prisma.tenderRequirementFinding.create({
+      data: {
+        id: findingId,
+        organizationId: orgAId,
+        tenderId,
+        analysisJobId: analysisJobV1,
+        analysisVersion: 1,
+        category: "ADMINISTRATIVE",
+        label: "Fournir une attestation d'assurance décennale",
+        isMandatory: true,
+      },
+    });
+
+    const createRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/technical-memos`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ templateOrigin: "TENDEROS_SYSTEM" }),
+    });
+    expect(createRes.status).toBe(201);
+    const created = (await createRes.json()) as { memo: { id: string }; sections: { id: string }[] };
+    const memoId = created.memo.id;
+    const dependentSectionId = created.sections[0]!.id;
+
+    // Prépare le gabarit dérivé (nécessaire pour que `/export` dépasse la garde
+    // `TechnicalMemoTemplateNotReadyError` — jamais atteinte autrement, indépendante de ce checkpoint).
+    const prepareRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/prepare`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(prepareRes.status).toBe(200);
+
+    // Lie directement UNE section à l'exigence DCE — contourne volontairement l'heuristique de
+    // `/map` (hors périmètre de ce test, déjà couverte par `map-findings-to-sections.spec.ts`).
+    await prisma.technicalMemoSectionRequirement.create({
+      data: { id: randomUUID(), organizationId: orgAId, technicalMemoSectionId: dependentSectionId, findingType: "REQUIREMENT", findingId, coverageStatus: "NEEDS_REVIEW" },
+    });
+
+    // Étape 1a — aucune section générée : UNKNOWN, jamais faussement CURRENT pour un mémoire vide
+    // (mission §29).
+    const freshnessEmptyRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(freshnessEmptyRes.status).toBe(200);
+    expect((await freshnessEmptyRes.json()) as { freshness: string }).toMatchObject({ freshness: "UNKNOWN" });
+
+    // Étape 1b — simule une génération réussie pour CHAQUE section : la section dépendante capture
+    // analysisVersion=1/dceRevision=1, les autres n'ont AUCUNE dépendance DCE (mission "jamais une
+    // dépendance fabriquée" — seule la section réellement liée à une exigence porte une provenance
+    // DCE).
+    for (const section of created.sections) {
+      const isDependent = section.id === dependentSectionId;
+      await prisma.technicalMemoSectionRevision.create({
+        data: {
+          id: randomUUID(),
+          organizationId: orgAId,
+          technicalMemoSectionId: section.id,
+          revisionNumber: 1,
+          source: "AI_GENERATED",
+          content: `Contenu généré pour ${section.id}.`,
+          analysisVersion: isDependent ? 1 : null,
+          dceRevision: isDependent ? 1 : null,
+          createdBy: ownerAUserId,
+        },
+      });
+    }
+
+    const freshnessCurrentRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessCurrentRes.json()) as { freshness: string }).toMatchObject({ freshness: "CURRENT" });
+
+    // Étape 1c — un mémoire globalement CURRENT reste exportable normalement (pas encore de garde
+    // bloquante) : preuve que la garde §49/§110 n'introduit jamais un faux positif.
+    const exportCurrentRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/export`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(exportCurrentRes.status).toBe(200);
+
+    // Étape 1d (correctif audit FIXD-P1-001) — un humain édite MANUELLEMENT la section dépendante
+    // du DCE via le VRAI endpoint HTTP `/edit`. La nouvelle révision MANUAL doit CONSERVER
+    // analysisVersion=1/dceRevision=1 (jamais les effacer) : sinon `computeTechnicalMemoSectionFreshness`
+    // traiterait cette section comme "sans dépendance DCE" et elle resterait faussement CURRENT
+    // pour toujours, même après un futur changement DCE (voir l'assertion après la RC-v2 ci-dessous).
+    const editRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/sections/${dependentSectionId}/edit`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ content: "Contenu corrigé à la main par un utilisateur, sur la base du texte généré par l'IA." }),
+    });
+    expect(editRes.status).toBe(200);
+    expect((await editRes.json()) as { source: string; analysisVersion?: number; dceRevision?: number }).toMatchObject({ source: "MANUAL", analysisVersion: 1, dceRevision: 1 });
+
+    const freshnessAfterEditRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessAfterEditRes.json()) as { freshness: string }).toMatchObject({ freshness: "CURRENT" });
+
+    // Étape 2 — RC-v2 : le DCE change (nouvelle révision), AUCUNE réanalyse encore. L'analyse v1
+    // devient elle-même STALE (dceRevision=1 ≠ Dce.revision=2), donc la section qui en dépend
+    // devient STALE — jamais un faux CURRENT global (mission §9-10/§39).
+    await prisma.dce.update({ where: { id: dceId }, data: { revision: 2 } });
+
+    const freshnessStaleRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const freshnessStale = (await freshnessStaleRes.json()) as { freshness: string; sections: { technicalMemoSectionId: string; freshness: string; analysisStale?: boolean }[] };
+    expect(freshnessStale.freshness).toBe("STALE");
+    expect(freshnessStale.sections.find((s) => s.technicalMemoSectionId === dependentSectionId)).toMatchObject({ freshness: "STALE", analysisStale: true });
+    // Les sections indépendantes du DCE restent CURRENT — la staleness ne se propage jamais à une
+    // section qui ne consomme réellement aucune source DCE (mission "jamais une dépendance
+    // fabriquée").
+    expect(freshnessStale.sections.filter((s) => s.technicalMemoSectionId !== dependentSectionId).every((s) => s.freshness === "CURRENT")).toBe(true);
+
+    // Étape 3 — une régénération de la section dépendante est bloquée AVANT tout appel IA (le garde
+    // `assertAnalysisPrecondition` s'exécute avant `beginGeneration()`), donc testable via un VRAI
+    // appel HTTP sans provider IA configuré dans cette suite.
+    const blockedGenerateRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/sections/${dependentSectionId}/generate`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({}),
+    });
+    expect(blockedGenerateRes.status).toBe(409);
+    expect((await blockedGenerateRes.json()) as { error: { code: string } }).toMatchObject({ error: { code: "TECHNICAL_MEMO_ANALYSIS_NOT_CURRENT" } });
+
+    // Étape 4 — un mémoire STALE n'est JAMAIS exportable comme version courante (mission §49/§110).
+    const blockedExportRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/export`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(blockedExportRes.status).toBe(409);
+    expect((await blockedExportRes.json()) as { error: { code: string } }).toMatchObject({ error: { code: "TECHNICAL_MEMO_STALE_EXPORT_BLOCKED" } });
+
+    // Étape 5a — réanalyse (v2, dceRevision=2) : à elle seule, elle ne "répare" PAS rétroactivement
+    // une section déjà générée — seule une régénération EXPLICITE de cette section peut le faire
+    // (mission §21 "jamais automatique"). Le mémoire reste STALE tant que la section dépendante n'a
+    // pas été régénérée, même si l'analyse courante est de nouveau CURRENT.
+    await seedSucceededAnalysis({ organizationId: orgAId, tenderId, actorId: ownerAUserId, analysisVersion: 2, dceRevision: 2 });
+
+    const freshnessStillStaleRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessStillStaleRes.json()) as { freshness: string }).toMatchObject({ freshness: "STALE" });
+
+    // Étape 5b — régénération réelle (simulée, même motif qu'à l'étape 1b) de la SEULE section
+    // dépendante contre l'analyse désormais CURRENT — nouvelle révision (3, après la 1=AI_GENERATED
+    // et la 2=MANUAL de l'étape 1d), aucune des révisions PRÉCÉDENTES n'est JAMAIS supprimée ni
+    // écrasée (mission §23/§51 "historique de versions, jamais un écrasement silencieux").
+    await prisma.technicalMemoSectionRevision.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgAId,
+        technicalMemoSectionId: dependentSectionId,
+        revisionNumber: 3,
+        source: "AI_REGENERATED",
+        content: `Contenu régénéré pour ${dependentSectionId}.`,
+        analysisVersion: 2,
+        dceRevision: 2,
+        createdBy: ownerAUserId,
+      },
+    });
+
+    const historicalRevisions = await prisma.technicalMemoSectionRevision.findMany({
+      where: { organizationId: orgAId, technicalMemoSectionId: dependentSectionId },
+      orderBy: { revisionNumber: "asc" },
+    });
+    expect(historicalRevisions).toHaveLength(3);
+    expect(historicalRevisions[0]).toMatchObject({ revisionNumber: 1, source: "AI_GENERATED", analysisVersion: 1, dceRevision: 1 });
+    // Correctif audit FIXD-P1-001 — la révision MANUAL de l'étape 1d (interrogeable et préservée)
+    // porte bien la provenance DCE CONSERVÉE, jamais effacée.
+    expect(historicalRevisions[1]).toMatchObject({ revisionNumber: 2, source: "MANUAL", analysisVersion: 1, dceRevision: 1 });
+    expect(historicalRevisions[2]).toMatchObject({ revisionNumber: 3, source: "AI_REGENERATED", analysisVersion: 2, dceRevision: 2 });
+
+    // Étape 5c — le mémoire redevient globalement CURRENT, et l'export réussit de nouveau.
+    const freshnessCurrentAgainRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessCurrentAgainRes.json()) as { freshness: string }).toMatchObject({ freshness: "CURRENT" });
+
+    const exportAgainRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/export`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(exportAgainRes.status).toBe(200);
+  }, 60000);
 });

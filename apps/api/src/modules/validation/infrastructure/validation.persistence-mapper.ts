@@ -51,6 +51,10 @@ export type PersistedFinalApproval = {
   status: string;
   invalidatedAt: Date | null;
   invalidatedReason: string | null;
+  candidateCompanyId: string | null;
+  analysisVersion: number | null;
+  dceRevision: number | null;
+  technicalMemoRevisionFingerprint: string | null;
 };
 
 export function toDomainIssue(record: PersistedValidationIssue): ValidationIssue {
@@ -105,5 +109,9 @@ export function toDomainApproval(record: PersistedFinalApproval): FinalApproval 
     status: record.status as FinalApprovalStatus,
     invalidatedAt: record.invalidatedAt ?? undefined,
     invalidatedReason: record.invalidatedReason ?? undefined,
+    candidateCompanyId: record.candidateCompanyId ?? undefined,
+    analysisVersion: record.analysisVersion ?? undefined,
+    dceRevision: record.dceRevision ?? undefined,
+    technicalMemoRevisionFingerprint: record.technicalMemoRevisionFingerprint ?? undefined,
   });
 }

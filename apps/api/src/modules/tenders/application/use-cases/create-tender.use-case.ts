@@ -5,6 +5,7 @@ import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { ConsumeAoCreditUseCase } from "../../../billing";
 import { AssertClientAccessUseCase, ClientAccountArchivedError, ClientPermission, GetClientAccountUseCase } from "../../../client-portfolio";
+import { CandidateCompanyArchivedError, GetCandidateCompanyUseCase } from "../../../candidate-company";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { TenderPermission } from "../../domain/tender-permission";
 import { Tender } from "../../domain/tender.aggregate";
@@ -28,6 +29,7 @@ export type CreateTenderCommand = Readonly<{
   actorId: string;
   actorRole: string;
   clientAccountId: string;
+  candidateCompanyId?: string | undefined;
   title: string;
   reference?: string | undefined;
   buyerName?: string | undefined;
@@ -84,6 +86,7 @@ export class CreateTenderUseCase {
     private readonly getClientAccountUseCase: GetClientAccountUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
     private readonly consumeAoCreditUseCase: ConsumeAoCreditUseCase,
+    private readonly getCandidateCompanyUseCase: GetCandidateCompanyUseCase,
   ) {}
 
   async execute(command: CreateTenderCommand): Promise<CreateTenderResult> {
@@ -110,6 +113,20 @@ export class CreateTenderUseCase {
       permission: ClientPermission.CreateTender,
     });
 
+    // V2 Sprint 26 (Checkpoint 2.1-A3) — un `candidateCompanyId` FOURNI doit exister, appartenir à
+    // l'organisation, et ne pas être archivé — jamais fait confiance directement (même motif que
+    // `clientAccountId` ci-dessus). Organization-isolation-only (mission A1 §20) : aucune vérification
+    // d'accès supplémentaire au-delà de `TenderPermission.Create` déjà vérifiée ci-dessus.
+    if (command.candidateCompanyId !== undefined) {
+      const candidateCompany = await this.getCandidateCompanyUseCase.execute({
+        organizationId: command.organizationId,
+        candidateCompanyId: command.candidateCompanyId,
+      });
+      if (candidateCompany.status === "ARCHIVED") {
+        throw new CandidateCompanyArchivedError();
+      }
+    }
+
     // V2 Sprint 3 §5 — un `buyerId` fourni doit exister et appartenir à l'organisation, jamais
     // fait confiance directement (même motif que `clientAccountId` ci-dessus).
     if (command.buyerId !== undefined) {
@@ -127,6 +144,7 @@ export class CreateTenderUseCase {
       id: TenderId.from(this.idGenerator.generate()),
       organizationId: command.organizationId,
       clientAccountId: command.clientAccountId,
+      candidateCompanyId: command.candidateCompanyId,
       title: command.title,
       reference: command.reference,
       buyerName: command.buyerName,

@@ -16,3 +16,8 @@ export type { ValidationRunRepository } from "./application/ports/validation-run
 export type { FinalApprovalSummary, ValidationRunSummary } from "./application/dtos";
 export { ReadinessStatus } from "./domain/readiness-status";
 export { FinalApprovalStatus } from "./domain/final-approval.aggregate";
+
+// Checkpoint 2.1-P2.1-FIX-F — réexporté pour `submission` (agrégateur final de readiness).
+export { GetValidationFreshnessUseCase } from "./application/use-cases/get-validation-freshness.use-case";
+export type { ValidationFreshnessResult } from "./application/use-cases/get-validation-freshness.use-case";
+export { ValidationFreshness } from "./domain/validation-freshness";

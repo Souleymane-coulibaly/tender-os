@@ -12,6 +12,10 @@ const STATUS_BY_CODE: Record<string, number> = {
   TECHNICAL_MEMO_SECTION_ALREADY_VALIDATED: HttpStatus.CONFLICT,
   TECHNICAL_MEMO_TEMPLATE_NOT_READY: HttpStatus.CONFLICT,
   TECHNICAL_MEMO_CITATION_VALIDATION_FAILED: HttpStatus.UNPROCESSABLE_ENTITY,
+  // Checkpoint 2.1-P2.1-FIX-D — même famille que TECHNICAL_MEMO_TEMPLATE_NOT_READY : état actuel
+  // (analyse/mémoire pas encore actualisé) empêche l'action, jamais une erreur de validation.
+  TECHNICAL_MEMO_ANALYSIS_NOT_CURRENT: HttpStatus.CONFLICT,
+  TECHNICAL_MEMO_STALE_EXPORT_BLOCKED: HttpStatus.CONFLICT,
 
   // Erreurs cross-module réelles — jamais révéler l'existence d'une ressource inaccessible, même
   // 404 anti-énumération (même convention que Chat/Workspace/Knowledge Base/document-generation).

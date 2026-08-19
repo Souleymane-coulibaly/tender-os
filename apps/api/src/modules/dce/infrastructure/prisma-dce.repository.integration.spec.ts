@@ -165,6 +165,56 @@ describe("PrismaDceRepository (PostgreSQL)", () => {
     expect(found?.status).toBe(DceStatus.Imported);
   });
 
+  it("TEST 1 (Checkpoint 2.1-P2.1-FIX-A) — a freshly persisted DCE starts at revision 1, a meaningful baseline", async () => {
+    const tenderId = await createTender();
+    const dce = buildDce(tenderId);
+    await repository.create(dce);
+
+    const found = await repository.findById({ organizationId, dceId: dce.id.value });
+    expect(found?.revision).toBe(1);
+  });
+
+  it("TEST 7 (Checkpoint 2.1-P2.1-FIX-A, concurrency) — N concurrent incrementRevision calls on the SAME DCE never lose a single increment (atomic UPDATE ... SET revision = revision + 1)", async () => {
+    const tenderId = await createTender();
+    const dce = buildDce(tenderId);
+    await repository.create(dce);
+
+    const concurrentIncrements = 10;
+    await Promise.all(
+      Array.from({ length: concurrentIncrements }, () => repository.incrementRevision({ organizationId, dceId: dce.id.value })),
+    );
+
+    const found = await repository.findById({ organizationId, dceId: dce.id.value });
+    expect(found?.revision).toBe(1 + concurrentIncrements);
+  });
+
+  it("TEST 9 (Checkpoint 2.1-P2.1-FIX-A, tenant isolation) — incrementRevision scoped to a different organizationId never advances another organization's DCE", async () => {
+    const tenderId = await createTender();
+    const dce = buildDce(tenderId);
+    await repository.create(dce);
+
+    await expect(repository.incrementRevision({ organizationId: otherOrganizationId, dceId: dce.id.value })).rejects.toThrow();
+
+    const found = await repository.findById({ organizationId, dceId: dce.id.value });
+    expect(found?.revision).toBe(1);
+  });
+
+  it("save() (a status transition) never resets a revision already advanced by incrementRevision — the two are independent column-scoped writes", async () => {
+    const tenderId = await createTender();
+    const dce = buildDce(tenderId);
+    await repository.create(dce);
+
+    await repository.incrementRevision({ organizationId, dceId: dce.id.value });
+    await repository.incrementRevision({ organizationId, dceId: dce.id.value });
+
+    dce.markImported(new Date());
+    await repository.save(dce);
+
+    const found = await repository.findById({ organizationId, dceId: dce.id.value });
+    expect(found?.status).toBe(DceStatus.Imported);
+    expect(found?.revision).toBe(3);
+  });
+
   it("rejects at the database level a dce row whose (tenderId, organizationId) pair does not match a real Tender", async () => {
     // Contournement volontaire du repository/domaine — un organizationId incohérent avec le
     // Tender référencé (otherTenderId appartient à otherOrganizationId) doit être rejeté par

@@ -160,6 +160,9 @@ describe("Administrative Dossier — Sprint 8C.1 DC4 official form (real HTTP + 
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: orgId } });
+    // Checkpoint 2.1-A4 (correctif hygiène de test) — voir le commentaire identique dans
+    // administrative-dossier-generation-http.integration.spec.ts.
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: orgId } });
     await prisma.organization.deleteMany({ where: { id: orgId } });
     await app.close();
   });
@@ -242,7 +245,9 @@ describe("Administrative Dossier — Sprint 8C.1 DC4 official form (real HTTP + 
     const hashAfter = createHash("sha256").update(officialBufferAfter).digest("hex");
     expect(hashAfter).toBe(officialFileHash);
     expect(officialBufferAfter.equals(officialFileBuffer)).toBe(true);
-  });
+  }, 20000); // Checkpoint 2.1-A4 — 6 étapes HTTP réelles (prepare/draft/preview/generate x2/validate)
+  // dans un seul test, déjà proche du timeout par défaut avant A4 ; voir le commentaire identique
+  // dans administrative-dossier-official-form-fill-http.integration.spec.ts.
 
   it("isolates the prepared values/draft between two independent DC4 declarations on the same tender", async () => {
     const createRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/administrative-subcontractors`, {

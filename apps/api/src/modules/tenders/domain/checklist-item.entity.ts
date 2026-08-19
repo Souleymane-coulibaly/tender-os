@@ -69,6 +69,14 @@ export const ChecklistItemOrigin = {
 } as const;
 export type ChecklistItemOrigin = (typeof ChecklistItemOrigin)[keyof typeof ChecklistItemOrigin];
 
+/** Checkpoint 2.1-P2.1-FIX-B — axe ORTHOGONAL à `ChecklistComplianceStatus` (mission §15 "ne
+ *  jamais confondre status et freshness", même discipline que `AnalysisStatus` vs
+ *  `AnalysisFreshness`). Reflète si CETTE exigence a été retrouvée dans la dernière analyse
+ *  réconciliée — jamais si elle est conforme. Écrit UNIQUEMENT par
+ *  `ReconcileChecklistWithNewAnalysisUseCase`. */
+export const ChecklistRequirementFreshness = { Current: "CURRENT", Stale: "STALE" } as const;
+export type ChecklistRequirementFreshness = (typeof ChecklistRequirementFreshness)[keyof typeof ChecklistRequirementFreshness];
+
 /** V2 Sprint 6 §13-15 — sujet concerné, jamais une entreprise inventée pour ANY_MEMBER/GROUP_MEMBER. */
 export const ChecklistSubjectType = {
   Candidate: "CANDIDATE",
@@ -122,6 +130,7 @@ export type ChecklistItemProps = {
   documentMatchReasons?: readonly string[] | undefined;
   documentExpiresAt?: Date | undefined;
   documentValidityCheckedAt?: Date | undefined;
+  requirementFreshness: ChecklistRequirementFreshness;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -203,6 +212,7 @@ export class ChecklistItem {
       documentMatchReasons: undefined,
       documentExpiresAt: undefined,
       documentValidityCheckedAt: undefined,
+      requirementFreshness: ChecklistRequirementFreshness.Current,
       createdAt: input.occurredAt,
       updatedAt: input.occurredAt,
     });
@@ -302,6 +312,29 @@ export class ChecklistItem {
       this.props.complianceStatus = ChecklistComplianceStatus.ToReview;
     }
     this.deriveLegacyStatus(occurredAt);
+  }
+
+  /** Checkpoint 2.1-P2.1-FIX-B — confirme que cette exigence a été retrouvée dans la dernière
+   *  analyse réconciliée. Ne touche JAMAIS `complianceStatus`/`status` (mission §20) : un item
+   *  déjà VALIDATED reste VALIDATED, cette méthode ne fait que lever un signal STALE antérieur. */
+  confirmRequirementCurrent(occurredAt: Date): void {
+    if (this.props.requirementFreshness === ChecklistRequirementFreshness.Current) return;
+    this.props.requirementFreshness = ChecklistRequirementFreshness.Current;
+    this.props.updatedAt = occurredAt;
+  }
+
+  /** Checkpoint 2.1-P2.1-FIX-B (mission §18/§19/§21) — l'exigence source a disparu de la dernière
+   *  analyse réconciliée OU a matériellement changé. Ne touche JAMAIS `complianceStatus` (mission
+   *  §20 "ne pas effacer le travail humain sans nécessité") : un item VALIDATED reste VALIDATED,
+   *  jamais rétrogradé automatiquement — seul un signal ADDITIF, à surfacer explicitement côté UI
+   *  (mission §21 "le statut satisfait ne doit pas être automatiquement considéré toujours valide
+   *  sans règle explicite" : ce signal EST la règle explicite, la décision de re-valider reste
+   *  humaine). Jamais appelée pour un item `origin = MANUAL` (mission §23) — voir l'appelant.
+   */
+  markRequirementStale(occurredAt: Date): void {
+    if (this.props.requirementFreshness === ChecklistRequirementFreshness.Stale) return;
+    this.props.requirementFreshness = ChecklistRequirementFreshness.Stale;
+    this.props.updatedAt = occurredAt;
   }
 
   changeLot(lotId: string | undefined, occurredAt: Date): void {
@@ -431,6 +464,9 @@ export class ChecklistItem {
   }
   get documentValidityCheckedAt(): Date | undefined {
     return this.props.documentValidityCheckedAt;
+  }
+  get requirementFreshness(): ChecklistRequirementFreshness {
+    return this.props.requirementFreshness;
   }
   get createdAt(): Date {
     return this.props.createdAt;

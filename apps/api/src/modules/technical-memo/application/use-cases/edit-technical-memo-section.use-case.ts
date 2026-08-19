@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ClientPermission } from "../../../client-portfolio";
+import { GetTenderUseCase } from "../../../tenders";
 import { TechnicalMemoSectionRevisionSource } from "../../domain/enums";
 import { TechnicalMemoSectionNotFoundError } from "../../domain/errors";
 import { TechnicalMemoSectionRevision } from "../../domain/technical-memo-section-revision.entity";
@@ -39,6 +40,7 @@ export class EditTechnicalMemoSectionUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly accessService: TechnicalMemoAccessService,
+    private readonly getTenderUseCase: GetTenderUseCase,
   ) {}
 
   async execute(command: EditTechnicalMemoSectionCommand): Promise<TechnicalMemoSectionRevision> {
@@ -51,6 +53,12 @@ export class EditTechnicalMemoSectionUseCase {
       requireUseOrgPermission: true,
     });
 
+    // Checkpoint 2.1-P2.1-FIX-D — même provenance CANDIDATE qu'une génération IA (mission §11/§18) :
+    // une édition manuelle décrit toujours l'entreprise candidate active à ce moment, jamais figée
+    // sur autre chose. HORS transaction (lecture seule, cohérent avec le motif "jamais un appel
+    // réseau/lecture évitable dans une transaction Prisma").
+    const tender = await this.getTenderUseCase.execute({ organizationId: command.organizationId, tenderId: memo.tenderId, actorId: command.actorId, actorRole: command.actorRole });
+
     return this.atomicTransactionRunner.run(async () => {
       await this.revisionRepository.lockSection({ organizationId: command.organizationId, technicalMemoSectionId: command.technicalMemoSectionId });
 
@@ -62,6 +70,17 @@ export class EditTechnicalMemoSectionUseCase {
       const occurredAt = this.clock.now();
       const revisionNumber = await this.revisionRepository.nextRevisionNumber({ organizationId: command.organizationId, technicalMemoSectionId: command.technicalMemoSectionId });
 
+      // Correctif audit (P1 FIXD-P1-001) — une édition manuelle n'ASSEMBLE aucun contexte DCE
+      // (mission §32, toujours vrai), mais elle ne doit pas non plus EFFACER la dépendance DCE que
+      // la section avait déjà : si la dernière révision existante portait un `analysisVersion`/
+      // `dceRevision` (contenu IA généré contre une exigence DCE réelle), l'édition humaine qui le
+      // remplace reste construite sur cette même base et DOIT continuer à en hériter la fraîcheur —
+      // sinon `computeTechnicalMemoSectionFreshness` confond "section sans dépendance DCE" et
+      // "dépendance DCE dont la provenance a été perdue par une édition", et une section devenue
+      // STALE après un changement DCE redevient silencieusement CURRENT dès qu'un humain la touche.
+      // Jamais RE-RÉSOLU (une édition ne consomme aucune source fraîche), uniquement CONSERVÉ.
+      const previousRevision = await this.revisionRepository.findLatestBySectionId({ organizationId: command.organizationId, technicalMemoSectionId: command.technicalMemoSectionId });
+
       const revision = TechnicalMemoSectionRevision.create({
         id: this.idGenerator.generate(),
         organizationId: command.organizationId,
@@ -69,6 +88,9 @@ export class EditTechnicalMemoSectionUseCase {
         revisionNumber,
         source: TechnicalMemoSectionRevisionSource.Manual,
         content: command.content,
+        candidateCompanyId: tender.candidateCompanyId,
+        analysisVersion: previousRevision?.analysisVersion,
+        dceRevision: previousRevision?.dceRevision,
         createdBy: command.actorId,
         occurredAt,
       });

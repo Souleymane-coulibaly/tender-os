@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { OpportunityPermission } from "../../domain/opportunity-permission";
 import { assertOpportunityFound } from "../../domain/opportunity.aggregate";
-import { OPPORTUNITY_QUICK_SCORE_REPOSITORY, type OpportunityQuickScoreRecord, type OpportunityQuickScoreRepository } from "../ports/opportunity-quick-score.repository";
+import { OPPORTUNITY_QUICK_SCORE_REPOSITORY, withQuickScoreCandidateStaleness, type OpportunityQuickScoreRecord, type OpportunityQuickScoreRepository } from "../ports/opportunity-quick-score.repository";
 import { OPPORTUNITY_REPOSITORY, type OpportunityRepository } from "../ports/opportunity.repository";
 import { assertHasOpportunityPermission } from "../policies/opportunity-authorization.policy";
 import { assertOpportunityClientAccessAllowed } from "../policies/opportunity-client-access.policy";
@@ -38,6 +38,7 @@ export class ListOpportunityQuickScoresUseCase {
       permission: ClientPermission.ReadOpportunity,
     });
 
-    return this.quickScoreRepository.listVersions({ organizationId: query.organizationId, opportunityId: query.opportunityId });
+    const versions = await this.quickScoreRepository.listVersions({ organizationId: query.organizationId, opportunityId: query.opportunityId });
+    return versions.map((version) => withQuickScoreCandidateStaleness(version, opportunity.candidateCompanyId));
   }
 }

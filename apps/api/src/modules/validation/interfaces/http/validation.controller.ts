@@ -4,6 +4,7 @@ import { CurrentMembershipContext, OrganizationMembershipGuard, type MembershipC
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
 import { ApproveFinalVersionUseCase } from "../../application/use-cases/approve-final-version.use-case";
 import { GetReadinessStatusUseCase } from "../../application/use-cases/get-readiness-status.use-case";
+import { GetValidationFreshnessUseCase } from "../../application/use-cases/get-validation-freshness.use-case";
 import { GetValidationRunUseCase } from "../../application/use-cases/get-validation-run.use-case";
 import { ReopenFinalVersionUseCase } from "../../application/use-cases/reopen-final-version.use-case";
 import { ReopenValidationIssueUseCase } from "../../application/use-cases/reopen-validation-issue.use-case";
@@ -34,6 +35,7 @@ export class ValidationController {
     private readonly approveFinalVersionUseCase: ApproveFinalVersionUseCase,
     private readonly reopenFinalVersionUseCase: ReopenFinalVersionUseCase,
     private readonly getReadinessStatusUseCase: GetReadinessStatusUseCase,
+    private readonly getValidationFreshnessUseCase: GetValidationFreshnessUseCase,
   ) {}
 
   @Post("tenders/:tenderId/validation/run")
@@ -78,6 +80,18 @@ export class ValidationController {
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
   ) {
     return this.getReadinessStatusUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId });
+  }
+
+  // Checkpoint 2.1-P2.1-FIX-E — lecture seule, jamais persistée (voir
+  // `GetValidationFreshnessUseCase`) : indique si la dernière `FinalApproval` ACTIVE de ce tender
+  // reste CURRENT par rapport au dossier métier courant (Candidate/Analyse/Mémoire technique).
+  @Get("tenders/:tenderId/validation/freshness")
+  async freshness(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    return this.getValidationFreshnessUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId });
   }
 
   @Post("validation/issues/:issueId/resolve")

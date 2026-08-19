@@ -61,6 +61,13 @@ export class DeleteDceDocumentUseCase {
       throw new DceDocumentNotFoundError();
     }
 
+    // Checkpoint 2.1-P2.1-FIX-A (mission §8, correctif audit — P1 "incrément best-effort après coup
+    // peut masquer un vrai changement") — la révision avance AVANT la suppression réelle, et son
+    // échec PROPAGE (jamais avalé) : soit rien n'est encore supprimé (retry sûr), soit la révision a
+    // avancé et la suppression suit. Si LA SUPPRESSION échoue ensuite, le pire état résiduel est
+    // "révision avancée sans suppression réelle" (faux STALE, sans danger) — jamais l'inverse.
+    await this.dceRepository.incrementRevision({ organizationId: command.organizationId, dceId: dce.id.value });
+
     await this.deleteDocumentUseCase.execute({
       organizationId: command.organizationId,
       documentId: command.documentId,

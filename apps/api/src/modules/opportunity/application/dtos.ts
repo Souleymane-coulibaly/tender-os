@@ -4,6 +4,7 @@ export type OpportunitySummary = {
   id: string;
   organizationId: string;
   clientAccountId?: string | undefined;
+  candidateCompanyId?: string | undefined;
   buyerId?: string | undefined;
   title: string;
   description?: string | undefined;
@@ -33,6 +34,7 @@ export function toOpportunitySummary(opportunity: Opportunity): OpportunitySumma
     id: opportunity.id.value,
     organizationId: opportunity.organizationId,
     clientAccountId: opportunity.clientAccountId,
+    candidateCompanyId: opportunity.candidateCompanyId,
     buyerId: opportunity.buyerId,
     title: opportunity.title,
     description: opportunity.description,

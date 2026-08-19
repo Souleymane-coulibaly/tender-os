@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/wordprocessingShape" mc:Ignorable="w14 wp14">
+  <w:body>
+<w:p><w:r><w:t xml:space="preserve">TenderOS 2.1 - P2.1-FIX-A - Codex Re-audit</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">DCE Freshness Foundation</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Date: 2026-08-18</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Mode: strict read-only</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Executive Verdict</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Verdict: PARTIALLY VALIDATED, BUT NOT SUFFICIENTLY RELIABLE AS A FOUNDATION. Remaining risk is P1.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">The design introduced by FIX-A is conceptually sound: Dce.revision is a single monotonic freshness source, TenderAnalysisSummary.dceRevision is an additive nullable snapshot, and freshness is computed at read time as CURRENT, STALE or UNKNOWN without rewriting history.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">The blocking issue is operational reliability. On the DCE mutation paths that matter most (ADD, REPLACE, DELETE, CATEGORY CHANGE), revision bumps are executed as cross-module best-effort side effects with catch-and-log behavior. If the increment fails after the semantic mutation succeeded, freshness can be reported incorrectly. That is not a cosmetic defect: it breaks the very trustworthiness of the new source of truth.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Git Initial State</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">BRANCH: v2/redesign-ui...origin/v2/redesign-ui</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">WORKTREE: dirty, broad checkpoint tree. Current diff stat shows 105 changed tracked files with 2003 insertions and 327 deletions.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">STAGED: none detected.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Files really belonging to FIX-A include at least: schema.prisma, migration 20261005091000_checkpoint_2_1_p2_1_fix_a_dce_freshness, analysis freshness types/use cases, DCE aggregate/repository/use cases, and frontend analysis freshness display types/components.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Prisma / Data Model</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Dce.revision is really present as an integer semantic revision. Migration adds revision to dces as INTEGER NOT NULL DEFAULT 1.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">TenderAnalysisSummary.dceRevision is really present as a nullable additive column. Migration adds dce_revision to tender_analysis_summaries as nullable INTEGER with no default.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">This is the correct historical stance: existing DCE rows become revision 1 baseline, historical summaries remain NULL and therefore UNKNOWN, not fake CURRENT.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Migration Audit</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Migration file 20261005091000_checkpoint_2_1_p2_1_fix_a_dce_freshness is additive only.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">No DROP, no rename, no destructive backfill, no false historical reconstruction found.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Historical preservation objective is respected at schema level.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Historical Preservation</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">No code found in FIX-A that deletes or rewrites historical DocumentVersion rows, historical Analysis rows, or historical TenderAnalysisSummary rows just to support freshness.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">GetEffectiveTenderAnalysisSummary keeps base dceRevision/analysisFreshness from the base summary and layers user revisions on top without rewriting that base.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Append-only history is preserved. A COMPLETED analysis can indeed become STALE without being mutated or deleted.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Single Source of Truth Check</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">The new intended freshness SOT is clearly Dce.revision.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Freshness calculation is centralized in a pure function computeAnalysisFreshness(capturedDceRevision, currentDceRevision).</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Read-time comparison is reused by GetTenderBusinessAnalysisUseCase and then carried through GetEffectiveTenderAnalysisSummaryUseCase.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">I did not find a second competing freshness source such as updatedAt comparison, document timestamp comparison, fake stale booleans, or analysisVersion hijacking for this FIX-A foundation.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Conclusion on SOT shape: good.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Initial Baseline</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Dce aggregate creates new DCEs with revision = 1. This matches the migration baseline and avoids invented prehistory.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Baseline semantics are coherent: first known state is revision 1, not 0 and not guessed from previous changes.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Freshness Read Path</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Backend read path is coherent: business analysis latest summary is loaded, current DCE is resolved, and freshness is computed at read time.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">UNKNOWN is returned whenever captured revision or current revision is unavailable, which is the right conservative behavior.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Frontend has aligned types and labels for CURRENT, STALE and UNKNOWN.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Where The Foundation Breaks</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">ADD path: import-dce-files.use-case increments DCE revision after successful document import, but wraps incrementRevision in catch-and-log best-effort behavior.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">REPLACE path: replace-dce-document.use-case also increments revision in best-effort mode after AddDocumentVersionUseCase succeeds.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">DELETE path: delete-dce-document.use-case increments revision in best-effort mode after DeleteDocumentUseCase succeeds.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">CATEGORY CHANGE path: correct-dce-document-category.use-case increments revision in best-effort mode after effective category mutation.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">The repository increment itself is technically strong: PrismaDceRepository.incrementRevision performs an atomic database increment using revision: { increment: 1 } under the composite key (id, organizationId). Integration tests explicitly cover concurrent increments.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">The problem is not the increment primitive. The problem is when and how that primitive is invoked in the mutation flows.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Why This Is Still P1</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">If the semantic DCE mutation succeeds but incrementRevision fails and is swallowed, the current DCE revision remains too low.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">From that moment, an older analysis summary can incorrectly compare equal to the stale DCE revision and appear CURRENT.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">That is a false-negative on staleness, which defeats the purpose of FIX-A. The system would be declaring freshness where freshness is no longer known to be true.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Because FIX-B through FIX-F are expected to rely on this foundation, this is not acceptable technical debt for a source-of-truth layer. It would propagate incorrect trust decisions to later refresh gates and UI signals.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Non-Regression / Compatibility Notes</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">The new model is future-compatible with downstream consumers: analysis summary now carries dceRevision, effective summary preserves it, frontend displays freshness, and historical unknown handling is safe.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">This means the conceptual interface is ready for future checkpoints. The reliability contract is what remains insufficient.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Findings</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F1 - P1: Dce.revision propagation is not transactionally guaranteed on ADD/REPLACE/DELETE/CATEGORY CHANGE. Best-effort catch-and-log allows semantic DCE mutation without freshness source update.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F2 - P1: Because freshness is computed purely from Dce.revision versus captured dceRevision, a missed increment can misclassify stale analyses as CURRENT.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F3 - PASS: migration is additive-only and preserves history honestly.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F4 - PASS: historical summaries with NULL dceRevision resolve to UNKNOWN, not fabricated CURRENT.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F5 - PASS: increment primitive itself is atomic and concurrency-safe at repository level.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Foundation Decision</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Is FIX-A sufficiently reliable to serve as the foundation for FIX-B to FIX-F?</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Answer: No, not yet.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Architecture direction: valid.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Data model: valid.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Read-time freshness semantics: valid.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Operational reliability of the source-of-truth update: insufficient.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Final Status</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">P2.1-FIX-A should be considered ARCHITECTURALLY CORRECT BUT OPERATIONALLY NOT YET TRUSTWORTHY ENOUGH AS A FOUNDATION. The remaining best-effort propagation risk is still P1.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Primary Proof Files</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/prisma/migrations/20261005091000_checkpoint_2_1_p2_1_fix_a_dce_freshness/migration.sql</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/dce/domain/dce.aggregate.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/dce/application/ports/dce.repository.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/dce/infrastructure/prisma-dce.repository.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/dce/application/use-cases/import-dce-files.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/dce/application/use-cases/replace-dce-document.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/dce/application/use-cases/delete-dce-document.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/dce/application/use-cases/correct-dce-document-category.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/analysis/domain/analysis-freshness.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/analysis/application/use-cases/get-tender-business-analysis.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/analysis/application/use-cases/get-effective-tender-analysis-summary.use-case.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/analysis/infrastructure/prisma-business-analysis.repository.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/web/src/lib/analysis-types.ts</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>

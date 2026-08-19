@@ -7,6 +7,7 @@ import { ArchiveTenderUseCase } from "../../application/use-cases/archive-tender
 import { RestoreTenderUseCase } from "../../application/use-cases/restore-tender.use-case";
 import { ChangeTenderStatusUseCase } from "../../application/use-cases/change-tender-status.use-case";
 import { ChangeTenderClientAccountUseCase } from "../../application/use-cases/change-tender-client-account.use-case";
+import { ChangeTenderCandidateCompanyUseCase } from "../../application/use-cases/change-tender-candidate-company.use-case";
 import { CreateTenderUseCase } from "../../application/use-cases/create-tender.use-case";
 import { GetTenderUseCase } from "../../application/use-cases/get-tender.use-case";
 import { GetTenderProfileUseCase } from "../../application/use-cases/get-tender-profile.use-case";
@@ -83,6 +84,7 @@ import {
   ChangeRequestedDocumentStatusBodySchema,
   ChangeRiskStatusBodySchema,
   ChangeTenderCandidateBodySchema,
+  ChangeTenderCandidateCompanyBodySchema,
   ChangeTenderStatusBodySchema,
   CreateAlertBodySchema,
   CreateAwardCriterionBodySchema,
@@ -107,6 +109,7 @@ import {
   type ChangeRequestedDocumentStatusBody,
   type ChangeRiskStatusBody,
   type ChangeTenderCandidateBody,
+  type ChangeTenderCandidateCompanyBody,
   type ChangeTenderStatusBody,
   type CreateAlertBody,
   type CreateAwardCriterionBody,
@@ -141,6 +144,7 @@ export class TendersController {
     private readonly getTenderStatisticsUseCase: GetTenderStatisticsUseCase,
     private readonly changeTenderStatusUseCase: ChangeTenderStatusUseCase,
     private readonly changeTenderClientAccountUseCase: ChangeTenderClientAccountUseCase,
+    private readonly changeTenderCandidateCompanyUseCase: ChangeTenderCandidateCompanyUseCase,
     private readonly archiveTenderUseCase: ArchiveTenderUseCase,
     private readonly restoreTenderUseCase: RestoreTenderUseCase,
     private readonly listTenderStatusHistoryUseCase: ListTenderStatusHistoryUseCase,
@@ -361,6 +365,30 @@ export class TendersController {
       actorId: actor.userId,
       actorRole: membership.role,
       clientAccountId: body.clientAccountId,
+      reason: body.reason,
+      requestId: request.id,
+    });
+    return presentTender(result);
+  }
+
+  // V2 Sprint 26 (Checkpoint 2.1-A3) — changement CONTRÔLÉ de l'entreprise candidate (SOT
+  // `CandidateCompany`), distinct de `:tenderId/candidate` ci-dessus (`clientAccountId`, contexte
+  // client/portefeuille legacy — les deux coexistent, mission §21). Jamais via `PATCH :tenderId`.
+  @Post(":tenderId/candidate-company")
+  @HttpCode(HttpStatus.OK)
+  async changeCandidateCompany(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Body(new ZodValidationPipe(ChangeTenderCandidateCompanyBodySchema)) body: ChangeTenderCandidateCompanyBody,
+    @Req() request: RequestWithId,
+  ) {
+    const result = await this.changeTenderCandidateCompanyUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      candidateCompanyId: body.candidateCompanyId,
       reason: body.reason,
       requestId: request.id,
     });

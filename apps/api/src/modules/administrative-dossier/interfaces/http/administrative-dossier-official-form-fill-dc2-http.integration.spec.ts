@@ -144,6 +144,8 @@ describe("Administrative Dossier — V2 Sprint 11B DC2 real official form fill (
     await prisma.documentVersion.deleteMany({ where: { organizationId: orgId } });
     await prisma.document.deleteMany({ where: { organizationId: orgId } });
     await prisma.tender.deleteMany({ where: { organizationId: orgId } });
+    await prisma.candidateEstablishment.deleteMany({ where: { organizationId: orgId } });
+    await prisma.candidateCompany.deleteMany({ where: { organizationId: orgId } });
     await prisma.clientAssignment.deleteMany({ where: { organizationId: orgId } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: orgId } });
     await prisma.auditLog.deleteMany({ where: { organizationId: orgId } });
@@ -184,6 +186,35 @@ describe("Administrative Dossier — V2 Sprint 11B DC2 real official form fill (
     const zip = await JSZip.loadAsync(Buffer.from(await downloadRes.arrayBuffer()));
     const xml = await zip.file("word/document.xml")?.async("string");
     expect(xml).toContain("Menuiserie Corentin SARL");
+  });
+
+  it("BLOCKING (audit post-A4, correctif P1/P2-01) — a Tender linked to a CandidateCompany resolves candidate.tradeName/siret/address/legalForm from CandidateCompany, NEVER from the ClientAccount's legal identity", async () => {
+    const clientAccountId = await createClientWithLegalIdentity({ tradeName: "Client Legacy Legal SAS", siret: "35600000000048" });
+    const tender = await prisma.tender.create({ data: { id: randomUUID(), organizationId: orgId, clientAccountId, title: "Marche DC2 - candidate moderne", status: "DRAFT", tags: [], createdBy: ownerUserId } });
+
+    const candidateCompany = await prisma.candidateCompany.create({
+      data: { id: randomUUID(), organizationId: orgId, name: "Candidate Moderne SARL", nameNormalized: "candidate moderne sarl", legalName: "Candidate Moderne SARL", siren: "654000000", legalForm: "SARL", status: "ACTIVE", createdBy: ownerUserId },
+    });
+    await prisma.candidateEstablishment.create({
+      data: { id: randomUUID(), organizationId: orgId, candidateCompanyId: candidateCompany.id, siret: "65400000000017", isPrincipal: true, addressLine: "3 rue du Candidat", postalCode: "13000", city: "Marseille", country: "FR", createdBy: ownerUserId },
+    });
+    await prisma.tender.update({ where: { id_organizationId: { id: tender.id, organizationId: orgId } }, data: { candidateCompanyId: candidateCompany.id } });
+
+    const readinessRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/official-forms/dc2/candidate/readiness`, { headers: jsonHeaders(tokenOwner) });
+    expect(readinessRes.status).toBe(200);
+    const readiness = (await readinessRes.json()) as { fields: { fieldKey: string; status: string; value?: unknown }[] };
+    expect(readiness.fields.find((f) => f.fieldKey === "candidate.tradeName")).toMatchObject({ status: "AVAILABLE", value: "Candidate Moderne SARL" });
+    expect(readiness.fields.find((f) => f.fieldKey === "candidate.siret")).toMatchObject({ status: "AVAILABLE", value: "65400000000017" });
+    expect(readiness.fields.find((f) => f.fieldKey === "candidate.legalForm")).toMatchObject({ status: "AVAILABLE", value: "SARL" });
+
+    const generateRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/official-forms/dc2/candidate/generate`, { method: "POST", headers: jsonHeaders(tokenOwner) });
+    expect(generateRes.status).toBe(201);
+    const generated = (await generateRes.json()) as { revisions: { artifactDocumentId?: string }[] };
+    const downloadRes = await fetch(`${baseUrl}/api/v1/documents/${generated.revisions[0]!.artifactDocumentId}/download`, { headers: jsonHeaders(tokenOwner) });
+    const zip = await JSZip.loadAsync(Buffer.from(await downloadRes.arrayBuffer()));
+    const xml = await zip.file("word/document.xml")?.async("string");
+    expect(xml).toContain("Candidate Moderne SARL");
+    expect(xml).not.toContain("Client Legacy Legal SAS");
   });
 
   it("BLOCKING (mission §54) — groupement 2 membres: each DC2 generation uses ONLY its own member's data, never contaminated by the other member or the candidate", async () => {
@@ -241,7 +272,9 @@ describe("Administrative Dossier — V2 Sprint 11B DC2 real official form fill (
     // Anti-IDOR — un memberId qui n'appartient pas à CE groupement est refusé.
     const badMemberRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/official-forms/dc2/members/does-not-exist/readiness`, { headers: jsonHeaders(tokenOwner) });
     expect(badMemberRes.status).toBe(404);
-  });
+  }, 15000); // Checkpoint 2.1-A4 — 2 lectures de readiness + 2 générations DOCX réelles + 2
+  // téléchargements dans un seul test ; voir le commentaire identique dans
+  // administrative-dossier-official-form-fill-http.integration.spec.ts.
 
   it("BLOCKING (mission §41 multi-candidate) — a DIFFERENT tender's DC2 never resolves to the wrong candidate's data", async () => {
     const clientA = await createClientWithLegalIdentity({ tradeName: "Candidat A SARL", siret: "35600000000048" });

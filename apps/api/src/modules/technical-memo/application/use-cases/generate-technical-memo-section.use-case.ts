@@ -1,10 +1,10 @@
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
-import { AI_PROVIDER_REGISTRY, AiTimeoutError, type AIProvider, type AIProviderRegistry, type AIProviderRequest, type AIProviderResult } from "../../../analysis";
+import { AI_PROVIDER_REGISTRY, AiTimeoutError, GetEffectiveTenderAnalysisSummaryUseCase, type AIProvider, type AIProviderRegistry, type AIProviderRequest, type AIProviderResult } from "../../../analysis";
 import { ClientPermission } from "../../../client-portfolio";
 import { TechnicalMemoCoverageStatus, TechnicalMemoSectionRevisionSource } from "../../domain/enums";
-import { TechnicalMemoSectionNotFoundError } from "../../domain/errors";
+import { TechnicalMemoAnalysisNotCurrentError, TechnicalMemoSectionNotFoundError } from "../../domain/errors";
 import { TechnicalMemoSectionCitation } from "../../domain/technical-memo-section-citation.value-object";
 import { TechnicalMemoSectionRevision } from "../../domain/technical-memo-section-revision.entity";
 import { buildTechnicalMemoSystemPrompt, TECHNICAL_MEMO_SYSTEM_PROMPT_VERSION } from "../../infrastructure/technical-memo-system-prompt";
@@ -47,7 +47,19 @@ function sleep(ms: number): Promise<void> {
 type DeclaredCitationMatch = Readonly<{ reference: KnownTechnicalMemoReference; excerpt: string | undefined }>;
 
 type GenerationOutcome =
-  | { kind: "completed"; content: string; model: string; citationMatches: readonly DeclaredCitationMatch[]; missingDataNotes: readonly string[]; usage: AIProviderResult["usage"] }
+  | {
+      kind: "completed";
+      content: string;
+      model: string;
+      citationMatches: readonly DeclaredCitationMatch[];
+      missingDataNotes: readonly string[];
+      usage: AIProviderResult["usage"];
+      /** Checkpoint 2.1-P2.1-FIX-D — provenance figée AU MOMENT de cet appel, jamais relue dans
+       *  `finalize()` (mission §18/§39 "jamais les sources courantes relues à la fin"). */
+      candidateCompanyId: string | undefined;
+      analysisVersion: number | undefined;
+      dceRevision: number | undefined;
+    }
   | { kind: "failed"; errorMessage: string };
 
 /**
@@ -75,6 +87,7 @@ export class GenerateTechnicalMemoSectionUseCase {
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly accessService: TechnicalMemoAccessService,
     private readonly contextAssembler: TechnicalMemoSectionContextAssembler,
+    private readonly getEffectiveTenderAnalysisSummaryUseCase: GetEffectiveTenderAnalysisSummaryUseCase,
     // Consolidation IA — Checkpoint A §3 : résolveur optionnel (motif d'Analyse, jamais celui,
     // obligatoire, de Génération — Mémoire technique a un comportement historique à préserver).
     // Absent ⇒ repli strict sur `TechnicalMemoAiConfig.aiModel`, jamais une exception.
@@ -95,11 +108,31 @@ export class GenerateTechnicalMemoSectionUseCase {
       requireUseOrgPermission: true,
     });
 
+    // Checkpoint 2.1-P2.1-FIX-D (mission §22) — bloque AVANT toute mutation d'état (jamais un
+    // passage GENERATING suivi d'un échec) : UNIQUEMENT si cette section a réellement des
+    // exigences DCE liées (mission §12/§13, jamais une dépendance fabriquée pour une section qui
+    // n'en a aucune — voir `TechnicalMemoAnalysisNotCurrentError`).
+    await this.assertAnalysisPrecondition(command, memo);
+
     const section = await this.beginGeneration(command);
 
     const outcome = await this.generate({ command, memo, section: section });
 
     return this.finalize(command, outcome);
+  }
+
+  private async assertAnalysisPrecondition(command: GenerateTechnicalMemoSectionCommand, memo: Awaited<ReturnType<TechnicalMemoAccessService["loadMemo"]>>): Promise<void> {
+    const links = await this.requirementRepository.listBySectionId({ organizationId: command.organizationId, technicalMemoSectionId: command.technicalMemoSectionId });
+    if (links.length === 0) return;
+    const effectiveAnalysis = await this.getEffectiveTenderAnalysisSummaryUseCase.execute({
+      organizationId: command.organizationId,
+      tenderId: memo.tenderId,
+      actorId: command.actorId,
+      actorRole: command.actorRole,
+    });
+    if (effectiveAnalysis.analysisFreshness !== "CURRENT") {
+      throw new TechnicalMemoAnalysisNotCurrentError();
+    }
   }
 
   /** Verrou + passage GENERATING — transaction courte (mission §84 "deux générations concurrentes
@@ -206,7 +239,17 @@ export class GenerateTechnicalMemoSectionUseCase {
         });
 
         const { citationMatches, missingDataNotes, content } = this.parseAndValidate(result.content, context.knownReferences);
-        return await completeRoutingDecision({ kind: "completed", content, model: resolvedModel, citationMatches, missingDataNotes, usage: result.usage });
+        return await completeRoutingDecision({
+          kind: "completed",
+          content,
+          model: resolvedModel,
+          citationMatches,
+          missingDataNotes,
+          usage: result.usage,
+          candidateCompanyId: context.provenance.candidateCompanyId,
+          analysisVersion: context.provenance.analysisVersion,
+          dceRevision: context.provenance.dceRevision,
+        });
       } catch (error) {
         const isLastAttempt = attempt === maxAttempts;
         if (!isRetryableAiError(error) || isLastAttempt) {
@@ -321,9 +364,20 @@ export class GenerateTechnicalMemoSectionUseCase {
     return { kind: "failed", errorMessage: reason };
   }
 
-  /** Finalisation (révision + citations + section) — seconde transaction courte. */
+  /** Finalisation (révision + citations + section) — seconde transaction courte.
+   *
+   *  Correctif audit (même classe de bug que P1-FIXC-001, GO/NO-GO) — `lockSection` est repris ICI,
+   *  jamais seulement dans `beginGeneration()` : le verrou consultatif Postgres est scopé à la
+   *  TRANSACTION (`pg_advisory_xact_lock`), donc relâché dès que la transaction de
+   *  `beginGeneration()` committe, bien AVANT que cette méthode ne lise/écrive
+   *  `nextRevisionNumber`/`create`. Sans ce second verrou, deux finalisations concurrentes de la
+   *  MÊME section (deux régénérations, ou une régénération + une édition manuelle) pouvaient courir
+   *  sur `nextRevisionNumber` sans aucune sérialisation réelle (mission §43/§47 "réutiliser les
+   *  mécanismes de lock existants, éviter un read-max-write non protégé"). */
   private async finalize(command: GenerateTechnicalMemoSectionCommand, outcome: GenerationOutcome): Promise<TechnicalMemoSectionRevision> {
     return this.atomicTransactionRunner.run(async () => {
+      await this.revisionRepository.lockSection({ organizationId: command.organizationId, technicalMemoSectionId: command.technicalMemoSectionId });
+
       const section = await this.sectionRepository.findById({ organizationId: command.organizationId, technicalMemoSectionId: command.technicalMemoSectionId });
       if (!section) {
         throw new TechnicalMemoSectionNotFoundError();
@@ -385,6 +439,9 @@ export class GenerateTechnicalMemoSectionUseCase {
         totalTokenCount: outcome.usage.totalTokens,
         missingDataNotes: outcome.missingDataNotes,
         citations,
+        candidateCompanyId: outcome.candidateCompanyId,
+        analysisVersion: outcome.analysisVersion,
+        dceRevision: outcome.dceRevision,
         createdBy: command.actorId,
         occurredAt,
       });

@@ -2,27 +2,24 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import { FirstTenderTracker } from "./first-tender-tracker";
-import { fetchAnalysisCapabilities, fetchAnalysisSectionData } from "../../../analysis-actions";
-import { canTriggerAnalysis, type AnalysisCapability, type AnalysisSectionData } from "../../../../../lib/analysis-types";
 import { fetchTenderSuggestions } from "../../../ai-suggestion-actions";
 import { canManageAiSuggestions, type AiSuggestion } from "../../../../../lib/ai-suggestion-types";
-import { fetchDceSectionData } from "../../../dce-actions";
 import { fetchGoNoGoReport, fetchTenderGoNoGoDecisions } from "../../../opportunity-actions";
 import { canGenerateGoNoGoReport, canRecordGoNoGoDecision, type GoNoGoDecision, type GoNoGoReport } from "../../../../../lib/opportunity-types";
-import { canDeleteDceDocument, canImportOrReplaceDceDocument, type DceDocumentSummary, type DceSummary } from "../../../../../lib/dce-types";
 import type { TenderCockpit } from "../../../../../lib/cockpit-types";
 import { canUploadOrEditDocument, type DocumentSummary } from "../../../../../lib/documents-types";
 import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../../lib/client-portfolio-types";
+import { fetchCandidateCompanies, fetchCandidateCompanyOrNull } from "../../../candidate-company-actions";
+import type { CandidateCompanySummary } from "../../../../../lib/candidate-company-types";
 import {
   TENDER_STATUS_LABELS,
-  canChangeTenderCandidate,
+  canChangeTenderCandidateCompany,
+  canChangeTenderClient,
   canEditTenderDetails,
   canManageTenderLots,
   type Alert,
   type AwardCriterion,
   type Buyer,
-  type ChecklistItem,
-  type ChecklistProgress,
   type Milestone,
   type Readiness,
   type RequestedDocument,
@@ -40,14 +37,12 @@ import { ApiErrorState } from "../../api-error-state";
 import { TenderStatusBadge } from "../tender-status-badge";
 import { AiSuggestionsSection } from "./ai-suggestions-section";
 import { AlertsSection } from "./alerts-section";
-import { AnalysisSection } from "./analysis-section";
 import { ArchiveButton } from "./archive-button";
-import { CandidateSection } from "./candidate-section";
-import { ChecklistSection } from "./checklist-section";
+import { CandidateCompanySection } from "./candidate-company-section";
+import { ClientSection } from "./client-section";
 import { CockpitSection } from "./cockpit-section";
 import { CompletenessSection } from "./completeness-section";
 import { CriteriaSection } from "./criteria-section";
-import { DceSection } from "./dce-section";
 import { DocumentsSection } from "./documents-section";
 import { EditTenderForm } from "./edit-tender-form";
 import { GoNoGoSection } from "./go-no-go-section";
@@ -79,8 +74,6 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
 
   let tender: Tender;
   let lots: TenderLot[];
-  let checklistItems: ChecklistItem[];
-  let checklistProgress: ChecklistProgress | null;
   let criteria: AwardCriterion[];
   let requestedDocuments: RequestedDocument[];
   let milestones: Milestone[];
@@ -89,9 +82,6 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   let readiness: Readiness;
   let history: StatusHistoryEntry[];
   let documents: DocumentSummary[];
-  let dceSection: { dce: DceSummary | null; documents: DceDocumentSummary[] };
-  let analysisData: AnalysisSectionData;
-  let analysisCapabilities: AnalysisCapability[];
   let aiSuggestions: AiSuggestion[];
   let role: string | undefined;
   let cockpit: TenderCockpit;
@@ -100,13 +90,12 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   let accessibleClients: ClientAccountSummary[];
   let goNoGoReport: GoNoGoReport | null;
   let goNoGoDecisions: GoNoGoDecision[];
+  let availableCandidateCompanies: CandidateCompanySummary[];
 
   try {
     [
       tender,
       lots,
-      checklistItems,
-      checklistProgress,
       criteria,
       requestedDocuments,
       milestones,
@@ -115,9 +104,6 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       readiness,
       history,
       documents,
-      dceSection,
-      analysisData,
-      analysisCapabilities,
       aiSuggestions,
       role,
       cockpit,
@@ -126,11 +112,10 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       accessibleClients,
       goNoGoReport,
       goNoGoDecisions,
+      availableCandidateCompanies,
     ] = await Promise.all([
       appApiFetch<Tender>(`/api/v1/tenders/${id}`),
       appApiFetch<TenderLot[]>(`/api/v1/tenders/${id}/lots`),
-      appApiFetch<ChecklistItem[]>(`/api/v1/tenders/${id}/checklist`),
-      appApiFetch<ChecklistProgress>(`/api/v1/tenders/${id}/checklist/progress`).catch(() => null),
       appApiFetch<AwardCriterion[]>(`/api/v1/tenders/${id}/criteria`),
       appApiFetch<RequestedDocument[]>(`/api/v1/tenders/${id}/requested-documents`),
       appApiFetch<Milestone[]>(`/api/v1/tenders/${id}/milestones`),
@@ -139,9 +124,6 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       appApiFetch<Readiness>(`/api/v1/tenders/${id}/readiness`),
       appApiFetch<StatusHistoryEntry[]>(`/api/v1/tenders/${id}/history`),
       appApiFetch<DocumentSummary[]>(`/api/v1/tenders/${id}/documents`),
-      fetchDceSectionData(id),
-      fetchAnalysisSectionData(id),
-      fetchAnalysisCapabilities(id),
       fetchTenderSuggestions(id),
       getCurrentMembershipRole(),
       appApiFetch<TenderCockpit>(`/api/v1/tenders/${id}/cockpit`),
@@ -150,10 +132,16 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       appApiFetch<ClientPortfolioPage<ClientAccountSummary>>("/api/v1/clients?limit=100&status=ACTIVE").then((page) => page.items),
       fetchGoNoGoReport(id),
       fetchTenderGoNoGoDecisions(id),
+      fetchCandidateCompanies().then((page) => page.items),
     ]);
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
+
+  // Checkpoint 2.1-A5 — best-effort, jamais bloquant (même discipline que ResolveCandidateIdentityUseCase
+  // côté backend) : un Tender legacy (candidateCompanyId absent) ou une CandidateCompany depuis
+  // archivée ne doit jamais faire échouer l'affichage de la fiche Tender.
+  const currentCandidateCompany = tender.candidateCompanyId ? await fetchCandidateCompanyOrNull(tender.candidateCompanyId) : null;
 
   const navTabs = buildTenderNavTabs(tender.id);
 
@@ -182,29 +170,35 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       <CompletenessSection completeness={profile.completeness} />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <CandidateSection
+        <ClientSection
           tenderId={tender.id}
           status={tender.status}
           currentClientAccountId={tender.clientAccountId}
           currentClientName={profile.candidate.name}
           accessibleClients={accessibleClients}
-          canChange={canChangeTenderCandidate(role)}
+          canChange={canChangeTenderClient(role)}
         />
-        <Card title="Acheteur">
-          {profile.buyer ? (
-            <div className="text-sm text-tenderos-navy">
-              <p className="font-semibold">{profile.buyer.name}</p>
-              {profile.buyer.city ? <p className="text-xs text-tenderos-slate">{profile.buyer.city}</p> : null}
-              {profile.buyer.siret ? <p className="text-xs text-tenderos-slate">SIRET : {profile.buyer.siret}</p> : null}
-            </div>
-          ) : (
-            <p className="text-sm text-tenderos-slate">{tender.buyerName ?? "Aucun acheteur structuré rattaché."}</p>
-          )}
-          <p className="mt-2 text-xs text-tenderos-slate">
-            Modifiable depuis « Modifier les informations de l&apos;appel d&apos;offres » ci-dessous.
-          </p>
-        </Card>
+        <CandidateCompanySection
+          tenderId={tender.id}
+          status={tender.status}
+          currentCandidateCompany={currentCandidateCompany}
+          availableCandidateCompanies={availableCandidateCompanies}
+          canChange={canChangeTenderCandidateCompany(role)}
+        />
       </div>
+
+      <Card title="Acheteur">
+        {profile.buyer ? (
+          <div className="text-sm text-tenderos-navy">
+            <p className="font-semibold">{profile.buyer.name}</p>
+            {profile.buyer.city ? <p className="text-xs text-tenderos-slate">{profile.buyer.city}</p> : null}
+            {profile.buyer.siret ? <p className="text-xs text-tenderos-slate">SIRET : {profile.buyer.siret}</p> : null}
+          </div>
+        ) : (
+          <p className="text-sm text-tenderos-slate">{tender.buyerName ?? "Aucun acheteur structuré rattaché."}</p>
+        )}
+        <p className="mt-2 text-xs text-tenderos-slate">Modifiable depuis « Modifier les informations de l&apos;appel d&apos;offres » ci-dessous.</p>
+      </Card>
 
       {tender.status !== "ARCHIVED" ? <StatusChangeForm tenderId={tender.id} status={tender.status} /> : null}
 
@@ -236,23 +230,12 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <LotsSection tenderId={tender.id} lots={lots} canManage={canManageTenderLots(role)} />
-        <ChecklistSection tenderId={tender.id} items={checklistItems} lots={lots} progress={checklistProgress} />
         <CriteriaSection tenderId={tender.id} criteria={criteria} />
         <RequestedDocumentsSection tenderId={tender.id} documents={requestedDocuments} />
         <DocumentsSection tenderId={tender.id} documents={documents} canManage={canUploadOrEditDocument(role)} />
-        <DceSection
-          tenderId={tender.id}
-          dce={dceSection.dce}
-          documents={dceSection.documents}
-          canManage={canImportOrReplaceDceDocument(role)}
-          canDelete={canDeleteDceDocument(role)}
-          canAnalyze={canTriggerAnalysis(role)}
-          analysisCapability={analysisCapabilities.find((c) => c.taskType === "ANALYZE_DOCUMENT")}
-        />
         <MilestonesSection tenderId={tender.id} milestones={milestones} />
         <RisksSection tenderId={tender.id} risks={risks} />
         <AlertsSection tenderId={tender.id} alerts={alerts} />
-        <AnalysisSection tenderId={tender.id} initialData={analysisData} canTrigger={canTriggerAnalysis(role)} />
         <AiSuggestionsSection tenderId={tender.id} initialSuggestions={aiSuggestions} canManage={canManageAiSuggestions(role)} />
         <GoNoGoSection
           tenderId={tender.id}

@@ -24,6 +24,13 @@ export type FinalApprovalProps = {
   status: FinalApprovalStatus;
   invalidatedAt?: Date | undefined;
   invalidatedReason?: string | undefined;
+  /** Checkpoint 2.1-P2.1-FIX-E — provenance minimale du dossier métier résolu au moment de
+   *  l'approbation (voir `validation-freshness.ts`), `undefined` pour toute ligne écrite avant ce
+   *  checkpoint. */
+  candidateCompanyId?: string | undefined;
+  analysisVersion?: number | undefined;
+  dceRevision?: number | undefined;
+  technicalMemoRevisionFingerprint?: string | undefined;
 };
 
 /**
@@ -52,6 +59,10 @@ export class FinalApproval {
     nextStatus?: string | undefined;
     occurredAt: Date;
     currentIssues: readonly ValidationIssue[];
+    candidateCompanyId?: string | undefined;
+    analysisVersion?: number | undefined;
+    dceRevision?: number | undefined;
+    technicalMemoRevisionFingerprint?: string | undefined;
   }): FinalApproval {
     const openBlocking = input.currentIssues.filter((issue) => issue.isBlocking && issue.isOpen);
     if (openBlocking.length > 0) {
@@ -72,6 +83,10 @@ export class FinalApproval {
       previousStatus: input.previousStatus,
       nextStatus: input.nextStatus,
       status: FinalApprovalStatus.Active,
+      candidateCompanyId: input.candidateCompanyId,
+      analysisVersion: input.analysisVersion,
+      dceRevision: input.dceRevision,
+      technicalMemoRevisionFingerprint: input.technicalMemoRevisionFingerprint,
     });
   }
 
@@ -141,5 +156,17 @@ export class FinalApproval {
   }
   get invalidatedReason(): string | undefined {
     return this.props.invalidatedReason;
+  }
+  get candidateCompanyId(): string | undefined {
+    return this.props.candidateCompanyId;
+  }
+  get analysisVersion(): number | undefined {
+    return this.props.analysisVersion;
+  }
+  get dceRevision(): number | undefined {
+    return this.props.dceRevision;
+  }
+  get technicalMemoRevisionFingerprint(): string | undefined {
+    return this.props.technicalMemoRevisionFingerprint;
   }
 }

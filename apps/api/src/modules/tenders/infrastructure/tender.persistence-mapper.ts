@@ -11,6 +11,7 @@ export type TenderPersistenceData = {
   id: string;
   organizationId: string;
   clientAccountId: string;
+  candidateCompanyId: string | null;
   title: string;
   reference: string | null;
   buyerName: string | null;
@@ -63,6 +64,7 @@ export class TenderPersistenceMapper {
       id: TenderId.from(record.id),
       organizationId: record.organizationId,
       clientAccountId: record.clientAccountId,
+      candidateCompanyId: record.candidateCompanyId ?? undefined,
       title: record.title,
       reference: record.reference ?? undefined,
       buyerName: record.buyerName ?? undefined,
@@ -115,6 +117,7 @@ export class TenderPersistenceMapper {
       id: tender.id.value,
       organizationId: tender.organizationId,
       clientAccountId: tender.clientAccountId,
+      candidateCompanyId: tender.candidateCompanyId ?? null,
       title: tender.title,
       reference: tender.reference ?? null,
       buyerName: tender.buyerName ?? null,

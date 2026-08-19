@@ -189,6 +189,8 @@ describe("Administrative Dossier — V2 Sprint 11 DC1 real official form fill (r
     await prisma.documentVersion.deleteMany({ where: { organizationId: orgId } });
     await prisma.document.deleteMany({ where: { organizationId: orgId } });
     await prisma.tender.deleteMany({ where: { organizationId: orgId } });
+    await prisma.candidateEstablishment.deleteMany({ where: { organizationId: orgId } });
+    await prisma.candidateCompany.deleteMany({ where: { organizationId: orgId } });
     await prisma.clientAssignment.deleteMany({ where: { organizationId: orgId } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: orgId } });
     await prisma.auditLog.deleteMany({ where: { organizationId: orgId } });
@@ -304,7 +306,10 @@ describe("Administrative Dossier — V2 Sprint 11 DC1 real official form fill (r
     const zip2 = await JSZip.loadAsync(Buffer.from(await download2.arrayBuffer()));
     const xml2 = await zip2.file("word/document.xml")?.async("string");
     expect(xml2).toContain("renommee");
-  });
+  }, 15000); // Checkpoint 2.1-A4 — deux générations DOCX réelles + un PATCH + deux téléchargements
+  // dans un seul test ; déjà proche du timeout par défaut (5000ms) avant A4, désormais dépassé par
+  // l'appel best-effort supplémentaire à ResolveCandidateIdentityUseCase dans les résolveurs DC1/
+  // DC2/DC4 (une lecture Prisma en plus par génération, jamais un N+1 — mission §71).
 
   it("BLOCKING (correctif audit Codex P2 — concurrence) — two simultaneous first-time generate calls on the SAME tender never create two independent lineages", async () => {
     const { tenderId } = await createClientTenderAndCandidate({ tradeName: "Toiture Bernard SARL", siret: "35600000000048" });
@@ -323,6 +328,60 @@ describe("Administrative Dossier — V2 Sprint 11 DC1 real official form fill (r
     expect(lineageCount).toBe(1);
     const revisions = await prisma.generatedDocumentRevision.findMany({ where: { organizationId: orgId, generatedDocumentId: bodyA.id }, orderBy: { revisionNumber: "asc" } });
     expect(revisions.map((r) => r.revisionNumber)).toEqual([1, 2]);
+  });
+
+  it("BLOCKING (audit post-A4, correctif P2-01) — a Tender linked to a CandidateCompany resolves candidate.tradeName/siret/address from CandidateCompany, NEVER from the ClientAccount's legal identity, even when they differ", async () => {
+    const { clientAccountId, tenderId } = await createClientTenderAndCandidate({ tradeName: "Client Legacy Legal SARL", siret: "35600000000048" });
+
+    const candidateCompany = await prisma.candidateCompany.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        name: "Candidate Moderne SAS",
+        nameNormalized: "candidate moderne sas",
+        legalName: "Candidate Moderne SAS",
+        siren: "789000000",
+        status: "ACTIVE",
+        createdBy: contributorUserId,
+      },
+    });
+    await prisma.candidateEstablishment.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        candidateCompanyId: candidateCompany.id,
+        siret: "78900000000029",
+        isPrincipal: true,
+        addressLine: "9 avenue du Candidat",
+        postalCode: "69000",
+        city: "Lyon",
+        country: "FR",
+        createdBy: contributorUserId,
+      },
+    });
+    await prisma.tender.update({ where: { id_organizationId: { id: tenderId, organizationId: orgId } }, data: { candidateCompanyId: candidateCompany.id } });
+
+    const readinessRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/official-forms/dc1/readiness`, { headers: jsonHeaders(tokenOwner) });
+    expect(readinessRes.status).toBe(200);
+    const readiness = (await readinessRes.json()) as { fields: { fieldKey: string; status: string; value?: unknown }[] };
+    expect(readiness.fields.find((f) => f.fieldKey === "candidate.tradeName")).toMatchObject({ status: "AVAILABLE", value: "Candidate Moderne SAS" });
+    expect(readiness.fields.find((f) => f.fieldKey === "candidate.siret")).toMatchObject({ status: "AVAILABLE", value: "78900000000029" });
+    expect(readiness.fields.find((f) => f.fieldKey === "candidate.address")?.value).toContain("9 avenue du Candidat");
+    // email/phone n'existent pas sur CandidateCompany — restent toujours résolus depuis
+    // legalIdentity (mission A4 §11, discipline "aucun champ inventé"), donc disponibles ici via
+    // la fiche legalIdentity du ClientAccount, contrairement à tradeName/siret/address ci-dessus.
+    expect(readiness.fields.find((f) => f.fieldKey === "candidate.email")).toMatchObject({ status: "AVAILABLE", value: "contact@example.test" });
+
+    const generateRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/official-forms/dc1/generate`, { method: "POST", headers: jsonHeaders(tokenOwner) });
+    expect(generateRes.status).toBe(201);
+    const generated = (await generateRes.json()) as { revisions: { artifactDocumentId?: string }[] };
+    const downloadRes = await fetch(`${baseUrl}/api/v1/documents/${generated.revisions[0]!.artifactDocumentId}/download`, { headers: jsonHeaders(tokenOwner) });
+    const zip = await JSZip.loadAsync(Buffer.from(await downloadRes.arrayBuffer()));
+    const documentXml = await zip.file("word/document.xml")?.async("string");
+    expect(documentXml).toContain("Candidate Moderne SAS");
+    expect(documentXml).not.toContain("Client Legacy Legal SARL");
+
+    void clientAccountId;
   });
 
   it("BLOCKING — a contributor without a client assignment on this Tender's client cannot read or generate the DC1 form (never leaks existence — 404, same convention as document-generation's own cross-client tests)", async () => {

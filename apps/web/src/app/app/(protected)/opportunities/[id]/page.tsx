@@ -13,8 +13,11 @@ import {
   type OpportunityQuickScore,
 } from "../../../../../lib/opportunity-types";
 import { fetchOpportunityDecisions, fetchOpportunityQuickScore } from "../../../opportunity-actions";
+import { canManageCandidateCompany, type CandidateCompanySummary } from "../../../../../lib/candidate-company-types";
+import { fetchCandidateCompanies, fetchCandidateCompanyOrNull } from "../../../candidate-company-actions";
 import { ApiErrorState } from "../../api-error-state";
 import { ArchiveOpportunityButton } from "./archive-opportunity-button";
+import { OpportunityCandidateCompanySection } from "./candidate-company-section";
 import { OpportunityDecisionSection } from "./opportunity-decision-section";
 import { OpportunityQuickScoreSection } from "./opportunity-quick-score-section";
 import { OpportunityStatusForm } from "./opportunity-status-form";
@@ -29,17 +32,22 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
   let quickScore: OpportunityQuickScore | null;
   let decisions: GoNoGoDecision[];
   let role: string | undefined;
+  let availableCandidateCompanies: CandidateCompanySummary[];
 
   try {
-    [opportunity, quickScore, decisions, role] = await Promise.all([
+    [opportunity, quickScore, decisions, role, availableCandidateCompanies] = await Promise.all([
       appApiFetch<Opportunity>(`/api/v1/opportunities/${id}`),
       fetchOpportunityQuickScore(id),
       fetchOpportunityDecisions(id),
       getCurrentMembershipRole(),
+      fetchCandidateCompanies().then((page) => page.items),
     ]);
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
+
+  // Checkpoint 2.1-A5 — best-effort, jamais bloquant (voir la même discipline sur la fiche Tender).
+  const currentCandidateCompany = opportunity.candidateCompanyId ? await fetchCandidateCompanyOrNull(opportunity.candidateCompanyId) : null;
 
   const canManage = canManageOpportunity(role);
   const canDecide = canRecordGoNoGoDecision(role);
@@ -55,10 +63,10 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
           </p>
           {opportunity.clientAccountId ? (
             <Link href={`/app/clients/${opportunity.clientAccountId}`} className="text-sm text-neutral-700 hover:underline">
-              Voir l&apos;entreprise candidate →
+              Voir le client →
             </Link>
           ) : (
-            <p className="text-sm italic text-amber-700">Aucune entreprise candidate rattachée — score et décision restent possibles, avec confiance réduite.</p>
+            <p className="text-sm italic text-amber-700">Aucun client rattaché — score et décision restent possibles, avec confiance réduite.</p>
           )}
         </div>
         <div className="flex items-center gap-3">
@@ -103,6 +111,12 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
           <h2 className="text-xs font-semibold uppercase text-neutral-500">Référence externe</h2>
           <p className="text-sm text-neutral-900">{opportunity.externalReference ?? "—"}</p>
         </div>
+        <OpportunityCandidateCompanySection
+          opportunityId={opportunity.id}
+          currentCandidateCompany={currentCandidateCompany}
+          availableCandidateCompanies={availableCandidateCompanies}
+          canManage={canManage && canManageCandidateCompany(role)}
+        />
       </section>
 
       {canManage && opportunity.status !== "ARCHIVED" ? <OpportunityStatusForm opportunityId={opportunity.id} status={opportunity.status} /> : null}

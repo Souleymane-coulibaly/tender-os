@@ -151,6 +151,14 @@ export class ImportDceFilesUseCase {
             return { kind: "duplicate" as const, duplicate };
           }
 
+          // Checkpoint 2.1-P2.1-FIX-A (mission §6, correctif audit — P1 "incrément best-effort
+          // après coup peut masquer un vrai changement") — la révision avance AVANT toute création,
+          // et son échec PROPAGE (jamais avalé) : soit rien n'est encore créé (retry sûr — le
+          // doublon n'existe pas encore, un nouvel essai repart proprement), soit la révision a
+          // avancé et la création suit. Si LA CRÉATION échoue ensuite, le pire état résiduel est
+          // "révision avancée sans document réel créé" (faux STALE, sans danger) — jamais l'inverse.
+          await this.dceRepository.incrementRevision({ organizationId: command.organizationId, dceId: dce.id.value });
+
           const documentSummary = await this.createDocumentWithFirstVersionUseCase.execute({
             organizationId: command.organizationId,
             actorId: command.actorId,

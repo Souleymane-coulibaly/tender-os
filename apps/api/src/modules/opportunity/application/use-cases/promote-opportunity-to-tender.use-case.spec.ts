@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ConsumeAoCreditUseCase } from "../../../billing";
+import { GetCandidateCompanyUseCase } from "../../../candidate-company";
+import { CreateCandidateCompanyUseCase } from "../../../candidate-company/application/use-cases/create-candidate-company.use-case";
+import {
+  FixedClock as CandidateFixedClock,
+  InMemoryAuditLogWriter as CandidateInMemoryAuditLogWriter,
+  InMemoryCandidateCompanyRepository,
+} from "../../../candidate-company/test-support/fakes";
+import { UuidGenerator } from "../../../../shared-kernel/id-generator";
 import { ClientAccountNotFoundError } from "../../../client-portfolio";
 import { CreateTenderUseCase, GetTenderUseCase } from "../../../tenders";
 import {
@@ -45,6 +53,13 @@ async function buildHarness() {
   const clientPortfolio = await createClientPortfolioTestFixture(ORG);
 
   const consumeAoCreditUseCase = { execute: vi.fn(async () => {}) } as unknown as ConsumeAoCreditUseCase;
+  const candidateCompanyRepository = new InMemoryCandidateCompanyRepository();
+  const createCandidateCompanyUseCase = new CreateCandidateCompanyUseCase(
+    candidateCompanyRepository,
+    new CandidateInMemoryAuditLogWriter(),
+    new CandidateFixedClock(),
+    new UuidGenerator(),
+  );
   const createTenderUseCase = new CreateTenderUseCase(
     tenderRepository,
     buyerRepository,
@@ -56,6 +71,7 @@ async function buildHarness() {
     clientPortfolio.getClientAccountUseCase,
     clientPortfolio.assertClientAccessUseCase,
     consumeAoCreditUseCase,
+    new GetCandidateCompanyUseCase(candidateCompanyRepository),
   );
   const getTenderUseCase = new GetTenderUseCase(tenderRepository, clientPortfolio.assertClientAccessUseCase);
 
@@ -73,7 +89,7 @@ async function buildHarness() {
     getTenderUseCase,
   );
 
-  return { opportunityRepository, decisionRepository, tenderRepository, auditLogWriter, outboxWriter, useCase, clock, clientPortfolio };
+  return { opportunityRepository, decisionRepository, tenderRepository, auditLogWriter, outboxWriter, useCase, clock, clientPortfolio, createCandidateCompanyUseCase };
 }
 
 function qualifiedOpportunity(overrides: Partial<Parameters<typeof Opportunity.create>[0]> = {}): Opportunity {
@@ -108,6 +124,31 @@ describe("PromoteOpportunityToTenderUseCase", () => {
     const persistedTender = await tenderRepository.findById({ organizationId: ORG, tenderId: result.tender.id });
     expect(persistedTender).not.toBeNull();
     expect(persistedTender?.title).toBe("Marché de nettoyage");
+  });
+
+  it("propagates candidateCompanyId from the Opportunity to the promoted Tender (Checkpoint 2.1-A3 §13)", async () => {
+    const { opportunityRepository, decisionRepository, useCase, tenderRepository, createCandidateCompanyUseCase } = await buildHarness();
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: "user-1", name: "Alpha SARL" });
+    const opportunity = qualifiedOpportunity({ candidateCompanyId: candidate.id });
+    await opportunityRepository.seed(opportunity);
+    await decisionRepository.create({ id: "d1", organizationId: ORG, level: GoNoGoDecisionLevel.Opportunity, opportunityId: opportunity.id.value, decision: GoNoGoDecisionValue.Go, actorId: "user-1", decidedAt: new Date() });
+
+    const result = await useCase.execute({ organizationId: ORG, opportunityId: opportunity.id.value, ...ACTOR });
+
+    expect(result.tender.candidateCompanyId).toBe(candidate.id);
+    const persistedTender = await tenderRepository.findById({ organizationId: ORG, tenderId: result.tender.id });
+    expect(persistedTender?.candidateCompanyId).toBe(candidate.id);
+  });
+
+  it("promotes without a candidateCompanyId when the Opportunity never had one — never invents one (Checkpoint 2.1-A3 §14/§22)", async () => {
+    const { opportunityRepository, decisionRepository, useCase } = await buildHarness();
+    const opportunity = qualifiedOpportunity();
+    await opportunityRepository.seed(opportunity);
+    await decisionRepository.create({ id: "d1", organizationId: ORG, level: GoNoGoDecisionLevel.Opportunity, opportunityId: opportunity.id.value, decision: GoNoGoDecisionValue.Go, actorId: "user-1", decidedAt: new Date() });
+
+    const result = await useCase.execute({ organizationId: ORG, opportunityId: opportunity.id.value, ...ACTOR });
+
+    expect(result.tender.candidateCompanyId).toBeUndefined();
   });
 
   it("refuses promotion when the latest decision is NO_GO (no derogation this sprint)", async () => {

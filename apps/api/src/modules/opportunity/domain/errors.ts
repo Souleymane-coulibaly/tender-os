@@ -121,6 +121,18 @@ export class GoNoGoReportNotFoundError extends DomainError {
   }
 }
 
+/** Checkpoint 2.1-P2.1-FIX-C (mission §28-29) — un GO/NO-GO ne peut jamais être généré/recalculé
+ *  à partir d'une analyse qui n'est pas `CURRENT` (STALE ou UNKNOWN bloquent tous les deux, mission
+ *  §37 "ne pas produire un faux GO/NO-GO CURRENT" — choix conservateur : bloquer plutôt que produire
+ *  un rapport dont la fraîcheur ne pourrait jamais être prouvée). L'utilisateur doit d'abord
+ *  actualiser l'analyse (refresh DCE -> réanalyse) avant de pouvoir recalculer. */
+export class GoNoGoAnalysisNotCurrentError extends DomainError {
+  readonly code = "GO_NO_GO_ANALYSIS_NOT_CURRENT";
+  constructor() {
+    super("The GO/NO-GO report cannot be generated while the source analysis is not CURRENT. Refresh the DCE analysis first.");
+  }
+}
+
 export class OpportunityQuickScoreNotFoundError extends DomainError {
   readonly code = "OPPORTUNITY_QUICK_SCORE_NOT_FOUND";
   constructor() {

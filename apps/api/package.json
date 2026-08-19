@@ -18,6 +18,7 @@
     "db:init:staging": "pnpm run db:migrate:deploy && pnpm run db:seed && pnpm run db:seed:staging",
     "bootstrap:platform-owner": "tsx prisma/bootstrap-platform-owner.ts",
     "eval:compliance": "tsx scripts/compliance-probe.cli.ts",
+    "candidate-company:backfill": "nest build && node dist/modules/candidate-company/migration/backfill-from-client-accounts.cli.js",
     "postinstall": "prisma generate"
   },
   "prisma": {

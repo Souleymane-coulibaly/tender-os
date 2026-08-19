@@ -1,14 +1,28 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { AnalysisFreshness } from "../../domain/analysis-freshness";
 import {
   TENDER_ANALYSIS_SUMMARY_REVISION_REPOSITORY,
   type TenderAnalysisSummaryRevisionRepository,
 } from "../ports/tender-analysis-summary-revision.repository";
-import type { TenderAnalysisSummaryRecord } from "../ports/business-analysis.repository";
-import { GetTenderBusinessAnalysisUseCase, type GetTenderBusinessAnalysisQuery } from "./get-tender-business-analysis.use-case";
+import { GetTenderBusinessAnalysisUseCase, type GetTenderBusinessAnalysisQuery, type TenderBusinessAnalysisWithFreshness } from "./get-tender-business-analysis.use-case";
+
+// Réexporté pour les consommateurs historiques de ce fichier (mission — jamais casser un import
+// existant) — la définition canonique vit désormais dans `../../domain/analysis-freshness.ts`,
+// partagée avec `GetTenderBusinessAnalysisUseCase` sans import circulaire entre les deux use cases.
+export { AnalysisFreshness };
+export { computeAnalysisFreshness } from "../../domain/analysis-freshness";
 
 export type EffectiveTenderAnalysisSummary = Readonly<{
   id: string;
   analysisVersion: number;
+  /** Checkpoint 2.1-P2.1-FIX-A — `Dce.revision` au moment de la persistance, `undefined` pour une
+   *  ligne écrite avant ce checkpoint. Voir `analysisFreshness` pour la comparaison déjà faite avec
+   *  la révision DCE courante. */
+  dceRevision?: number | undefined;
+  /** Checkpoint 2.1-P2.1-FIX-A — reprend TEL QUEL `analysisFreshness` déjà calculé par
+   *  `GetTenderBusinessAnalysisUseCase` (même fonction pure `computeAnalysisFreshness`, jamais un
+   *  second calcul divergent) — jamais persistée, voir sa documentation. */
+  analysisFreshness: AnalysisFreshness;
   opportunitySummary: string;
   complexityLevel: string;
   mainCriteria: readonly string[];
@@ -63,7 +77,7 @@ export class GetEffectiveTenderAnalysisSummaryUseCase {
   }
 
   private merge(
-    base: TenderAnalysisSummaryRecord,
+    base: TenderBusinessAnalysisWithFreshness,
     latestRevision: Awaited<ReturnType<TenderAnalysisSummaryRevisionRepository["listByBaseSummaryId"]>>[number] | undefined,
   ): EffectiveTenderAnalysisSummary {
     if (!latestRevision) {
@@ -73,6 +87,8 @@ export class GetEffectiveTenderAnalysisSummaryUseCase {
     return {
       id: base.id,
       analysisVersion: base.analysisVersion,
+      dceRevision: base.dceRevision,
+      analysisFreshness: base.analysisFreshness,
       opportunitySummary: latestRevision.opportunitySummary ?? base.opportunitySummary,
       complexityLevel: latestRevision.complexityLevel ?? base.complexityLevel,
       mainCriteria: latestRevision.mainCriteria ?? base.mainCriteria,

@@ -36,6 +36,12 @@ export type PersistTenderConsolidationInput = Readonly<{
    *  → `documentVersionId` reste `null` sur cette ligne (dégradation silencieuse de la provenance
    *  uniquement, jamais un blocage de la persistance). */
   documentVersionsByDocumentId: Readonly<Record<string, string | undefined>>;
+  /** Checkpoint 2.1-P2.1-FIX-A — `Dce.revision` lue UNE SEULE FOIS par l'appelant
+   *  (`BusinessAnalysisContentResolver`, même point de résolution que `documentVersionsByDocumentId`
+   *  ci-dessus), jamais recalculée après coup. `undefined` si aucun Dce n'existe pour ce Tender
+   *  (dégradation silencieuse — jamais un blocage de la persistance d'une consolidation par ailleurs
+   *  valide). */
+  dceRevision?: number | undefined;
 }>;
 
 export type DocumentAnalysisRecord = Readonly<{
@@ -181,6 +187,10 @@ export type QuestionFindingRecord = Readonly<{
 export type TenderAnalysisSummaryRecord = Readonly<{
   id: string;
   analysisVersion: number;
+  /** Checkpoint 2.1-P2.1-FIX-A — `Dce.revision` au moment de la persistance de CETTE synthèse.
+   *  `undefined` pour toute ligne écrite avant ce checkpoint (colonne additive nullable) — jamais
+   *  une précision historique fabriquée (mission §22). */
+  dceRevision?: number | undefined;
   opportunitySummary: string;
   complexityLevel: string;
   mainCriteria: readonly string[];

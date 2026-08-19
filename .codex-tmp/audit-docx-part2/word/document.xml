@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/wordprocessingShape" mc:Ignorable="w14 wp14">
+  <w:body>
+<w:p><w:r><w:t xml:space="preserve">TenderOS 2.1 - Global Functional Audit - Part 2</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Coverage Completion</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Date: 2026-08-18</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Mode: strict read-only</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Executive Summary</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Verdict: FUNCTIONALLY BROAD AND MOSTLY CONNECTED, BUT NOT YET A FULLY PROVEN SINGLE PRODUCTION CHAIN.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">This Part 2 confirms that TenderOS now contains a real end-to-end product surface across market watch, opportunities, tenders, DCE, analysis, checklist, administrative dossier, pricing, technical memo, document generation, validation, response package, submission/export, integrations, billing and AI configuration.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">The product is not a hollow shell anymore: the backend exposes dedicated controllers and use cases for each major stage, and the frontend contains corresponding protected pages and sections. That said, this audit remains a code-and-structure audit, not a full production replay. The repository demonstrates a credible business chain, but some links remain hybrid, partially parallel, or not fully proven in one frozen release snapshot.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Git Initial State</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">BRANCH: v2/redesign-ui...origin/v2/redesign-ui</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">WORKTREE: dirty. 79 tracked files changed, 1622 insertions, 315 deletions in current diff stat.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">STAGED: none detected (git diff --cached --stat empty).</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">UNTRACKED: includes candidate-company module, 3 Prisma migrations, new tender/opportunity/web surfaces, tests, images, staging config and local audit artifacts.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Scope of Part 2</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">This report intentionally does not re-audit A1 to A6.4 in depth. CandidateCompany, CandidateEstablishment, checklist/go-no-go candidate migration and technical memo candidate identity are treated here only when they participate in the broader business workflow.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Master Product Flow - Real Coverage</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">1. Market Watch exists as a real entry point. Evidence: market-watch saved searches and external tenders controllers expose listing, status, matches and promote endpoints, including POST market-watch/external-tenders/:externalTenderId/promote.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">2. Opportunity is a real intermediate business object. Evidence: opportunities controller supports create, list, update, status, archive, quick-score, go-no-go decisions and promote.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">3. Tender is a real central aggregate. Evidence: tenders controller exposes create, list, board, stats, profile, readiness, history, checklist, criteria, requested documents, milestones, risks, alerts and candidate assignment endpoints.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">4. DCE intake is real. Evidence: dce controller exposes POST tenders/:tenderId/dce, POST documents, POST import-zip, import job status, document list, update, category patch, download and delete.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">5. Analysis is real and fine-grained. Evidence: analysis controller exposes analysis creation, retry/cancel, latest summary, deadlines, criteria, clauses, requirements, risks, questions, map-suggestions and revisions.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">6. Consolidation exists, but as distributed features rather than one explicit consolidated module name. Evidence: analysis revisions, AI suggestion mapping, tender checklist/criteria/requested-document surfaces, cockpit/workspace UI sections.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">7. Lots and requirements are real. Evidence: tender-lots controller plus tenders controller criteria and requested-documents subflows.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">8. GO/NO-GO is real on both opportunity and tender paths. Evidence: opportunity go-no-go decisions and tender go-no-go report/decisions controllers.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">9. Checklist is real and connected. Evidence: tenders controller checklist endpoints plus checklist-intelligence controller for AI document matching, attaching, detaching and reconcile.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">10. Administrative dossier is real and deep. Evidence: administrative-dossier controllers cover dossier lifecycle, requirements, checklist, administrative documents, consortium, DC1, DC2, DUME, subcontractors, engagement act, signing powers and official-form generation/PDF flows.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">11. Chiffrage is real in two layers. Evidence: pricing controller for pricing estimates and summary; pricing-schedule controllers for extracted BPU/DPGF-like workbook flows, line edits, controls, validation and final file generation.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">12. Technical Memo is real. Evidence: tender-technical-memos and technical-memos controllers cover create, prepare, map, section generation, coverage, validation, edit and export.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">13. Generated documents are real. Evidence: tender-document-generation and generated-documents controllers cover list, generate, regenerate and revision download.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">14. Validation is real and positioned before final approval. Evidence: validation controller exposes run, get, readiness, resolve/reopen issue, final-approval and reopen.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">15. Response Package is real. Evidence: tender-response-packages, response-packages and package-artifacts controllers cover create, build, qualify items, attach documents, completeness, validate, generate and download package versions.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">16. Submission / final deposit is real. Evidence: submission controller exposes readiness, capabilities, start submission, create submission, proofs, receipt confirmation, replacement, withdrawal, cancel and reject.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">17. Export final is real. Evidence: export controller exposes export capabilities, preview, list, get and download.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Cross-Cutting Product Coverage</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Collaboration: dedicated workspace module and chat module are present in AppModule; notifications module and notification event consumers are also wired globally.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Knowledge Base / Response Library: knowledge-base module is present; generated documents, deliverables and export template surfaces show reusable content and output management rather than a single isolated editor.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Integration Hub / API Keys / Webhooks / Connectors: integrations and connectors modules are present in AppModule, with explicit webhook delivery worker and API/webhook pages under the protected frontend tree.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Billing / Quotas / Subscription: billing module, quota threshold consumers, subscription-usage module and checkout/plan catalog/entitlement override controllers are present.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">AI Catalog / Routing / Benchmark: AiBenchmarkModule and RoutingPolicyBridgeModule are globally imported; ai-configuration protected routes exist for models, routing policies, recommendations, benchmarks and prompts.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Observability / Outbox / Events: OutboxModule.forRoot is the single assembly point for integration, notification and quota threshold handlers. This is a strong structural sign of product-level event flow rather than disconnected modules.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Onboarding / Organizations / Identity / Permissions: identity, organizations and memberships modules are present globally; earlier staging diagnostics already showed onboarding exists as a real product path, even if not re-executed in this Part 2.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Tenant isolation: repeated use of AuthenticatedGuard and OrganizationMembershipGuard across audited controllers strongly indicates organization scoping as a default discipline.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Audit trail: many mutation use cases emit explicit action/resourceType metadata, especially visible in pricing-schedule and other previously audited modules; the repo uses action-oriented audit patterns rather than ad hoc logs.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Storage: document download endpoints, generated artifact endpoints, DCE upload/download and connector/storage modules show storage is a first-class concern, not a mock-only concept.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">What Is Strongly Confirmed</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- TenderOS has a genuine multi-stage AO pipeline in code. The chain is no longer fragmented into unrelated sprint demos.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- The backend naming and controller surface mostly match the product narrative from detection to final package/export.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- AI is embedded at multiple stages: analysis, checklist suggestions, technical memo, document generation, routing and benchmark configuration.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- Billing and quota governance are not bolted on externally; they are integrated into the application module graph.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">What Remains Partially Hybrid or Not Fully Proven</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F1 - Full single-path unification is still not strictly proven. The repository exposes both modernized candidate flows and legacy client/company-profile dependencies. This was already true in Part 1 and remains true when viewing the full product chain.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F2 - The business chain is broad, but some transitions are product-level compositions rather than a single orchestrated saga. Example: consolidation spans analysis revisions, suggestions, checklist and workspace surfaces rather than one explicit consolidation aggregate.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F3 - DCE refresh / synchronization is only partially demonstrated by controller naming and module presence in this read-only pass. DCE intake is clear; refresh semantics need deeper targeted audit if they are critical for go-live.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F4 - Response finalization exists through validation, response package, submission and export modules, but this audit does not prove one single non-branching happy path enforced by the domain. It proves capability presence and strong product intent.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">F5 - Because the worktree is dirty, this is still not a release-candidate proof. It is a structural and functional coherence audit over an in-progress integration tree.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Overall Product Answer</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Can TenderOS 2.1 realistically execute an end-to-end tender workflow from detection to final dossier production on coherent sources of truth?</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Answer: mostly yes at the product-architecture and functional-surface level; not yet fully yes as a zero-reserve production proof.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Why yes: every major step now exists with concrete backend endpoints and matching frontend areas. The repo reflects one product much more than a collection of isolated sprint artifacts.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Why not fully yes: some source-of-truth boundaries are still hybrid, some transitions are distributed across modules rather than enforced in a single business spine, and the current audit was performed on a dirty integration tree rather than a clean frozen candidate.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Operational Status</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Status recommendation: READY FOR NEXT TARGETED GLOBAL RE-AUDITS, NOT YET READY FOR CLAIM OF COMPLETE V2.1 PRODUCT UNIFICATION WITHOUT QUALIFIERS.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Recommended Next Audit Waves</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Wave P2-1: targeted deep audit of DCE refresh/synchronization and analysis re-entry behavior.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Wave P2-2: targeted deep audit of finalization chain from validated assets to response package to submission/export proof artifacts.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Wave P2-3: targeted deep audit of billing/quotas versus AI-intensive workflows under real feature gating.</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">Wave P2-4: clean-snapshot audit once the integration worktree stabilizes.</w:t></w:r></w:p>
+<w:p/>
+<w:p><w:r><w:t xml:space="preserve">Primary Proof Files</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/app.module.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/market-watch/interfaces/http/saved-searches.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/market-watch/interfaces/http/external-tenders.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/opportunity/interfaces/http/opportunities.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/opportunity/interfaces/http/go-no-go.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/tenders/interfaces/http/tenders.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/tenders/interfaces/http/tender-lots.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/dce/interfaces/http/dce.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/analysis/interfaces/http/analysis.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/checklist-intelligence/interfaces/http/checklist-intelligence.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/administrative-dossier/interfaces/http/administrative-dossier.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/administrative-dossier/interfaces/http/administrative-dossier-structured.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/administrative-dossier/interfaces/http/administrative-dossier-form-fill.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/pricing/interfaces/http/pricing.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/pricing-schedule/interfaces/http/tender-pricing-schedules.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/pricing-schedule/interfaces/http/pricing-schedules.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/technical-memo/interfaces/http/tender-technical-memos.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/technical-memo/interfaces/http/technical-memos.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/document-generation/interfaces/http/tender-document-generation.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/validation/interfaces/http/validation.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/response-package/interfaces/http/response-packages.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/submission/interfaces/http/submission.controller.ts</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">- apps/api/src/modules/export/interfaces/http/export.controller.ts</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>
