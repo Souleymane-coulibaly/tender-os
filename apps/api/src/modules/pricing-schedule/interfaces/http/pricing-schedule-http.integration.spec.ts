@@ -139,6 +139,7 @@ describe("Chiffrage (pricing-schedule) — real HTTP + PostgreSQL (NestJS)", () 
     await prisma.documentVersion.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.document.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.tender.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.candidateCompany.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAssignment.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -388,6 +389,54 @@ describe("Chiffrage (pricing-schedule) — real HTTP + PostgreSQL (NestJS)", () 
       body: JSON.stringify({ sourceDocumentId: bpu.documentId }),
     });
     expect(second.status).toBe(409);
+  });
+
+  /** TENDEROS-2.1-P2.2-E1 (correctif audit baseline P1, mission §12/§36/§37) — deux entreprises
+   *  candidates RÉELLEMENT distinctes ("CLIENT COMMERCIAL X" ≠ "CANDIDAT A"/"CANDIDAT B", mission
+   *  §15 "ne jamais utiliser des fixtures où Client et Candidate ont le même nom") peuvent chacune
+   *  avoir leur propre chiffrage pour le MÊME (Tender, fichier source) sans être bloquées comme un
+   *  faux doublon — la duplicate-detection est désormais scopée par `candidateCompanyId`, jamais par
+   *  `clientAccountId` (toujours identique pour les deux, donc jamais réellement discriminant).
+   *  Preuve directe (mission §36) que `CreatePricingScheduleUseCase` résout `candidateCompanyId`
+   *  depuis `Tender.candidateCompanyId`, jamais depuis le ClientAccount commercial. */
+  it("TEST 12 — multi-candidate: two distinct CandidateCompany can each hold their own pricing schedule for the same Tender/source document, never a false duplicate", async () => {
+    const { tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    const bpu = await importBpuDocument({ tenderId, token: tokenOwnerA, organizationId: orgAId });
+
+    const candidateA = await prisma.candidateCompany.create({
+      data: { id: randomUUID(), organizationId: orgAId, name: "CANDIDAT A", nameNormalized: "candidat a", status: "ACTIVE", createdBy: ownerAUserId },
+    });
+    await prisma.tender.update({ where: { id: tenderId }, data: { candidateCompanyId: candidateA.id } });
+
+    const createdForA = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/pricing-schedules`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ sourceDocumentId: bpu.documentId }),
+    });
+    expect(createdForA.status).toBe(201);
+    const scheduleA = (await createdForA.json()) as { id: string; candidateCompanyId?: string };
+
+    const candidateB = await prisma.candidateCompany.create({
+      data: { id: randomUUID(), organizationId: orgAId, name: "CANDIDAT B", nameNormalized: "candidat b", status: "ACTIVE", createdBy: ownerAUserId },
+    });
+    await prisma.tender.update({ where: { id: tenderId }, data: { candidateCompanyId: candidateB.id } });
+
+    // AVANT ce checkpoint, cette requête aurait échoué en 409 (doublon) : les deux chiffrages
+    // partagent le même Tender/ClientAccount, seule leur CandidateCompany diffère.
+    const createdForB = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/pricing-schedules`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ sourceDocumentId: bpu.documentId }),
+    });
+    expect(createdForB.status).toBe(201);
+    const scheduleB = (await createdForB.json()) as { id: string; candidateCompanyId?: string };
+
+    expect(scheduleA.id).not.toBe(scheduleB.id);
+
+    const persistedA = await prisma.pricingSchedule.findUniqueOrThrow({ where: { id: scheduleA.id } });
+    const persistedB = await prisma.pricingSchedule.findUniqueOrThrow({ where: { id: scheduleB.id } });
+    expect(persistedA.candidateCompanyId).toBe(candidateA.id);
+    expect(persistedB.candidateCompanyId).toBe(candidateB.id);
   });
 
   it("refuses generating a financial file before the version is validated", async () => {

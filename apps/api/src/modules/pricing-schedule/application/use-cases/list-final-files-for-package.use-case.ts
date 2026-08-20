@@ -5,7 +5,11 @@ import { PricingScheduleAccessService } from "../services/pricing-schedule-acces
 import { PRICING_SCHEDULE_FINAL_FILE_REPOSITORY, type PricingScheduleFinalFileRepository } from "../ports/pricing-schedule-final-file.repository";
 import { PRICING_SCHEDULE_REPOSITORY, type PricingScheduleRepository } from "../ports/pricing-schedule.repository";
 
-export type ListFinalFilesForPackageQuery = Readonly<{ organizationId: string; actorId: string; actorRole: string; tenderId: string; clientAccountId: string }>;
+/** TENDEROS-2.1-P2.2-E1 (correctif audit baseline P1) — `candidateCompanyId`, jamais
+ *  `clientAccountId` : le chiffrage soumis à l'acheteur appartient à l'entreprise CANDIDATE, pas au
+ *  client commercial (voir `PricingSchedule.candidateCompanyId`). `undefined` (Tender sans candidate
+ *  résolue) retourne toujours `[]` — jamais un fallback vers un autre candidat/vers le client. */
+export type ListFinalFilesForPackageQuery = Readonly<{ organizationId: string; actorId: string; actorRole: string; tenderId: string; candidateCompanyId: string | undefined }>;
 
 /** Un fichier financier final déjà généré (BPU/DPGF/DQE), prêt à être inclus dans un dossier de
  *  réponse — jamais un chiffrage non encore généré (mission §38 "ne doivent être requis que
@@ -22,8 +26,10 @@ export type PricingScheduleFinalFileForPackage = Readonly<{
 /**
  * Sprint 14 — port en LECTURE SEULE réexporté pour `response-package` (même motif que
  * `ListValidatedAdministrativeDocumentsForPackageUseCase`/`ListValidatedTechnicalMemosForPackageUseCase`).
- * Scopé au CANDIDATE demandeur (mission §69/§81 "jamais mélanger silencieusement deux candidats") —
- * ne retourne jamais un chiffrage d'un autre `clientAccountId`.
+ * TENDEROS-2.1-P2.2-E1 (correctif audit baseline P1) — scopé au CANDIDATE réel (mission §69/§81
+ * "jamais mélanger silencieusement deux candidats") : ne retourne jamais un chiffrage d'une autre
+ * `candidateCompanyId`, jamais un fallback silencieux vers `clientAccountId` (le client commercial
+ * n'est plus l'autorité de provenance candidate depuis ce checkpoint).
  */
 @Injectable()
 export class ListFinalFilesForPackageUseCase {
@@ -42,7 +48,14 @@ export class ListFinalFilesForPackageUseCase {
       clientPermission: ClientPermission.ReadPricingSchedule,
     });
 
-    const schedules = await this.scheduleRepository.list({ organizationId: query.organizationId, tenderId: query.tenderId, clientAccountId: query.clientAccountId });
+    // Mission §22 — aucune CandidateCompany résolue pour ce Tender : aucun chiffrage ne peut lui
+    // être attribué, jamais une substitution silencieuse (ex. vers le client commercial ou un autre
+    // candidat historique).
+    if (query.candidateCompanyId === undefined) {
+      return [];
+    }
+
+    const schedules = await this.scheduleRepository.list({ organizationId: query.organizationId, tenderId: query.tenderId, candidateCompanyId: query.candidateCompanyId });
     const result: PricingScheduleFinalFileForPackage[] = [];
 
     for (const schedule of schedules) {

@@ -11,6 +11,9 @@ export type PersistedTenderSubmission = {
   packageVersion: number;
   packageHash: string;
   manifestHash: string | null;
+  responsePackageVersionId: string | null;
+  responsePackageArtifactId: string | null;
+  responsePackageArtifactChecksum: string | null;
   status: string;
   submittedByUserId: string | null;
   submittedAt: Date | null;
@@ -45,6 +48,9 @@ export function toDomainTenderSubmission(record: PersistedTenderSubmission): Ten
     packageVersion: record.packageVersion,
     packageHash: record.packageHash,
     manifestHash: record.manifestHash ?? undefined,
+    responsePackageVersionId: record.responsePackageVersionId ?? undefined,
+    responsePackageArtifactId: record.responsePackageArtifactId ?? undefined,
+    responsePackageArtifactChecksum: record.responsePackageArtifactChecksum ?? undefined,
     status: record.status as TenderSubmissionStatus,
     submittedByUserId: record.submittedByUserId ?? undefined,
     submittedAt: record.submittedAt ?? undefined,
@@ -80,6 +86,9 @@ export function toTenderSubmissionRow(submission: TenderSubmission) {
     packageVersion: submission.packageVersion,
     packageHash: submission.packageHash,
     manifestHash: submission.manifestHash ?? null,
+    responsePackageVersionId: submission.responsePackageVersionId ?? null,
+    responsePackageArtifactId: submission.responsePackageArtifactId ?? null,
+    responsePackageArtifactChecksum: submission.responsePackageArtifactChecksum ?? null,
     status: submission.status,
     submittedByUserId: submission.submittedByUserId ?? null,
     submittedAt: submission.submittedAt ?? null,

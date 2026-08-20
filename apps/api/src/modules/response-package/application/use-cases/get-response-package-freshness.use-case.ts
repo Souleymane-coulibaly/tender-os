@@ -49,14 +49,18 @@ export class GetResponsePackageFreshnessUseCase {
       return { freshness: ResponsePackageFreshness.Unknown, currentVersionId: undefined, currentVersionNumber: pkg.currentVersionNumber };
     }
 
-    const [version, persistedItems, tender, candidateContext, adminDocs, technicalMemos, finalFiles, checklistItems] = await Promise.all([
+    // TENDEROS-2.1-P2.2-E1 — `tender` doit être résolu AVANT `listFinalFilesForPackageUseCase` (qui
+    // a désormais besoin de `tender.candidateCompanyId`, jamais de `pkg.clientAccountId`) : ne peut
+    // plus faire partie du même `Promise.all` que les appels qui en dépendent.
+    const tender = await this.getTenderUseCase.execute({ organizationId: query.organizationId, tenderId: pkg.tenderId, actorId: query.actorId, actorRole: query.actorRole });
+
+    const [version, persistedItems, candidateContext, adminDocs, technicalMemos, finalFiles, checklistItems] = await Promise.all([
       this.versionRepository.findById({ organizationId: query.organizationId, responsePackageVersionId: pkg.currentVersionId }),
       this.itemRepository.listByVersion({ organizationId: query.organizationId, responsePackageVersionId: pkg.currentVersionId }),
-      this.getTenderUseCase.execute({ organizationId: query.organizationId, tenderId: pkg.tenderId, actorId: query.actorId, actorRole: query.actorRole }),
       this.getCandidateContextForPackageUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: pkg.tenderId }),
       this.listValidatedAdministrativeDocumentsForPackageUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: pkg.tenderId }),
       this.listValidatedTechnicalMemosForPackageUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: pkg.tenderId }),
-      this.listFinalFilesForPackageUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: pkg.tenderId, clientAccountId: pkg.clientAccountId }),
+      this.listFinalFilesForPackageUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: pkg.tenderId, candidateCompanyId: tender.candidateCompanyId }),
       this.checklistItemRepository.listByTender({ organizationId: query.organizationId, tenderId: pkg.tenderId }),
     ]);
 

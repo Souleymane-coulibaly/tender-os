@@ -21,11 +21,22 @@ export type CreateResponsePackageCommand = Readonly<{
 }>;
 
 /**
- * Enregistre le PÉRIMÈTRE d'un dossier de réponse (mission §8 "Tender + Lot + Candidate") — cette
- * étape ne collecte encore aucune pièce, elle se contente de déclarer le périmètre DRAFT sans
- * version. La collecte réelle (Checklist + dossier administratif + mémoire technique + chiffrage)
- * est un second temps séparé — voir `BuildResponsePackageVersionUseCase`, même découpage en deux
- * étapes que `CreatePricingScheduleUseCase`/`ExtractPricingScheduleVersionUseCase` (Sprint 13).
+ * Enregistre le PÉRIMÈTRE d'un dossier de réponse (mission §8 "Tender + Lot") — cette étape ne
+ * collecte encore aucune pièce, elle se contente de déclarer le périmètre DRAFT sans version. La
+ * collecte réelle (Checklist + dossier administratif + mémoire technique + chiffrage) est un
+ * second temps séparé — voir `BuildResponsePackageVersionUseCase`, même découpage en deux étapes
+ * que `CreatePricingScheduleUseCase`/`ExtractPricingScheduleVersionUseCase` (Sprint 13).
+ *
+ * TENDEROS-2.1-P2.2-F1.1 (audit Codex F1, décision explicite — voir rapport final "CANDIDATE_SCOPE_DECISION")
+ * — `ResponsePackage` (ce conteneur) est scopé Tender+Lot+ClientAccount, PAS CandidateCompany :
+ * `clientAccountId` ici sert exclusivement le RBAC/scope commercial (`ClientPermission`), jamais
+ * l'identité candidate. Un changement de CandidateCompany sur le Tender ne crée JAMAIS un nouveau
+ * conteneur — il rend la version COURANTE STALE (`GetResponsePackageFreshnessUseCase`, FIX-E) et un
+ * rebuild produit une NOUVELLE `ResponsePackageVersion` sur ce MÊME conteneur, dont
+ * `candidateCompanyId` capture alors la candidate réellement courante (mission §10 "chaque version
+ * fige au minimum la CandidateCompany utilisée au build"). C'est la version, jamais le conteneur,
+ * qui porte la provenance candidate — même discipline que `PricingSchedule`/`ResponsePackageVersion`
+ * (P2.2-E1/FIX-E) : jamais deux sources de vérité candidate concurrentes.
  */
 @Injectable()
 export class CreateResponsePackageUseCase {

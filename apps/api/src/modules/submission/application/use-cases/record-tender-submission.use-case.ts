@@ -6,11 +6,13 @@ import { TenderSubmission } from "../../domain/tender-submission.aggregate";
 import {
   ActiveTenderSubmissionAlreadyExistsError,
   CustomPlatformNameRequiredError,
+  ResponsePackageArtifactMissingError,
   SubmissionDeadlinePassedError,
   SubmissionPackageVersionMismatchError,
   TenderNotReadyForSubmissionError,
 } from "../../domain/errors";
 import { SubmissionReadinessReasonSeverity } from "../../domain/submission-readiness-reason";
+import { GetSubmittableResponsePackageVersionUseCase, type SubmittableResponsePackageVersion } from "../../../response-package";
 import { requiresCustomPlatformName, type SubmissionPlatform } from "../../domain/submission-platform";
 import { TenderSubmissionStatus } from "../../domain/tender-submission-status";
 import { toTenderSubmissionSummary, type TenderSubmissionSummary } from "../dtos";
@@ -57,11 +59,33 @@ export class RecordTenderSubmissionUseCase {
     private readonly accessService: SubmissionAccessService,
     private readonly packageResolver: SubmissionPackageResolverService,
     private readonly getReadinessUseCase: GetTenderSubmissionReadinessUseCase,
+    private readonly getSubmittableResponsePackageVersionUseCase: GetSubmittableResponsePackageVersionUseCase,
     @Inject(TENDER_SUBMISSION_REPOSITORY) private readonly submissionRepository: TenderSubmissionRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
   ) {}
+
+  /**
+   * Checkpoint TENDEROS-2.1-P2.2-F2.1 (ferme le gap identifié par l'audit F2 : SEUL le flux direct
+   * `record()` appelait ce resolver, jamais le flux `start()->recordFromInProgress()`, alors que ce
+   * dernier finalise lui aussi un dépôt réel) — résolution UNIQUE, partagée par les deux branches
+   * ci-dessous, jamais dupliquée (mission §7 "réutiliser le SOT existant"). Même sémantique que F2 :
+   * `AMBIGUOUS_OR_ABSENT` reste silencieux (legacy continue) ; `ARTIFACT_MISSING` refuse proprement
+   * (mission §67).
+   */
+  private async resolveResponsePackageProvenance(command: {
+    organizationId: string;
+    actorId: string;
+    actorRole: string;
+    tenderId: string;
+  }): Promise<SubmittableResponsePackageVersion | undefined> {
+    const resolution = await this.getSubmittableResponsePackageVersionUseCase.execute(command);
+    if (resolution.status === "ARTIFACT_MISSING") {
+      throw new ResponsePackageArtifactMissingError();
+    }
+    return resolution.status === "RESOLVED" ? resolution : undefined;
+  }
 
   async execute(command: RecordTenderSubmissionCommand): Promise<TenderSubmissionSummary> {
     const tender = await this.accessService.assertTenderAccess({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: command.tenderId, permission: ClientPermission.ManageSubmission });
@@ -99,6 +123,7 @@ export class RecordTenderSubmissionUseCase {
       // jamais accepter silencieusement un package obsolète parce qu'il correspond simplement au
       // package pinné au démarrage.
       await this.packageResolver.resolveExactPackage({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: command.tenderId, packageId: active.packageId });
+      const inProgressResponsePackageVersion = await this.resolveResponsePackageProvenance({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: command.tenderId });
       active.recordFromInProgress({
         submittedByUserId: command.actorId,
         submittedAt: command.submittedAt,
@@ -107,6 +132,9 @@ export class RecordTenderSubmissionUseCase {
         platformReference: command.platformReference,
         receiptReference: command.receiptReference,
         notes: command.notes,
+        responsePackageVersionId: inProgressResponsePackageVersion?.responsePackageVersionId,
+        responsePackageArtifactId: inProgressResponsePackageVersion?.artifactId,
+        responsePackageArtifactChecksum: inProgressResponsePackageVersion?.artifactChecksum,
         occurredAt,
       });
       await this.submissionRepository.save(active);
@@ -120,6 +148,15 @@ export class RecordTenderSubmissionUseCase {
 
     const resolvedPackage = await this.packageResolver.resolveExactPackage({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: command.tenderId, packageId: command.packageId });
 
+    // Checkpoint TENDEROS-2.1-P2.2-F2 — provenance ADDITIVE du dossier de réponse V2 (mission §11
+    // "réutiliser le snapshot déjà généré, jamais reconstruire le ZIP ici"), figée au moment du
+    // dépôt, jamais recalculée. `AMBIGUOUS_OR_ABSENT` (0/plusieurs dossiers, Tender multi-lot, ou
+    // version courante non validée) laisse ce champ vide — le dépôt legacy continue alors
+    // normalement, jamais bloqué pour cette seule raison (mission §16 "ne pas supprimer/bloquer le
+    // legacy sans preuve"). `ARTIFACT_MISSING` (mission §67) est en revanche une résolution SANS
+    // AMBIGUÏTÉ dont le seul défaut est l'absence de ZIP généré — refus propre, jamais silencieux.
+    const resolvedResponsePackageVersion = await this.resolveResponsePackageProvenance({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: command.tenderId });
+
     const submission = TenderSubmission.record({
       id: this.idGenerator.generate(),
       organizationId: command.organizationId,
@@ -128,6 +165,9 @@ export class RecordTenderSubmissionUseCase {
       packageVersion: resolvedPackage.packageVersion,
       packageHash: resolvedPackage.packageHash,
       manifestHash: resolvedPackage.manifestHash,
+      responsePackageVersionId: resolvedResponsePackageVersion?.responsePackageVersionId,
+      responsePackageArtifactId: resolvedResponsePackageVersion?.artifactId,
+      responsePackageArtifactChecksum: resolvedResponsePackageVersion?.artifactChecksum,
       submittedByUserId: command.actorId,
       submittedAt: command.submittedAt,
       platform: command.platform,

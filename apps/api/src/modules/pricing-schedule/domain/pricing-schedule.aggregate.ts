@@ -6,6 +6,9 @@ export type PricingScheduleProps = {
   tenderId: string;
   lotId?: string | undefined;
   clientAccountId: string;
+  /** TENDEROS-2.1-P2.2-E1 — `Tender.candidateCompanyId` au moment de la création, jamais réévalué
+   *  (voir docstring de classe). `undefined` pour un chiffrage LEGACY ou un Tender sans candidate. */
+  candidateCompanyId?: string | undefined;
   financialDocumentType: FinancialDocumentType;
   sourceDocumentId: string;
   sourceDocumentVersionId: string;
@@ -31,6 +34,7 @@ export class PricingSchedule {
     tenderId: string;
     lotId?: string | undefined;
     clientAccountId: string;
+    candidateCompanyId?: string | undefined;
     financialDocumentType: FinancialDocumentType;
     sourceDocumentId: string;
     sourceDocumentVersionId: string;
@@ -43,6 +47,7 @@ export class PricingSchedule {
       tenderId: input.tenderId,
       lotId: input.lotId,
       clientAccountId: input.clientAccountId,
+      candidateCompanyId: input.candidateCompanyId,
       financialDocumentType: input.financialDocumentType,
       sourceDocumentId: input.sourceDocumentId,
       sourceDocumentVersionId: input.sourceDocumentVersionId,
@@ -100,6 +105,9 @@ export class PricingSchedule {
   }
   get clientAccountId(): string {
     return this.props.clientAccountId;
+  }
+  get candidateCompanyId(): string | undefined {
+    return this.props.candidateCompanyId;
   }
   get financialDocumentType(): FinancialDocumentType {
     return this.props.financialDocumentType;

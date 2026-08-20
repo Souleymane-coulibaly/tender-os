@@ -115,3 +115,16 @@ export class DocumentNotUsableForSubmissionProofError extends DomainError {
     super(`Ce document ne peut pas être utilisé comme preuve de dépôt : ${reason}`);
   }
 }
+
+/** Checkpoint TENDEROS-2.1-P2.2-F2, mission §67 — un unique dossier de réponse V2 existe pour ce
+ *  Tender, sa version courante est validée, mais AUCUN artefact (ZIP) n'a jamais été généré pour
+ *  elle. Distinct du cas "ambiguïté structurelle" (0 ou plusieurs dossiers — non-bloquant, le
+ *  legacy continue) : ici la résolution est SANS AMBIGUÏTÉ, donc l'absence de fichier réel est une
+ *  anomalie qui doit refuser proprement le dépôt plutôt que de le laisser silencieusement dépourvu
+ *  de provenance V2. */
+export class ResponsePackageArtifactMissingError extends DomainError {
+  readonly code = "RESPONSE_PACKAGE_ARTIFACT_MISSING";
+  constructor() {
+    super("Le dossier de réponse est validé mais aucun fichier n'a été généré pour cette version. Générez le fichier avant d'enregistrer le dépôt.");
+  }
+}

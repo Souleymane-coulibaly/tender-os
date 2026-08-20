@@ -7,6 +7,7 @@ type PricingScheduleRow = {
   tenderId: string;
   lotId: string | null;
   clientAccountId: string;
+  candidateCompanyId: string | null;
   financialDocumentType: string;
   sourceDocumentId: string;
   sourceDocumentVersionId: string;
@@ -25,6 +26,7 @@ export function toDomainPricingSchedule(record: PricingScheduleRow): PricingSche
     tenderId: record.tenderId,
     lotId: record.lotId ?? undefined,
     clientAccountId: record.clientAccountId,
+    candidateCompanyId: record.candidateCompanyId ?? undefined,
     financialDocumentType: record.financialDocumentType as FinancialDocumentType,
     sourceDocumentId: record.sourceDocumentId,
     sourceDocumentVersionId: record.sourceDocumentVersionId,
@@ -44,6 +46,7 @@ export function toPricingScheduleRow(schedule: PricingSchedule) {
     tenderId: schedule.tenderId,
     lotId: schedule.lotId ?? null,
     clientAccountId: schedule.clientAccountId,
+    candidateCompanyId: schedule.candidateCompanyId ?? null,
     financialDocumentType: schedule.financialDocumentType,
     sourceDocumentId: schedule.sourceDocumentId,
     sourceDocumentVersionId: schedule.sourceDocumentVersionId,

@@ -58,25 +58,32 @@ export class InMemoryPricingScheduleRepository implements PricingScheduleReposit
   async findById(input: { organizationId: string; pricingScheduleId: string }): Promise<PricingSchedule | null> {
     return this.schedules.find((s) => s.id === input.pricingScheduleId && s.organizationId === input.organizationId) ?? null;
   }
-  async findByScope(input: { organizationId: string; tenderId: string; lotId: string | null; clientAccountId: string; sourceDocumentId: string }): Promise<PricingSchedule | null> {
+  async findByScope(input: { organizationId: string; tenderId: string; lotId: string | null; candidateCompanyId: string | undefined; sourceDocumentId: string }): Promise<PricingSchedule | null> {
     return (
       this.schedules.find(
         (s) =>
           s.organizationId === input.organizationId &&
           s.tenderId === input.tenderId &&
           (s.lotId ?? null) === input.lotId &&
-          s.clientAccountId === input.clientAccountId &&
+          (s.candidateCompanyId ?? undefined) === input.candidateCompanyId &&
           s.sourceDocumentId === input.sourceDocumentId,
       ) ?? null
     );
   }
-  async list(input: { organizationId: string; tenderId: string; lotId?: string | undefined; clientAccountId?: string | undefined }): Promise<readonly PricingSchedule[]> {
+  async list(input: {
+    organizationId: string;
+    tenderId: string;
+    lotId?: string | undefined;
+    clientAccountId?: string | undefined;
+    candidateCompanyId?: string | undefined;
+  }): Promise<readonly PricingSchedule[]> {
     return this.schedules.filter(
       (s) =>
         s.organizationId === input.organizationId &&
         s.tenderId === input.tenderId &&
         (input.lotId === undefined || s.lotId === input.lotId) &&
-        (input.clientAccountId === undefined || s.clientAccountId === input.clientAccountId),
+        (input.clientAccountId === undefined || s.clientAccountId === input.clientAccountId) &&
+        (input.candidateCompanyId === undefined || s.candidateCompanyId === input.candidateCompanyId),
     );
   }
 }

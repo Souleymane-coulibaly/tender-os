@@ -5086,6 +5086,17 @@ model TenderSubmission {
   packageHash    String  @map("package_hash") @db.VarChar(64)
   manifestHash   String? @map("manifest_hash") @db.VarChar(64)
 
+  /// Checkpoint TENDEROS-2.1-P2.2-F2 — dossier de réponse V2 (`response-package`) réellement soumis,
+  /// dénormalisé en LECTURE SEULE (même discipline que `packageId` ci-dessus), jamais une FK stricte
+  /// inter-module. `NULL` pour une soumission antérieure à ce checkpoint OU pour un Tender dont le
+  /// dossier V2 n'était pas résolvable sans ambiguïté au moment du dépôt (voir
+  /// `GetSubmittableResponsePackageVersionUseCase`) — jamais deviné/backfillé. Le checksum figé ici
+  /// est celui de `PackageArtifact.checksum` au moment du dépôt, jamais recalculé depuis les sources
+  /// courantes (mission §33).
+  responsePackageVersionId        String? @map("response_package_version_id") @db.Uuid
+  responsePackageArtifactId       String? @map("response_package_artifact_id") @db.Uuid
+  responsePackageArtifactChecksum String? @map("response_package_artifact_checksum") @db.VarChar(64)
+
   /// SUBMISSION_IN_PROGRESS | SUBMITTED | RECEIPT_CONFIRMED | SUBMISSION_REJECTED | WITHDRAWN |
   /// REPLACED | CANCELLED — CHECK (migration). NOT_SUBMITTED/READY_FOR_SUBMISSION ne sont jamais
   /// persistés (calculés avant qu'aucune ligne n'existe, mission §7).
@@ -5139,6 +5150,7 @@ model TenderSubmission {
   @@index([packageId])
   @@index([supersedesSubmissionId])
   @@index([replacedBySubmissionId])
+  @@index([responsePackageVersionId])
   @@map("tender_submissions")
 }
 
@@ -6789,8 +6801,19 @@ model PricingSchedule {
 
   lotId String? @map("lot_id") @db.Uuid
 
-  /// Mission §69 — jamais réutilisé aveuglément entre deux candidates du même Tender.
+  /// Client commercial (RBAC/scoping — mission TENDEROS-2.1-P2.2-E1 §2 "reste légitime pour
+  /// ownership commercial/permissions") — n'est PLUS l'identité candidate depuis ce checkpoint, voir
+  /// `candidateCompanyId` ci-dessous.
   clientAccountId String @map("client_account_id") @db.Uuid
+
+  /// Checkpoint TENDEROS-2.1-P2.2-E1 (correctif audit baseline P1) — `Tender.candidateCompanyId`
+  /// résolu au moment de la CRÉATION de ce chiffrage, même motif que
+  /// `ResponsePackageVersion.candidateCompanyId` (Checkpoint 2.1-P2.1-FIX-E) : `NULL` pour tout
+  /// chiffrage créé avant ce checkpoint ou pour un Tender LEGACY FLOW sans candidate résolue —
+  /// jamais devinée/backfillée depuis `clientAccountId`, jamais réévaluée après création. C'est
+  /// désormais CETTE colonne, jamais `clientAccountId`, qui scope la résolution des fichiers
+  /// financiers finaux pour le Response Package (`ListFinalFilesForPackageUseCase`).
+  candidateCompanyId String? @map("candidate_company_id") @db.Uuid
 
   /// BPU | DPGF | DQE | OTHER_FINANCIAL_SCHEDULE — CHECK (migration).
   financialDocumentType String @map("financial_document_type") @db.VarChar(30)
@@ -6820,6 +6843,7 @@ model PricingSchedule {
   /// distinct dans un index unique classique.
   @@index([organizationId, tenderId])
   @@index([organizationId, clientAccountId])
+  @@index([organizationId, candidateCompanyId])
   @@map("pricing_schedules")
 }
 

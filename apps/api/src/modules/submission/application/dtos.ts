@@ -32,6 +32,11 @@ export type TenderSubmissionSummary = {
   packageVersion: number;
   packageHash: string;
   manifestHash?: string | undefined;
+  /** TENDEROS-2.1-P2.2-F2 — dossier de réponse V2 réellement soumis, `undefined` si non résolvable
+   *  sans ambiguïté au moment du dépôt (voir `GetSubmittableResponsePackageVersionUseCase`). */
+  responsePackageVersionId?: string | undefined;
+  responsePackageArtifactId?: string | undefined;
+  responsePackageArtifactChecksum?: string | undefined;
   status: string;
   submittedByUserId?: string | undefined;
   submittedAt?: string | undefined;
@@ -66,6 +71,9 @@ export function toTenderSubmissionSummary(submission: TenderSubmission, proofs: 
     packageVersion: submission.packageVersion,
     packageHash: submission.packageHash,
     manifestHash: submission.manifestHash,
+    responsePackageVersionId: submission.responsePackageVersionId,
+    responsePackageArtifactId: submission.responsePackageArtifactId,
+    responsePackageArtifactChecksum: submission.responsePackageArtifactChecksum,
     status: submission.status,
     submittedByUserId: submission.submittedByUserId,
     submittedAt: submission.submittedAt?.toISOString(),

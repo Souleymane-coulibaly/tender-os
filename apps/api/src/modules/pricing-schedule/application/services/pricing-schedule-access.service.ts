@@ -43,8 +43,17 @@ export class PricingScheduleAccessService {
   }
 
   /** Vérifie l'accès au Tender SANS exiger qu'un chiffrage existe déjà — utilisé par
-   *  `CreatePricingScheduleUseCase`/`ListPricingSchedulesUseCase`. */
-  async assertTenderAccess(input: { organizationId: string; actorId: string; actorRole: string; tenderId: string; permission: ClientPermission }): Promise<string> {
+   *  `CreatePricingScheduleUseCase`/`ListPricingSchedulesUseCase`/`ListFinalFilesForPackageUseCase`.
+   *  TENDEROS-2.1-P2.2-E1 — retourne aussi `candidateCompanyId` (jamais recalculé/deviné ailleurs) :
+   *  `clientAccountId` reste l'autorité RBAC/scoping client, `candidateCompanyId` devient l'autorité
+   *  de provenance candidate pour tout ce qui est soumis à l'acheteur (mission §2/§6). */
+  async assertTenderAccess(input: {
+    organizationId: string;
+    actorId: string;
+    actorRole: string;
+    tenderId: string;
+    permission: ClientPermission;
+  }): Promise<{ clientAccountId: string; candidateCompanyId: string | undefined }> {
     const tender = await this.getTenderUseCase.execute({
       organizationId: input.organizationId,
       tenderId: input.tenderId,
@@ -58,6 +67,6 @@ export class PricingScheduleAccessService {
       actorRole: input.actorRole,
       permission: input.permission,
     });
-    return tender.clientAccountId;
+    return { clientAccountId: tender.clientAccountId, candidateCompanyId: tender.candidateCompanyId };
   }
 }

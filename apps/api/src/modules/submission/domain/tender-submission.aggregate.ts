@@ -13,6 +13,13 @@ export type TenderSubmissionProps = {
   packageVersion: number;
   packageHash: string;
   manifestHash?: string | undefined;
+  /** Checkpoint TENDEROS-2.1-P2.2-F2 — dossier de réponse V2 réellement soumis, figé à la création,
+   *  jamais recalculé (même discipline que `packageId` ci-dessus). `undefined` pour une soumission
+   *  antérieure à ce checkpoint ou pour un Tender dont le dossier V2 n'était pas résolvable sans
+   *  ambiguïté (voir `GetSubmittableResponsePackageVersionUseCase`). */
+  responsePackageVersionId?: string | undefined;
+  responsePackageArtifactId?: string | undefined;
+  responsePackageArtifactChecksum?: string | undefined;
   status: TenderSubmissionStatus;
   submittedByUserId?: string | undefined;
   submittedAt?: Date | undefined;
@@ -56,6 +63,9 @@ export class TenderSubmission {
     packageVersion: number;
     packageHash: string;
     manifestHash?: string | undefined;
+    responsePackageVersionId?: string | undefined;
+    responsePackageArtifactId?: string | undefined;
+    responsePackageArtifactChecksum?: string | undefined;
     submittedByUserId: string;
     submittedAt: Date;
     platform: SubmissionPlatform;
@@ -74,6 +84,9 @@ export class TenderSubmission {
       packageVersion: input.packageVersion,
       packageHash: input.packageHash,
       manifestHash: input.manifestHash,
+      responsePackageVersionId: input.responsePackageVersionId,
+      responsePackageArtifactId: input.responsePackageArtifactId,
+      responsePackageArtifactChecksum: input.responsePackageArtifactChecksum,
       status: TenderSubmissionStatus.Submitted,
       submittedByUserId: input.submittedByUserId,
       submittedAt: input.submittedAt,
@@ -143,6 +156,13 @@ export class TenderSubmission {
     platformReference?: string | undefined;
     receiptReference?: string | undefined;
     notes?: string | undefined;
+    /** Checkpoint TENDEROS-2.1-P2.2-F2.1 — ferme le gap identifié par l'audit F2 (le flux
+     *  start()->recordFromInProgress() finalisait un dépôt réel sans jamais capturer la
+     *  provenance V2, contrairement au flux direct `record()`). Mêmes champs, même discipline
+     *  (figés à l'instant T, `undefined` si non résolvable sans ambiguïté). */
+    responsePackageVersionId?: string | undefined;
+    responsePackageArtifactId?: string | undefined;
+    responsePackageArtifactChecksum?: string | undefined;
     occurredAt: Date;
   }): void {
     this.transitionTo(TenderSubmissionStatus.Submitted, input.occurredAt);
@@ -153,6 +173,9 @@ export class TenderSubmission {
     this.props.platformReference = input.platformReference;
     this.props.receiptReference = input.receiptReference;
     this.props.notes = input.notes;
+    this.props.responsePackageVersionId = input.responsePackageVersionId;
+    this.props.responsePackageArtifactId = input.responsePackageArtifactId;
+    this.props.responsePackageArtifactChecksum = input.responsePackageArtifactChecksum;
   }
 
   updateNotes(input: { notes: string | undefined; occurredAt: Date }): void {
@@ -220,6 +243,15 @@ export class TenderSubmission {
   }
   get manifestHash(): string | undefined {
     return this.props.manifestHash;
+  }
+  get responsePackageVersionId(): string | undefined {
+    return this.props.responsePackageVersionId;
+  }
+  get responsePackageArtifactId(): string | undefined {
+    return this.props.responsePackageArtifactId;
+  }
+  get responsePackageArtifactChecksum(): string | undefined {
+    return this.props.responsePackageArtifactChecksum;
   }
   get status(): TenderSubmissionStatus {
     return this.props.status;

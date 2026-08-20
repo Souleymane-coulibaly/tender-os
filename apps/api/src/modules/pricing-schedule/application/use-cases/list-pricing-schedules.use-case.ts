@@ -28,7 +28,7 @@ export class ListPricingSchedulesUseCase {
   ) {}
 
   async execute(query: ListPricingSchedulesQuery): Promise<readonly PricingSchedule[]> {
-    const clientAccountId = await assertPricingScheduleTenderAccess(this.accessService, {
+    const { clientAccountId } = await assertPricingScheduleTenderAccess(this.accessService, {
       organizationId: query.organizationId,
       tenderId: query.tenderId,
       actorId: query.actorId,

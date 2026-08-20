@@ -5,10 +5,12 @@ import { ClientPermission } from "../../../client-portfolio";
 import { TenderSubmission } from "../../domain/tender-submission.aggregate";
 import {
   CustomPlatformNameRequiredError,
+  ResponsePackageArtifactMissingError,
   SubmissionDeadlinePassedError,
   TenderSubmissionAlreadyReplacedError,
   TenderSubmissionNotFoundError,
 } from "../../domain/errors";
+import { GetSubmittableResponsePackageVersionUseCase } from "../../../response-package";
 import { requiresCustomPlatformName, type SubmissionPlatform } from "../../domain/submission-platform";
 import { TenderSubmissionStatus } from "../../domain/tender-submission-status";
 import { toTenderSubmissionSummary, type TenderSubmissionSummary } from "../dtos";
@@ -42,6 +44,7 @@ export class ReplaceTenderSubmissionUseCase {
   constructor(
     private readonly accessService: SubmissionAccessService,
     private readonly packageResolver: SubmissionPackageResolverService,
+    private readonly getSubmittableResponsePackageVersionUseCase: GetSubmittableResponsePackageVersionUseCase,
     @Inject(TENDER_SUBMISSION_REPOSITORY) private readonly submissionRepository: TenderSubmissionRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -67,6 +70,22 @@ export class ReplaceTenderSubmissionUseCase {
 
     const resolvedPackage = await this.packageResolver.resolveExactPackage({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: previous.tenderId, packageId: command.packageId });
 
+    // Checkpoint TENDEROS-2.1-P2.2-F2.1 (ferme le gap identifié par l'audit F2 : ce flux finalise
+    // un vrai dépôt SUBMITTED via `TenderSubmission.record()` mais n'appelait jamais ce resolver,
+    // contrairement au flux direct `RecordTenderSubmissionUseCase`) — même sémantique exacte :
+    // `AMBIGUOUS_OR_ABSENT` reste silencieux (legacy continue), `ARTIFACT_MISSING` refuse proprement
+    // (mission §67), jamais de recalcul de fraîcheur/validation ici (déjà garanti ailleurs).
+    const responsePackageVersionResolution = await this.getSubmittableResponsePackageVersionUseCase.execute({
+      organizationId: command.organizationId,
+      actorId: command.actorId,
+      actorRole: command.actorRole,
+      tenderId: previous.tenderId,
+    });
+    if (responsePackageVersionResolution.status === "ARTIFACT_MISSING") {
+      throw new ResponsePackageArtifactMissingError();
+    }
+    const resolvedResponsePackageVersion = responsePackageVersionResolution.status === "RESOLVED" ? responsePackageVersionResolution : undefined;
+
     const occurredAt = this.clock.now();
     const next = TenderSubmission.record({
       id: this.idGenerator.generate(),
@@ -76,6 +95,9 @@ export class ReplaceTenderSubmissionUseCase {
       packageVersion: resolvedPackage.packageVersion,
       packageHash: resolvedPackage.packageHash,
       manifestHash: resolvedPackage.manifestHash,
+      responsePackageVersionId: resolvedResponsePackageVersion?.responsePackageVersionId,
+      responsePackageArtifactId: resolvedResponsePackageVersion?.artifactId,
+      responsePackageArtifactChecksum: resolvedResponsePackageVersion?.artifactChecksum,
       submittedByUserId: command.actorId,
       submittedAt: command.submittedAt,
       platform: command.platform,

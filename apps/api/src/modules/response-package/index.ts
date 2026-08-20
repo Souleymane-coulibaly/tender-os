@@ -26,3 +26,8 @@ export type { ListResponsePackagesQuery } from "./application/use-cases/list-res
 export { GetResponsePackageFreshnessUseCase } from "./application/use-cases/get-response-package-freshness.use-case";
 export type { ResponsePackageFreshnessResult } from "./application/use-cases/get-response-package-freshness.use-case";
 export { ResponsePackageFreshness } from "./domain/response-package-freshness";
+
+// Checkpoint TENDEROS-2.1-P2.2-F2 — réexporté pour `submission` (résolution du dossier de réponse
+// V2 réellement soumissible, mission §6), même motif que les exports FIX-F ci-dessus.
+export { GetSubmittableResponsePackageVersionUseCase } from "./application/use-cases/get-submittable-response-package-version.use-case";
+export type { SubmittableResponsePackageVersion, SubmittableResponsePackageVersionResolution } from "./application/use-cases/get-submittable-response-package-version.use-case";

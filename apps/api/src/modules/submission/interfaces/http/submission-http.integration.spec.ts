@@ -239,12 +239,16 @@ describe("Submission — real HTTP + PostgreSQL (NestJS)", () => {
    *  `submission-package` + Dossier de réponse VALIDATED/CURRENT (Lot + item MANDATORY satisfait +
    *  build + validate). Retourne tout ce dont les tests de mutation ont besoin pour casser UNE
    *  dimension à la fois sans re-semer tout le dossier. */
-  async function seedReadyDossier(input: { title: string; submissionDeadline?: Date }): Promise<{
+  async function seedReadyDossier(input: { title: string; submissionDeadline?: Date; skipResponsePackageArtifactGeneration?: boolean }): Promise<{
     tenderId: string;
     dceId: string;
     candidateCompanyId: string;
     lotId: string;
     legacyPackage: { id: string; version: number };
+    responsePackageId: string;
+    responsePackageVersionId: string;
+    responsePackageArtifactId: string | undefined;
+    responsePackageArtifactChecksum: string | undefined;
   }> {
     const localClientId = randomUUID();
     const tenderId = randomUUID();
@@ -339,7 +343,19 @@ describe("Submission — real HTTP + PostgreSQL (NestJS)", () => {
     const validateRes = await fetch(`${baseUrl}/api/v1/response-packages/${rp.id}/versions/${built.version.id}/validate`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
     expect(validateRes.status).toBe(200);
 
-    return { tenderId, dceId, candidateCompanyId, lotId: lot.id, legacyPackage };
+    // Checkpoint TENDEROS-2.1-P2.2-F2 — génère RÉELLEMENT l'artefact ZIP (mission §57 "CURRENT +
+    // validated + artifact") : sans cet appel, `GetSubmittableResponsePackageVersionUseCase`
+    // résoudrait `ARTIFACT_MISSING` (aucun `PackageArtifact` en base) — un dossier "READY" au sens
+    // F2 doit avoir un artefact réellement généré, jamais seulement validé. `skipResponsePackageArtifactGeneration`
+    // (mission §67 TEST MISSING ARTIFACT) laisse volontairement ce cas non résolu pour un test dédié.
+    if (input.skipResponsePackageArtifactGeneration) {
+      return { tenderId, dceId, candidateCompanyId, lotId: lot.id, legacyPackage, responsePackageId: rp.id, responsePackageVersionId: built.version.id, responsePackageArtifactId: undefined, responsePackageArtifactChecksum: undefined };
+    }
+    const generateRpRes = await fetch(`${baseUrl}/api/v1/response-packages/${rp.id}/versions/${built.version.id}/generate`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(generateRpRes.status).toBe(201);
+    const rpArtifact = (await generateRpRes.json()) as { id: string; checksum: string };
+
+    return { tenderId, dceId, candidateCompanyId, lotId: lot.id, legacyPackage, responsePackageId: rp.id, responsePackageVersionId: built.version.id, responsePackageArtifactId: rpArtifact.id, responsePackageArtifactChecksum: rpArtifact.checksum };
   }
 
   it("Checkpoint 2.1-P2.1-FIX-F — E2E (mission §174) : un dossier RÉELLEMENT complet (Candidate + Analyse CURRENT + Checklist réconciliée + Validation CURRENT + Dossier de réponse VALIDATED/CURRENT) est READY_FOR_SUBMISSION, sans AUCUNE raison bloquante", async () => {
@@ -568,8 +584,280 @@ describe("Submission — real HTTP + PostgreSQL (NestJS)", () => {
     });
   });
 
+  describe("Checkpoint TENDEROS-2.1-P2.2-F2 — Response Package V2 connectée à la Submission finale", () => {
+    it("TEST HAPPY PATH V2 (mission §57) — a genuinely READY dossier records provenance pointing exactly at the validated CURRENT ResponsePackageVersion/artifact/checksum", async () => {
+      const seed = await seedReadyDossier({ title: "Marché F2 happy path V2" });
+
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ packageId: seed.legacyPackage.id, platform: "PLACE", submittedAt: new Date().toISOString() }),
+      });
+      expect(res.status).toBe(201);
+      const submission = (await res.json()) as { id: string; status: string; responsePackageVersionId?: string; responsePackageArtifactId?: string; responsePackageArtifactChecksum?: string };
+      expect(submission.status).toBe("SUBMITTED");
+      expect(submission.responsePackageVersionId).toBe(seed.responsePackageVersionId);
+      expect(submission.responsePackageArtifactId).toBe(seed.responsePackageArtifactId);
+      expect(submission.responsePackageArtifactChecksum).toBe(seed.responsePackageArtifactChecksum);
+
+      // Persisté, pas seulement retourné à l'instant T — une relecture réelle le confirme.
+      const getRes = await fetch(`${baseUrl}/api/v1/submissions/${submission.id}`, { headers: authHeaders(tokenOwnerA, orgAId) });
+      const persisted = (await getRes.json()) as { responsePackageVersionId?: string };
+      expect(persisted.responsePackageVersionId).toBe(seed.responsePackageVersionId);
+    });
+
+    it("TEST HISTORICAL PROVENANCE (mission §58) — a later rebuild that moves the ResponsePackage's current version forward leaves the already-recorded Submission's provenance untouched", async () => {
+      const seed = await seedReadyDossier({ title: "Marché F2 provenance historique" });
+
+      const recordRes = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ packageId: seed.legacyPackage.id, platform: "PLACE", submittedAt: new Date().toISOString() }),
+      });
+      expect(recordRes.status).toBe(201);
+      const submission = (await recordRes.json()) as { id: string; responsePackageVersionId?: string };
+      expect(submission.responsePackageVersionId).toBe(seed.responsePackageVersionId);
+
+      // Rebuild réel : une nouvelle version COURANTE (V2) est produite pour le MÊME ResponsePackage
+      // (mission §7 "réutiliser le SOT existant, jamais un nouveau moteur") — le pointeur `currentVersionId`
+      // avance, mais la Submission déjà enregistrée reste figée sur la version qui existait au dépôt.
+      const rebuildRes = await fetch(`${baseUrl}/api/v1/response-packages/${seed.responsePackageId}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+      expect(rebuildRes.status).toBe(201);
+      const rebuilt = (await rebuildRes.json()) as { version: { id: string; versionNumber: number } };
+      expect(rebuilt.version.id).not.toBe(seed.responsePackageVersionId);
+      expect(rebuilt.version.versionNumber).toBeGreaterThan(1);
+
+      const getRes = await fetch(`${baseUrl}/api/v1/submissions/${submission.id}`, { headers: authHeaders(tokenOwnerA, orgAId) });
+      const persisted = (await getRes.json()) as { responsePackageVersionId?: string; responsePackageArtifactId?: string; responsePackageArtifactChecksum?: string };
+      expect(persisted.responsePackageVersionId).toBe(seed.responsePackageVersionId);
+      expect(persisted.responsePackageArtifactId).toBe(seed.responsePackageArtifactId);
+      expect(persisted.responsePackageArtifactChecksum).toBe(seed.responsePackageArtifactChecksum);
+    });
+
+    it("TEST MISSING ARTIFACT (mission §67) — a validated CURRENT ResponsePackageVersion with no generated artifact refuses the deposit cleanly, no Submission persisted", async () => {
+      const seed = await seedReadyDossier({ title: "Marché F2 artefact manquant", skipResponsePackageArtifactGeneration: true });
+
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ packageId: seed.legacyPackage.id, platform: "PLACE", submittedAt: new Date().toISOString() }),
+      });
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as { error: { code: string } };
+      expect(body.error.code).toBe("RESPONSE_PACKAGE_ARTIFACT_MISSING");
+
+      const activeRes = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submission-readiness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+      const active = (await activeRes.json()) as { canSubmit: boolean };
+      // La readiness V2 (FIX-A..E) n'exige que "validated + CURRENT", jamais l'existence d'un
+      // artefact ZIP réellement généré (mission §67 : c'est une dimension DISTINCTE, propre à F2) —
+      // elle reste donc `true` alors même que le dépôt vient d'être refusé pour cette raison précise.
+      expect(active.canSubmit).toBe(true);
+    });
+
+    it("TEST MULTI-LOT AMBIGUITY (mission §6/§29) — a Tender with two ResponsePackages (one per lot) never guesses: the legacy deposit still succeeds, but with empty V2 provenance", async () => {
+      const seed = await seedReadyDossier({ title: "Marché F2 multi-lot ambiguïté" });
+
+      // Second lot, son propre dossier de réponse V2 complet (build -> validate -> generate) — le
+      // Tender porte alors DEUX ResponsePackage distincts (un par lot), jamais fusionnés (mission §29).
+      const secondLot = await prisma.tenderLot.create({ data: { id: randomUUID(), organizationId: orgAId, tenderId: seed.tenderId, lotNumber: "2", title: "Lot secondaire", displayOrder: 1 } });
+      const docForm = new FormData();
+      docForm.append("title", "DC1-lot2.pdf");
+      docForm.append("origin", "USER_UPLOAD");
+      docForm.append("domain", "TENDER");
+      docForm.append("file", new Blob([Buffer.from("contenu réel DC1 lot 2 (fixture F2)")], { type: "application/pdf" }), "DC1-lot2.pdf");
+      const docRes = await fetch(`${baseUrl}/api/v1/documents`, { method: "POST", headers: authHeadersNoContentType(tokenOwnerA, orgAId), body: docForm });
+      expect(docRes.status).toBe(201);
+      const doc = (await docRes.json()) as { id: string; currentVersion: { id: string } };
+      await prisma.tenderChecklistItem.create({
+        data: {
+          id: randomUUID(),
+          organizationId: orgAId,
+          tenderId: seed.tenderId,
+          lotId: secondLot.id,
+          title: "DC1 lot 2",
+          status: "TODO",
+          type: "ADMINISTRATIVE_DOCUMENT",
+          requirementLevel: "MANDATORY",
+          subjectType: "CANDIDATE",
+          complianceStatus: "TO_REVIEW",
+          documentStatus: "AVAILABLE",
+          matchedDocumentId: doc.id,
+          matchedDocumentVersionId: doc.currentVersion.id,
+          documentMatchStatus: "MANUALLY_ATTACHED",
+        },
+      });
+      const createRp2Res = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/response-packages`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ lotId: secondLot.id }) });
+      expect(createRp2Res.status).toBe(201);
+      const rp2 = (await createRp2Res.json()) as { id: string };
+      const build2Res = await fetch(`${baseUrl}/api/v1/response-packages/${rp2.id}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+      expect(build2Res.status).toBe(201);
+      const built2 = (await build2Res.json()) as { version: { id: string } };
+      const validate2Res = await fetch(`${baseUrl}/api/v1/response-packages/${rp2.id}/versions/${built2.version.id}/validate`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+      expect(validate2Res.status).toBe(200);
+      const generate2Res = await fetch(`${baseUrl}/api/v1/response-packages/${rp2.id}/versions/${built2.version.id}/generate`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+      expect(generate2Res.status).toBe(201);
+
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ packageId: seed.legacyPackage.id, platform: "PLACE", submittedAt: new Date().toISOString() }),
+      });
+      expect(res.status).toBe(201);
+      const submission = (await res.json()) as { status: string; responsePackageVersionId?: string; responsePackageArtifactId?: string; responsePackageArtifactChecksum?: string };
+      expect(submission.status).toBe("SUBMITTED");
+      expect(submission.responsePackageVersionId).toBeUndefined();
+      expect(submission.responsePackageArtifactId).toBeUndefined();
+      expect(submission.responsePackageArtifactChecksum).toBeUndefined();
+    });
+  });
+
+  describe("Checkpoint TENDEROS-2.1-P2.2-F2.1 — parité V2 sur le flux start() -> recordFromInProgress()", () => {
+    async function startInProgress(input: { tenderId: string; packageId: string }): Promise<{ id: string; status: string }> {
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${input.tenderId}/submissions/start`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ packageId: input.packageId, platform: "PLACE" }),
+      });
+      expect(res.status).toBe(201);
+      const started = (await res.json()) as { id: string; status: string };
+      expect(started.status).toBe("SUBMISSION_IN_PROGRESS");
+      return started;
+    }
+
+    it("TEST IN-PROGRESS HAPPY PATH (mission §32) — READY -> start() -> recordFromInProgress() captures the same V2 provenance as a direct record", async () => {
+      const seed = await seedReadyDossier({ title: "Marché F2.1 in-progress happy path" });
+      await startInProgress({ tenderId: seed.tenderId, packageId: seed.legacyPackage.id });
+
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ packageId: seed.legacyPackage.id, platform: "PLACE", submittedAt: new Date().toISOString() }),
+      });
+      expect(res.status).toBe(201);
+      const submission = (await res.json()) as { status: string; responsePackageVersionId?: string; responsePackageArtifactId?: string; responsePackageArtifactChecksum?: string };
+      expect(submission.status).toBe("SUBMITTED");
+      expect(submission.responsePackageVersionId).toBe(seed.responsePackageVersionId);
+      expect(submission.responsePackageArtifactId).toBe(seed.responsePackageArtifactId);
+      expect(submission.responsePackageArtifactChecksum).toBe(seed.responsePackageArtifactChecksum);
+    });
+
+    it("TEST IN-PROGRESS HISTORY (mission §33) — a rebuild after recordFromInProgress() leaves the finalized Submission's V1 provenance untouched", async () => {
+      const seed = await seedReadyDossier({ title: "Marché F2.1 in-progress historique" });
+      const started = await startInProgress({ tenderId: seed.tenderId, packageId: seed.legacyPackage.id });
+
+      const recordRes = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ packageId: seed.legacyPackage.id, platform: "PLACE", submittedAt: new Date().toISOString() }),
+      });
+      expect(recordRes.status).toBe(201);
+
+      const rebuildRes = await fetch(`${baseUrl}/api/v1/response-packages/${seed.responsePackageId}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+      expect(rebuildRes.status).toBe(201);
+
+      const getRes = await fetch(`${baseUrl}/api/v1/submissions/${started.id}`, { headers: authHeaders(tokenOwnerA, orgAId) });
+      const persisted = (await getRes.json()) as { responsePackageVersionId?: string; responsePackageArtifactId?: string };
+      expect(persisted.responsePackageVersionId).toBe(seed.responsePackageVersionId);
+      expect(persisted.responsePackageArtifactId).toBe(seed.responsePackageArtifactId);
+    });
+
+    it("TEST IN-PROGRESS ARTIFACT MISSING (mission §34) — a univoque CURRENT/validated dossier with no generated artifact refuses recordFromInProgress() cleanly, submission stays IN_PROGRESS", async () => {
+      const seed = await seedReadyDossier({ title: "Marché F2.1 in-progress artefact manquant", skipResponsePackageArtifactGeneration: true });
+      const started = await startInProgress({ tenderId: seed.tenderId, packageId: seed.legacyPackage.id });
+
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ packageId: seed.legacyPackage.id, platform: "PLACE", submittedAt: new Date().toISOString() }),
+      });
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as { error: { code: string } };
+      expect(body.error.code).toBe("RESPONSE_PACKAGE_ARTIFACT_MISSING");
+
+      const getRes = await fetch(`${baseUrl}/api/v1/submissions/${started.id}`, { headers: authHeaders(tokenOwnerA, orgAId) });
+      const persisted = (await getRes.json()) as { status: string };
+      expect(persisted.status).toBe("SUBMISSION_IN_PROGRESS");
+    });
+
+    it("TEST IN-PROGRESS DCE RACE (mission §35) — READY -> start() -> DCE revision bump -> recordFromInProgress() is refused, exactly like the direct-record race", async () => {
+      const seed = await seedReadyDossier({ title: "Marché F2.1 in-progress DCE race" });
+      await startInProgress({ tenderId: seed.tenderId, packageId: seed.legacyPackage.id });
+      await prisma.dce.update({ where: { id: seed.dceId }, data: { revision: 2 } });
+
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ packageId: seed.legacyPackage.id, platform: "PLACE", submittedAt: new Date().toISOString() }),
+      });
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as { error: { code: string; reasons: { code: string }[] } };
+      expect(body.error.reasons.map((r) => r.code)).toContain("ANALYSIS_STALE");
+    });
+
+    it("TEST IN-PROGRESS CANDIDATE RACE (mission §36) — READY -> start() -> Candidate unassigned -> recordFromInProgress() is refused", async () => {
+      const seed = await seedReadyDossier({ title: "Marché F2.1 in-progress Candidate race" });
+      await startInProgress({ tenderId: seed.tenderId, packageId: seed.legacyPackage.id });
+      await prisma.tender.update({ where: { id: seed.tenderId }, data: { candidateCompanyId: null } });
+
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ packageId: seed.legacyPackage.id, platform: "PLACE", submittedAt: new Date().toISOString() }),
+      });
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as { error: { code: string; reasons: { code: string }[] } };
+      expect(body.error.reasons.map((r) => r.code)).toContain("CANDIDATE_MISSING");
+    });
+
+    it("TEST IN-PROGRESS VALIDATION RACE (mission §37) — READY -> start() -> reanalysis leaves the active FinalApproval's captured provenance behind -> recordFromInProgress() is refused", async () => {
+      const seed = await seedReadyDossier({ title: "Marché F2.1 in-progress Validation race" });
+      await startInProgress({ tenderId: seed.tenderId, packageId: seed.legacyPackage.id });
+      await prisma.dce.update({ where: { id: seed.dceId }, data: { revision: 2 } });
+      await seedSucceededAnalysis({ tenderId: seed.tenderId, analysisVersion: 2, dceRevision: 2 });
+
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ packageId: seed.legacyPackage.id, platform: "PLACE", submittedAt: new Date().toISOString() }),
+      });
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as { error: { code: string; reasons: { code: string }[] } };
+      expect(body.error.reasons.map((r) => r.code)).toContain("VALIDATION_STALE");
+    });
+
+    it("TEST IN-PROGRESS PACKAGE RACE (mission §38) — READY -> start() -> a new mandatory checklist item makes Response Package stale -> recordFromInProgress() is refused, never silently submitting the stale V1", async () => {
+      const seed = await seedReadyDossier({ title: "Marché F2.1 in-progress Response Package race" });
+      await startInProgress({ tenderId: seed.tenderId, packageId: seed.legacyPackage.id });
+      await prisma.tenderChecklistItem.create({
+        data: {
+          id: randomUUID(),
+          organizationId: orgAId,
+          tenderId: seed.tenderId,
+          lotId: seed.lotId,
+          title: "Attestation ajoutée après start()",
+          status: "TODO",
+          type: "ADMINISTRATIVE_DOCUMENT",
+          requirementLevel: "MANDATORY",
+          subjectType: "CANDIDATE",
+          complianceStatus: "TO_REVIEW",
+          documentStatus: "MISSING",
+          documentMatchStatus: "NOT_SEARCHED",
+        },
+      });
+
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ packageId: seed.legacyPackage.id, platform: "PLACE", submittedAt: new Date().toISOString() }),
+      });
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as { error: { code: string; reasons: { code: string }[] } };
+      expect(body.error.reasons.map((r) => r.code)).toContain("RESPONSE_PACKAGE_STALE");
+    });
+  });
+
   it("mission — full lifecycle: readiness -> record -> proof -> confirm receipt -> replace -> reject, with history conserved and the old package reference untouched", async () => {
-    const { tenderId, legacyPackage: firstPackage } = await seedReadyDossier({ title: "Marché dépôt complet" });
+    const { tenderId, legacyPackage: firstPackage, responsePackageVersionId, responsePackageArtifactId, responsePackageArtifactChecksum } = await seedReadyDossier({ title: "Marché dépôt complet" });
 
     const readinessRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/submission-readiness`, { headers: authHeaders(tokenOwnerA, orgAId) });
     expect(readinessRes.status).toBe(200);
@@ -632,19 +920,26 @@ describe("Submission — real HTTP + PostgreSQL (NestJS)", () => {
       body: JSON.stringify({ packageId: secondPackage.id, platform: "AWS_ACHAT", submittedAt: new Date().toISOString() }),
     });
     expect(replaceRes.status).toBe(201);
-    const secondSubmission = (await replaceRes.json()) as { id: string; status: string; supersedesSubmissionId: string; packageId: string };
+    const secondSubmission = (await replaceRes.json()) as { id: string; status: string; supersedesSubmissionId: string; packageId: string; responsePackageVersionId?: string; responsePackageArtifactId?: string; responsePackageArtifactChecksum?: string };
     expect(secondSubmission.status).toBe("SUBMITTED");
     expect(secondSubmission.supersedesSubmissionId).toBe(firstSubmission.id);
     expect(secondSubmission.packageId).toBe(secondPackage.id);
+    // Checkpoint TENDEROS-2.1-P2.2-F2.1 (ferme le gap identifié par l'audit F2) — le remplacement
+    // capture lui aussi la provenance V2, même dossier toujours CURRENT/validé depuis le seed.
+    expect(secondSubmission.responsePackageVersionId).toBe(responsePackageVersionId);
+    expect(secondSubmission.responsePackageArtifactId).toBe(responsePackageArtifactId);
+    expect(secondSubmission.responsePackageArtifactChecksum).toBe(responsePackageArtifactChecksum);
 
     // L'ancienne soumission reste REPLACED, avec SA référence de package d'origine intacte —
-    // jamais réécrite rétroactivement (mission §18).
+    // jamais réécrite rétroactivement (mission §18) — y compris sa PROPRE provenance V2 (capturée
+    // au moment du premier record(), jamais réécrite par le replace()).
     const oldRes = await fetch(`${baseUrl}/api/v1/submissions/${firstSubmission.id}`, { headers: authHeaders(tokenOwnerA, orgAId) });
     expect(oldRes.status).toBe(200);
-    const old = (await oldRes.json()) as { status: string; replacedBySubmissionId: string; packageId: string };
+    const old = (await oldRes.json()) as { status: string; replacedBySubmissionId: string; packageId: string; responsePackageVersionId?: string };
     expect(old.status).toBe("REPLACED");
     expect(old.replacedBySubmissionId).toBe(secondSubmission.id);
     expect(old.packageId).toBe(firstPackage.id);
+    expect(old.responsePackageVersionId).toBe(responsePackageVersionId);
 
     // Historique complet conservé — les deux soumissions apparaissent, jamais écrasées.
     const historyRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/submissions`, { headers: authHeaders(tokenOwnerA, orgAId) });

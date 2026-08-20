@@ -30,7 +30,7 @@ export class PrismaPricingScheduleRepository implements PricingScheduleRepositor
     organizationId: string;
     tenderId: string;
     lotId: string | null;
-    clientAccountId: string;
+    candidateCompanyId: string | undefined;
     sourceDocumentId: string;
   }): Promise<PricingSchedule | null> {
     const record = await this.prisma.currentClient().pricingSchedule.findFirst({
@@ -38,20 +38,27 @@ export class PrismaPricingScheduleRepository implements PricingScheduleRepositor
         organizationId: input.organizationId,
         tenderId: input.tenderId,
         lotId: input.lotId,
-        clientAccountId: input.clientAccountId,
+        candidateCompanyId: input.candidateCompanyId ?? null,
         sourceDocumentId: input.sourceDocumentId,
       },
     });
     return record ? toDomainPricingSchedule(record) : null;
   }
 
-  async list(input: { organizationId: string; tenderId: string; lotId?: string | undefined; clientAccountId?: string | undefined }): Promise<readonly PricingSchedule[]> {
+  async list(input: {
+    organizationId: string;
+    tenderId: string;
+    lotId?: string | undefined;
+    clientAccountId?: string | undefined;
+    candidateCompanyId?: string | undefined;
+  }): Promise<readonly PricingSchedule[]> {
     const records = await this.prisma.currentClient().pricingSchedule.findMany({
       where: {
         organizationId: input.organizationId,
         tenderId: input.tenderId,
         ...(input.lotId !== undefined ? { lotId: input.lotId } : {}),
         ...(input.clientAccountId !== undefined ? { clientAccountId: input.clientAccountId } : {}),
+        ...(input.candidateCompanyId !== undefined ? { candidateCompanyId: input.candidateCompanyId } : {}),
       },
       orderBy: { createdAt: "desc" },
     });

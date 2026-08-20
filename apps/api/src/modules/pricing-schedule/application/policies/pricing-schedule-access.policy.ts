@@ -14,7 +14,7 @@ import type { PricingScheduleAccessService } from "../services/pricing-schedule-
 export async function assertPricingScheduleTenderAccess(
   accessService: PricingScheduleAccessService,
   input: { organizationId: string; tenderId: string; actorId: string; actorRole: string; clientPermission: ClientPermission; requireUseOrgPermission?: boolean },
-): Promise<string> {
+): Promise<{ clientAccountId: string; candidateCompanyId: string | undefined }> {
   if (input.requireUseOrgPermission) {
     assertHasTenderPermission(input.actorRole, TenderPermission.UsePricingSchedule);
   }

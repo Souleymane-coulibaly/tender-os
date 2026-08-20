@@ -26,9 +26,15 @@ export class PrismaPackageItemRepository implements PackageItemRepository {
   }
 
   async listByVersion(input: { organizationId: string; responsePackageVersionId: string }): Promise<readonly PackageItem[]> {
+    // TENDEROS-2.1-P2.2-F1.1 (P3, audit Codex F1) — `sourceId` comme tie-breaker : contrairement à
+    // `PackageItem.id` (généré neuf à CHAQUE build), `sourceId` référence l'objet amont stable
+    // (ChecklistItem/AdministrativeDocument/TechnicalMemo/PricingSchedule) et reste identique d'un
+    // build à l'autre pour le même état métier — deux items partageant `category`+`label` gardent
+    // donc le MÊME ordre relatif entre deux générations successives, jamais un ordre DB non
+    // déterministe (mission §29/§17).
     const records = await this.prisma.currentClient().packageItem.findMany({
       where: { organizationId: input.organizationId, responsePackageVersionId: input.responsePackageVersionId },
-      orderBy: [{ category: "asc" }, { label: "asc" }],
+      orderBy: [{ category: "asc" }, { label: "asc" }, { sourceId: "asc" }],
     });
     return records.map(toDomainPackageItem);
   }

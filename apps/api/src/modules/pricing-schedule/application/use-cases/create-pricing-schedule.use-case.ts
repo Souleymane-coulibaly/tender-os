@@ -53,7 +53,7 @@ export class CreatePricingScheduleUseCase {
   ) {}
 
   async execute(command: CreatePricingScheduleCommand): Promise<PricingSchedule> {
-    const clientAccountId = await assertPricingScheduleTenderAccess(this.accessService, {
+    const { clientAccountId, candidateCompanyId } = await assertPricingScheduleTenderAccess(this.accessService, {
       organizationId: command.organizationId,
       tenderId: command.tenderId,
       actorId: command.actorId,
@@ -84,7 +84,7 @@ export class CreatePricingScheduleUseCase {
       organizationId: command.organizationId,
       tenderId: command.tenderId,
       lotId: command.lotId ?? null,
-      clientAccountId,
+      candidateCompanyId,
       sourceDocumentId: command.sourceDocumentId,
     });
     if (existing) {
@@ -100,6 +100,7 @@ export class CreatePricingScheduleUseCase {
       tenderId: command.tenderId,
       lotId: command.lotId,
       clientAccountId,
+      candidateCompanyId,
       financialDocumentType,
       sourceDocumentId: command.sourceDocumentId,
       sourceDocumentVersionId: sourceDocument.currentVersionId,

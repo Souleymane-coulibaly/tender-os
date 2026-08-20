@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { RecordTenderSubmissionUseCase } from "./record-tender-submission.use-case";
 import type { GetTenderSubmissionReadinessUseCase } from "./get-tender-submission-readiness.use-case";
+import type { GetSubmittableResponsePackageVersionUseCase, SubmittableResponsePackageVersion, SubmittableResponsePackageVersionResolution } from "../../../response-package";
 import { TenderSubmission } from "../../domain/tender-submission.aggregate";
 import {
   ActiveTenderSubmissionAlreadyExistsError,
   CustomPlatformNameRequiredError,
+  ResponsePackageArtifactMissingError,
   SubmissionDeadlinePassedError,
   SubmissionPackageMissingError,
   SubmissionPackageOutdatedError,
@@ -52,16 +54,28 @@ function fakeReadinessUseCase(reasons: readonly SubmissionReadinessReason[] = []
   const resolveSpy = vi.fn(async () => reasons);
   return { useCase: { resolveFileReadinessReasons: resolveSpy } as unknown as GetTenderSubmissionReadinessUseCase, resolveSpy };
 }
+// Checkpoint TENDEROS-2.1-P2.2-F2 — par défaut "aucun dossier V2 résolvable sans ambiguïté"
+// (`AMBIGUOUS_OR_ABSENT`, jamais bloquant en soi — voir `record-tender-submission.use-case.ts`),
+// pour que les tests existants (qui n'exercent PAS cette provenance) restent inchangés. Des tests
+// dédiés fournissent `RESOLVED`/`ARTIFACT_MISSING` pour prouver le câblage, sans dupliquer la
+// logique de résolution elle-même (déjà prouvée par ses propres tests dans `response-package`).
+function fakeSubmittableResponsePackageVersionUseCase(
+  result: SubmittableResponsePackageVersionResolution = { status: "AMBIGUOUS_OR_ABSENT" },
+): GetSubmittableResponsePackageVersionUseCase {
+  return { execute: vi.fn(async () => result) } as unknown as GetSubmittableResponsePackageVersionUseCase;
+}
 function buildUseCase(input: {
   accessService?: SubmissionAccessService;
   resolver: SubmissionPackageResolverService;
   repository: TenderSubmissionRepository;
   readinessUseCase?: GetTenderSubmissionReadinessUseCase;
+  submittableResponsePackageVersionUseCase?: GetSubmittableResponsePackageVersionUseCase;
 }): RecordTenderSubmissionUseCase {
   return new RecordTenderSubmissionUseCase(
     input.accessService ?? fakeAccessService(),
     input.resolver,
     input.readinessUseCase ?? fakeReadinessUseCase().useCase,
+    input.submittableResponsePackageVersionUseCase ?? fakeSubmittableResponsePackageVersionUseCase(),
     input.repository,
     fakeAuditLogWriter(),
     fakeClock(),
@@ -217,6 +231,99 @@ describe("RecordTenderSubmissionUseCase", () => {
       const newer = completedPackage({ id: "pkg-new", version: 2 });
       const useCase = buildUseCase({ resolver: resolverWith([older, newer]), repository: inMemoryRepository(), readinessUseCase: fakeReadinessUseCase([]).useCase });
       await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-old", platform: SubmissionPlatform.Place, submittedAt: NOW })).rejects.toBeInstanceOf(SubmissionPackageOutdatedError);
+    });
+  });
+
+  describe("Checkpoint TENDEROS-2.1-P2.2-F2 — Response Package V2 provenance", () => {
+    it("captures the resolved ResponsePackageVersion/artifact/checksum on the recorded submission when resolvable", async () => {
+      const submittable: SubmittableResponsePackageVersion = {
+        responsePackageId: "rp-1",
+        responsePackageVersionId: "rpv-1",
+        versionNumber: 3,
+        artifactId: "artifact-1",
+        artifactChecksum: "c".repeat(64),
+        artifactFileName: "TenderOS_tender-1_V3.zip",
+      };
+      const useCase = buildUseCase({
+        resolver: resolverWith([completedPackage()]),
+        repository: inMemoryRepository(),
+        submittableResponsePackageVersionUseCase: fakeSubmittableResponsePackageVersionUseCase({ status: "RESOLVED", ...submittable }),
+      });
+
+      const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW });
+
+      expect(result.responsePackageVersionId).toBe("rpv-1");
+      expect(result.responsePackageArtifactId).toBe("artifact-1");
+      expect(result.responsePackageArtifactChecksum).toBe("c".repeat(64));
+    });
+
+    it("mission §16/§29 — never blocks the legacy deposit when the V2 dossier is not resolvable without ambiguity (e.g. multi-lot Tender), leaves the new provenance fields empty", async () => {
+      const useCase = buildUseCase({
+        resolver: resolverWith([completedPackage()]),
+        repository: inMemoryRepository(),
+        submittableResponsePackageVersionUseCase: fakeSubmittableResponsePackageVersionUseCase({ status: "AMBIGUOUS_OR_ABSENT" }),
+      });
+
+      const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW });
+
+      expect(result.status).toBe(TenderSubmissionStatus.Submitted);
+      expect(result.responsePackageVersionId).toBeUndefined();
+      expect(result.responsePackageArtifactId).toBeUndefined();
+      expect(result.responsePackageArtifactChecksum).toBeUndefined();
+    });
+
+    it("mission §67 — refuses cleanly (no Submission persisted) when the V2 dossier resolves without ambiguity but has no generated artifact", async () => {
+      const repository = inMemoryRepository();
+      const useCase = buildUseCase({
+        resolver: resolverWith([completedPackage()]),
+        repository,
+        submittableResponsePackageVersionUseCase: fakeSubmittableResponsePackageVersionUseCase({ status: "ARTIFACT_MISSING", responsePackageId: "rp-1", responsePackageVersionId: "rpv-1" }),
+      });
+
+      await expect(
+        useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW }),
+      ).rejects.toBeInstanceOf(ResponsePackageArtifactMissingError);
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it("Checkpoint TENDEROS-2.1-P2.2-F2.1 (ferme le gap identifié par l'audit F2) — also captures provenance when completing a SUBMISSION_IN_PROGRESS row (start -> recordFromInProgress)", async () => {
+      const started = TenderSubmission.start({ id: "sub-1", organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, packageId: "pkg-1", packageVersion: 1, packageHash: "a".repeat(64), startedByUserId: "user-1", platform: SubmissionPlatform.Place, occurredAt: NOW });
+      const repository = inMemoryRepository(started);
+      const submittable: SubmittableResponsePackageVersion = {
+        responsePackageId: "rp-1",
+        responsePackageVersionId: "rpv-1",
+        versionNumber: 1,
+        artifactId: "artifact-1",
+        artifactChecksum: "e".repeat(64),
+        artifactFileName: "TenderOS_tender-1_V1.zip",
+      };
+      const useCase = buildUseCase({
+        resolver: resolverWith([completedPackage()]),
+        repository,
+        submittableResponsePackageVersionUseCase: fakeSubmittableResponsePackageVersionUseCase({ status: "RESOLVED", ...submittable }),
+      });
+
+      const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.AwsAchat, submittedAt: NOW });
+
+      expect(result.status).toBe(TenderSubmissionStatus.Submitted);
+      expect(result.responsePackageVersionId).toBe("rpv-1");
+      expect(result.responsePackageArtifactId).toBe("artifact-1");
+      expect(result.responsePackageArtifactChecksum).toBe("e".repeat(64));
+    });
+
+    it("Checkpoint TENDEROS-2.1-P2.2-F2.1 — refuses cleanly when completing a SUBMISSION_IN_PROGRESS row whose V2 dossier resolves without ambiguity but has no generated artifact", async () => {
+      const started = TenderSubmission.start({ id: "sub-1", organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, packageId: "pkg-1", packageVersion: 1, packageHash: "a".repeat(64), startedByUserId: "user-1", platform: SubmissionPlatform.Place, occurredAt: NOW });
+      const repository = inMemoryRepository(started);
+      const useCase = buildUseCase({
+        resolver: resolverWith([completedPackage()]),
+        repository,
+        submittableResponsePackageVersionUseCase: fakeSubmittableResponsePackageVersionUseCase({ status: "ARTIFACT_MISSING", responsePackageId: "rp-1", responsePackageVersionId: "rpv-1" }),
+      });
+
+      await expect(
+        useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.AwsAchat, submittedAt: NOW }),
+      ).rejects.toBeInstanceOf(ResponsePackageArtifactMissingError);
+      expect(repository.save).not.toHaveBeenCalled();
     });
   });
 });
