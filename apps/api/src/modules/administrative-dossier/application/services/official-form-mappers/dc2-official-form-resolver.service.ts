@@ -41,8 +41,11 @@ export type Dc2OfficialFormResolution = Readonly<{
  * `siret`/`address`/`legalForm` préfèrent la SOT `CandidateCompany`/`CandidateEstablishment` (via
  * `ResolveCandidateIdentityUseCase`) quand `Tender.candidateCompanyId` est renseigné (NEW FLOW),
  * sinon `company-profile.legalIdentity` (LEGACY FLOW) — même discipline que `Dc1OfficialFormResolver`.
- * Seuls `email`/`phone` restent TOUJOURS résolus depuis `legalIdentity` (aucun champ équivalent sur
- * `CandidateCompany`). Le scope MEMBER (groupement) reste inchangé, hors périmètre A4.
+ *
+ * V2 Sprint 26 (Checkpoint TENDEROS-2.1-P2.2-F3.1, correctif audit Codex P1) — `email`/`phone` ne
+ * retombent PLUS sur `legalIdentity` (client commercial) en NEW FLOW : restent `MISSING`, aucune SOT
+ * candidate-native équivalente n'existe. Inchangé en LEGACY FLOW. Le scope MEMBER (groupement) reste
+ * inchangé, hors périmètre A4/F3.1.
  */
 @Injectable()
 export class Dc2OfficialFormResolver {
@@ -87,11 +90,18 @@ export class Dc2OfficialFormResolver {
           ? [legalIdentity.addressLine, [legalIdentity.postalCode, legalIdentity.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
           : undefined;
       operatorLabel = tradeName ?? "Candidat";
+      // Checkpoint TENDEROS-2.1-P2.2-F3.1 (correctif audit Codex P1) — même discipline que
+      // `Dc1OfficialFormResolver` : `legalIdentity` est le CLIENT COMMERCIAL, jamais utilisé
+      // silencieusement comme contact du candidat en NEW FLOW (aucune SOT candidate-native n'existe
+      // pour email/téléphone). Reste `MISSING` plutôt qu'inventé ; inchangé en LEGACY FLOW.
+      const candidateEmail = usesCandidateCompany ? undefined : (legalIdentity?.generalEmail ?? undefined);
+      const candidatePhone = usesCandidateCompany ? undefined : (legalIdentity?.phone ?? undefined);
+      const candidateContactSource = usesCandidateCompany ? undefined : FormFieldSource.ClientProfile;
 
       put("candidate.tradeName", "Nom commercial", true, tradeName, candidateSource);
       put("candidate.address", "Adresse", true, address, candidateSource);
-      put("candidate.email", "Courriel", false, legalIdentity?.generalEmail ?? undefined, FormFieldSource.ClientProfile);
-      put("candidate.phone", "Téléphone", false, legalIdentity?.phone ?? undefined, FormFieldSource.ClientProfile);
+      put("candidate.email", "Courriel", false, candidateEmail, candidateContactSource);
+      put("candidate.phone", "Téléphone", false, candidatePhone, candidateContactSource);
       put("candidate.siret", "SIRET", true, siret, candidateSource);
       const legalForm = usesCandidateCompany ? candidateIdentity.legalForm : (legalIdentity?.legalForm ?? undefined);
       put("candidate.legalForm", "Forme juridique", false, legalForm, candidateSource);

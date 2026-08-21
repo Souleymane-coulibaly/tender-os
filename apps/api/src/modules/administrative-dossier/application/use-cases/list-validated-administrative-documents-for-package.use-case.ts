@@ -5,7 +5,16 @@ import { ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY, type AdministrativeDocumen
 import { ADMINISTRATIVE_DOSSIER_REPOSITORY, type AdministrativeDossierRepository } from "../ports/administrative-dossier.repository";
 import { AdministrativeDossierAccessService } from "../services/administrative-dossier-access.service";
 
-export type ListValidatedAdministrativeDocumentsForPackageQuery = Readonly<{ organizationId: string; actorId: string; actorRole: string; tenderId: string }>;
+export type ListValidatedAdministrativeDocumentsForPackageQuery = Readonly<{
+  organizationId: string;
+  actorId: string;
+  actorRole: string;
+  tenderId: string;
+  /** Checkpoint TENDEROS-2.1-P2.2-F3 — CandidateCompany EFFECTIF du Tender au moment de l'appel
+   *  (mission §18/§25/§32), jamais résolu ici. `undefined` = Tender legacy sans candidat résolu,
+   *  auquel cas AUCUN filtrage candidat n'est appliqué (mission §27 "ne pas casser l'historique"). */
+  candidateCompanyId: string | undefined;
+}>;
 
 /** Une pièce administrative validée, prête à être incluse dans un package de soumission — la
  *  référence document/version est déjà VÉRIFIÉE (posée uniquement via `verifyAttachableDocument` au
@@ -51,6 +60,18 @@ export class ListValidatedAdministrativeDocumentsForPackageUseCase {
       const revisions = await this.revisionRepository.listByDocument({ organizationId: query.organizationId, administrativeDocumentId: document.id });
       const validatedRevision = revisions.find((r) => r.id === document.validatedRevisionId);
       if (!validatedRevision?.documentId || !validatedRevision.documentVersionId || !validatedRevision.documentChecksum || !validatedRevision.documentFileName || !validatedRevision.documentMimeType) {
+        continue;
+      }
+      // Checkpoint TENDEROS-2.1-P2.2-F3.1, mission §17/§18/§20 (resserre F3, correctif audit Codex P2)
+      // — en NEW FLOW (`query.candidateCompanyId` renseigné), `candidateCompanyId=NULL` n'est PLUS un
+      // joker : une révision historique sans provenance capturée ne peut satisfaire AUCUN candidat
+      // NEW FLOW, jamais seulement celles explicitement d'un AUTRE candidat (mission §18 matrice, cas
+      // D). En LEGACY FLOW (`query.candidateCompanyId === undefined`, Tender sans candidat résolu),
+      // le comportement historique reste inchangé — AUCUN filtrage (mission §27/§32 "ne pas casser
+      // l'historique", cas A de la matrice). Les révisions NULL elles-mêmes restent immuables — c'est
+      // leur APPLICABILITÉ au NEW FLOW qui change ici, jamais leur donnée (mission §19/§21, aucun
+      // backfill).
+      if (query.candidateCompanyId !== undefined && validatedRevision.candidateCompanyId !== query.candidateCompanyId) {
         continue;
       }
       result.push({

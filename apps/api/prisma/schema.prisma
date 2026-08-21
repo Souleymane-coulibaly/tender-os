@@ -3983,18 +3983,62 @@ model SubmissionPackage {
   storageKey   String? @map("storage_key") @db.VarChar(500)
   manifestJson Json?   @map("manifest_json")
 
+  /// Checkpoint TENDEROS-2.1-P2.2-F4.1 (OPTION C) — provenance EXPLICITE vers le `PackageArtifact`
+  /// V2 dont ce package est le WRAPPER opérationnel, jamais un second calcul du contenu métier
+  /// (mission "SubmissionPackage X = wrapper du PackageArtifact V2 Y, jamais une reconstruction
+  /// indépendante"). Dénormalisé en LECTURE SEULE, figé une seule fois à la création — même
+  /// discipline que `TenderSubmission.responsePackageVersionId` (F2). Pas de FK Prisma déclarée
+  /// (même motif que `RoutingDecision.analysisId`) : un simple pointeur indexé, jamais un couplage
+  /// structurel cross-module. `NULL` pour tout package antérieur à ce checkpoint (jamais backfillé,
+  /// jamais une provenance fabriquée) — un tel package legacy ne peut alors plus jamais satisfaire
+  /// `SubmissionPackageResolverService.resolveExactPackage()` (mission §11), sans que son historique
+  /// (une `TenderSubmission` déjà enregistrée qui le référence) ne soit jamais réécrit.
+  responsePackageVersionId        String? @map("response_package_version_id") @db.Uuid
+  responsePackageArtifactId       String? @map("response_package_artifact_id") @db.Uuid
+  responsePackageArtifactChecksum String? @map("response_package_artifact_checksum") @db.VarChar(64)
+
   createdBy    String    @map("created_by") @db.Uuid
   createdAt    DateTime  @default(now()) @map("created_at")
   completedAt  DateTime? @map("completed_at")
   errorCode    String?   @map("error_code") @db.VarChar(60)
   errorMessage String?   @map("error_message")
 
-  files PackageFile[]
+  files                     PackageFile[]
+  responsePackageProvenance SubmissionPackageResponsePackage[]
 
   @@unique([id, organizationId])
   @@unique([tenderId, version])
   @@index([organizationId, tenderId])
+  @@index([organizationId, responsePackageVersionId])
   @@map("submission_packages")
+}
+
+/// Checkpoint TENDEROS-2.1-P2.2-F4.1-CODEX-AUDIT (fixe le P1 relevé par l'audit : le mode LOT à
+/// N≥2 était refusé purement et simplement à la création du wrapper, régression fonctionnelle par
+/// rapport à F2.3 qui avait déjà résolu ce cas côté `TenderSubmission`). Mirroir EXACT de
+/// `SubmissionResponsePackage` (mission "réutiliser le SOT existant, jamais un second moteur") —
+/// une ligne par lot REQUIS dont le dossier de réponse V2 a été résolu au moment de la création du
+/// wrapper. Dénormalisée en LECTURE SEULE depuis `response-package`/`tenders`, jamais une FK stricte
+/// vers eux (même discipline que les 3 colonnes scalaires F2/F4.1, réservées au mode GLOBAL).
+model SubmissionPackageResponsePackage {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  submissionPackageId String            @map("submission_package_id") @db.Uuid
+  submissionPackage   SubmissionPackage @relation(fields: [submissionPackageId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  lotId String @map("lot_id") @db.Uuid
+
+  responsePackageVersionId  String @map("response_package_version_id") @db.Uuid
+  responsePackageArtifactId String @map("response_package_artifact_id") @db.Uuid
+  artifactChecksum          String @map("artifact_checksum") @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([submissionPackageId, lotId])
+  @@index([organizationId, submissionPackageId])
+  @@index([organizationId, responsePackageVersionId])
+  @@map("submission_package_response_packages")
 }
 
 /// Mission §53/§54 — un fichier inclus dans le ZIP final, avec son propre hash (mission "tous les
@@ -4010,8 +4054,12 @@ model PackageFile {
   /// nommage sûre"), jamais dérivé directement d'une entrée utilisateur non assainie.
   archivePath String @map("archive_path") @db.VarChar(300)
 
-  /// EXPORT_ARTIFACT | SIGNATURE_ARTIFACT | MANIFEST | ADMINISTRATIVE_DOCUMENT — CHECK (migration).
-  sourceType String  @map("source_type") @db.VarChar(24)
+  /// EXPORT_ARTIFACT | SIGNATURE_ARTIFACT | MANIFEST | ADMINISTRATIVE_DOCUMENT |
+  /// RESPONSE_PACKAGE_ARTIFACT — CHECK (migration). RESPONSE_PACKAGE_ARTIFACT (Checkpoint
+  /// TENDEROS-2.1-P2.2-F4.1) est le PackageArtifact V2 lui-même, embarqué tel quel — la source du
+  /// contenu métier (administratif/mémoire technique/pricing/checklist), jamais reconstruite une
+  /// seconde fois indépendamment (mission "PackageArtifact V2 doit être la source de contenu").
+  sourceType String  @map("source_type") @db.VarChar(30)
   sourceId   String? @map("source_id") @db.Uuid
 
   fileName String @map("file_name") @db.VarChar(255)
@@ -4704,6 +4752,17 @@ model AdministrativeDocumentRevision {
   officialTemplateId String? @map("official_template_id") @db.Uuid
   formDataSnapshot   Json?   @map("form_data_snapshot")
 
+  /// Checkpoint TENDEROS-2.1-P2.2-F3 — CandidateCompany effectif du Tender au moment où cette
+  /// révision a été créée (générée OU déposée manuellement) — dénormalisé en LECTURE SEULE, jamais
+  /// recalculé après coup (même discipline que `ResponsePackageVersion.candidateCompanyId`, F1.1).
+  /// `NULL` pour toute révision antérieure à ce checkpoint OU pour un Tender sans CandidateCompany
+  /// résolu au moment de l'attachement — jamais deviné/backfillé. Permet à
+  /// `ListValidatedAdministrativeDocumentsForPackageUseCase` de refuser silencieusement une pièce
+  /// (DC1/DC2/DC4...) capturée pour un AUTRE candidat après un changement de Candidate sur le Tender
+  /// (mission §18 "les documents A ne doivent jamais rester silencieusement considérés comme valides
+  /// pour B").
+  candidateCompanyId String? @map("candidate_company_id") @db.Uuid
+
   createdBy String   @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -4711,6 +4770,7 @@ model AdministrativeDocumentRevision {
   @@unique([id, organizationId])
   @@unique([administrativeDocumentId, revisionNumber])
   @@index([organizationId, administrativeDocumentId])
+  @@index([organizationId, candidateCompanyId])
   @@map("administrative_document_revisions")
 }
 
@@ -5141,7 +5201,8 @@ model TenderSubmission {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  proofs SubmissionProof[]
+  proofs           SubmissionProof[]
+  responsePackages SubmissionResponsePackage[]
 
   @@unique([id, organizationId])
   @@index([organizationId, tenderId])
@@ -5152,6 +5213,36 @@ model TenderSubmission {
   @@index([replacedBySubmissionId])
   @@index([responsePackageVersionId])
   @@map("tender_submissions")
+}
+
+/// Checkpoint TENDEROS-2.1-P2.2-F2.3 — provenance MULTI-LOT (mission §8/§13), ADDITIVE au mode
+/// global existant (les 3 colonnes scalaires `TenderSubmission.responsePackageVersionId/…`
+/// ci-dessus restent inchangées et continuent de porter le mode "un seul dossier de réponse").
+/// Une ligne par lot REQUIS (`TenderLot.selectedForResponse = true`) dont le dossier de réponse a
+/// été résolu au moment du dépôt — jamais un lot non sélectionné, jamais un backfill historique
+/// (mission §10/§11). Dénormalisée en LECTURE SEULE depuis `response-package`/`tenders` (mêmes
+/// modules distincts), jamais de FK stricte vers eux — même discipline que les colonnes F2
+/// ci-dessus. Contrainte unique (submissionId, lotId) : jamais deux provenances contradictoires
+/// pour le même lot sur la même Submission (mission §20/§60).
+model SubmissionResponsePackage {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  submissionId String           @map("submission_id") @db.Uuid
+  submission   TenderSubmission @relation(fields: [submissionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  lotId String @map("lot_id") @db.Uuid
+
+  responsePackageVersionId  String @map("response_package_version_id") @db.Uuid
+  responsePackageArtifactId String @map("response_package_artifact_id") @db.Uuid
+  artifactChecksum          String @map("artifact_checksum") @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([submissionId, lotId])
+  @@index([organizationId, submissionId])
+  @@index([organizationId, responsePackageVersionId])
+  @@map("submission_response_packages")
 }
 
 /// Mission §12 — une preuve de dépôt (reçu/accusé/capture...), liée à un `Document` déjà vérifié.

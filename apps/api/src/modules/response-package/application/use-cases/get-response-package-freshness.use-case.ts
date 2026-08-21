@@ -58,7 +58,7 @@ export class GetResponsePackageFreshnessUseCase {
       this.versionRepository.findById({ organizationId: query.organizationId, responsePackageVersionId: pkg.currentVersionId }),
       this.itemRepository.listByVersion({ organizationId: query.organizationId, responsePackageVersionId: pkg.currentVersionId }),
       this.getCandidateContextForPackageUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: pkg.tenderId }),
-      this.listValidatedAdministrativeDocumentsForPackageUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: pkg.tenderId }),
+      this.listValidatedAdministrativeDocumentsForPackageUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: pkg.tenderId, candidateCompanyId: tender.candidateCompanyId }),
       this.listValidatedTechnicalMemosForPackageUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: pkg.tenderId }),
       this.listFinalFilesForPackageUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: pkg.tenderId, candidateCompanyId: tender.candidateCompanyId }),
       this.checklistItemRepository.listByTender({ organizationId: query.organizationId, tenderId: pkg.tenderId }),

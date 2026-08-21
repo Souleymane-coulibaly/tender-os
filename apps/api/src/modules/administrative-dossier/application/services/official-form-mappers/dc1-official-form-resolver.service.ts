@@ -41,10 +41,15 @@ const DC1_MEMBER_FIELDS_NOT_APPLICABLE_REASON = "Candidat individuel — le grou
  * SOT `CandidateCompany`/`CandidateEstablishment` (A1/A3, via `ResolveCandidateIdentityUseCase`,
  * "Candidate Context" canonique) quand `Tender.candidateCompanyId` est renseigné (NEW FLOW) ; retombe
  * sur `company-profile.legalIdentity` (`clientAccountId`) sinon (LEGACY FLOW — Tender sans
- * `candidateCompanyId`, jamais rétroactivement rempli, voir A2/A3). `candidate.email`/`phone`
- * restent TOUJOURS résolus depuis `legalIdentity` : `CandidateCompany` ne porte aucun champ de
- * contact (mission A1 §6, minimalisme) — ceci n'est jamais un fallback à supprimer plus tard, c'est
- * la SEULE source existante pour ces deux champs.
+ * `candidateCompanyId`, jamais rétroactivement rempli, voir A2/A3).
+ *
+ * V2 Sprint 26 (Checkpoint TENDEROS-2.1-P2.2-F3.1, correctif audit Codex P1) — `candidate.email`/
+ * `phone` ne retombent PLUS sur `legalIdentity` (le CLIENT COMMERCIAL) en NEW FLOW :
+ * `CandidateCompany` ne porte aucun champ de contact (mission A1 §6, minimalisme) et aucune autre
+ * SOT candidate-native n'existe (`Signatory`/`CompanyRepresentative` restent scopés
+ * `clientAccountId`) — ces deux champs restent honnêtement `MISSING` en NEW FLOW plutôt que
+ * d'emprunter silencieusement l'identité du client commercial. En LEGACY FLOW (candidat == client
+ * commercial), `legalIdentity` reste la SEULE source légitime, inchangée.
  */
 @Injectable()
 export class Dc1OfficialFormResolver {
@@ -84,6 +89,18 @@ export class Dc1OfficialFormResolver {
       : legalIdentity
         ? [legalIdentity.addressLine, [legalIdentity.postalCode, legalIdentity.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
         : undefined;
+    // Checkpoint TENDEROS-2.1-P2.2-F3.1 (correctif audit Codex P1) — `CandidateCompany` ne porte
+    // aucun champ email/téléphone (`CANDIDATE_CONTACT_SOURCE_AUDIT` : aucune SOT candidate-native
+    // trouvée ailleurs — `Signatory`/`CompanyRepresentative` restent tous deux scopés
+    // `clientAccountId`, jamais `candidateCompanyId`). En NEW FLOW, `legalIdentity` appartient au
+    // CLIENT COMMERCIAL, jamais au candidat : ne plus jamais l'utiliser comme repli silencieux pour
+    // ces deux champs (mission §4 "ne pas inventer candidate.email = client.email"). Reste `undefined`
+    // (→ statut MISSING via `put`, jamais une valeur fabriquée) tant qu'aucune SOT candidate-native
+    // n'existe (`CANDIDATE_CONTACT_MISSING_USES_NEEDS_REVIEW`). En LEGACY FLOW, comportement
+    // historique inchangé — `legalIdentity` reste la SOT légitime (candidat == client commercial).
+    const candidateEmail = usesCandidateCompany ? undefined : (legalIdentity?.generalEmail ?? undefined);
+    const candidatePhone = usesCandidateCompany ? undefined : (legalIdentity?.phone ?? undefined);
+    const candidateContactSource = usesCandidateCompany ? undefined : FormFieldSource.ClientProfile;
 
     const fields: AdministrativeFormFieldReadiness[] = [];
     const data: Record<string, unknown> = {};
@@ -110,8 +127,8 @@ export class Dc1OfficialFormResolver {
 
     put("candidate.tradeName", "Nom commercial du candidat", true, candidateTradeName, candidateSource);
     put("candidate.address", "Adresse du candidat", true, candidateAddress, candidateSource);
-    put("candidate.email", "Courriel du candidat", false, legalIdentity?.generalEmail ?? undefined, FormFieldSource.ClientProfile);
-    put("candidate.phone", "Téléphone du candidat", false, legalIdentity?.phone ?? undefined, FormFieldSource.ClientProfile);
+    put("candidate.email", "Courriel du candidat", false, candidateEmail, candidateContactSource);
+    put("candidate.phone", "Téléphone du candidat", false, candidatePhone, candidateContactSource);
     put("candidate.siret", "SIRET du candidat", true, candidateSiret, candidateSource);
 
     put("dc1.groupementEntreprises", "Groupement d'entreprises (case à cocher)", true, dc1 ? isConsortium : undefined, dc1 ? FormFieldSource.AdministrativeDossier : undefined);

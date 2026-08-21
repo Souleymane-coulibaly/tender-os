@@ -85,6 +85,14 @@ export class Dc4OfficialFormResolver {
         ? [legalIdentity.addressLine, [legalIdentity.postalCode, legalIdentity.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
         : undefined;
     const subAddress = subcontractorProfile ? [subcontractorProfile.addressLine, [subcontractorProfile.postalCode, subcontractorProfile.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : undefined;
+    // Checkpoint TENDEROS-2.1-P2.2-F3.1 (correctif audit Codex P1) — même discipline que DC1/DC2 :
+    // `legalIdentity` est le CLIENT COMMERCIAL, jamais un contact du TITULAIRE (le candidat lui-même)
+    // en NEW FLOW ; aucune SOT candidate-native équivalente n'existe. Reste `MISSING` plutôt
+    // qu'inventé. `subcontractor.*` n'est jamais concerné (SOT propre, `SubcontractorProfile`,
+    // inchangée — mission §11 "ne pas confondre titulaire et sous-traitant"). Inchangé en LEGACY FLOW.
+    const titulaireEmail = usesCandidateCompany ? undefined : (legalIdentity?.generalEmail ?? undefined);
+    const titulairePhone = usesCandidateCompany ? undefined : (legalIdentity?.phone ?? undefined);
+    const titulaireContactSource = usesCandidateCompany ? undefined : FormFieldSource.ClientProfile;
 
     const fields: AdministrativeFormFieldReadiness[] = [];
     const data: Record<string, unknown> = {};
@@ -100,8 +108,8 @@ export class Dc4OfficialFormResolver {
 
     put("titulaire.tradeName", "Nom commercial du titulaire", true, titulaireTradeName, candidateSource);
     put("titulaire.address", "Adresse du titulaire", true, titulaireAddress, candidateSource);
-    put("titulaire.email", "Courriel du titulaire", false, legalIdentity?.generalEmail ?? undefined, FormFieldSource.ClientProfile);
-    put("titulaire.phone", "Téléphone du titulaire", false, legalIdentity?.phone ?? undefined, FormFieldSource.ClientProfile);
+    put("titulaire.email", "Courriel du titulaire", false, titulaireEmail, titulaireContactSource);
+    put("titulaire.phone", "Téléphone du titulaire", false, titulairePhone, titulaireContactSource);
     put("titulaire.siret", "SIRET du titulaire", true, titulaireSiret, candidateSource);
     const titulaireLegalForm = usesCandidateCompany ? candidateIdentity.legalForm : (legalIdentity?.legalForm ?? undefined);
     put("titulaire.legalForm", "Forme juridique du titulaire", false, titulaireLegalForm, candidateSource);

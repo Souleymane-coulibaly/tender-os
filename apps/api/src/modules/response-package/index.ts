@@ -30,4 +30,9 @@ export { ResponsePackageFreshness } from "./domain/response-package-freshness";
 // Checkpoint TENDEROS-2.1-P2.2-F2 — réexporté pour `submission` (résolution du dossier de réponse
 // V2 réellement soumissible, mission §6), même motif que les exports FIX-F ci-dessus.
 export { GetSubmittableResponsePackageVersionUseCase } from "./application/use-cases/get-submittable-response-package-version.use-case";
-export type { SubmittableResponsePackageVersion, SubmittableResponsePackageVersionResolution } from "./application/use-cases/get-submittable-response-package-version.use-case";
+export type { SubmittableResponsePackageVersion, SubmittableResponsePackageVersionForLot, SubmittableResponsePackageVersionResolution } from "./application/use-cases/get-submittable-response-package-version.use-case";
+
+// Checkpoint TENDEROS-2.1-P2.2-F2.3 — réexporté pour `submission` (SOT du périmètre de lots requis
+// pour candidature, mission §3), même motif que les exports F2 ci-dessus.
+export { GetRequiredResponsePackagesForTenderUseCase } from "./application/use-cases/get-required-response-packages-for-tender.use-case";
+export type { ResponsePackageRequirement } from "./domain/services/resolve-response-package-requirements";

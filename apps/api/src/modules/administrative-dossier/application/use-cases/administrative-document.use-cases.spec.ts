@@ -11,6 +11,7 @@ import type { AdministrativeRequirementRepository } from "../ports/administrativ
 import type { AdministrativeDossierAccessService } from "../services/administrative-dossier-access.service";
 import type { AdministrativeDossierRecalculationService } from "../services/administrative-dossier-recalculation.service";
 import type { GetDocumentUseCase } from "../../../documents";
+import type { GetTenderUseCase } from "../../../tenders";
 import type { AuditLogWriter } from "../ports/audit-log-writer";
 import { AdministrativeDocumentType } from "../../domain/administrative-document-type";
 import { AdministrativeDocument } from "../../domain/administrative-document.aggregate";
@@ -51,6 +52,12 @@ function fakeGetDocumentUseCase(): GetDocumentUseCase {
       currentVersion: { id: "version-1", checksum: "abc123", sanitizedFilename: "attestation.pdf", mimeType: "application/pdf" },
     })),
   } as unknown as GetDocumentUseCase;
+}
+// Checkpoint TENDEROS-2.1-P2.2-F3 — par défaut un CandidateCompany résolu (comportement le plus
+// courant), pour que les tests existants (qui n'exercent PAS cette provenance) restent inchangés en
+// pratique tout en capturant une valeur réelle et vérifiable.
+function fakeGetTenderUseCase(candidateCompanyId: string | undefined = "candidate-1"): GetTenderUseCase {
+  return { execute: vi.fn(async () => ({ candidateCompanyId })) } as unknown as GetTenderUseCase;
 }
 function inMemoryDocumentRepository(seed: AdministrativeDocument[] = []): AdministrativeDocumentRepository {
   const rows = new Map(seed.map((d) => [d.id, d]));
@@ -118,7 +125,7 @@ describe("AttachAdministrativeDocumentRevisionUseCase — mission §21", () => {
     const revisionRepository = inMemoryRevisionRepository([revision]);
     const getDocumentUseCase = fakeGetDocumentUseCase();
     const statusRecalculation = fakeStatusRecalculation();
-    const useCase = new AttachAdministrativeDocumentRevisionUseCase(fakeAccessService(), documentRepository, revisionRepository, getDocumentUseCase, fakeAuditLogWriter(), statusRecalculation, fakeClock(), fakeIdGenerator());
+    const useCase = new AttachAdministrativeDocumentRevisionUseCase(fakeAccessService(), documentRepository, revisionRepository, getDocumentUseCase, fakeGetTenderUseCase(), fakeAuditLogWriter(), statusRecalculation, fakeClock(), fakeIdGenerator());
 
     const summary = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", administrativeDocumentId: "doc-1", documentId: "doc-ext-1" });
 
@@ -126,6 +133,69 @@ describe("AttachAdministrativeDocumentRevisionUseCase — mission §21", () => {
     expect(summary.revisions[0]?.status).toBe("IN_REVIEW");
     expect(summary.revisions[0]?.documentChecksum).toBe("abc123");
     expect(statusRecalculation.recompute).toHaveBeenCalledWith({ organizationId: ORGANIZATION_ID, dossierId: DOSSIER_ID });
+  });
+
+  it("Checkpoint TENDEROS-2.1-P2.2-F3 — captures the Tender's effective CandidateCompany at attach time, never guessed, undefined for a Tender without a resolved candidate", async () => {
+    const document = baseDocument();
+    const revision = draftRevision();
+    const documentRepository = inMemoryDocumentRepository([document]);
+    const revisionRepository = inMemoryRevisionRepository([revision]);
+    const useCase = new AttachAdministrativeDocumentRevisionUseCase(
+      fakeAccessService(),
+      documentRepository,
+      revisionRepository,
+      fakeGetDocumentUseCase(),
+      fakeGetTenderUseCase("candidate-A"),
+      fakeAuditLogWriter(),
+      fakeStatusRecalculation(),
+      fakeClock(),
+      fakeIdGenerator(),
+    );
+
+    await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", administrativeDocumentId: "doc-1", documentId: "doc-ext-1" });
+
+    const persisted = await revisionRepository.listByDocument({ organizationId: ORGANIZATION_ID, administrativeDocumentId: "doc-1" });
+    expect(persisted[0]?.candidateCompanyId).toBe("candidate-A");
+  });
+
+  it("Checkpoint TENDEROS-2.1-P2.2-F3 — re-evaluates the candidate on EVERY attach, never frozen on the first one: a second attach (which submits the prior revision for review, so it creates a NEW revision rather than reusing it) captures the candidate current AT THAT INSTANT, and the earlier revision's own candidate is never rewritten", async () => {
+    const document = baseDocument();
+    const revision = draftRevision();
+    const documentRepository = inMemoryDocumentRepository([document]);
+    const revisionRepository = inMemoryRevisionRepository([revision]);
+    // Première pièce jointe : candidat A. `attachDocument` appelle ensuite `submitForReview` —
+    // la révision quitte l'état DRAFT, donc un second attach ne peut PLUS la réutiliser (mission
+    // "jamais une réécriture d'une révision non-DRAFT") : il en crée une NOUVELLE.
+    const useCaseA = new AttachAdministrativeDocumentRevisionUseCase(
+      fakeAccessService(),
+      documentRepository,
+      revisionRepository,
+      fakeGetDocumentUseCase(),
+      fakeGetTenderUseCase("candidate-A"),
+      fakeAuditLogWriter(),
+      fakeStatusRecalculation(),
+      fakeClock(),
+      fakeIdGenerator(),
+    );
+    await useCaseA.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", administrativeDocumentId: "doc-1", documentId: "doc-ext-1" });
+
+    const useCaseB = new AttachAdministrativeDocumentRevisionUseCase(
+      fakeAccessService(),
+      documentRepository,
+      revisionRepository,
+      fakeGetDocumentUseCase(),
+      fakeGetTenderUseCase("candidate-B"),
+      fakeAuditLogWriter(),
+      fakeStatusRecalculation(),
+      fakeClock(),
+      fakeIdGenerator(),
+    );
+    await useCaseB.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", administrativeDocumentId: "doc-1", documentId: "doc-ext-2" });
+
+    const persisted = await revisionRepository.listByDocument({ organizationId: ORGANIZATION_ID, administrativeDocumentId: "doc-1" });
+    expect(persisted).toHaveLength(2);
+    expect(persisted[0]?.candidateCompanyId).toBe("candidate-A"); // révision d'origine, jamais réécrite
+    expect(persisted[1]?.candidateCompanyId).toBe("candidate-B"); // nouvelle révision, candidat réévalué
   });
 
   it("creates a NEW revision (never mutating) when the latest revision is already validated, and clears the prior validation", async () => {
@@ -138,7 +208,7 @@ describe("AttachAdministrativeDocumentRevisionUseCase — mission §21", () => {
 
     const documentRepository = inMemoryDocumentRepository([document]);
     const revisionRepository = inMemoryRevisionRepository([validated]);
-    const useCase = new AttachAdministrativeDocumentRevisionUseCase(fakeAccessService(), documentRepository, revisionRepository, fakeGetDocumentUseCase(), fakeAuditLogWriter(), fakeStatusRecalculation(), fakeClock(), fakeIdGenerator());
+    const useCase = new AttachAdministrativeDocumentRevisionUseCase(fakeAccessService(), documentRepository, revisionRepository, fakeGetDocumentUseCase(), fakeGetTenderUseCase(), fakeAuditLogWriter(), fakeStatusRecalculation(), fakeClock(), fakeIdGenerator());
 
     const summary = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", administrativeDocumentId: "doc-1", documentId: "doc-ext-2" });
 

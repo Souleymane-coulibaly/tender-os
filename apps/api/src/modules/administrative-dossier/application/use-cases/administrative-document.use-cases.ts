@@ -3,6 +3,7 @@ import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ClientPermission } from "../../../client-portfolio";
 import { GetDocumentUseCase } from "../../../documents";
+import { GetTenderUseCase } from "../../../tenders";
 import type { AdministrativeDocumentType } from "../../domain/administrative-document-type";
 import { AdministrativeDocument } from "../../domain/administrative-document.aggregate";
 import { AdministrativeDocumentRevision } from "../../domain/administrative-document-revision.entity";
@@ -129,6 +130,7 @@ export class AttachAdministrativeDocumentRevisionUseCase {
     @Inject(ADMINISTRATIVE_DOCUMENT_REPOSITORY) private readonly documentRepository: AdministrativeDocumentRepository,
     @Inject(ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY) private readonly revisionRepository: AdministrativeDocumentRevisionRepository,
     private readonly getDocumentUseCase: GetDocumentUseCase,
+    private readonly getTenderUseCase: GetTenderUseCase,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     private readonly statusRecalculation: AdministrativeDossierRecalculationService,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -149,12 +151,19 @@ export class AttachAdministrativeDocumentRevisionUseCase {
       permission: ClientPermission.ManageAdministrativeDocuments,
     });
 
-    const verified = await verifyAttachableDocument(this.getDocumentUseCase, {
-      organizationId: command.organizationId,
-      actorId: command.actorId,
-      actorRole: command.actorRole,
-      documentId: command.documentId,
-    });
+    const [verified, tender] = await Promise.all([
+      verifyAttachableDocument(this.getDocumentUseCase, {
+        organizationId: command.organizationId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+        documentId: command.documentId,
+      }),
+      // Checkpoint TENDEROS-2.1-P2.2-F3 — capture le CandidateCompany effectif à CET instant précis
+      // (mission §18/§26), pour une révision manuelle comme pour une révision générée (même chemin
+      // d'attachement, mission §18 "jamais un second mécanisme"). `undefined` si le Tender n'a pas
+      // encore de candidat résolu — jamais deviné.
+      this.getTenderUseCase.execute({ organizationId: command.organizationId, tenderId: document.tenderId, actorId: command.actorId, actorRole: command.actorRole }),
+    ]);
 
     const revisions = await this.revisionRepository.listByDocument({ organizationId: command.organizationId, administrativeDocumentId: document.id });
     const latest = revisions[revisions.length - 1];
@@ -190,6 +199,7 @@ export class AttachAdministrativeDocumentRevisionUseCase {
       expiresAt: command.expiresAt,
       officialTemplateId: command.officialTemplateId,
       formDataSnapshot: command.formDataSnapshot,
+      candidateCompanyId: tender.candidateCompanyId,
       occurredAt,
     });
     target.submitForReview(occurredAt);

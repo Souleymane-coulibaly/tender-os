@@ -173,8 +173,13 @@ describe("Dossier de réponse (response-package) — real HTTP + PostgreSQL (Nes
     await prisma.tender.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     // TENDEROS-2.1-P2.2-E1 — PricingSchedule/PricingScheduleVersion/PricingScheduleFinalFile
     // cascadent tous sur la suppression du Tender (`onDelete: Cascade`) : aucun nettoyage explicite
-    // supplémentaire nécessaire pour ces tables. CandidateCompany, référencée PAR le Tender (jamais
-    // l'inverse), se nettoie APRÈS.
+    // supplémentaire nécessaire pour ces tables. Idem TechnicalMemo/TechnicalMemoSection/
+    // TechnicalMemoSectionRevision et GeneratedDocument/GeneratedDocumentRevision (Checkpoint F4) —
+    // tous cascadent depuis `Tender`. `DocumentTemplate`/`DocumentTemplateVersion` en revanche sont
+    // scopés `organizationId` SEUL (aucune FK vers `Tender`) — nettoyage explicite requis.
+    await prisma.documentTemplateVersion.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.documentTemplate.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    // CandidateCompany, référencée PAR le Tender (jamais l'inverse), se nettoie APRÈS.
     await prisma.candidateCompany.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAssignment.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -315,6 +320,158 @@ describe("Dossier de réponse (response-package) — real HTTP + PostgreSQL (Nes
     // La version historique reste EXACTEMENT celle de Candidate A — jamais réattribuée à B.
     const persistedVersionAfter = await prisma.responsePackageVersion.findUniqueOrThrow({ where: { id: built.version.id } });
     expect(persistedVersionAfter.candidateCompanyId).toBe(candidateA.id);
+  }, 30000);
+
+  /** Checkpoint TENDEROS-2.1-P2.2-F3 (mission §25/§32/§41/§46-47) — bout en bout, réel HTTP +
+   *  PostgreSQL : une pièce administrative (DC1) VALIDÉE pendant que le Tender pointait vers
+   *  Candidate A est incluse dans la version construite pour A ; une fois le Tender réassigné à
+   *  Candidate B SANS qu'une nouvelle pièce ne soit validée pour B, un rebuild n'inclut plus JAMAIS
+   *  cette pièce (`ListValidatedAdministrativeDocumentsForPackageUseCase` filtre désormais sur
+   *  `candidateCompanyId`, fermant le gap identifié par l'audit : `TenderCandidateCompanyChanged`
+   *  n'avait aucun consommateur, aucune pièce administrative ne détectait un changement de candidat). */
+  it("TEST F3 — an administrative document validated for Candidate A is excluded from a rebuild made for Candidate B, unless it is re-validated", async () => {
+    const { tenderId, lotId } = await createClientTenderAndLot({ organizationId: orgAId, userId: ownerAUserId });
+    const candidateA = await prisma.candidateCompany.create({
+      data: { id: randomUUID(), organizationId: orgAId, name: "CANDIDAT A TESTF3", nameNormalized: "candidat a testf3", status: "ACTIVE", createdBy: ownerAUserId },
+    });
+    const candidateB = await prisma.candidateCompany.create({
+      data: { id: randomUUID(), organizationId: orgAId, name: "CANDIDAT B TESTF3", nameNormalized: "candidat b testf3", status: "ACTIVE", createdBy: ownerAUserId },
+    });
+    await prisma.tender.update({ where: { id: tenderId }, data: { candidateCompanyId: candidateA.id } });
+
+    const ensureDossierRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/administrative-dossier`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(ensureDossierRes.status).toBe(200);
+
+    // Une pièce administrative (DC1) est créée, déposée et VALIDÉE pendant que le Tender pointe vers
+    // Candidate A — capture `candidateCompanyId: candidateA.id` sur la révision (mission §18/§26).
+    const createDocRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/administrative-documents`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ documentType: "DC1", label: "DC1" }),
+    });
+    expect(createDocRes.status).toBe(201);
+    const administrativeDocument = (await createDocRes.json()) as { id: string };
+
+    const uploaded = await uploadDocument({ token: tokenOwnerA, organizationId: orgAId, filename: "dc1-candidate-a.pdf" });
+    const attachRes = await fetch(`${baseUrl}/api/v1/administrative-documents/${administrativeDocument.id}/revisions`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ documentId: uploaded.documentId }),
+    });
+    expect(attachRes.status).toBe(201);
+    const attached = (await attachRes.json()) as { revisions: { id: string; status: string }[] };
+    const revisionId = attached.revisions[0]!.id;
+
+    const validateAdminDocRes = await fetch(`${baseUrl}/api/v1/administrative-documents/${administrativeDocument.id}/validate`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ revisionId }),
+    });
+    expect(validateAdminDocRes.status).toBe(200);
+
+    // V1 — construit pour Candidate A : la pièce administrative apparaît comme un item du package.
+    const createPkgRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/response-packages`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ lotId }) });
+    const pkg = (await createPkgRes.json()) as { id: string };
+    const buildV1Res = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(buildV1Res.status).toBe(201);
+    const builtV1 = (await buildV1Res.json()) as { version: { id: string }; items: { sourceType: string; sourceId: string }[] };
+    expect(builtV1.items.some((i) => i.sourceType === "ADMINISTRATIVE_DOCUMENT" && i.sourceId === administrativeDocument.id)).toBe(true);
+
+    // Le Tender est réassigné à Candidate B — AUCUNE nouvelle pièce administrative n'est validée
+    // pour B (simule exactement le gap découvert par l'audit).
+    await prisma.tender.update({ where: { id: tenderId }, data: { candidateCompanyId: candidateB.id } });
+
+    // V2 — rebuild pour Candidate B : la pièce validée pour A n'apparaît plus du tout, jamais
+    // silencieusement réattribuée à B.
+    const buildV2Res = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(buildV2Res.status).toBe(201);
+    const builtV2 = (await buildV2Res.json()) as { version: { id: string }; items: { sourceType: string; sourceId: string }[] };
+    expect(builtV2.version.id).not.toBe(builtV1.version.id);
+    expect(builtV2.items.some((i) => i.sourceType === "ADMINISTRATIVE_DOCUMENT" && i.sourceId === administrativeDocument.id)).toBe(false);
+
+    // V1 (historique) reste inchangée — elle référence toujours la pièce d'A, jamais réécrite.
+    const v1AfterRebuildItemsRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/versions/${builtV1.version.id}/completeness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(v1AfterRebuildItemsRes.status).toBe(200);
+  }, 30000);
+
+  /** Checkpoint TENDEROS-2.1-P2.2-F3.1 (mission §17/§18/§25/§26/§31, correctif audit Codex P2) —
+   *  bout en bout, réel HTTP + PostgreSQL : une pièce administrative attachée et validée alors que le
+   *  Tender n'avait ENCORE aucun candidat résolu (LEGACY au moment de l'attachement, capture donc
+   *  `candidateCompanyId=NULL`, un scénario historique réel — jamais forcé en base) satisfait le
+   *  package tant que le Tender reste LEGACY, puis n'est PLUS jamais acceptée dès que le Tender
+   *  acquiert un candidat NEW FLOW — `NULL` n'est jamais un joker (matrice §18, cas D). Prouve aussi
+   *  que la fraîcheur (`freshness`), pas seulement le rebuild, applique la même politique (mission
+   *  §26). */
+  it("TEST F3.1 — a historical NULL-candidate revision (attached while the Tender was still LEGACY) stops satisfying the package the moment the Tender acquires a NEW FLOW candidate", async () => {
+    const { tenderId, lotId } = await createClientTenderAndLot({ organizationId: orgAId, userId: ownerAUserId });
+
+    const ensureDossierRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/administrative-dossier`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(ensureDossierRes.status).toBe(200);
+
+    // Pièce administrative créée/déposée/validée alors que le Tender N'A ENCORE AUCUN candidat
+    // (LEGACY) — capture réellement `candidateCompanyId=NULL`, jamais forcé en base.
+    const createDocRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/administrative-documents`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ documentType: "DC1", label: "DC1" }),
+    });
+    expect(createDocRes.status).toBe(201);
+    const administrativeDocument = (await createDocRes.json()) as { id: string };
+
+    const uploaded = await uploadDocument({ token: tokenOwnerA, organizationId: orgAId, filename: "dc1-legacy-null.pdf" });
+    const attachRes = await fetch(`${baseUrl}/api/v1/administrative-documents/${administrativeDocument.id}/revisions`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ documentId: uploaded.documentId }),
+    });
+    expect(attachRes.status).toBe(201);
+    const attached = (await attachRes.json()) as { revisions: { id: string; status: string }[] };
+    const revisionId = attached.revisions[0]!.id;
+
+    const validateAdminDocRes = await fetch(`${baseUrl}/api/v1/administrative-documents/${administrativeDocument.id}/validate`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ revisionId }),
+    });
+    expect(validateAdminDocRes.status).toBe(200);
+
+    const persistedRevision = await prisma.administrativeDocumentRevision.findUniqueOrThrow({ where: { id: revisionId } });
+    expect(persistedRevision.candidateCompanyId).toBeNull();
+
+    // V1 — construit pendant que le Tender reste LEGACY : la pièce NULL satisfait le package (matrice
+    // §18, cas A — aucun filtrage tant qu'aucun candidat NEW FLOW n'existe).
+    const createPkgRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/response-packages`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ lotId }) });
+    const pkg = (await createPkgRes.json()) as { id: string };
+    const buildV1Res = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(buildV1Res.status).toBe(201);
+    const builtV1 = (await buildV1Res.json()) as { version: { id: string }; items: { sourceType: string; sourceId: string }[] };
+    expect(builtV1.items.some((i) => i.sourceType === "ADMINISTRATIVE_DOCUMENT" && i.sourceId === administrativeDocument.id)).toBe(true);
+
+    const freshnessLegacyRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessLegacyRes.json()) as { freshness: string }).toMatchObject({ freshness: "CURRENT" });
+
+    // Le Tender acquiert un candidat NEW FLOW (Candidate B) — la révision NULL, historique et
+    // JAMAIS réécrite, ne peut plus satisfaire AUCUN candidat NEW FLOW (matrice §18, cas D).
+    const candidateB = await prisma.candidateCompany.create({
+      data: { id: randomUUID(), organizationId: orgAId, name: "CANDIDAT B TESTF3.1", nameNormalized: "candidat b testf3.1", status: "ACTIVE", createdBy: ownerAUserId },
+    });
+    await prisma.tender.update({ where: { id: tenderId }, data: { candidateCompanyId: candidateB.id } });
+
+    // Mission §26 — la fraîcheur (pas seulement le rebuild) reflète immédiatement la nouvelle
+    // politique : V1 devient STALE, car la pièce qu'elle contient n'est plus une pièce ATTENDUE.
+    const freshnessAfterCandidateRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessAfterCandidateRes.json()) as { freshness: string }).toMatchObject({ freshness: "STALE" });
+
+    // Mission §20/§25 — un rebuild pour B n'inclut plus JAMAIS la pièce NULL historique.
+    const buildV2Res = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(buildV2Res.status).toBe(201);
+    const builtV2 = (await buildV2Res.json()) as { version: { id: string }; items: { sourceType: string; sourceId: string }[] };
+    expect(builtV2.items.some((i) => i.sourceType === "ADMINISTRATIVE_DOCUMENT" && i.sourceId === administrativeDocument.id)).toBe(false);
+
+    // La révision NULL elle-même reste immuable — jamais backfillée avec le candidat courant
+    // (mission §19/§21, aucune réécriture d'historique).
+    const revisionAfter = await prisma.administrativeDocumentRevision.findUniqueOrThrow({ where: { id: revisionId } });
+    expect(revisionAfter.candidateCompanyId).toBeNull();
   }, 30000);
 
   /** TENDEROS-2.1-P2.2-F1.1 (mission §18/§21/§22) — cycle de vie complet Candidate A → B sur le
@@ -776,4 +933,128 @@ describe("Dossier de réponse (response-package) — real HTTP + PostgreSQL (Nes
     });
     expect(legitimateRes.status).toBe(200);
   });
+
+  /** Checkpoint TENDEROS-2.1-P2.2-F4 (mission §9/§16/§47) — bout en bout, réel HTTP + PostgreSQL :
+   *  un nouveau fichier financier final (`PricingScheduleFinalFile`) généré pour la MÊME
+   *  `PricingScheduleVersion` fait passer le package courant STALE (exactement comme un document
+   *  administratif ou un mémoire technique — mission §16 "tester au minimum : admin revision,
+   *  technical memo, pricing output"), et un rebuild redevient CURRENT en référençant le NOUVEAU
+   *  fichier, jamais l'ancien. Seed direct via Prisma (comme TEST 10) — le pipeline XLSX réel est
+   *  déjà prouvé par `pricing-schedule-http.integration.spec.ts`, seule la mécanique de fraîcheur
+   *  est sous test ici. */
+  it("TEST PRICING CHANGE (mission §9/§16/§47) — a new final-file generation for the SAME pricing-schedule version makes the package STALE, a rebuild references the new file, never the old one", async () => {
+    const { tenderId, lotId, clientAccountId } = await createClientTenderAndLot({ organizationId: orgAId, userId: ownerAUserId });
+    const candidate = await prisma.candidateCompany.create({
+      data: { id: randomUUID(), organizationId: orgAId, name: "CANDIDAT PRICING CHANGE", nameNormalized: "candidat pricing change", status: "ACTIVE", createdBy: ownerAUserId },
+    });
+    await prisma.tender.update({ where: { id: tenderId }, data: { candidateCompanyId: candidate.id } });
+
+    const sourceDoc = await uploadDocument({ token: tokenOwnerA, organizationId: orgAId, filename: "bpu-source.pdf" });
+    const finalDocV1 = await uploadDocument({ token: tokenOwnerA, organizationId: orgAId, filename: "bpu-final-v1.pdf" });
+    const scheduleId = randomUUID();
+    const versionId = randomUUID();
+    await prisma.pricingSchedule.create({
+      data: { id: scheduleId, organizationId: orgAId, tenderId, clientAccountId, candidateCompanyId: candidate.id, financialDocumentType: "BPU", sourceDocumentId: sourceDoc.documentId, sourceDocumentVersionId: sourceDoc.documentVersionId, status: "VALIDATED", currentVersionNumber: 1, createdBy: ownerAUserId },
+    });
+    await prisma.pricingScheduleVersion.create({
+      data: { id: versionId, organizationId: orgAId, pricingScheduleId: scheduleId, versionNumber: 1, status: "VALIDATED", sourceDocumentVersionId: sourceDoc.documentVersionId, createdBy: ownerAUserId, validatedBy: ownerAUserId, validatedAt: new Date() },
+    });
+    await prisma.pricingSchedule.update({ where: { id: scheduleId }, data: { currentVersionId: versionId } });
+    await prisma.pricingScheduleFinalFile.create({
+      data: { id: randomUUID(), organizationId: orgAId, pricingScheduleVersionId: versionId, documentId: finalDocV1.documentId, documentVersionId: finalDocV1.documentVersionId, injectedCellCount: 2, generatedBy: ownerAUserId },
+    });
+
+    const createRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/response-packages`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ lotId }) });
+    const pkg = (await createRes.json()) as { id: string };
+    const buildV1Res = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(buildV1Res.status).toBe(201);
+    const builtV1 = (await buildV1Res.json()) as { version: { id: string }; items: { category: string; documentId?: string }[] };
+    expect(builtV1.items.find((i) => i.category === "FINANCIAL")?.documentId).toBe(finalDocV1.documentId);
+
+    const freshnessCurrentRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessCurrentRes.json()) as { freshness: string }).toMatchObject({ freshness: "CURRENT" });
+
+    // Une NOUVELLE génération pour la MÊME version de chiffrage — mission §9 "aucune contrainte
+    // n'empêche une régénération sur la version déjà validée" (confirmé par audit).
+    const finalDocV2 = await uploadDocument({ token: tokenOwnerA, organizationId: orgAId, filename: "bpu-final-v2.pdf" });
+    await prisma.pricingScheduleFinalFile.create({
+      data: { id: randomUUID(), organizationId: orgAId, pricingScheduleVersionId: versionId, documentId: finalDocV2.documentId, documentVersionId: finalDocV2.documentVersionId, injectedCellCount: 3, generatedBy: ownerAUserId },
+    });
+
+    const freshnessStaleRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessStaleRes.json()) as { freshness: string }).toMatchObject({ freshness: "STALE" });
+
+    const buildV2Res = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(buildV2Res.status).toBe(201);
+    const builtV2 = (await buildV2Res.json()) as { version: { id: string; versionNumber: number }; items: { category: string; documentId?: string }[] };
+    expect(builtV2.version.versionNumber).toBe(2);
+    expect(builtV2.items.find((i) => i.category === "FINANCIAL")?.documentId).toBe(finalDocV2.documentId);
+
+    const freshnessAfterRebuildRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessAfterRebuildRes.json()) as { freshness: string }).toMatchObject({ freshness: "CURRENT" });
+  }, 30000);
+
+  /** Checkpoint TENDEROS-2.1-P2.2-F4 (mission §8/§16/§46) — bout en bout, réel HTTP + PostgreSQL :
+   *  une nouvelle génération du mémoire technique (nouvelle `GeneratedDocumentRevision`, même
+   *  `technicalMemoId`) fait passer le package courant STALE, un rebuild redevient CURRENT en
+   *  référençant le NOUVEAU document généré. */
+  it("TEST TECHNICAL MEMO CHANGE (mission §8/§16/§46) — a new export of the SAME technical memo makes the package STALE, a rebuild references the new export, never the old one", async () => {
+    const { tenderId, lotId } = await createClientTenderAndLot({ organizationId: orgAId, userId: ownerAUserId });
+
+    const createMemoRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/technical-memos`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ templateOrigin: "TENDEROS_SYSTEM" }) });
+    expect(createMemoRes.status).toBe(201);
+    const createdMemo = (await createMemoRes.json()) as { memo: { id: string }; sections: { id: string }[] };
+    const memoId = createdMemo.memo.id;
+
+    const prepareRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/prepare`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(prepareRes.status).toBe(200);
+
+    // Chaque section a besoin d'une révision pour que la fraîcheur du mémoire soit CURRENT (mission
+    // "aucune dépendance DCE/Analyse inventée ici" — révisions volontairement sans
+    // analysisVersion/dceRevision/candidateCompanyId, hors périmètre de ce test). `TechnicalMemoSection.content`
+    // doit être mis à jour EXPLICITEMENT en parallèle (le domaine le fait dans la même transaction
+    // via le vrai flux HTTP `/edit`/génération — un insert Prisma direct de la révision seule ne le
+    // synchronise pas automatiquement), sinon `/export` génère un DOCX sans contenu réel.
+    for (const section of createdMemo.sections) {
+      await prisma.technicalMemoSectionRevision.create({
+        data: { id: randomUUID(), organizationId: orgAId, technicalMemoSectionId: section.id, revisionNumber: 1, source: "AI_GENERATED", content: "Contenu suffisant pour l'export.", createdBy: ownerAUserId },
+      });
+      await prisma.technicalMemoSection.update({ where: { id: section.id }, data: { content: "Contenu suffisant pour l'export.", status: "VALIDATED" } });
+    }
+
+    const exportV1Res = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/export`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({}) });
+    expect(exportV1Res.status).toBe(200);
+
+    const createRpRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/response-packages`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ lotId }) });
+    const pkg = (await createRpRes.json()) as { id: string };
+    const buildV1Res = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(buildV1Res.status).toBe(201);
+    const builtV1 = (await buildV1Res.json()) as { version: { id: string }; items: { category: string; sourceId?: string; documentId?: string }[] };
+    const technicalItemV1 = builtV1.items.find((i) => i.category === "TECHNICAL");
+    expect(technicalItemV1?.sourceId).toBe(memoId);
+    const documentIdV1 = technicalItemV1?.documentId;
+    expect(documentIdV1).toBeDefined();
+
+    const freshnessCurrentRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessCurrentRes.json()) as { freshness: string }).toMatchObject({ freshness: "CURRENT" });
+
+    // Une nouvelle génération pour le MÊME mémoire technique — crée une NOUVELLE
+    // `GeneratedDocumentRevision` (nouveau document/version), jamais une réécriture de la première.
+    const exportV2Res = await fetch(`${baseUrl}/api/v1/technical-memos/${memoId}/export`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({}) });
+    expect(exportV2Res.status).toBe(200);
+
+    const freshnessStaleRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessStaleRes.json()) as { freshness: string }).toMatchObject({ freshness: "STALE" });
+
+    const buildV2Res = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(buildV2Res.status).toBe(201);
+    const builtV2 = (await buildV2Res.json()) as { version: { id: string; versionNumber: number }; items: { category: string; documentId?: string }[] };
+    expect(builtV2.version.versionNumber).toBe(2);
+    const documentIdV2 = builtV2.items.find((i) => i.category === "TECHNICAL")?.documentId;
+    expect(documentIdV2).toBeDefined();
+    expect(documentIdV2).not.toBe(documentIdV1);
+
+    const freshnessAfterRebuildRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect((await freshnessAfterRebuildRes.json()) as { freshness: string }).toMatchObject({ freshness: "CURRENT" });
+  }, 30000);
 });

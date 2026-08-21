@@ -23,13 +23,13 @@ function fakeReadiness(status: string): GetReadinessStatusUseCase {
   return { execute: vi.fn(async () => ({ status })) } as unknown as GetReadinessStatusUseCase;
 }
 function completedPackage(overrides: Partial<SubmissionPackageSummary> = {}): SubmissionPackageSummary {
-  return { id: "pkg-1", tenderId: TENDER_ID, version: 1, status: PackageStatus.Completed, validationRunId: "run-1", approvalId: "approval-1", readinessStatus: "READY_FOR_SUBMISSION", files: [], fileHash: "a".repeat(64), createdAt: NOW.toISOString(), ...overrides };
+  return { id: "pkg-1", tenderId: TENDER_ID, version: 1, status: PackageStatus.Completed, validationRunId: "run-1", approvalId: "approval-1", readinessStatus: "READY_FOR_SUBMISSION", files: [], responsePackages: [], fileHash: "a".repeat(64), createdAt: NOW.toISOString(), ...overrides };
 }
 function fakePackages(packages: readonly SubmissionPackageSummary[]): ListSubmissionPackagesUseCase {
   return { execute: vi.fn(async () => packages) } as unknown as ListSubmissionPackagesUseCase;
 }
 function fakeRepository(active: TenderSubmission | null = null): TenderSubmissionRepository {
-  return { create: vi.fn(), findById: vi.fn(), findActiveForTender: vi.fn(async () => active), listByTender: vi.fn(), save: vi.fn(), replaceActive: vi.fn() };
+  return { create: vi.fn(), findById: vi.fn(), findActiveForTender: vi.fn(async () => active), listByTender: vi.fn(), save: vi.fn(), replaceActive: vi.fn(), listResponsePackageProvenance: vi.fn(async () => []) };
 }
 
 /**
@@ -49,7 +49,7 @@ function buildUseCase(input: {
   listTechnicalMemosUseCase?: { execute: ReturnType<typeof vi.fn> };
   getTechnicalMemoFreshnessUseCase?: { execute: ReturnType<typeof vi.fn> };
   getValidationFreshnessUseCase?: { execute: ReturnType<typeof vi.fn> };
-  listResponsePackagesUseCase?: { execute: ReturnType<typeof vi.fn> };
+  getRequiredResponsePackagesForTenderUseCase?: { execute: ReturnType<typeof vi.fn> };
   getResponsePackageFreshnessUseCase?: { execute: ReturnType<typeof vi.fn> };
 }): GetTenderSubmissionReadinessUseCase {
   return new GetTenderSubmissionReadinessUseCase(
@@ -68,7 +68,8 @@ function buildUseCase(input: {
     (input.listTechnicalMemosUseCase ?? { execute: vi.fn(async () => []) }) as never,
     (input.getTechnicalMemoFreshnessUseCase ?? { execute: vi.fn(async () => ({ freshness: "CURRENT" })) }) as never,
     (input.getValidationFreshnessUseCase ?? { execute: vi.fn(async () => ({ hasActiveApproval: true, freshness: "CURRENT" })) }) as never,
-    (input.listResponsePackagesUseCase ?? { execute: vi.fn(async () => [{ id: "response-package-1", currentVersionId: "version-1", status: "VALIDATED" }]) }) as never,
+    (input.getRequiredResponsePackagesForTenderUseCase ??
+      { execute: vi.fn(async () => [{ lotId: undefined, matchingPackages: [{ id: "response-package-1", lotId: undefined, currentVersionId: "version-1", status: "VALIDATED" }] }]) }) as never,
     (input.getResponsePackageFreshnessUseCase ?? { execute: vi.fn(async () => ({ freshness: "CURRENT" })) }) as never,
   );
 }
@@ -198,5 +199,79 @@ describe("GetTenderSubmissionReadinessUseCase — dimensions de fraîcheur du do
     });
     const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
     expect(result.fileReadinessReasons).toContainEqual(expect.objectContaining({ code: "ANALYSIS_MISSING" }));
+  });
+});
+
+describe("GetTenderSubmissionReadinessUseCase — multi-lot (Checkpoint TENDEROS-2.1-P2.2-F2.3)", () => {
+  it("TEST TWO SELECTED LOTS (mission §45) — READY when both required lots resolve to a CURRENT/validated package", async () => {
+    const useCase = buildUseCase({
+      getRequiredResponsePackagesForTenderUseCase: {
+        execute: vi.fn(async () => [
+          { lotId: "lot-a", matchingPackages: [{ id: "pkg-a", lotId: "lot-a", currentVersionId: "v-a", status: "VALIDATED" }] },
+          { lotId: "lot-b", matchingPackages: [{ id: "pkg-b", lotId: "lot-b", currentVersionId: "v-b", status: "VALIDATED" }] },
+        ]),
+      },
+    });
+    const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
+    expect(result.canSubmit).toBe(true);
+    expect(result.fileReadinessReasons.filter((r) => r.source === "RESPONSE_PACKAGE")).toEqual([]);
+  });
+
+  it("TEST NON-SELECTED LOT (mission §46) — a lot that exists but was never selected for response never appears as a requirement, so its stale/missing package never blocks", async () => {
+    // lot-c is simply absent from the requirements (the fake represents what
+    // GetRequiredResponsePackagesForTenderUseCase already filtered via selectedForResponse) — this
+    // proves readiness only ever looks at what it was given, never re-derives participation itself.
+    const useCase = buildUseCase({
+      getRequiredResponsePackagesForTenderUseCase: {
+        execute: vi.fn(async () => [{ lotId: "lot-a", matchingPackages: [{ id: "pkg-a", lotId: "lot-a", currentVersionId: "v-a", status: "VALIDATED" }] }]),
+      },
+    });
+    const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
+    expect(result.canSubmit).toBe(true);
+  });
+
+  it("TEST MISSING REQUIRED LOT (mission §47) — BLOCKED when a required lot has zero matching packages", async () => {
+    const useCase = buildUseCase({
+      getRequiredResponsePackagesForTenderUseCase: {
+        execute: vi.fn(async () => [
+          { lotId: "lot-a", matchingPackages: [{ id: "pkg-a", lotId: "lot-a", currentVersionId: "v-a", status: "VALIDATED" }] },
+          { lotId: "lot-b", matchingPackages: [] },
+        ]),
+      },
+    });
+    const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
+    expect(result.canSubmit).toBe(false);
+    expect(result.fileReadinessReasons).toContainEqual(expect.objectContaining({ code: "RESPONSE_PACKAGE_MISSING" }));
+  });
+
+  it("TEST STALE REQUIRED LOT (mission §48) — BLOCKED when one of several required lots is STALE, even though the other is CURRENT", async () => {
+    const useCase = buildUseCase({
+      getRequiredResponsePackagesForTenderUseCase: {
+        execute: vi.fn(async () => [
+          { lotId: "lot-a", matchingPackages: [{ id: "pkg-a", lotId: "lot-a", currentVersionId: "v-a", status: "VALIDATED" }] },
+          { lotId: "lot-b", matchingPackages: [{ id: "pkg-b", lotId: "lot-b", currentVersionId: "v-b", status: "VALIDATED" }] },
+        ]),
+      },
+      getResponsePackageFreshnessUseCase: {
+        execute: vi.fn(async ({ responsePackageId }: { responsePackageId: string }) => ({ freshness: responsePackageId === "pkg-b" ? "STALE" : "CURRENT" })),
+      },
+    });
+    const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
+    expect(result.canSubmit).toBe(false);
+    expect(result.fileReadinessReasons).toContainEqual(expect.objectContaining({ code: "RESPONSE_PACKAGE_STALE" }));
+  });
+
+  it("TEST UNVALIDATED REQUIRED LOT (mission §49) — BLOCKED when one required lot's current version isn't validated yet", async () => {
+    const useCase = buildUseCase({
+      getRequiredResponsePackagesForTenderUseCase: {
+        execute: vi.fn(async () => [
+          { lotId: "lot-a", matchingPackages: [{ id: "pkg-a", lotId: "lot-a", currentVersionId: "v-a", status: "VALIDATED" }] },
+          { lotId: "lot-b", matchingPackages: [{ id: "pkg-b", lotId: "lot-b", currentVersionId: "v-b", status: "IN_REVIEW" }] },
+        ]),
+      },
+    });
+    const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
+    expect(result.canSubmit).toBe(false);
+    expect(result.fileReadinessReasons).toContainEqual(expect.objectContaining({ code: "RESPONSE_PACKAGE_INCOMPLETE" }));
   });
 });

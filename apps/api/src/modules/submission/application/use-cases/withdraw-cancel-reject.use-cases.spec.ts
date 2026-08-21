@@ -26,7 +26,7 @@ function proofRepository(): SubmissionProofRepository {
   return { create: vi.fn(), findById: vi.fn(), listBySubmission: vi.fn(async () => []) };
 }
 function repositoryWith(submission: TenderSubmission | null): TenderSubmissionRepository {
-  return { create: vi.fn(), findById: vi.fn(async () => submission), findActiveForTender: vi.fn(), listByTender: vi.fn(), save: vi.fn(async () => undefined), replaceActive: vi.fn() };
+  return { create: vi.fn(), findById: vi.fn(async () => submission), findActiveForTender: vi.fn(), listByTender: vi.fn(), save: vi.fn(async () => undefined), replaceActive: vi.fn(), listResponsePackageProvenance: vi.fn(async () => []) };
 }
 function submitted() {
   return TenderSubmission.record({ id: "sub-1", organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, packageId: "pkg-1", packageVersion: 1, packageHash: "a".repeat(64), submittedByUserId: "user-1", submittedAt: NOW, platform: SubmissionPlatform.Place, occurredAt: NOW });

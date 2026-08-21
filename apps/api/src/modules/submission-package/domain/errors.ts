@@ -27,3 +27,4 @@ export class UnsafeArchivePathError extends DomainError {
     super(`Refusing an unsafe archive path: "${path}"`);
   }
 }
+

@@ -22,8 +22,15 @@ export class ListTenderSubmissionsUseCase {
     const submissions = await this.submissionRepository.listByTender({ organizationId: query.organizationId, tenderId: query.tenderId });
     return Promise.all(
       submissions.map(async (submission) => {
-        const proofs = await this.proofRepository.listBySubmission({ organizationId: query.organizationId, submissionId: submission.id });
-        return toTenderSubmissionSummary(submission, proofs);
+        const [proofs, responsePackageProvenance] = await Promise.all([
+          this.proofRepository.listBySubmission({ organizationId: query.organizationId, submissionId: submission.id }),
+          // Checkpoint TENDEROS-2.1-P2.2-F2.3.1 — relit la provenance MULTI-LOT figée (mode LOT
+          // uniquement, `[]` pour le mode global/toute Submission antérieure à F2.3), jamais
+          // recalculée depuis le Tender courant (mission §18) — même lecture que GET détail
+          // (mission §22 "parité detail/list").
+          this.submissionRepository.listResponsePackageProvenance({ organizationId: query.organizationId, submissionId: submission.id }),
+        ]);
+        return toTenderSubmissionSummary(submission, proofs, responsePackageProvenance);
       }),
     );
   }

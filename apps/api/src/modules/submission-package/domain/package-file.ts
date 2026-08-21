@@ -5,8 +5,16 @@ export const PackageFileSourceType = {
   SignatureArtifact: "SIGNATURE_ARTIFACT",
   Manifest: "MANIFEST",
   /** Sprint 8C Phase 2 — pièce administrative validée (DC1/DC2/DC4/DUME/AE/attestations/pouvoirs...),
-   *  incluse en LECTURE SEULE depuis `administrative-dossier`. */
+   *  incluse en LECTURE SEULE depuis `administrative-dossier`.
+   *  @deprecated Checkpoint TENDEROS-2.1-P2.2-F4.1 — n'est plus produit par
+   *  `CreateSubmissionPackageUseCase` (déjà encapsulé dans `RESPONSE_PACKAGE_ARTIFACT`) ; conservé
+   *  dans le catalogue pour les `PackageFile` HISTORIQUES déjà persistées (jamais réécrites). */
   AdministrativeDocument: "ADMINISTRATIVE_DOCUMENT",
+  /** Checkpoint TENDEROS-2.1-P2.2-F4.1 (OPTION C) — le `PackageArtifact` V2 lui-même, embarqué tel
+   *  quel : la SOURCE DE CONTENU MÉTIER (administratif/mémoire technique/pricing/checklist), jamais
+   *  reconstruite indépendamment (mission "SubmissionPackage ne reconstruit plus un second dossier
+   *  métier"). `sourceId` porte le `responsePackageVersionId` correspondant. */
+  ResponsePackageArtifact: "RESPONSE_PACKAGE_ARTIFACT",
 } as const;
 export type PackageFileSourceType = (typeof PackageFileSourceType)[keyof typeof PackageFileSourceType];
 

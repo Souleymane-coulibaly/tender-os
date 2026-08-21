@@ -18,6 +18,12 @@ export type SubmissionPackageProps = {
   fileSize?: number | undefined;
   fileHash?: string | undefined;
   storageKey?: string | undefined;
+  /** Checkpoint TENDEROS-2.1-P2.2-F4.1 — provenance du `PackageArtifact` V2 dont ce package est le
+   *  wrapper, figée une seule fois à `create()`, jamais réévaluée. `undefined` pour tout package
+   *  antérieur à ce checkpoint (jamais backfillé). */
+  responsePackageVersionId?: string | undefined;
+  responsePackageArtifactId?: string | undefined;
+  responsePackageArtifactChecksum?: string | undefined;
   createdBy: string;
   createdAt: Date;
   completedAt?: Date | undefined;
@@ -43,6 +49,9 @@ export class SubmissionPackage {
     approvalId: string;
     readinessStatus: string;
     files: readonly PackageFile[];
+    responsePackageVersionId?: string | undefined;
+    responsePackageArtifactId?: string | undefined;
+    responsePackageArtifactChecksum?: string | undefined;
     createdBy: string;
     occurredAt: Date;
   }): SubmissionPackage {
@@ -67,6 +76,9 @@ export class SubmissionPackage {
       approvalId: input.approvalId,
       readinessStatus: input.readinessStatus,
       files: input.files,
+      responsePackageVersionId: input.responsePackageVersionId,
+      responsePackageArtifactId: input.responsePackageArtifactId,
+      responsePackageArtifactChecksum: input.responsePackageArtifactChecksum,
       createdBy: input.createdBy,
       createdAt: input.occurredAt,
     });
@@ -148,6 +160,15 @@ export class SubmissionPackage {
   }
   get storageKey(): string | undefined {
     return this.props.storageKey;
+  }
+  get responsePackageVersionId(): string | undefined {
+    return this.props.responsePackageVersionId;
+  }
+  get responsePackageArtifactId(): string | undefined {
+    return this.props.responsePackageArtifactId;
+  }
+  get responsePackageArtifactChecksum(): string | undefined {
+    return this.props.responsePackageArtifactChecksum;
   }
   get createdBy(): string {
     return this.props.createdBy;

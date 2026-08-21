@@ -367,10 +367,12 @@ describe("Administrative Dossier — V2 Sprint 11 DC1 real official form fill (r
     expect(readiness.fields.find((f) => f.fieldKey === "candidate.tradeName")).toMatchObject({ status: "AVAILABLE", value: "Candidate Moderne SAS" });
     expect(readiness.fields.find((f) => f.fieldKey === "candidate.siret")).toMatchObject({ status: "AVAILABLE", value: "78900000000029" });
     expect(readiness.fields.find((f) => f.fieldKey === "candidate.address")?.value).toContain("9 avenue du Candidat");
-    // email/phone n'existent pas sur CandidateCompany — restent toujours résolus depuis
-    // legalIdentity (mission A4 §11, discipline "aucun champ inventé"), donc disponibles ici via
-    // la fiche legalIdentity du ClientAccount, contrairement à tradeName/siret/address ci-dessus.
-    expect(readiness.fields.find((f) => f.fieldKey === "candidate.email")).toMatchObject({ status: "AVAILABLE", value: "contact@example.test" });
+    // Checkpoint TENDEROS-2.1-P2.2-F3.1 (correctif audit Codex P1) — email/phone n'existent pas sur
+    // CandidateCompany et aucune autre SOT candidate-native n'existe : contrairement à
+    // tradeName/siret/address, ils ne retombent PLUS sur la fiche legalIdentity du ClientAccount (le
+    // client commercial, jamais le candidat) en NEW FLOW — restent honnêtement MISSING plutôt que
+    // d'emprunter silencieusement une identité fausse.
+    expect(readiness.fields.find((f) => f.fieldKey === "candidate.email")).toMatchObject({ status: "MISSING" });
 
     const generateRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/official-forms/dc1/generate`, { method: "POST", headers: jsonHeaders(tokenOwner) });
     expect(generateRes.status).toBe(201);

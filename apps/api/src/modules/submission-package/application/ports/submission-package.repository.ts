@@ -1,12 +1,16 @@
 import type { PackageFile } from "../../domain/package-file";
 import type { SubmissionPackage } from "../../domain/submission-package.aggregate";
+import type { SubmissionPackageResponsePackageProvenance } from "../../domain/submission-package-response-package-provenance";
 
-export type SubmissionPackageWithFiles = { pkg: SubmissionPackage; files: readonly PackageFile[] };
+export type SubmissionPackageResponsePackageProvenanceInput = Readonly<{ lotId: string; responsePackageVersionId: string; responsePackageArtifactId: string; artifactChecksum: string }>;
+
+export type SubmissionPackageWithFiles = { pkg: SubmissionPackage; files: readonly PackageFile[]; responsePackageProvenance: readonly SubmissionPackageResponsePackageProvenance[] };
 
 export interface SubmissionPackageRepository {
-  /** Crée le package PENDING et ses fichiers en une seule transaction courte (mission §69, même
-   *  discipline que `ExportJobRepository.create`). */
-  create(input: { pkg: SubmissionPackage; files: readonly PackageFile[] }): Promise<void>;
+  /** Crée le package PENDING, ses fichiers, et sa provenance multi-lot le cas échéant (mode LOT
+   *  uniquement, mission §69, même discipline que `ExportJobRepository.create`), en une seule
+   *  transaction courte. */
+  create(input: { pkg: SubmissionPackage; files: readonly PackageFile[]; responsePackageProvenance?: readonly SubmissionPackageResponsePackageProvenanceInput[] }): Promise<void>;
   findById(input: { organizationId: string; packageId: string }): Promise<SubmissionPackageWithFiles | null>;
   listForTender(input: { organizationId: string; tenderId: string }): Promise<readonly SubmissionPackageWithFiles[]>;
   findLatestCompletedForTender(input: { organizationId: string; tenderId: string }): Promise<SubmissionPackageWithFiles | null>;

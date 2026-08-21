@@ -3,7 +3,7 @@ import { GetEffectiveTenderAnalysisSummaryUseCase, TenderBusinessAnalysisNotFoun
 import { GetChecklistFreshnessUseCase } from "../../../checklist-intelligence";
 import { ClientPermission } from "../../../client-portfolio";
 import { GetGoNoGoReportUseCase, GoNoGoReportNotFoundError } from "../../../opportunity";
-import { GetResponsePackageFreshnessUseCase, ListResponsePackagesUseCase } from "../../../response-package";
+import { GetRequiredResponsePackagesForTenderUseCase, GetResponsePackageFreshnessUseCase } from "../../../response-package";
 import { GetTechnicalMemoFreshnessUseCase, ListTechnicalMemosUseCase } from "../../../technical-memo";
 import { GetReadinessStatusUseCase, GetValidationFreshnessUseCase, ReadinessStatus } from "../../../validation";
 import { ListSubmissionPackagesUseCase, PackageStatus, type SubmissionPackageSummary } from "../../../submission-package";
@@ -72,7 +72,7 @@ export class GetTenderSubmissionReadinessUseCase {
     private readonly listTechnicalMemosUseCase: ListTechnicalMemosUseCase,
     private readonly getTechnicalMemoFreshnessUseCase: GetTechnicalMemoFreshnessUseCase,
     private readonly getValidationFreshnessUseCase: GetValidationFreshnessUseCase,
-    private readonly listResponsePackagesUseCase: ListResponsePackagesUseCase,
+    private readonly getRequiredResponsePackagesForTenderUseCase: GetRequiredResponsePackagesForTenderUseCase,
     private readonly getResponsePackageFreshnessUseCase: GetResponsePackageFreshnessUseCase,
   ) {}
 
@@ -86,7 +86,7 @@ export class GetTenderSubmissionReadinessUseCase {
   async resolveFileReadinessReasons(query: GetTenderSubmissionReadinessQuery, candidateCompanyId: string | undefined): Promise<readonly SubmissionReadinessReason[]> {
     const base = { organizationId: query.organizationId, tenderId: query.tenderId, actorId: query.actorId, actorRole: query.actorRole };
 
-    const [analysisResult, checklistResult, goNoGoResult, technicalMemos, validationResult, responsePackages] = await Promise.all([
+    const [analysisResult, checklistResult, goNoGoResult, technicalMemos, validationResult, responsePackageRequirements] = await Promise.all([
       this.getEffectiveTenderAnalysisSummaryUseCase.execute(base).catch((error) => {
         if (error instanceof TenderBusinessAnalysisNotFoundError) return undefined;
         throw error;
@@ -98,25 +98,43 @@ export class GetTenderSubmissionReadinessUseCase {
       }),
       this.listTechnicalMemosUseCase.execute(base),
       this.getValidationFreshnessUseCase.execute(base),
-      this.listResponsePackagesUseCase.execute(base),
+      this.getRequiredResponsePackagesForTenderUseCase.execute(base),
     ]);
 
-    // Mission "le PIRE signal parmi tous les mémoires/packages du tender s'il y en a plusieurs" —
-    // même granularité tender-wide que le reste de ce use case (jamais un scope Lot inventé ici,
-    // mission §111-112 "prouver l'architecture existante").
+    // Mission "le PIRE signal parmi tous les mémoires du tender s'il y en a plusieurs" — même
+    // granularité tender-wide que le reste de ce use case (jamais un scope Lot inventé ici, mission
+    // §111-112 "prouver l'architecture existante" — Technical Memo n'a pas de notion de lot).
     const technicalMemoFreshnesses = await Promise.all(
       technicalMemos.map((memo) => this.getTechnicalMemoFreshnessUseCase.execute({ organizationId: query.organizationId, technicalMemoId: memo.id, actorId: query.actorId, actorRole: query.actorRole })),
     );
     const worstTechnicalMemoFreshness = technicalMemoFreshnesses.length === 0 ? undefined : technicalMemoFreshnesses.some((f) => f.freshness === "STALE") ? "STALE" : technicalMemoFreshnesses.some((f) => f.freshness === "UNKNOWN") ? "UNKNOWN" : "CURRENT";
 
-    const responsePackageFreshnesses = await Promise.all(
-      responsePackages.map((pkg) => this.getResponsePackageFreshnessUseCase.execute({ organizationId: query.organizationId, responsePackageId: pkg.id, actorId: query.actorId, actorRole: query.actorRole })),
-    );
+    // Checkpoint TENDEROS-2.1-P2.2-F2.3, mission §15/§27/§28 — READY signifie que TOUS les créneaux
+    // REQUIS (global unique, ou un par lot RÉELLEMENT sélectionné pour candidature — jamais "au
+    // moins un ResponsePackage créé quelque part est CURRENT", l'ancien calcul non scopé). Un
+    // créneau requis dont `matchingPackages.length !== 1` (absent, ou ambigu — jamais deviné, même
+    // discipline que le resolver F2) compte comme non résolu ; un lot NON sélectionné n'apparaît
+    // jamais dans `responsePackageRequirements` (mission §14/§16) donc ne peut jamais peser ici.
+    let anyRequirementUnresolved = false;
+    const resolvedRequirementFreshnesses: Array<{ freshness: "CURRENT" | "STALE" | "UNKNOWN"; hasCurrentVersion: boolean; isValidated: boolean }> = [];
+    for (const requirement of responsePackageRequirements) {
+      if (requirement.matchingPackages.length !== 1) {
+        anyRequirementUnresolved = true;
+        continue;
+      }
+      const pkg = requirement.matchingPackages[0]!;
+      const freshness = await this.getResponsePackageFreshnessUseCase.execute({ organizationId: query.organizationId, responsePackageId: pkg.id, actorId: query.actorId, actorRole: query.actorRole });
+      resolvedRequirementFreshnesses.push({ freshness: freshness.freshness, hasCurrentVersion: pkg.currentVersionId !== undefined, isValidated: pkg.status === "VALIDATED" || pkg.status === "EXPORTED" });
+    }
     const worstResponsePackageFreshness =
-      responsePackageFreshnesses.length === 0 ? undefined : responsePackageFreshnesses.some((f) => f.freshness === "STALE") ? "STALE" : responsePackageFreshnesses.some((f) => f.freshness === "UNKNOWN") ? "UNKNOWN" : "CURRENT";
-    // Une version courante existe-t-elle, et est-elle VALIDATED, pour CHAQUE package du tender qui a
-    // une version courante ? (mission §63 "généré, complet, CURRENT").
-    const anyCurrentVersionNotValidated = responsePackages.some((pkg) => pkg.currentVersionId !== undefined && pkg.status !== "VALIDATED" && pkg.status !== "EXPORTED");
+      resolvedRequirementFreshnesses.length === 0
+        ? undefined
+        : resolvedRequirementFreshnesses.some((f) => f.freshness === "STALE")
+          ? "STALE"
+          : resolvedRequirementFreshnesses.some((f) => f.freshness === "UNKNOWN")
+            ? "UNKNOWN"
+            : "CURRENT";
+    const anyCurrentVersionNotValidated = resolvedRequirementFreshnesses.some((f) => f.hasCurrentVersion && !f.isValidated);
 
     const input: FileReadinessInput = {
       candidateCompanyId,
@@ -125,7 +143,11 @@ export class GetTenderSubmissionReadinessUseCase {
       goNoGo: { exists: goNoGoResult !== undefined, freshness: goNoGoResult?.freshness, recommendation: goNoGoResult?.recommendation },
       technicalMemo: { exists: technicalMemos.length > 0, freshness: worstTechnicalMemoFreshness },
       validation: { hasActiveApproval: validationResult.hasActiveApproval, freshness: validationResult.freshness },
-      responsePackage: { exists: responsePackages.length > 0, freshness: worstResponsePackageFreshness, isCurrentVersionValidated: responsePackages.length === 0 ? undefined : !anyCurrentVersionNotValidated },
+      responsePackage: {
+        exists: !anyRequirementUnresolved && resolvedRequirementFreshnesses.length > 0,
+        freshness: worstResponsePackageFreshness,
+        isCurrentVersionValidated: resolvedRequirementFreshnesses.length === 0 ? undefined : !anyCurrentVersionNotValidated,
+      },
     };
 
     return evaluateFileReadinessReasons(input);

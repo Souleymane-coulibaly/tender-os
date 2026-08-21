@@ -20,6 +20,11 @@ export type AdministrativeDocumentRevisionProps = {
    *  données actuelles"). */
   officialTemplateId?: string | undefined;
   formDataSnapshot?: Record<string, unknown> | undefined;
+  /** Checkpoint TENDEROS-2.1-P2.2-F3 — CandidateCompany effectif du Tender au moment où cette
+   *  révision a été créée (générée OU déposée manuellement), dénormalisé en LECTURE SEULE, jamais
+   *  recalculé après coup. `undefined` pour toute révision antérieure à ce checkpoint ou pour un
+   *  Tender sans CandidateCompany résolu au moment de l'attachement — jamais deviné/backfillé. */
+  candidateCompanyId?: string | undefined;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -70,6 +75,11 @@ export class AdministrativeDocumentRevision {
      *  formulaire officiel — jamais pour un fichier déposé manuellement par un acteur. */
     officialTemplateId?: string | undefined;
     formDataSnapshot?: Record<string, unknown> | undefined;
+    /** Checkpoint TENDEROS-2.1-P2.2-F3 — CandidateCompany effectif du Tender à CET instant précis
+     *  (mission §18/§26), capturé par l'appelant depuis `Tender.candidateCompanyId`, jamais résolu
+     *  ici (aucune E/S dans l'entité). Toujours réévalué à CHAQUE attachement — y compris quand une
+     *  révision DRAFT existante est réutilisée — jamais figé une seule fois à `create()`. */
+    candidateCompanyId?: string | undefined;
     occurredAt: Date;
   }): void {
     if (this.props.status !== AdministrativeDocumentRevisionStatus.Draft) {
@@ -83,6 +93,7 @@ export class AdministrativeDocumentRevision {
     this.props.expiresAt = input.expiresAt;
     this.props.officialTemplateId = input.officialTemplateId;
     this.props.formDataSnapshot = input.formDataSnapshot;
+    this.props.candidateCompanyId = input.candidateCompanyId;
     this.props.updatedAt = input.occurredAt;
   }
 
@@ -159,6 +170,9 @@ export class AdministrativeDocumentRevision {
   }
   get formDataSnapshot(): Record<string, unknown> | undefined {
     return this.props.formDataSnapshot;
+  }
+  get candidateCompanyId(): string | undefined {
+    return this.props.candidateCompanyId;
   }
   get status(): AdministrativeDocumentRevisionStatus {
     return this.props.status;

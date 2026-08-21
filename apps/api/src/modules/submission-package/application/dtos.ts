@@ -1,6 +1,17 @@
 import type { PackageFile } from "../domain/package-file";
 import type { SubmissionPackage } from "../domain/submission-package.aggregate";
 
+export type SubmissionPackageResponsePackageSummary = { lotId: string; responsePackageVersionId: string; responsePackageArtifactId: string; artifactChecksum: string };
+
+/** Accepte n'importe quelle forme portant AU MOINS ces 4 champs métier — le type domaine complet
+ *  (`SubmissionPackageResponsePackageProvenance`, relu en base) comme la forme construite localement
+ *  juste après écriture (`SubmissionPackageResponsePackageProvenanceInput`, sans id/createdAt) sont
+ *  tous deux assignables ici, jamais une seconde lecture DB requise (mission "jamais recalculé après
+ *  coup"). */
+export function toSubmissionPackageResponsePackageSummary(p: SubmissionPackageResponsePackageSummary): SubmissionPackageResponsePackageSummary {
+  return { lotId: p.lotId, responsePackageVersionId: p.responsePackageVersionId, responsePackageArtifactId: p.responsePackageArtifactId, artifactChecksum: p.artifactChecksum };
+}
+
 export type PackageFileSummary = {
   archivePath: string;
   sourceType: string;
@@ -38,13 +49,25 @@ export type SubmissionPackageSummary = {
   mimeType?: string | undefined;
   fileSize?: number | undefined;
   fileHash?: string | undefined;
+  /** Checkpoint TENDEROS-2.1-P2.2-F4.1 — permet à tout consommateur de l'API de PROUVER que ce
+   *  package est bien le wrapper du `PackageArtifact` V2 exact certifié par la Submission Readiness
+   *  (mission "SubmissionPackage X = wrapper du PackageArtifact V2 Y"). `undefined` pour un package
+   *  antérieur à ce checkpoint. */
+  responsePackageVersionId?: string | undefined;
+  responsePackageArtifactId?: string | undefined;
+  responsePackageArtifactChecksum?: string | undefined;
+  /** Checkpoint TENDEROS-2.1-P2.2-F4.1-CODEX-AUDIT — provenance MULTI-LOT (mode LOT, mission "ne
+   *  jamais refuser un N≥2 représentable sans ambiguïté"), une entrée par lot requis. Vide en mode
+   *  GLOBAL (les 3 champs scalaires ci-dessus sont alors seuls renseignés) — jamais les deux à la
+   *  fois, même discipline que `TenderSubmissionSummary.responsePackages`. */
+  responsePackages: readonly SubmissionPackageResponsePackageSummary[];
   createdAt: string;
   completedAt?: string | undefined;
   errorCode?: string | undefined;
   errorMessage?: string | undefined;
 };
 
-export function toSubmissionPackageSummary(input: { pkg: SubmissionPackage; files: readonly PackageFile[] }): SubmissionPackageSummary {
+export function toSubmissionPackageSummary(input: { pkg: SubmissionPackage; files: readonly PackageFile[]; responsePackageProvenance?: readonly SubmissionPackageResponsePackageSummary[] }): SubmissionPackageSummary {
   return {
     id: input.pkg.id,
     tenderId: input.pkg.tenderId,
@@ -58,6 +81,10 @@ export function toSubmissionPackageSummary(input: { pkg: SubmissionPackage; file
     mimeType: input.pkg.mimeType,
     fileSize: input.pkg.fileSize,
     fileHash: input.pkg.fileHash,
+    responsePackageVersionId: input.pkg.responsePackageVersionId,
+    responsePackageArtifactId: input.pkg.responsePackageArtifactId,
+    responsePackageArtifactChecksum: input.pkg.responsePackageArtifactChecksum,
+    responsePackages: (input.responsePackageProvenance ?? []).map(toSubmissionPackageResponsePackageSummary),
     createdAt: input.pkg.createdAt.toISOString(),
     completedAt: input.pkg.completedAt?.toISOString(),
     errorCode: input.pkg.errorCode,

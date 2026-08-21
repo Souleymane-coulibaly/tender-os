@@ -90,7 +90,7 @@ export class BuildResponsePackageVersionUseCase {
 
       const [candidateContext, adminDocs, technicalMemos, finalFiles, checklistItems] = await Promise.all([
         this.getCandidateContextForPackageUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: pkg.tenderId }),
-        this.listValidatedAdministrativeDocumentsForPackageUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: pkg.tenderId }),
+        this.listValidatedAdministrativeDocumentsForPackageUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: pkg.tenderId, candidateCompanyId: tender.candidateCompanyId }),
         this.listValidatedTechnicalMemosForPackageUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: pkg.tenderId }),
         this.listFinalFilesForPackageUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: pkg.tenderId, candidateCompanyId: tender.candidateCompanyId }),
         this.checklistItemRepository.listByTender({ organizationId: command.organizationId, tenderId: pkg.tenderId }),

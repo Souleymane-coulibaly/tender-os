@@ -5,6 +5,7 @@ import { DocumentsModule } from "../documents";
 import { ExportModule } from "../export";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
+import { ResponsePackageModule } from "../response-package";
 import { SignatureModule } from "../signature";
 import { TendersModule } from "../tenders";
 import { ValidationModule } from "../validation";
@@ -26,7 +27,7 @@ import { SubmissionPackageController } from "./interfaces/http/submission-packag
  * leurs tables) : aucun de ces modules n'importe jamais Package en retour.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, ExportModule, ValidationModule, SignatureModule, DocumentsModule, AdministrativeDossierModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, ExportModule, ValidationModule, SignatureModule, DocumentsModule, AdministrativeDossierModule, ResponsePackageModule],
   controllers: [SubmissionPackageController],
   providers: [
     CreateSubmissionPackageUseCase,

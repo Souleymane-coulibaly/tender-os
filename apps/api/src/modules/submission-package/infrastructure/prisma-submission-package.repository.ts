@@ -2,17 +2,17 @@ import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
 import type { PackageFile } from "../domain/package-file";
 import type { SubmissionPackage } from "../domain/submission-package.aggregate";
-import type { SubmissionPackageRepository, SubmissionPackageWithFiles } from "../application/ports/submission-package.repository";
+import type { SubmissionPackageRepository, SubmissionPackageResponsePackageProvenanceInput, SubmissionPackageWithFiles } from "../application/ports/submission-package.repository";
 import { toDomainSubmissionPackage } from "./submission-package.persistence-mapper";
 
-const INCLUDE = { files: { orderBy: { order: "asc" as const } } };
+const INCLUDE = { files: { orderBy: { order: "asc" as const } }, responsePackageProvenance: true };
 
 @Injectable()
 export class PrismaSubmissionPackageRepository implements SubmissionPackageRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(input: { pkg: SubmissionPackage; files: readonly PackageFile[] }): Promise<void> {
-    // Deux opérations top-level dans une transaction courte plutôt que le raccourci Prisma
+  async create(input: { pkg: SubmissionPackage; files: readonly PackageFile[]; responsePackageProvenance?: readonly SubmissionPackageResponsePackageProvenanceInput[] }): Promise<void> {
+    // Opérations top-level dans une transaction courte plutôt que le raccourci Prisma
     // `files: { create: [...] }` (même contournement que `PrismaExportJobRepository.create` —
     // la FK composite `(submissionPackageId, organizationId)` sur `PackageFile` n'est pas
     // correctement inférée par le raccourci imbriqué).
@@ -32,6 +32,22 @@ export class PrismaSubmissionPackageRepository implements SubmissionPackageRepos
                 fileSize: f.fileSize,
                 fileHash: f.fileHash,
                 order: f.order,
+              })),
+            }),
+          ]
+        : []),
+      // Checkpoint TENDEROS-2.1-P2.2-F4.1-CODEX-AUDIT — provenance multi-lot (mode LOT uniquement),
+      // mirroir exact de `PrismaTenderSubmissionRepository.create`'s `submissionResponsePackage`.
+      ...(input.responsePackageProvenance && input.responsePackageProvenance.length > 0
+        ? [
+            this.prisma.submissionPackageResponsePackage.createMany({
+              data: input.responsePackageProvenance.map((p) => ({
+                organizationId: input.pkg.organizationId,
+                submissionPackageId: input.pkg.id,
+                lotId: p.lotId,
+                responsePackageVersionId: p.responsePackageVersionId,
+                responsePackageArtifactId: p.responsePackageArtifactId,
+                artifactChecksum: p.artifactChecksum,
               })),
             }),
           ]
@@ -117,6 +133,9 @@ function toPackageRow(pkg: SubmissionPackage) {
     fileSize: pkg.fileSize ?? null,
     fileHash: pkg.fileHash ?? null,
     storageKey: pkg.storageKey ?? null,
+    responsePackageVersionId: pkg.responsePackageVersionId ?? null,
+    responsePackageArtifactId: pkg.responsePackageArtifactId ?? null,
+    responsePackageArtifactChecksum: pkg.responsePackageArtifactChecksum ?? null,
     createdBy: pkg.createdBy,
     createdAt: pkg.createdAt,
     completedAt: pkg.completedAt ?? null,

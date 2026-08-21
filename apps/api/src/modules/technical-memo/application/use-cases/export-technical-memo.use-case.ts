@@ -10,6 +10,7 @@ import {
   type GeneratedDocumentRepository,
   type GeneratedDocumentRevision,
 } from "../../../document-generation";
+import { InternalDocumentCleanupService } from "../../../documents";
 import { TechnicalMemoStaleExportBlockedError, TechnicalMemoTemplateNotReadyError } from "../../domain/errors";
 import { TechnicalMemoFreshness } from "../../domain/technical-memo-freshness";
 import { assertTechnicalMemoAccess } from "../policies/technical-memo-access.policy";
@@ -50,6 +51,7 @@ export class ExportTechnicalMemoUseCase {
     private readonly accessService: TechnicalMemoAccessService,
     private readonly documentGenerationExecutionService: DocumentGenerationExecutionService,
     private readonly getTechnicalMemoFreshnessUseCase: GetTechnicalMemoFreshnessUseCase,
+    private readonly internalDocumentCleanupService: InternalDocumentCleanupService,
   ) {}
 
   async execute(command: ExportTechnicalMemoCommand): Promise<GeneratedDocumentRevision> {
@@ -130,6 +132,27 @@ export class ExportTechnicalMemoUseCase {
       documentTitle: `Mémoire technique — ${memo.tenderId}`,
       requestId: command.requestId,
     });
+
+    // Checkpoint TENDEROS-2.1-P2.2-F4 (correctif — Sprint 21 "hardening" a retiré la persistance de
+    // la révision de `DocumentGenerationExecutionService.run()` elle-même, la reportant à
+    // l'APPELANT — voir le docstring de `run()` : "n'écrit plus JAMAIS la ligne
+    // GeneratedDocumentRevision elle-même... c'est désormais la responsabilité de l'appelant". Ce
+    // use case ne l'avait jamais fait, contrairement à `GenerateDocumentUseCase`/
+    // `RegenerateDocumentUseCase` (mêmes appelants cités par ce docstring) — chaque export
+    // "réussissait" (200, `status: COMPLETED`, artefact réellement stocké) sans jamais laisser de
+    // trace en base, rendant TOUT mémoire technique invisible pour
+    // `ListValidatedTechnicalMemosForPackageUseCase` (aucun `GeneratedDocumentRevision` à trouver).
+    // Même filet de sécurité que `GenerateDocumentUseCase` : si l'écriture de la révision échoue
+    // alors que l'artefact a déjà été créé avec succès par `run()`, le purger plutôt que le laisser
+    // orphelin (correctif audit Codex P2 original, relocalisé ici pour la même raison).
+    try {
+      await this.generatedDocumentRepository.createRevision(revision);
+    } catch (error) {
+      if (revision.artifactDocumentId) {
+        await this.internalDocumentCleanupService.purgeJustCreatedDocument({ organizationId: command.organizationId, documentId: revision.artifactDocumentId });
+      }
+      throw error;
+    }
 
     if (revision.status === GeneratedDocumentRevisionStatus.Completed) {
       memo.markExported(occurredAt);

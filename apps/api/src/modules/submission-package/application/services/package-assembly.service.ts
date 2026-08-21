@@ -7,7 +7,7 @@ import { stageStreamToTempFile } from "../../../../shared-kernel/temp-file-stagi
 import { PackageFile, type PackageFileSourceType } from "../../domain/package-file";
 import { SubmissionPackage } from "../../domain/submission-package.aggregate";
 import type { SubmissionPackageManifest } from "../dtos";
-import { SUBMISSION_PACKAGE_REPOSITORY, type SubmissionPackageRepository } from "../ports/submission-package.repository";
+import { SUBMISSION_PACKAGE_REPOSITORY, type SubmissionPackageRepository, type SubmissionPackageResponsePackageProvenanceInput } from "../ports/submission-package.repository";
 import { ZIP_ARCHIVE_PORT, type ZipArchivePort } from "../ports/zip-archive.port";
 
 /** Une source à inclure dans le ZIP — `sourceStorageKey` est PRIVÉ à ce service (jamais persisté
@@ -33,6 +33,15 @@ export type RunPackageAssemblyInput = Readonly<{
   approvalId: string;
   readinessStatus: string;
   sources: readonly PackageSourceFile[];
+  /** Checkpoint TENDEROS-2.1-P2.2-F4.1 — provenance du `PackageArtifact` V2 dont ce package est le
+   *  wrapper, figée telle quelle sur la ligne créée (jamais recalculée ici). */
+  responsePackageVersionId?: string | undefined;
+  responsePackageArtifactId?: string | undefined;
+  responsePackageArtifactChecksum?: string | undefined;
+  /** Checkpoint TENDEROS-2.1-P2.2-F4.1-CODEX-AUDIT — provenance MULTI-LOT (mode LOT uniquement,
+   *  jamais en même temps que les 3 champs scalaires ci-dessus), figée telle quelle sur les lignes
+   *  créées. */
+  responsePackageProvenance?: readonly SubmissionPackageResponsePackageProvenanceInput[];
   createdBy: string;
   occurredAt: Date;
 }>;
@@ -53,7 +62,7 @@ export class PackageAssemblyService {
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
   ) {}
 
-  async run(input: RunPackageAssemblyInput): Promise<{ pkg: SubmissionPackage; files: readonly PackageFile[] }> {
+  async run(input: RunPackageAssemblyInput): Promise<{ pkg: SubmissionPackage; files: readonly PackageFile[]; responsePackageProvenance: readonly SubmissionPackageResponsePackageProvenanceInput[] }> {
     const version = await this.submissionPackageRepository.nextVersion({ organizationId: input.organizationId, tenderId: input.tenderId });
     const packageId = this.idGenerator.generate();
 
@@ -97,12 +106,15 @@ export class PackageAssemblyService {
       approvalId: input.approvalId,
       readinessStatus: input.readinessStatus,
       files,
+      responsePackageVersionId: input.responsePackageVersionId,
+      responsePackageArtifactId: input.responsePackageArtifactId,
+      responsePackageArtifactChecksum: input.responsePackageArtifactChecksum,
       createdBy: input.createdBy,
       occurredAt: input.occurredAt,
     });
 
-    // Transaction courte n°1 : PENDING + fichiers.
-    await this.submissionPackageRepository.create({ pkg, files });
+    // Transaction courte n°1 : PENDING + fichiers + provenance multi-lot (mode LOT uniquement).
+    await this.submissionPackageRepository.create({ pkg, files, responsePackageProvenance: input.responsePackageProvenance ?? [] });
     pkg.markGenerating();
     await this.submissionPackageRepository.markGenerating({ organizationId: input.organizationId, packageId });
 
@@ -141,7 +153,7 @@ export class PackageAssemblyService {
         });
         pkg.markCompleted({ fileName, mimeType: "application/zip", fileSize: staged.sizeBytes, fileHash: staged.sha256, storageKey, occurredAt: input.occurredAt });
 
-        return { pkg, files };
+        return { pkg, files, responsePackageProvenance: input.responsePackageProvenance ?? [] };
       } finally {
         await staged.cleanup();
       }

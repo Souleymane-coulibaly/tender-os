@@ -29,7 +29,7 @@ function fakeReadinessUseCase(result: Partial<TenderSubmissionReadinessResult> =
   return { execute: vi.fn(async () => full) } as unknown as GetTenderSubmissionReadinessUseCase;
 }
 function fakeRepository(active: TenderSubmission | null = null): TenderSubmissionRepository {
-  return { create: vi.fn(), findById: vi.fn(), findActiveForTender: vi.fn(async () => active), listByTender: vi.fn(), save: vi.fn(), replaceActive: vi.fn() };
+  return { create: vi.fn(), findById: vi.fn(), findActiveForTender: vi.fn(async () => active), listByTender: vi.fn(), save: vi.fn(), replaceActive: vi.fn(), listResponsePackageProvenance: vi.fn(async () => []) };
 }
 function fakeAssertClientAccess(allowed: Set<string>): AssertClientAccessUseCase {
   return { execute: vi.fn(async ({ permission }: { permission: string }) => { if (!allowed.has(permission)) throw new Error("denied"); }) } as unknown as AssertClientAccessUseCase;

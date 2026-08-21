@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { RecordTenderSubmissionUseCase } from "./record-tender-submission.use-case";
 import type { GetTenderSubmissionReadinessUseCase } from "./get-tender-submission-readiness.use-case";
-import type { GetSubmittableResponsePackageVersionUseCase, SubmittableResponsePackageVersion, SubmittableResponsePackageVersionResolution } from "../../../response-package";
+import type { GetResponsePackageFreshnessUseCase, GetSubmittableResponsePackageVersionUseCase, SubmittableResponsePackageVersion, SubmittableResponsePackageVersionResolution } from "../../../response-package";
 import { TenderSubmission } from "../../domain/tender-submission.aggregate";
 import {
   ActiveTenderSubmissionAlreadyExistsError,
@@ -39,12 +39,50 @@ function fakeAccessService(submissionDeadline?: string): SubmissionAccessService
 function fakeAuditLogWriter(): AuditLogWriter {
   return { record: vi.fn(async () => undefined) };
 }
+// Checkpoint TENDEROS-2.1-P2.2-F4.1 — chaque `SubmissionPackage` legacy porte désormais une
+// provenance V2 stampée ; ce fichier teste `RecordTenderSubmissionUseCase`, jamais le CONTENU du
+// nouveau contrôle d'alignement V2 (couvert séparément par les tests dédiés F4.1) — la valeur par
+// défaut ici est volontairement PARTAGÉE par tous les fixtures `completedPackage()`, pour que
+// `resolverWith()` puisse toujours faire correspondre sa résolution V2 fictive, quel que soit le
+// package sélectionné comme "dernier COMPLETED" par les tests existants.
+const DEFAULT_V2_VERSION_ID = "rpv-default";
+const DEFAULT_V2_ARTIFACT_ID = "art-default";
 function completedPackage(overrides: Partial<SubmissionPackageSummary> = {}): SubmissionPackageSummary {
-  return { id: "pkg-1", tenderId: TENDER_ID, version: 1, status: PackageStatus.Completed, validationRunId: "run-1", approvalId: "approval-1", readinessStatus: "READY_FOR_SUBMISSION", files: [MANIFEST_FILE], fileHash: "a".repeat(64), createdAt: NOW.toISOString(), ...overrides };
+  return {
+    id: "pkg-1",
+    tenderId: TENDER_ID,
+    version: 1,
+    status: PackageStatus.Completed,
+    validationRunId: "run-1",
+    approvalId: "approval-1",
+    readinessStatus: "READY_FOR_SUBMISSION",
+    files: [MANIFEST_FILE],
+    fileHash: "a".repeat(64),
+    responsePackageVersionId: DEFAULT_V2_VERSION_ID,
+    responsePackageArtifactId: DEFAULT_V2_ARTIFACT_ID,
+    responsePackages: [],
+    createdAt: NOW.toISOString(),
+    ...overrides,
+  };
 }
 function resolverWith(packages: readonly SubmissionPackageSummary[]): SubmissionPackageResolverService {
   const listUseCase = { execute: vi.fn(async () => packages) } as unknown as ListSubmissionPackagesUseCase;
-  return new SubmissionPackageResolverService(listUseCase);
+  const getSubmittableResponsePackageVersionUseCase = {
+    execute: vi.fn(async () => ({
+      status: "RESOLVED",
+      responsePackageId: "rp-default",
+      responsePackageVersionId: DEFAULT_V2_VERSION_ID,
+      versionNumber: 1,
+      artifactId: DEFAULT_V2_ARTIFACT_ID,
+      artifactChecksum: "c".repeat(64),
+      artifactFileName: "V2.zip",
+      artifactStorageKey: "storage/v2.zip",
+      artifactMimeType: "application/zip",
+      artifactSizeBytes: 2048,
+    })),
+  } as unknown as GetSubmittableResponsePackageVersionUseCase;
+  const getResponsePackageFreshnessUseCase = { execute: vi.fn(async () => ({ freshness: "CURRENT", currentVersionId: DEFAULT_V2_VERSION_ID, currentVersionNumber: 1 })) } as unknown as GetResponsePackageFreshnessUseCase;
+  return new SubmissionPackageResolverService(listUseCase, getSubmittableResponsePackageVersionUseCase, getResponsePackageFreshnessUseCase);
 }
 // Checkpoint 2.1-P2.1-FIX-F.1 — par défaut "dossier complet" (aucune raison, jamais bloquant), pour
 // que les tests existants (qui exercent d'AUTRES guards) restent inchangés. Un test dédié fournit
@@ -96,6 +134,7 @@ function inMemoryRepository(seed: TenderSubmission | null = null): TenderSubmiss
       active = s;
     }),
     replaceActive: vi.fn(),
+    listResponsePackageProvenance: vi.fn(async () => []),
   };
 }
 
@@ -243,6 +282,9 @@ describe("RecordTenderSubmissionUseCase", () => {
         artifactId: "artifact-1",
         artifactChecksum: "c".repeat(64),
         artifactFileName: "TenderOS_tender-1_V3.zip",
+        artifactStorageKey: "storage/artifact-1.zip",
+        artifactMimeType: "application/zip",
+        artifactSizeBytes: 4096,
       };
       const useCase = buildUseCase({
         resolver: resolverWith([completedPackage()]),
@@ -296,6 +338,9 @@ describe("RecordTenderSubmissionUseCase", () => {
         artifactId: "artifact-1",
         artifactChecksum: "e".repeat(64),
         artifactFileName: "TenderOS_tender-1_V1.zip",
+        artifactStorageKey: "storage/artifact-1.zip",
+        artifactMimeType: "application/zip",
+        artifactSizeBytes: 4096,
       };
       const useCase = buildUseCase({
         resolver: resolverWith([completedPackage()]),

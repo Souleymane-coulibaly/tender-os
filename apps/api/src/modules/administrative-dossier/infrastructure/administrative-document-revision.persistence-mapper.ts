@@ -17,6 +17,7 @@ export type PersistedAdministrativeDocumentRevision = {
   notes: string | null;
   officialTemplateId: string | null;
   formDataSnapshot: unknown;
+  candidateCompanyId: string | null;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -38,6 +39,7 @@ export function toDomainAdministrativeDocumentRevision(record: PersistedAdminist
     notes: record.notes ?? undefined,
     officialTemplateId: record.officialTemplateId ?? undefined,
     formDataSnapshot: (record.formDataSnapshot as Record<string, unknown> | null) ?? undefined,
+    candidateCompanyId: record.candidateCompanyId ?? undefined,
     createdBy: record.createdBy,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -60,6 +62,7 @@ export function toAdministrativeDocumentRevisionRow(revision: AdministrativeDocu
     notes: revision.notes ?? null,
     officialTemplateId: revision.officialTemplateId ?? null,
     formDataSnapshot: revision.formDataSnapshot === undefined ? Prisma.JsonNull : (revision.formDataSnapshot as object),
+    candidateCompanyId: revision.candidateCompanyId ?? null,
     createdBy: revision.createdBy,
     createdAt: revision.createdAt,
     updatedAt: revision.updatedAt,

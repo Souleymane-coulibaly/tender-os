@@ -1,5 +1,17 @@
 import type { SubmissionProof } from "../domain/submission-proof.entity";
+import type { SubmissionResponsePackageProvenance } from "../domain/submission-response-package-provenance";
 import type { TenderSubmission } from "../domain/tender-submission.aggregate";
+
+export type SubmissionResponsePackageProvenanceSummary = {
+  lotId: string;
+  responsePackageVersionId: string;
+  responsePackageArtifactId: string;
+  artifactChecksum: string;
+};
+
+export function toSubmissionResponsePackageProvenanceSummary(provenance: SubmissionResponsePackageProvenance): SubmissionResponsePackageProvenanceSummary {
+  return { lotId: provenance.lotId, responsePackageVersionId: provenance.responsePackageVersionId, responsePackageArtifactId: provenance.responsePackageArtifactId, artifactChecksum: provenance.artifactChecksum };
+}
 
 export type SubmissionProofSummary = {
   id: string;
@@ -61,9 +73,17 @@ export type TenderSubmissionSummary = {
   createdAt: string;
   updatedAt: string;
   proofs: readonly SubmissionProofSummary[];
+  /** Checkpoint TENDEROS-2.1-P2.2-F2.3 — provenance MULTI-LOT (mode LOT uniquement), une entrée par
+   *  lot requis résolu au dépôt. Vide pour le mode global (les 3 champs scalaires ci-dessus suffisent
+   *  alors) et pour toute Submission antérieure à F2.3 (jamais backfillé). */
+  responsePackages: readonly SubmissionResponsePackageProvenanceSummary[];
 };
 
-export function toTenderSubmissionSummary(submission: TenderSubmission, proofs: readonly SubmissionProof[]): TenderSubmissionSummary {
+export function toTenderSubmissionSummary(
+  submission: TenderSubmission,
+  proofs: readonly SubmissionProof[],
+  responsePackageProvenance: readonly SubmissionResponsePackageProvenance[] = [],
+): TenderSubmissionSummary {
   return {
     id: submission.id,
     tenderId: submission.tenderId,
@@ -98,5 +118,6 @@ export function toTenderSubmissionSummary(submission: TenderSubmission, proofs: 
     createdAt: submission.createdAt.toISOString(),
     updatedAt: submission.updatedAt.toISOString(),
     proofs: proofs.map(toSubmissionProofSummary),
+    responsePackages: responsePackageProvenance.map(toSubmissionResponsePackageProvenanceSummary),
   };
 }

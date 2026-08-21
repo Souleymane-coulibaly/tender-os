@@ -28,6 +28,7 @@ import { GetResponsePackageFreshnessUseCase } from "./application/use-cases/get-
 import { GetResponsePackageUseCase } from "./application/use-cases/get-response-package.use-case";
 import { GetResponsePackagePortfolioSummaryForDashboardUseCase } from "./application/use-cases/get-response-package-portfolio-summary-for-dashboard.use-case";
 import { GetResponsePackageForPublicApiUseCase } from "./application/use-cases/get-response-package-for-public-api.use-case";
+import { GetRequiredResponsePackagesForTenderUseCase } from "./application/use-cases/get-required-response-packages-for-tender.use-case";
 import { GetSubmittableResponsePackageVersionUseCase } from "./application/use-cases/get-submittable-response-package-version.use-case";
 import { GetVersionTenderRefForApprovalUseCase } from "./application/use-cases/get-version-tender-ref-for-approval.use-case";
 import { ListResponsePackagesUseCase } from "./application/use-cases/list-response-packages.use-case";
@@ -77,6 +78,7 @@ import { TenderResponsePackagesController } from "./interfaces/http/tender-respo
     GetResponsePackageForPublicApiUseCase,
     GetVersionTenderRefForApprovalUseCase,
     GetSubmittableResponsePackageVersionUseCase,
+    GetRequiredResponsePackagesForTenderUseCase,
 
     ResponsePackageAccessService,
     PackageItemEditGuard,
@@ -101,6 +103,7 @@ import { TenderResponsePackagesController } from "./interfaces/http/tender-respo
     ListResponsePackagesUseCase,
     GetResponsePackageFreshnessUseCase,
     GetSubmittableResponsePackageVersionUseCase,
+    GetRequiredResponsePackagesForTenderUseCase,
   ],
 })
 export class ResponsePackageModule {}
