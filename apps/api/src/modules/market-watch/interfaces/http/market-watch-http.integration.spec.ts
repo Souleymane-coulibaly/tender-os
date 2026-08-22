@@ -367,4 +367,61 @@ describe("Market Watch (market-watch) — real HTTP + PostgreSQL (NestJS)", () =
   it("mission §66/§67 — EmailAlertWorker.tick() runs without throwing even with zero pending matches (isolation, never blocks the app)", async () => {
     await expect(emailAlertWorker.tick()).resolves.toBeUndefined();
   });
+
+  it("BLOQUANT — Checkpoint TENDEROS-2.1-P2.3-E3, mission §31/§39: GET /saved-searches reports newMatchCount scoped per watch (a NEW match on watch A never inflates watch B's count)", async () => {
+    // Le marché préexiste AVANT la création des veilles — exerce le backfill immédiat (mission
+    // §17/§18) plutôt qu'un cycle de sync (qui ne réévaluerait que le DELTA de CE cycle, jamais un
+    // tender déjà présent en base).
+    await prisma.externalTender.create({
+      data: { id: randomUUID(), organizationId: orgAId, source: "BOAMP", marketType: "PUBLIC", externalId: `badge-test-${randomUUID()}`, title: "Marché badgetest", cpvCodes: [], publicationDate: new Date(), updatedAt: new Date() },
+    });
+
+    const watchARes = await fetch(`${baseUrl}/api/v1/market-watch/saved-searches`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ name: "Veille badge A", criteria: { includeKeywords: ["badgetest"] }, alertInApp: true }) });
+    const watchA = (await watchARes.json()) as { id: string };
+    const watchBRes = await fetch(`${baseUrl}/api/v1/market-watch/saved-searches`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ name: "Veille badge B", criteria: { includeKeywords: ["autrechosequinematchejamais"] }, alertInApp: true }) });
+    const watchB = (await watchBRes.json()) as { id: string };
+
+    const listRes = await fetch(`${baseUrl}/api/v1/market-watch/saved-searches`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const list = (await listRes.json()) as { id: string; newMatchCount?: number }[];
+    expect(list.find((s) => s.id === watchA.id)?.newMatchCount).toBeGreaterThanOrEqual(1);
+    expect(list.find((s) => s.id === watchB.id)?.newMatchCount ?? 0).toBe(0);
+
+    const matchesRes = await fetch(`${baseUrl}/api/v1/market-watch/saved-searches/${watchA.id}/matches`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const matches = (await matchesRes.json()) as { items: { id: string; status: string }[] };
+    const matchId = matches.items[0]!.id;
+    await fetch(`${baseUrl}/api/v1/market-watch/saved-searches/matches/${matchId}/status`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ status: "INTERESTED" }) });
+
+    const listAfterRes = await fetch(`${baseUrl}/api/v1/market-watch/saved-searches`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    const listAfter = (await listAfterRes.json()) as { id: string; newMatchCount?: number }[];
+    expect(listAfter.find((s) => s.id === watchA.id)?.newMatchCount ?? 0).toBe(0);
+  });
+
+  it("BLOQUANT — Checkpoint TENDEROS-2.1-P2.3-E3, mission §17/§18: creating a saved search immediately surfaces a PRE-EXISTING matching ExternalTender (never waits for the next sync cycle)", async () => {
+    await prisma.externalTender.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgAId,
+        source: "BOAMP",
+        marketType: "PUBLIC",
+        externalId: `backfill-preexisting-${randomUUID()}`,
+        title: "Marché de nettoyage industriel backfill",
+        cpvCodes: [],
+        publicationDate: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/market-watch/saved-searches`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ name: "Veille backfill nettoyage", criteria: { includeKeywords: ["nettoyage"] }, alertInApp: true }),
+    });
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as { id: string };
+
+    const matchesRes = await fetch(`${baseUrl}/api/v1/market-watch/saved-searches/${id}/matches`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(matchesRes.status).toBe(200);
+    const matches = (await matchesRes.json()) as { items: { tender: { title: string } }[] };
+    expect(matches.items.some((m) => m.tender.title === "Marché de nettoyage industriel backfill")).toBe(true);
+  });
 });

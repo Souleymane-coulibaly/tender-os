@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { ExternalTender } from "../../domain/external-tender.entity";
 import { SavedSearch } from "../../domain/saved-search.entity";
 import {
   FakeMarketSourceConnector,
@@ -146,5 +147,61 @@ describe("SyncMarketSourceUseCase — mission §5-§12/§26/§48/§65", () => {
     const result = await useCase.execute({ organizationId: ORG_ID, connector });
 
     expect(result.matchesCreated).toBe(0);
+  });
+
+  describe("backfillMatchesForSavedSearch — mission §17/§18", () => {
+    it("BLOQUANT — a newly created watch matches an ExternalTender that ALREADY existed before it (never waits for the tender to change)", async () => {
+      const preexisting = ExternalTender.create({
+        id: "et-preexisting",
+        organizationId: ORG_ID,
+        source: "BOAMP",
+        marketType: "PUBLIC",
+        externalId: "boamp-preexisting",
+        title: "Marché de nettoyage industriel",
+        cpvCodes: [],
+        occurredAt: new Date("2026-05-20T00:00:00.000Z"),
+      });
+      externalTenderRepository.tenders.push(preexisting);
+      const savedSearch = SavedSearch.create({ id: "ss-new", organizationId: ORG_ID, ownerUserId: "user-1", name: "Nettoyage", criteria: { includeKeywords: ["nettoyage"] }, alertInApp: true, createdBy: "user-1", occurredAt: NOW });
+
+      const result = await useCase.backfillMatchesForSavedSearch({ savedSearch, now: NOW });
+
+      expect(result.matchesCreated).toBe(1);
+      expect(result.notificationsCreated).toBe(1);
+      expect(matchRepository.matches).toHaveLength(1);
+    });
+
+    it("running the backfill twice never creates a second match or notification (idempotent, same createIfNotExists mechanism)", async () => {
+      const preexisting = ExternalTender.create({
+        id: "et-preexisting",
+        organizationId: ORG_ID,
+        source: "BOAMP",
+        marketType: "PUBLIC",
+        externalId: "boamp-preexisting",
+        title: "Marché de nettoyage industriel",
+        cpvCodes: [],
+        occurredAt: new Date("2026-05-20T00:00:00.000Z"),
+      });
+      externalTenderRepository.tenders.push(preexisting);
+      const savedSearch = SavedSearch.create({ id: "ss-new", organizationId: ORG_ID, ownerUserId: "user-1", name: "Nettoyage", criteria: { includeKeywords: ["nettoyage"] }, alertInApp: true, createdBy: "user-1", occurredAt: NOW });
+
+      await useCase.backfillMatchesForSavedSearch({ savedSearch, now: NOW });
+      const second = await useCase.backfillMatchesForSavedSearch({ savedSearch, now: NOW });
+
+      expect(second.matchesCreated).toBe(0);
+      expect(second.notificationsCreated).toBe(0);
+      expect(matchRepository.matches).toHaveLength(1);
+    });
+
+    it("a non-matching pre-existing tender is never backfilled", async () => {
+      const preexisting = ExternalTender.create({ id: "et-preexisting", organizationId: ORG_ID, source: "BOAMP", marketType: "PUBLIC", externalId: "boamp-preexisting", title: "Marché de voirie", cpvCodes: [], occurredAt: new Date("2026-05-20T00:00:00.000Z") });
+      externalTenderRepository.tenders.push(preexisting);
+      const savedSearch = SavedSearch.create({ id: "ss-new", organizationId: ORG_ID, ownerUserId: "user-1", name: "Cybersécurité", criteria: { includeKeywords: ["cybersécurité"] }, alertInApp: true, createdBy: "user-1", occurredAt: NOW });
+
+      const result = await useCase.backfillMatchesForSavedSearch({ savedSearch, now: NOW });
+
+      expect(result.matchesCreated).toBe(0);
+      expect(matchRepository.matches).toHaveLength(0);
+    });
   });
 });

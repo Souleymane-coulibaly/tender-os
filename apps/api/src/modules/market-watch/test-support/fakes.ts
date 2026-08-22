@@ -167,4 +167,12 @@ export class InMemorySavedSearchMatchRepository implements SavedSearchMatchRepos
     const items = this.matches.filter((m) => m.organizationId === input.organizationId && m.savedSearchId === input.savedSearchId).slice(0, input.limit);
     return { items, nextCursor: null };
   }
+  async countByStatus(input: { organizationId: string; savedSearchIds: readonly string[]; status: string }): Promise<Record<string, number>> {
+    const counts: Record<string, number> = {};
+    for (const match of this.matches) {
+      if (match.organizationId !== input.organizationId || match.status !== input.status || !input.savedSearchIds.includes(match.savedSearchId)) continue;
+      counts[match.savedSearchId] = (counts[match.savedSearchId] ?? 0) + 1;
+    }
+    return counts;
+  }
 }

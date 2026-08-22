@@ -7818,6 +7818,43 @@ model MarketSourceSyncLease {
   @@map("market_source_sync_leases")
 }
 
+/// Checkpoint TENDEROS-2.1-P2.3-E3, mission §28 (OBSERVABILITÉ) — jusqu'ici la seule trace d'une
+/// exécution de veille était un `Logger.log` transitoire (`SyncMarketSourceUseCase`), jamais
+/// interrogeable. Granularité (organizationId, source) — PAS par veille individuelle
+/// (`SavedSearch`) : c'est l'unité d'exécution réelle du pipeline aujourd'hui (`SyncMarketSourceUseCase`
+/// évalue TOUTES les veilles actives d'une organisation en une seule passe contre une source, mission
+/// §41 "récupère les veilles dues -> dispatch" jamais une cron par veille) — un `watchId` séparé ne
+/// correspondrait à aucune exécution réelle, jamais ajouté artificiellement (mission §4 "ne pas
+/// ajouter des champs simplement pour correspondre à une liste"). Écrit par `MarketSourceSyncWorker`
+/// (infrastructure), jamais par le use case lui-même (séparation orchestration/pipeline déjà
+/// établie). Emails : hors périmètre de ce modèle — `EmailAlertWorker`/`SendPendingEmailAlertsUseCase`
+/// est un pipeline distinct avec sa propre unité d'exécution (mission §28 "pour chaque exécution de
+/// veille" ; l'exécution email a son propre état déjà observable via `SavedSearchMatch.emailStatus`).
+model MarketSourceSyncRun {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  source         String @db.VarChar(40)
+
+  startedAt  DateTime  @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  status     String    @db.VarChar(20) /// RUNNING | SUCCEEDED | FAILED
+
+  opportunitiesFetched    Int @default(0) @map("opportunities_fetched")
+  opportunitiesCreated    Int @default(0) @map("opportunities_created")
+  opportunitiesUpdated    Int @default(0) @map("opportunities_updated")
+  matchesCreated          Int @default(0) @map("matches_created")
+  notificationsCreated    Int @default(0) @map("notifications_created")
+
+  /// Jamais le contenu source brut (mission §28 "ne pas loguer inutilement du contenu sensible") —
+  /// un résumé borné uniquement.
+  errorSummary String? @map("error_summary") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, source, startedAt])
+  @@map("market_source_sync_runs")
+}
+
 /// V2 Sprint 17 — trace de promotion ExternalTender -> Opportunity (mission §56 "prévenir
 /// l'utilisateur, ne pas dupliquer silencieusement"). Délibérément découplé du module
 /// `opportunity` (aucune colonne ajoutée à `Opportunity`, aucun couplage Prisma cross-module,

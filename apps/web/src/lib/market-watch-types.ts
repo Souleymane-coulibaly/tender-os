@@ -29,6 +29,7 @@ export type SavedSearchSummary = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  newMatchCount?: number;
 };
 
 export type ExternalTenderLot = { number: string; description?: string; cpvCode?: string };

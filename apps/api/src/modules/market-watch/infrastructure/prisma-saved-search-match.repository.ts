@@ -80,4 +80,14 @@ export class PrismaSavedSearchMatchRepository implements SavedSearchMatchReposit
 
     return { items: page.map(toDomainSavedSearchMatch), nextCursor: hasNextPage ? (page[page.length - 1]?.id ?? null) : null };
   }
+
+  async countByStatus(input: { organizationId: string; savedSearchIds: readonly string[]; status: string }): Promise<Record<string, number>> {
+    if (input.savedSearchIds.length === 0) return {};
+    const groups = await this.prisma.currentClient().savedSearchMatch.groupBy({
+      by: ["savedSearchId"],
+      where: { organizationId: input.organizationId, savedSearchId: { in: [...input.savedSearchIds] }, status: input.status },
+      _count: { _all: true },
+    });
+    return Object.fromEntries(groups.map((group) => [group.savedSearchId, group._count._all]));
+  }
 }

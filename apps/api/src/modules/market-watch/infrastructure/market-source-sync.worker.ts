@@ -1,7 +1,9 @@
 import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { ID_GENERATOR, type IdGenerator } from "../../../shared-kernel/id-generator";
 import { workerJobsFailed, workerJobsTotal } from "../../../shared-kernel/metrics/metrics";
 import { MARKET_SOURCE_CONNECTORS, type MarketSourceConnector } from "../application/ports/market-source-connector";
 import { MARKET_SOURCE_SYNC_LEASE_REPOSITORY, type MarketSourceSyncLeaseRepository } from "../application/ports/market-source-sync-lease.repository";
+import { MARKET_SOURCE_SYNC_RUN_REPOSITORY, type MarketSourceSyncRunRepository } from "../application/ports/market-source-sync-run.repository";
 import { SAVED_SEARCH_REPOSITORY, type SavedSearchRepository } from "../application/ports/saved-search.repository";
 import { SyncMarketSourceUseCase } from "../application/use-cases/sync-market-source.use-case";
 
@@ -22,6 +24,8 @@ export class MarketSourceSyncWorker implements OnModuleInit, OnModuleDestroy {
     @Inject(MARKET_SOURCE_CONNECTORS) private readonly connectors: MarketSourceConnector[],
     @Inject(SAVED_SEARCH_REPOSITORY) private readonly savedSearchRepository: SavedSearchRepository,
     @Inject(MARKET_SOURCE_SYNC_LEASE_REPOSITORY) private readonly leaseRepository: MarketSourceSyncLeaseRepository,
+    @Inject(MARKET_SOURCE_SYNC_RUN_REPOSITORY) private readonly syncRunRepository: MarketSourceSyncRunRepository,
+    @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly syncMarketSourceUseCase: SyncMarketSourceUseCase,
   ) {}
 
@@ -74,14 +78,48 @@ export class MarketSourceSyncWorker implements OnModuleInit, OnModuleDestroy {
             this.logger.debug(`Skipping market source sync (source=${connector.source}, org=${organizationId}): lease already held by another instance.`);
             continue;
           }
+          // Mission §28 (OBSERVABILITÉ) — une trace persistée par exécution (organizationId,
+          // source), démarrée avant l'appel et complétée dans les deux branches ci-dessous. Best
+          // effort au même titre que les métriques Prometheus voisines : un échec d'écriture de
+          // cette trace ne doit jamais faire échouer la synchronisation elle-même.
+          const runId = this.idGenerator.generate();
+          const runStartedAt = new Date();
           try {
-            await this.syncMarketSourceUseCase.execute({ organizationId, connector, batchSize });
+            await this.syncRunRepository.start({ id: runId, organizationId, source: connector.source, startedAt: runStartedAt });
+          } catch (error) {
+            this.logger.warn(`Failed to record market source sync run start (source=${connector.source}, org=${organizationId}): ${error instanceof Error ? error.message : String(error)}`);
+          }
+
+          try {
+            const result = await this.syncMarketSourceUseCase.execute({ organizationId, connector, batchSize });
             workerJobsTotal.inc({ worker: "market_source_sync", outcome: "succeeded" });
+            await this.completeRunQuietly({
+              id: runId,
+              finishedAt: new Date(),
+              status: "SUCCEEDED",
+              opportunitiesFetched: result.collected,
+              opportunitiesCreated: result.created,
+              opportunitiesUpdated: result.updated,
+              matchesCreated: result.matchesCreated,
+              notificationsCreated: result.notificationsCreated,
+            });
           } catch (error) {
             // Mission §62 — une source en échec n'empêche jamais les autres de continuer.
-            this.logger.warn(`Market source sync failed (source=${connector.source}, org=${organizationId}): ${error instanceof Error ? error.message : String(error)}`);
+            const message = error instanceof Error ? error.message : String(error);
+            this.logger.warn(`Market source sync failed (source=${connector.source}, org=${organizationId}): ${message}`);
             workerJobsTotal.inc({ worker: "market_source_sync", outcome: "failed" });
             workerJobsFailed.inc({ worker: "market_source_sync" });
+            await this.completeRunQuietly({
+              id: runId,
+              finishedAt: new Date(),
+              status: "FAILED",
+              opportunitiesFetched: 0,
+              opportunitiesCreated: 0,
+              opportunitiesUpdated: 0,
+              matchesCreated: 0,
+              notificationsCreated: 0,
+              errorSummary: message.slice(0, 500),
+            });
           }
         }
       }
@@ -97,5 +135,13 @@ export class MarketSourceSyncWorker implements OnModuleInit, OnModuleDestroy {
     if (!raw) return fallback;
     const parsed = Number(raw);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  }
+
+  private async completeRunQuietly(input: Parameters<MarketSourceSyncRunRepository["complete"]>[0]): Promise<void> {
+    try {
+      await this.syncRunRepository.complete(input);
+    } catch (error) {
+      this.logger.warn(`Failed to record market source sync run completion (id=${input.id}): ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }

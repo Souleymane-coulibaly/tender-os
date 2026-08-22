@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import { AssertClientAccessUseCase, ClientPermission, GetClientAccountUseCase } from "../../../client-portfolio";
@@ -7,6 +7,7 @@ import { SavedSearch } from "../../domain/saved-search.entity";
 import type { SavedSearchCriteriaInput } from "../../domain/services/matching-engine";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { SAVED_SEARCH_REPOSITORY, type SavedSearchRepository } from "../ports/saved-search.repository";
+import { SyncMarketSourceUseCase } from "./sync-market-source.use-case";
 
 export type CreateSavedSearchCommand = Readonly<{
   organizationId: string;
@@ -26,6 +27,8 @@ export type CreateSavedSearchCommand = Readonly<{
  *  gouverne (mission §19/§71) — jamais un élargissement (mission §18). */
 @Injectable()
 export class CreateSavedSearchUseCase {
+  private readonly logger = new Logger(CreateSavedSearchUseCase.name);
+
   constructor(
     @Inject(SAVED_SEARCH_REPOSITORY) private readonly repository: SavedSearchRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
@@ -33,6 +36,7 @@ export class CreateSavedSearchUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly getClientAccountUseCase: GetClientAccountUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
+    @Optional() private readonly syncMarketSourceUseCase?: SyncMarketSourceUseCase,
   ) {}
 
   async execute(command: CreateSavedSearchCommand): Promise<SavedSearch> {
@@ -76,6 +80,16 @@ export class CreateSavedSearchUseCase {
       requestId: command.requestId,
       metadata: { name: savedSearch.name, clientAccountId: savedSearch.clientAccountId },
     });
+
+    // Mission §17/§18 — best-effort, jamais bloquant (voir `backfillMatchesForSavedSearch`) : un
+    // échec ne doit jamais faire échouer la création de la veille elle-même.
+    if (this.syncMarketSourceUseCase) {
+      try {
+        await this.syncMarketSourceUseCase.backfillMatchesForSavedSearch({ savedSearch, now: occurredAt });
+      } catch (error) {
+        this.logger.warn(`Failed to backfill matches for newly created saved search ${savedSearch.id}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
 
     return savedSearch;
   }

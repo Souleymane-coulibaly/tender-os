@@ -3,7 +3,9 @@ import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { CreateNotificationUseCase } from "../../../notifications";
+import { withSourceRetry } from "../services/with-source-retry";
 import { ExternalTender } from "../../domain/external-tender.entity";
+import type { SavedSearch } from "../../domain/saved-search.entity";
 import { SavedSearchMatch } from "../../domain/saved-search-match.entity";
 import { evaluateMatch, type MatchableTender, type MatchReason } from "../../domain/services/matching-engine";
 import { ATOMIC_TRANSACTION_RUNNER, type AtomicTransactionRunner } from "../ports/atomic-transaction-runner";
@@ -69,7 +71,10 @@ export class SyncMarketSourceUseCase {
 
   async execute(command: SyncMarketSourceCommand): Promise<SyncMarketSourceResult> {
     const now = this.clock.now();
-    const searchResult = await command.connector.search({ limit: command.batchSize ?? 100 });
+    // Mission §27 — un timeout/429 transitoire ne doit pas échouer tout le cycle de cette source
+    // dès la première tentative (voir `withSourceRetry` pour la justification du dimensionnement,
+    // volontairement modeste : le worker rejoue de toute façon toutes les heures).
+    const searchResult = await withSourceRetry(() => command.connector.search({ limit: command.batchSize ?? 100 }));
 
     let created = 0;
     let updated = 0;
@@ -119,6 +124,42 @@ export class SyncMarketSourceUseCase {
     );
 
     return { collected: searchResult.items.length, created, updated, unchanged, matchesCreated, notificationsCreated };
+  }
+
+  /**
+   * Checkpoint TENDEROS-2.1-P2.3-E3, mission §17/§18 — une opportunité déjà connue depuis hier
+   * reste "nouvelle" pour une veille qui commence tout juste à la matcher aujourd'hui. Sans ce
+   * backfill, `execute()` seul ne réévalue JAMAIS le matching pour un `ExternalTender` inchangé
+   * (le matching ne porte que sur le DELTA créé/mis à jour de CE cycle, voir le commentaire de
+   * classe) — une veille fraîchement créée ne verrait donc jamais les opportunités déjà en base
+   * tant qu'elles ne changent pas côté source. Fenêtre bornée (jamais un balayage complet de la
+   * table, même discipline que la fenêtre de fraîcheur par défaut de `TedSourceConnector`).
+   * Réutilise exactement `recordMatch`/`createNotificationAndEmitEvent` — même mécanisme
+   * idempotent qu'un cycle de sync normal, jamais un second système de matching. Appelé en
+   * best-effort par `CreateSavedSearchUseCase` — un échec ici ne doit jamais empêcher la création
+   * de la veille elle-même (le prochain cycle planifié rattrapera de toute façon tout DELTA futur).
+   */
+  async backfillMatchesForSavedSearch(input: { savedSearch: SavedSearch; now: Date }): Promise<{ matchesCreated: number; notificationsCreated: number }> {
+    const { savedSearch, now } = input;
+    const backfillWindowMs = 30 * 24 * 60 * 60 * 1000;
+    const page = await this.externalTenderRepository.list({ organizationId: savedSearch.organizationId, publishedAfter: new Date(now.getTime() - backfillWindowMs), limit: 200 });
+
+    let matchesCreated = 0;
+    let notificationsCreated = 0;
+    for (const tender of page.items) {
+      const evaluation = evaluateMatch(savedSearch.criteria, toMatchableTender(tender), now);
+      if (!evaluation.matched) continue;
+
+      const outcome = await this.recordMatch(savedSearch.id, savedSearch.organizationId, tender.id, evaluation.score, [...evaluation.reasons], now);
+      if (outcome === "created") {
+        matchesCreated += 1;
+        if (savedSearch.alertInApp) {
+          await this.createNotificationAndEmitEvent(savedSearch.organizationId, savedSearch.ownerUserId, savedSearch.id, savedSearch.name, tender.id, tender.title, evaluation.score, now);
+          notificationsCreated += 1;
+        }
+      }
+    }
+    return { matchesCreated, notificationsCreated };
   }
 
   private async upsertOne(organizationId: string, connector: MarketSourceConnector, collected: CollectedTender, now: Date): Promise<{ outcome: "created" | "updated" | "unchanged"; id: string }> {

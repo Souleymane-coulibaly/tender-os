@@ -14,9 +14,14 @@ export type SavedSearchSummary = Readonly<{
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Checkpoint TENDEROS-2.1-P2.3-E3, mission §31/§39 — nombre de matches au statut NEW pour CETTE
+   *  veille (jamais un compteur global non scopé, voir `SavedSearchMatchRepository.countByStatus`).
+   *  Optionnel : absent quand l'appelant n'a pas demandé l'enrichissement (ex. usage interne hors
+   *  page Veille, mission §4 "ne pas ajouter des champs pour tous les usages"). */
+  newMatchCount?: number | undefined;
 }>;
 
-export function toSavedSearchSummary(search: SavedSearch): SavedSearchSummary {
+export function toSavedSearchSummary(search: SavedSearch, newMatchCount?: number): SavedSearchSummary {
   return {
     id: search.id,
     ownerUserId: search.ownerUserId,
@@ -29,6 +34,7 @@ export function toSavedSearchSummary(search: SavedSearch): SavedSearchSummary {
     isActive: search.isActive,
     createdAt: search.createdAt.toISOString(),
     updatedAt: search.updatedAt.toISOString(),
+    newMatchCount,
   };
 }
 

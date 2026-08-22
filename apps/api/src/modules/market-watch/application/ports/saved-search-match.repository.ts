@@ -18,6 +18,11 @@ export interface SavedSearchMatchRepository {
    *  crash worker après claim, avant envoi/sauvegarde). */
   claimPendingEmailBatch(input: { organizationId?: string | undefined; limit: number; now: Date; staleClaimThresholdMs: number }): Promise<SavedSearchMatch[]>;
   listBySavedSearch(input: { organizationId: string; savedSearchId: string; limit: number; cursor?: string | undefined }): Promise<SavedSearchMatchPage>;
+  /** Checkpoint TENDEROS-2.1-P2.3-E3, mission §31/§39 — badge "NEW" par veille sur la liste. UNE
+   *  seule requête groupée (jamais N requêtes, une par veille — mission §44 "audit avant
+   *  d'optimiser", ici l'optimisation triviale d'emblée évite le N+1 plutôt que de le créer puis
+   *  le corriger). Absent du résultat = 0 (jamais une entrée à `undefined`). */
+  countByStatus(input: { organizationId: string; savedSearchIds: readonly string[]; status: string }): Promise<Record<string, number>>;
 }
 
 export const SAVED_SEARCH_MATCH_REPOSITORY = Symbol("SAVED_SEARCH_MATCH_REPOSITORY");

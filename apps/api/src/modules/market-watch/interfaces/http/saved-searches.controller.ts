@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseFilters, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Patch, Post, Query, Req, UseFilters, UseGuards } from "@nestjs/common";
 import type { RequestWithId } from "../../../../shared-kernel/request-id.middleware";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
 import { AuthenticatedGuard, CurrentActor, type AuthenticatedActor } from "../../../identity";
 import { CurrentMembershipContext, OrganizationMembershipGuard, type MembershipContext } from "../../../memberships";
 import { toSavedSearchMatchSummary, toSavedSearchSummary } from "../../application/dtos";
+import { SAVED_SEARCH_MATCH_REPOSITORY, type SavedSearchMatchRepository } from "../../application/ports/saved-search-match.repository";
 import { CreateSavedSearchUseCase } from "../../application/use-cases/create-saved-search.use-case";
 import { DeleteSavedSearchUseCase } from "../../application/use-cases/delete-saved-search.use-case";
 import { GetSavedSearchUseCase } from "../../application/use-cases/get-saved-search.use-case";
@@ -47,13 +48,17 @@ export class SavedSearchesController {
     private readonly listSavedSearchMatchesUseCase: ListSavedSearchMatchesUseCase,
     private readonly setMatchStatusUseCase: SetMatchStatusUseCase,
     private readonly promoteExternalTenderToOpportunityUseCase: PromoteExternalTenderToOpportunityUseCase,
+    @Inject(SAVED_SEARCH_MATCH_REPOSITORY) private readonly savedSearchMatchRepository: SavedSearchMatchRepository,
   ) {}
 
   @Get()
   @HttpCode(HttpStatus.OK)
   async list(@CurrentActor() actor: AuthenticatedActor, @CurrentMembershipContext() membership: MembershipContext) {
     const searches = await this.listSavedSearchesUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role });
-    return searches.map(toSavedSearchSummary);
+    // Mission §31/§39 — UNE seule requête groupée pour le badge "NEW" de toutes les veilles de la
+    // page, jamais N requêtes (une par veille).
+    const newCounts = await this.savedSearchMatchRepository.countByStatus({ organizationId: membership.organizationId, savedSearchIds: searches.map((s) => s.id), status: "NEW" });
+    return searches.map((search) => toSavedSearchSummary(search, newCounts[search.id] ?? 0));
   }
 
   @Post()
