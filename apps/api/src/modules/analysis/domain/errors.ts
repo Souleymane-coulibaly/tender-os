@@ -192,3 +192,14 @@ export class AnalysisJobMissingTriggeredByRoleError extends DomainError {
     super("Analysis job is missing the triggeredByRole captured at creation/retry time.");
   }
 }
+
+/** Checkpoint TENDEROS-2.1-P2.3-E4.1 — `AiModelRouter` est désormais la SEULE autorité de
+ *  sélection du modèle, jamais un repli silencieux (mission §17). Ne devrait jamais survenir en
+ *  production réelle (`AiRoutingModule` est câblé globalement) — signale un problème de
+ *  configuration/déploiement, jamais une cause métier normale. */
+export class AiModelRouterUnavailableError extends DomainError {
+  readonly code = "AI_MODEL_ROUTER_UNAVAILABLE";
+  constructor() {
+    super("The AI model router is not available. Contact support.");
+  }
+}

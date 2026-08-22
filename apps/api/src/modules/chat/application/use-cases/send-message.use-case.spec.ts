@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AiModelRouter } from "../../../ai-routing";
+import { InMemoryAiModelPreferenceRepository } from "../../../ai-routing/test-support/fakes";
 import type { GetTenderUseCase } from "../../../tenders";
 import { TenderPermissionMissingError } from "../../../tenders";
 import { ChatRateLimitReachedError, ConversationArchivedError, ConversationGenerationInProgressError, ConversationNotFoundError } from "../../domain/errors";
@@ -10,7 +12,6 @@ import {
   FakeAIProviderRegistry,
   FakeAtomicTransactionRunner,
   FakeOutboxWriter,
-  FakeRoutingPolicyResolver,
   fakeChatAIProviderResult,
   FixedClock,
   InMemoryAuditLogWriter,
@@ -36,11 +37,16 @@ describe("SendMessageUseCase", () => {
 
   let clock: FixedClock;
 
+  // Checkpoint TENDEROS-2.1-P2.3-E4.1 — un `AiModelRouter` réel (jamais `undefined`) est câblé par
+  // défaut, comme en production (`AiRoutingModule` toujours câblé globalement) : les tests qui ne
+  // testent pas spécifiquement le routing exercent donc le vrai chemin AUTOMATIC → gpt-5.4-mini.
+  // Passer explicitement `null` simule l'absence de Router (cas défensif `@Optional()`, jamais le
+  // cas réel en production) pour prouver l'échec propre (`AiModelRouterUnavailableError`).
   function buildUseCase(
     provider: FakeAIProvider,
     config: Partial<typeof CHAT_CONFIG_FIXTURE> = {},
-    routingPolicyResolver?: FakeRoutingPolicyResolver,
     routingDecisionWriter?: RecordingRoutingDecisionWriter | ThrowingRoutingDecisionWriter,
+    aiModelRouter: AiModelRouter | null = new AiModelRouter(new InMemoryAiModelPreferenceRepository()),
   ): SendMessageUseCase {
     outboxWriter = new FakeOutboxWriter();
     auditLogWriter = new InMemoryAuditLogWriter();
@@ -57,8 +63,8 @@ describe("SendMessageUseCase", () => {
       getTenderUseCase as unknown as GetTenderUseCase,
       assertClientAccessUseCase as never,
       contextAssembler as unknown as ChatContextAssembler,
-      routingPolicyResolver as never,
       routingDecisionWriter as never,
+      aiModelRouter ?? undefined,
     );
   }
 
@@ -164,7 +170,7 @@ describe("SendMessageUseCase", () => {
     // l'appel, jamais avant) : `model` doit être renseigné pour que ce message compte comme
     // "facturable" dans le garde-fou volume IA, contrairement à un échec de permission/résolution
     // provider (voir les tests dédiés ci-dessous).
-    expect(messageRepository.messages.find((m) => m.status === MessageStatus.Failed)?.model).toBe("gpt-4o-mini");
+    expect(messageRepository.messages.find((m) => m.status === MessageStatus.Failed)?.model).toBe("gpt-5.4-mini");
   });
 
   describe("garde-fou volume IA par Tender/jour (correctif audit Codex P1, décision utilisateur)", () => {
@@ -269,53 +275,42 @@ describe("SendMessageUseCase", () => {
     });
   });
 
-  describe("Consolidation IA — Checkpoint A §3/§6 (routing partagé)", () => {
+  describe("Checkpoint TENDEROS-2.1-P2.3-E4.1 — AiModelRouter est la SEULE autorité de sélection du modèle", () => {
     function successProvider(): FakeAIProvider {
       return new FakeAIProvider([{ kind: "success", result: fakeChatAIProviderResult({ content: JSON.stringify({ answer: "Réponse.", citations: [], insufficientContext: false }) }) }]);
     }
 
-    it("no RoutingPolicy resolver wired (undefined) — behaves exactly as before, uses ChatConfig.aiModel", async () => {
+    it("mission §34 TEST_DEFAULT_MINI — CHAT (real task type) resolves to gpt-5.4-mini via AUTOMATIC, no configuration required", async () => {
       const provider = successProvider();
-      const useCase = buildUseCase(provider, {}, undefined);
+      const aiModelRouter = new AiModelRouter(new InMemoryAiModelPreferenceRepository());
+      const useCase = buildUseCase(provider, {}, undefined, aiModelRouter);
 
       const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
 
       expect(result.status).toBe(MessageStatus.Completed);
-      expect(provider.requests[0]?.model).toBe("gpt-4o-mini");
+      expect(provider.requests[0]?.model).toBe("gpt-5.4-mini");
     });
 
-    it("resolver present but no active RoutingPolicy (returns null) — falls back to ChatConfig.aiModel, never throws", async () => {
+    it("passes the real actorId as userId to AiModelRouter.resolve (mission §18 — backend authoritative, override resolution keyed off the real actor, never client-supplied)", async () => {
+      const preferenceRepository = new InMemoryAiModelPreferenceRepository();
+      const aiModelRouter = new AiModelRouter(preferenceRepository);
+      const resolveSpy = vi.spyOn(aiModelRouter, "resolve");
       const provider = successProvider();
-      const resolver = new FakeRoutingPolicyResolver(null);
-      const useCase = buildUseCase(provider, {}, resolver);
+      const useCase = buildUseCase(provider, {}, undefined, aiModelRouter);
 
-      const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
+      await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-42", actorRole: "BID_MANAGER", content: "Question ?" });
 
-      expect(result.status).toBe(MessageStatus.Completed);
-      expect(provider.requests[0]?.model).toBe("gpt-4o-mini");
-      expect(resolver.calls).toEqual([{ organizationId: "org-1", promptKey: "CHAT" }]);
+      expect(resolveSpy).toHaveBeenCalledWith({ taskType: "CHAT", organizationId: "org-1", userId: "user-42" });
     });
 
-    it("an active RoutingPolicy resolves — the routed model is used instead of ChatConfig.aiModel", async () => {
+    it("BLOQUANT — no AiModelRouter wired (defensive @Optional() case, never true in production) — fails CLEANLY, never a silent fallback to a hardcoded model, provider is never called", async () => {
       const provider = successProvider();
-      const resolver = new FakeRoutingPolicyResolver({ policyId: "policy-1", policyVersion: 1, primaryModel: { provider: "OPENAI", modelKey: "gpt-4.1-mini" } });
-      const useCase = buildUseCase(provider, {}, resolver);
+      const useCase = buildUseCase(provider, {}, undefined, null);
 
       const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
 
-      expect(result.status).toBe(MessageStatus.Completed);
-      expect(provider.requests[0]?.model).toBe("gpt-4.1-mini");
-    });
-
-    it("BLOQUANT — the routing resolver throwing never fails the conversation, falls back to ChatConfig.aiModel", async () => {
-      const provider = successProvider();
-      const resolver = new FakeRoutingPolicyResolver(null, true);
-      const useCase = buildUseCase(provider, {}, resolver);
-
-      const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
-
-      expect(result.status).toBe(MessageStatus.Completed);
-      expect(provider.requests[0]?.model).toBe("gpt-4o-mini");
+      expect(result.status).toBe(MessageStatus.Failed);
+      expect(provider.requests).toHaveLength(0);
     });
   });
 
@@ -326,7 +321,7 @@ describe("SendMessageUseCase", () => {
 
     it("BLOQUANT — no writer wired (undefined) — behaves exactly as before, never throws", async () => {
       const provider = successProvider();
-      const useCase = buildUseCase(provider, {}, undefined, undefined);
+      const useCase = buildUseCase(provider, {}, undefined);
 
       const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
 
@@ -336,15 +331,15 @@ describe("SendMessageUseCase", () => {
     it("complete() is called exactly once on success, with the correct conversationId/promptKey/model", async () => {
       const provider = successProvider();
       const writer = new RecordingRoutingDecisionWriter();
-      const useCase = buildUseCase(provider, {}, undefined, writer);
+      const useCase = buildUseCase(provider, {}, writer);
 
       const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
 
       expect(result.status).toBe(MessageStatus.Completed);
       expect(writer.created).toHaveLength(1);
-      expect(writer.created[0]).toMatchObject({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", promptKey: "CHAT", primaryModel: "gpt-4o-mini" });
+      expect(writer.created[0]).toMatchObject({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", promptKey: "CHAT", primaryModel: "gpt-5.4-mini" });
       expect(writer.completed).toHaveLength(1);
-      expect(writer.completed[0]).toMatchObject({ id: writer.created[0]?.id, selectedModel: "gpt-4o-mini", status: "SUCCEEDED", fallbackLevel: 0, fallbackAttempts: 0 });
+      expect(writer.completed[0]).toMatchObject({ id: writer.created[0]?.id, selectedModel: "gpt-5.4-mini", status: "SUCCEEDED", fallbackLevel: 0, fallbackAttempts: 0 });
     });
 
     /**
@@ -360,7 +355,7 @@ describe("SendMessageUseCase", () => {
       const providerCompleteSpy = vi.spyOn(provider, "complete");
       const createSpy = vi.spyOn(writer, "create");
       const completeSpy = vi.spyOn(writer, "complete");
-      const useCase = buildUseCase(provider, {}, undefined, writer);
+      const useCase = buildUseCase(provider, {}, writer);
 
       await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
 
@@ -374,7 +369,7 @@ describe("SendMessageUseCase", () => {
     it("BLOQUANT — complete() is called exactly once with status FAILED when the conversation ultimately fails", async () => {
       const provider = new FakeAIProvider([{ kind: "error", error: new Error("network error while calling the AI provider") }]);
       const writer = new RecordingRoutingDecisionWriter();
-      const useCase = buildUseCase(provider, { aiMaxRetries: 0 }, undefined, writer);
+      const useCase = buildUseCase(provider, { aiMaxRetries: 0 }, writer);
 
       const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
 
@@ -387,7 +382,7 @@ describe("SendMessageUseCase", () => {
     it("BLOQUANT — a writer that throws on create()/complete() never fails an otherwise-successful conversation", async () => {
       const provider = successProvider();
       const writer = new ThrowingRoutingDecisionWriter();
-      const useCase = buildUseCase(provider, {}, undefined, writer);
+      const useCase = buildUseCase(provider, {}, writer);
 
       const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", conversationId: "conv-1", actorId: "user-1", actorRole: "BID_MANAGER", content: "Question ?" });
 

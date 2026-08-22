@@ -1,10 +1,9 @@
-import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { GetTenderUseCase } from "../../../tenders";
 import { GenerationTaskType } from "../../domain/generation-task-type";
 import { PROMPT_TEMPLATE_REPOSITORY, type PromptTemplateRepository } from "../ports/prompt-template.repository";
 import { PROMPT_VERSION_REPOSITORY, type PromptVersionRepository } from "../ports/prompt-version.repository";
-import { ROUTING_POLICY_RESOLVER, type RoutingPolicyResolver } from "../ports/routing-policy-resolver";
 
 export type GetGenerationCapabilitiesQuery = Readonly<{
   organizationId: string;
@@ -16,12 +15,12 @@ export type GetGenerationCapabilitiesQuery = Readonly<{
 /** Mêmes codes que les erreurs réellement levées par `LaunchGenerationUseCase`/
  *  `ProcessGenerationUseCase` (mission Sprint 8A.2 — "un seul vocabulaire d'erreur, jamais un
  *  second calcul divergent côté capacités") : un type de tâche marqué `ready: true` ici est
- *  garanti de ne JAMAIS échouer pour l'une de ces trois raisons au moment du lancement réel — la
- *  résolution utilisée est strictement identique (mêmes repositories, même résolveur). */
-export type GenerationCapabilityReasonCode =
-  | "PROMPT_TEMPLATE_NOT_FOUND"
-  | "NO_ACTIVE_PROMPT_VERSION"
-  | "NO_ACTIVE_ROUTING_POLICY";
+ *  garanti de ne JAMAIS échouer pour l'une de ces raisons au moment du lancement réel — la
+ *  résolution utilisée est strictement identique (mêmes repositories). Checkpoint
+ *  TENDEROS-2.1-P2.3-E4.1 — `NO_ACTIVE_ROUTING_POLICY` a disparu : `AiModelRouter` résout
+ *  désormais TOUJOURS un modèle pour un TaskType réel (AUTOMATIC, aucune configuration requise),
+ *  il n'existe donc plus de notion de "policy absente" qui bloquerait une génération. */
+export type GenerationCapabilityReasonCode = "PROMPT_TEMPLATE_NOT_FOUND" | "NO_ACTIVE_PROMPT_VERSION";
 
 export type GenerationCapability = Readonly<{
   taskType: GenerationTaskType;
@@ -35,20 +34,15 @@ export type GenerationCapability = Readonly<{
  * propose les 17 types sans jamais savoir lesquels sont réellement utilisables"). Nested sous
  * `/tenders/:tenderId` pour la même chaîne d'autorisation que le reste de l'écran Tender
  * (Tender → client → `ClientPermission.ReadGeneration`), bien que la résolution elle-même reste
- * strictement Organization-wide (RoutingPolicy n'a pas de scope Tender/Client — voir
- * `routing-policy-resolver.ts`, décision d'architecture Sprint 8A.2 : pas de réouverture du cœur
- * typé d'ai-benchmark dans ce sprint).
+ * strictement Organization-wide (le template/la version de prompt n'ont pas de scope Tender/Client).
  */
 @Injectable()
 export class GetGenerationCapabilitiesUseCase {
-  private readonly logger = new Logger(GetGenerationCapabilitiesUseCase.name);
-
   constructor(
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
     @Inject(PROMPT_TEMPLATE_REPOSITORY) private readonly promptTemplateRepository: PromptTemplateRepository,
     @Inject(PROMPT_VERSION_REPOSITORY) private readonly promptVersionRepository: PromptVersionRepository,
-    @Optional() @Inject(ROUTING_POLICY_RESOLVER) private readonly routingPolicyResolver?: RoutingPolicyResolver,
   ) {}
 
   async execute(query: GetGenerationCapabilitiesQuery): Promise<readonly GenerationCapability[]> {
@@ -82,27 +76,9 @@ export class GetGenerationCapabilitiesUseCase {
       return { taskType, ready: false, reasonCode: "NO_ACTIVE_PROMPT_VERSION" };
     }
 
-    const decision = await this.resolveActivePolicy(organizationId, taskType);
-    if (!decision) {
-      return { taskType, ready: false, reasonCode: "NO_ACTIVE_ROUTING_POLICY" };
-    }
-
+    // Checkpoint TENDEROS-2.1-P2.3-E4.1 — `AiModelRouter` résout TOUJOURS un modèle pour un
+    // TaskType réel (AUTOMATIC, aucune configuration requise) : une fois le template/la version
+    // de prompt confirmés, la génération est garantie prête, plus de vérification de routing ici.
     return { taskType, ready: true };
-  }
-
-  /** Même tolérance aux pannes que `ProcessGenerationUseCase.resolveActivePolicy` — un résolveur
-   *  non câblé ou en erreur est traité comme "aucune policy active", jamais une exception qui
-   *  ferait échouer l'affichage de TOUTES les capacités pour une seule cause infrastructurelle. */
-  private async resolveActivePolicy(organizationId: string, taskType: string) {
-    if (!this.routingPolicyResolver) return null;
-    try {
-      return await this.routingPolicyResolver.resolveActive({ organizationId, promptKey: taskType });
-    } catch (error) {
-      this.logger.warn(
-        `Routing policy resolution failed while computing capabilities for taskType ${taskType} (treated as "no active policy"): ` +
-          `${error instanceof Error ? error.message : String(error)}`,
-      );
-      return null;
-    }
   }
 }

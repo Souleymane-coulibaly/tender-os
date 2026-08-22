@@ -1,68 +1,39 @@
+import type { AiModelRouter } from "../../../ai-routing";
+import type { AiTaskType } from "../../../../shared-kernel/ai-task-type";
 import { AnalysisScope } from "../../domain/analysis-scope";
-import type { EscalationCondition } from "../../domain/escalation-condition";
-import type { AnalysisConfig } from "../../infrastructure/analysis-config";
+import { AiModelRouterUnavailableError } from "../../domain/errors";
 import { PromptKey } from "../ports/prompt-template.port";
-import type { ActiveRoutingDecision, RoutingPolicyResolver } from "../ports/routing-policy-resolver";
 
 export function mapScopeToPromptKey(scope: AnalysisScope): PromptKey {
   return scope === AnalysisScope.Document ? PromptKey.AnalyzeDocument : PromptKey.ConsolidateTenderAnalysis;
 }
 
-export type ResolvedModelForAnalysis = Readonly<{
-  /** Défini uniquement quand une RoutingPolicy a réellement fourni la décision — `undefined` =
-   *  chemin legacy (résolution par `AIProviderRegistry.resolve()` sans sélecteur, comportement
-   *  Sprint 4.1/4.2 inchangé). */
-  provider?: string | undefined;
-  model: string;
-  routingPolicyId?: string | undefined;
-  routingPolicyVersion?: number | undefined;
-  escalationModel?: { provider: string; modelKey: string } | undefined;
-  escalationConditions: readonly EscalationCondition[];
-}>;
+export type ResolvedModelForAnalysis = Readonly<{ provider: string; model: string }>;
 
 /**
- * Résout le modèle pour CE job (Sprint 5.2 §"Intégration Analysis") — d'abord via une
- * RoutingPolicy active si un résolveur est câblé, sinon repli STRICT sur le comportement Sprint
- * 4.1/4.2 (variable d'environnement statique par scope). Toute erreur du résolveur de routing est
- * traitée comme "pas de policy" : jamais une cause d'échec de l'analyse elle-même (mission
- * §"l'absence de routing ne doit jamais casser Analysis").
+ * Checkpoint TENDEROS-2.1-P2.3-E4.1 — `AiModelRouter` est la SEULE autorité de sélection du modèle
+ * (mission "aucun use case métier live ne doit décider lui-même quel modèle utiliser"). Remplace le
+ * palier `RoutingPolicy` (Sprint 5.2) et le repli statique `AnalysisConfig.aiModelForXxx` (Sprint
+ * 4.1/4.2), tous deux retirés du chemin runtime — jamais un modèle codé en dur, jamais une policy
+ * qui court-circuite le Router.
+ *
+ * L'escalade vers un second modèle sur échec (Sprint 5.2 §"Fallback simple") disparaît avec ce
+ * palier : elle dépendait ENTIÈREMENT d'une `RoutingPolicy.escalationModel`, elle-même retirée du
+ * chemin runtime — il n'existe plus de second modèle à escalader vers. Le retry réseau borné
+ * existant (`AnalysisConfig.aiMaxRetries`, inchangé) reste l'unique mécanisme de résilience.
+ *
+ * Aucun `userId` n'est transmis ici : `AnalysisJob` ne trace qu'un `triggeredByRole`, jamais un
+ * `triggeredByUserId` (job asynchrone, voir le rapport final "AUTH_ACTOR_AUDIT") — la résolution
+ * reste donc TOUJOURS `DEFAULT` pour Analysis, jamais un override utilisateur, un fait
+ * architectural jamais contourné ici.
+ *
+ * Mission §17 — un Router indisponible (`AiRoutingModule` non câblé, jamais le cas en production)
+ * échoue PROPREMENT (`AiModelRouterUnavailableError`), jamais un repli silencieux.
  */
-export async function resolveModelForAnalysis(input: {
-  scope: AnalysisScope;
-  organizationId: string;
-  config: AnalysisConfig;
-  routingPolicyResolver?: RoutingPolicyResolver | undefined;
-  onRoutingResolutionError?: (error: unknown) => void;
-}): Promise<ResolvedModelForAnalysis> {
-  const legacyModel =
-    input.scope === AnalysisScope.Document ? input.config.aiModelForDocumentAnalysis : input.config.aiModelForTenderConsolidation;
-  const legacy: ResolvedModelForAnalysis = { model: legacyModel, escalationConditions: [] };
-
-  if (!input.routingPolicyResolver) {
-    return legacy;
+export async function resolveModelForAnalysis(input: { scope: AnalysisScope; organizationId: string; aiModelRouter?: AiModelRouter | undefined }): Promise<ResolvedModelForAnalysis> {
+  if (!input.aiModelRouter) {
+    throw new AiModelRouterUnavailableError();
   }
-
-  let decision: ActiveRoutingDecision | null;
-  try {
-    decision = await input.routingPolicyResolver.resolveActive({
-      organizationId: input.organizationId,
-      promptKey: mapScopeToPromptKey(input.scope),
-    });
-  } catch (error) {
-    input.onRoutingResolutionError?.(error);
-    return legacy;
-  }
-
-  if (!decision) {
-    return legacy;
-  }
-
-  return {
-    provider: decision.primaryModel.provider,
-    model: decision.primaryModel.modelKey,
-    routingPolicyId: decision.policyId,
-    routingPolicyVersion: decision.policyVersion,
-    escalationModel: decision.escalationModel,
-    escalationConditions: decision.escalationConditions,
-  };
+  const routed = await input.aiModelRouter.resolve({ taskType: mapScopeToPromptKey(input.scope) as AiTaskType, organizationId: input.organizationId });
+  return { provider: routed.provider, model: routed.modelKey };
 }

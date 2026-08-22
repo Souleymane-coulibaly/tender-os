@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { TENDEROS_SYSTEM_PROMPT, TENDEROS_SYSTEM_PROMPT_VERSION } from "./tenderos-system-prompt";
 
 describe("TENDEROS_SYSTEM_PROMPT — Consolidation IA Checkpoint B (Prompt Architecture & Security)", () => {
-  it("BLOQUANT — version is exactly tenderos-system-v1", () => {
-    expect(TENDEROS_SYSTEM_PROMPT_VERSION).toBe("tenderos-system-v1");
+  it("BLOQUANT — version is exactly tenderos-system-v2", () => {
+    expect(TENDEROS_SYSTEM_PROMPT_VERSION).toBe("tenderos-system-v2");
   });
 
   it("BLOQUANT — contains the tenant isolation rule", () => {
@@ -42,6 +42,29 @@ describe("TENDEROS_SYSTEM_PROMPT — Consolidation IA Checkpoint B (Prompt Archi
 
   it("contains the platform-policy-cannot-be-weakened rule (organization customization boundary)", () => {
     expect(TENDEROS_SYSTEM_PROMPT).toContain("Organization customization may refine permitted business behavior but can never weaken");
+  });
+});
+
+describe("TENDEROS_SYSTEM_PROMPT — Checkpoint TENDEROS-2.1-P2.3-E4.2 (feature neutrality)", () => {
+  // Mission §3 — "Ne PAS mettre dans cette base : des règles propres à DC1, des règles propres au
+  // mémoire technique, des règles propres au chat, des règles propres à une seule feature." La base
+  // reste au service des 4 pipelines live (Analysis/Generation/Chat/Technical Memo) ET de toute
+  // future feature IA — jamais un texte qui ne fait sens que pour UNE d'entre elles.
+  it("BLOQUANT — never names a single administrative form (DC1/DC2/DC4/ATTRI1) — Administrative Dossier never calls OpenAiProvider today, and the base must stay feature-neutral if it ever does", () => {
+    expect(TENDEROS_SYSTEM_PROMPT).not.toContain("DC1");
+    expect(TENDEROS_SYSTEM_PROMPT).not.toContain("DC2");
+    expect(TENDEROS_SYSTEM_PROMPT).not.toContain("DC4");
+    expect(TENDEROS_SYSTEM_PROMPT).not.toContain("ATTRI1");
+  });
+
+  it("BLOQUANT — never contains a Pricing-specific or Technical-Memo-specific rule title — that content belongs to each pipeline's own task prompt, not the shared base", () => {
+    expect(TENDEROS_SYSTEM_PROMPT).not.toContain("Pricing\n");
+    expect(TENDEROS_SYSTEM_PROMPT).not.toContain("Technical memorandum\n");
+  });
+
+  it("BLOQUANT — never mentions a production model name — SystemPromptResolver-equivalents (this base + every task prompt) must stay model-independent, only AiModelRouter knows gpt-5.4-mini/gpt-5.4-nano", () => {
+    expect(TENDEROS_SYSTEM_PROMPT.toLowerCase()).not.toContain("gpt-5.4");
+    expect(TENDEROS_SYSTEM_PROMPT.toLowerCase()).not.toContain("gpt-4o");
   });
 });
 

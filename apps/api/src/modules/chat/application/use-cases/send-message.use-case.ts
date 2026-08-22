@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import { AiModelRouter } from "../../../ai-routing";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import {
@@ -12,7 +13,7 @@ import {
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { assertHasTenderPermission, GetTenderUseCase, TenderPermission, type TenderSummary } from "../../../tenders";
 import { validateChatCitations, type KnownChatReferences } from "../../domain/chat-citation-validator";
-import { ChatRateLimitReachedError, ConversationArchivedError, ConversationGenerationInProgressError, ConversationNotFoundError } from "../../domain/errors";
+import { AiModelRouterUnavailableError, ChatRateLimitReachedError, ConversationArchivedError, ConversationGenerationInProgressError, ConversationNotFoundError } from "../../domain/errors";
 import { MessageCitation } from "../../domain/message-citation.entity";
 import { Message, MessageRole, MessageStatus } from "../../domain/message.entity";
 import { CHAT_CONFIG, type ChatConfig } from "../../infrastructure/chat-config";
@@ -24,7 +25,6 @@ import { ATOMIC_TRANSACTION_RUNNER, type AtomicTransactionRunner } from "../port
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { CONVERSATION_REPOSITORY, type ConversationRepository } from "../ports/conversation.repository";
 import { MESSAGE_REPOSITORY, type MessageRepository } from "../ports/message.repository";
-import { ROUTING_POLICY_RESOLVER, type RoutingPolicyResolver } from "../ports/routing-policy-resolver";
 import { ROUTING_DECISION_WRITER, type RoutingDecisionWriter } from "../ports/routing-decision-writer";
 import { OUTBOX_WRITER, type OutboxEventInput, type OutboxWriter } from "../../../outbox";
 import { ChatContextAssembler } from "../services/chat-context-assembler";
@@ -85,15 +85,18 @@ export class SendMessageUseCase {
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
     private readonly contextAssembler: ChatContextAssembler,
-    // Consolidation IA — Checkpoint A §3 : résolveur optionnel (comme pour Analyse, jamais le motif
-    // obligatoire de Génération — Chat a un comportement historique à préserver). Absent tant que
-    // `RoutingPolicyBridgeModule` n'est pas câblé, ou tant qu'aucune `RoutingPolicy` ACTIVE n'existe
-    // pour le task type `CHAT` ⇒ repli strict sur `ChatConfig.aiModel`, jamais une exception.
-    @Optional() @Inject(ROUTING_POLICY_RESOLVER) private readonly routingPolicyResolver?: RoutingPolicyResolver,
-    // Consolidation IA — Checkpoint D : writer optionnel (même motif best-effort qu'Analyse) — absent
-    // ou en échec, la décision n'est simplement pas persistée durablement, jamais une cause d'échec
-    // de la conversation elle-même (voir `createRoutingDecision`/`completeRoutingDecision`).
+    // Consolidation IA — Checkpoint D : writer optionnel (best-effort) — absent ou en échec, la
+    // décision n'est simplement pas persistée durablement, jamais une cause d'échec de la
+    // conversation elle-même (voir `createRoutingDecision`/`completeRoutingDecision`).
     @Optional() @Inject(ROUTING_DECISION_WRITER) private readonly routingDecisionWriter?: RoutingDecisionWriter,
+    // Checkpoint TENDEROS-2.1-P2.3-E4.1 — `AiModelRouter` est désormais la SEULE autorité de
+    // sélection du modèle (mission "aucun use case métier live ne doit décider lui-même quel
+    // modèle utiliser") : `RoutingPolicyResolver`/`ChatConfig.aiModel` ne participent plus à la
+    // décision (voir `generate()`). `@Optional()` reste par discipline défensive uniquement
+    // (jamais un crash au démarrage si `AiRoutingModule` n'est pas câblé) — un appel réel sans
+    // Router échoue PROPREMENT (`AiModelRouterUnavailableError`), jamais un repli silencieux vers
+    // un modèle codé en dur (mission §17).
+    @Optional() private readonly aiModelRouter?: AiModelRouter,
   ) {}
 
   async execute(command: SendMessageCommand): Promise<MessageSummary> {
@@ -242,30 +245,18 @@ export class SendMessageUseCase {
     priorMessages: readonly Message[];
     assistantMessageId: string;
   }): Promise<GenerationOutcome> {
-    // Consolidation IA — Checkpoint A §3 : consulte le moteur de routing partagé (task type
-    // `CHAT`) avant de retomber sur le modèle statique — même discipline que
-    // `resolveModelForAnalysis` (analysis/application/services/model-routing-resolver.ts), jamais
-    // une cause d'échec de la conversation si la résolution échoue ou ne trouve aucune policy.
-    let resolvedModel = this.config.aiModel;
-    let resolvedProvider = this.config.aiProvider;
-    let routingPolicyId: string | undefined;
-    let routingPolicyVersion: number | undefined;
-    if (this.routingPolicyResolver) {
-      try {
-        const decision = await this.routingPolicyResolver.resolveActive({ organizationId: input.command.organizationId, promptKey: "CHAT" });
-        if (decision) {
-          resolvedModel = decision.primaryModel.modelKey;
-          resolvedProvider = decision.primaryModel.provider;
-          routingPolicyId = decision.policyId;
-          routingPolicyVersion = decision.policyVersion;
-        }
-      } catch (error) {
-        this.logger.warn(
-          `Routing policy resolution failed for conversation ${input.command.conversationId}, falling back to the static model configuration: ` +
-            `${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
+    // Checkpoint TENDEROS-2.1-P2.3-E4.1 — `AiModelRouter` est la SEULE autorité de sélection du
+    // modèle (mission "aucun use case métier live ne doit décider lui-même quel modèle utiliser").
+    // Jamais de repli vers `ChatConfig.aiModel`/une RoutingPolicy : un Router indisponible échoue
+    // PROPREMENT (mission §17), jamais silencieusement vers un modèle codé en dur.
+    if (!this.aiModelRouter) {
+      return this.toFailureOutcome(new AiModelRouterUnavailableError());
     }
+    const routed = await this.aiModelRouter.resolve({ taskType: "CHAT", organizationId: input.command.organizationId, userId: input.command.actorId });
+    const resolvedModel = routed.modelKey;
+    const resolvedProvider = routed.provider;
+    const routingPolicyId: string | undefined = undefined;
+    const routingPolicyVersion: number | undefined = undefined;
 
     let provider: AIProvider;
     try {

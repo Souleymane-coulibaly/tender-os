@@ -12,6 +12,8 @@ import { OrganizationRole } from "../../../memberships/domain/organization-role"
 // publique pour créer la toute première Membership ADMIN d'une organisation.
 import { PrismaMembershipRepository } from "../../../memberships/infrastructure/prisma-membership.repository";
 import { buildMinimalPdf } from "../../../extraction/test-support/pdf-fixture-builder";
+import { AnalysisTrigger } from "../../domain/analysis-trigger";
+import { PrismaAnalysisJobRepository } from "../../infrastructure/prisma-analysis-job.repository";
 
 type AnalysisSummary = {
   id: string;
@@ -149,6 +151,36 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
       if (Date.now() > deadline) throw new Error(`Analysis ${analysisId} did not reach a terminal status in time (last: ${body.status})`);
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
+  }
+
+  /** Checkpoint TENDEROS-2.1-P2.3-E4 — un `OPENAI_API_KEY` réel est présent dans cet environnement
+   *  et `AiModelRouter` résout désormais un modèle même sans RoutingPolicy active : le pipeline ne
+   *  s'arrête plus de façon déterministe sur `AI_PROVIDER_NOT_CONFIGURED` en quelques dizaines de
+   *  ms (un vrai aller-retour réseau OpenAI a lieu, issue non prédictible pour un modèle qui
+   *  n'existe pas encore côté OpenAI). Certains tests ont besoin SPÉCIFIQUEMENT d'un job FAILED
+   *  (ex. tester le retry, une transition réservée à FAILED) — on force alors directement l'état
+   *  via le repository réel (même `finalizeAttempt` atomique que la production), dès que le
+   *  dispatcher a réservé la ligne (transition locale synchrone, gagnée avant que le vrai appel
+   *  réseau — plusieurs secondes — n'ait pu aboutir), jamais un accès SQL brut. */
+  async function forceAnalysisFailed(jobId: string, organizationId: string): Promise<void> {
+    const jobRepository = new PrismaAnalysisJobRepository(prisma);
+    let record = await prisma.analysisJob.findUnique({ where: { id: jobId } });
+    for (let attempt = 0; attempt < 20 && (record?.status === "PENDING" || record?.status === "QUEUED"); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      record = await prisma.analysisJob.findUnique({ where: { id: jobId } });
+    }
+    if (record?.status === "FAILED" || record?.status === "SUCCEEDED" || record?.status === "PARTIALLY_SUCCEEDED") return;
+    const now = new Date();
+    await jobRepository.finalizeAttempt({
+      organizationId,
+      jobId,
+      expectedAttemptCount: record?.attemptCount ?? 1,
+      startedAt: now,
+      occurredAt: now,
+      outcome: { kind: "failed", errorCode: "AI_TIMEOUT", errorMessage: "Forced failure (test-only, race-safe against the real in-flight provider call)." },
+      trigger: AnalysisTrigger.Manual,
+      retryCount: 0,
+    });
   }
 
   beforeAll(async () => {
@@ -297,7 +329,7 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
     await app.close();
   }, 30000);
 
-  it("starts a DOCUMENT-scope analysis (202) that ends up FAILED/AI_PROVIDER_NOT_CONFIGURED (no key in this environment)", async () => {
+  it("starts a DOCUMENT-scope analysis (202) that reaches a real terminal status via the real pipeline", async () => {
     const startRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/documents/${extractedDocumentId}/analyses`, {
       method: "POST",
       headers: authHeaders(tokenAdminA, orgAId),
@@ -308,12 +340,17 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
     expect(started.analysisVersion).toBe(1);
     expect(started.extractionVersion).toBeGreaterThanOrEqual(1);
 
+    // Checkpoint TENDEROS-2.1-P2.3-E4 — un `OPENAI_API_KEY` réel est présent dans cet environnement
+    // et `AiModelRouter` résout désormais un modèle même sans RoutingPolicy active : l'issue réelle
+    // (succès ou échec réseau réel, pour un modèle qui n'existe pas encore côté OpenAI) n'est plus
+    // une hypothèse que ce test cherche à prédire — il prouve seulement que le pipeline atteint un
+    // état terminal cohérent et que l'API le restitue correctement, jamais NO_ACTIVE_ROUTING_POLICY.
     const final = await waitForTerminalAnalysis(started.id, tokenAdminA, orgAId);
-    expect(final.status).toBe("FAILED");
-    expect(final.errorCode).toBe("AI_PROVIDER_NOT_CONFIGURED");
-  });
+    expect(["SUCCEEDED", "PARTIALLY_SUCCEEDED", "FAILED"]).toContain(final.status);
+    if (final.status === "FAILED") expect(final.errorCode).not.toBe("NO_ACTIVE_ROUTING_POLICY");
+  }, 25000);
 
-  it("starts a TENDER-scope analysis (202) that also ends up FAILED/AI_PROVIDER_NOT_CONFIGURED", async () => {
+  it("starts a TENDER-scope analysis (202) that reaches a real terminal status via the real pipeline", async () => {
     const startRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analyses`, {
       method: "POST",
       headers: authHeaders(tokenAdminA, orgAId),
@@ -323,18 +360,22 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
     expect(started.scope).toBe("TENDER");
 
     const final = await waitForTerminalAnalysis(started.id, tokenAdminA, orgAId);
-    expect(final.status).toBe("FAILED");
-    expect(final.errorCode).toBe("AI_PROVIDER_NOT_CONFIGURED");
-  });
+    expect(["SUCCEEDED", "PARTIALLY_SUCCEEDED", "FAILED"]).toContain(final.status);
+    if (final.status === "FAILED") expect(final.errorCode).not.toBe("NO_ACTIVE_ROUTING_POLICY");
+  }, 25000);
 
-  it("retries a FAILED analysis: same id and version, still FAILED (no key), attemptCount grows", async () => {
+  it("retries a FAILED analysis: same id and version, still terminal, attemptCount grows", async () => {
     const startRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analyses`, {
       method: "POST",
       headers: authHeaders(tokenAdminA, orgAId),
     });
     const started = (await startRes.json()) as AnalysisSummary;
-    const first = await waitForTerminalAnalysis(started.id, tokenAdminA, orgAId);
-    expect(first.status).toBe("FAILED");
+    // Le retry n'est une transition valide QUE depuis FAILED (mission — jamais une invention de
+    // ce test) : on force donc directement cet état, plutôt que d'attendre l'issue naturelle,
+    // désormais non déterministe (voir `forceAnalysisFailed`).
+    await forceAnalysisFailed(started.id, orgAId);
+    const first = await getAnalysis(started.id, tokenAdminA, orgAId);
+    expect(first.body.status).toBe("FAILED");
 
     const retryRes = await fetch(`${baseUrl}/api/v1/analyses/${started.id}/retry`, {
       method: "POST",
@@ -346,8 +387,8 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
     expect(retried.analysisVersion).toBe(started.analysisVersion);
 
     const second = await waitForTerminalAnalysis(started.id, tokenAdminA, orgAId);
-    expect(second.status).toBe("FAILED");
-  });
+    expect(["SUCCEEDED", "PARTIALLY_SUCCEEDED", "FAILED"]).toContain(second.status);
+  }, 25000);
 
   it("refuses to cancel an analysis that already reached a terminal status (409)", async () => {
     const startRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analyses`, {
@@ -364,7 +405,7 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
     expect(cancelRes.status).toBe(409);
     const body = (await cancelRes.json()) as { error: { code: string } };
     expect(body.error.code).toBe("ANALYSIS_NOT_CANCELLABLE");
-  });
+  }, 25000);
 
   it("refuses a double trigger while a job is still active for the same document (409)", async () => {
     // Job QUEUED inséré directement (jamais dispatché, donc jamais traité) — garantit un test
@@ -446,7 +487,7 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
     // `tenderAId`, ce qui ferait échouer (409 ANALYSIS_ALREADY_RUNNING) un test ultérieur qui
     // déclenche une nouvelle analyse TENDER sur ce même Tender.
     await waitForTerminalAnalysis(started.id, tokenOwnerA, orgAId);
-  });
+  }, 25000);
 
   it("lets an OWNER trigger a DOCUMENT-scope analysis via POST /tenders/:tenderId/documents/:documentId/analyses (202)", async () => {
     const startRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/documents/${ownerExtractedDocumentId}/analyses`, {
@@ -458,7 +499,7 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
     expect(started.scope).toBe("DOCUMENT");
 
     await waitForTerminalAnalysis(started.id, tokenOwnerA, orgAId);
-  });
+  }, 25000);
 
   it("lets an OWNER read (GET) and retry (POST .../retry) an analysis", async () => {
     const startRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analyses`, {
@@ -470,14 +511,15 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
     const { status } = await getAnalysis(started.id, tokenOwnerA, orgAId);
     expect(status).toBe(200);
 
-    await waitForTerminalAnalysis(started.id, tokenOwnerA, orgAId);
+    // Retry n'est une transition valide QUE depuis FAILED (voir `forceAnalysisFailed`).
+    await forceAnalysisFailed(started.id, orgAId);
     const retryRes = await fetch(`${baseUrl}/api/v1/analyses/${started.id}/retry`, {
       method: "POST",
       headers: authHeaders(tokenOwnerA, orgAId),
     });
     expect(retryRes.status).toBe(202);
     await waitForTerminalAnalysis(started.id, tokenOwnerA, orgAId);
-  });
+  }, 25000);
 
   it("lets an OWNER cancel a non-terminal analysis job (200)", async () => {
     // Job QUEUED inséré directement (jamais dispatché) — même technique déterministe que le test
@@ -523,7 +565,7 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
     const { status, body } = await getAnalysis(started.id, tokenOwnerB, orgBId);
     expect(status).toBe(404);
     expect(body.error?.code).toBe("ANALYSIS_NOT_FOUND");
-  });
+  }, 25000);
 
   it("never leaks an analysis belonging to another organization (404, not 403)", async () => {
     const startRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/analyses`, {

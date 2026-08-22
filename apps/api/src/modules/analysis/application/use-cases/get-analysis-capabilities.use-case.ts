@@ -24,15 +24,15 @@ export type AnalysisCapability = Readonly<{
 /**
  * Capacités d'analyse IA réellement configurées (mission Sprint 8A.2 — mirroir de
  * `GetGenerationCapabilitiesUseCase`, module `generation`). Contrairement à Generation, Analysis
- * n'a ni `PromptTemplate` ni `RoutingPolicy` bloquants en base : les deux prompts métier sont
- * statiques dans le code (voir `StaticPromptTemplateProvider`), et une `RoutingPolicy`
- * absente/en échec de résolution retombe SILENCIEUSEMENT sur la configuration statique (voir
- * `ProcessAnalysisJobUseCase`, "falling back to the static model configuration"), jamais un
- * blocage. Le SEUL vrai blocage possible est l'absence de provider IA configuré — vérifié en
- * réutilisant le MÊME registre que `ProcessAnalysisJobUseCase`/`ProcessDocumentExtractionUseCase`,
- * jamais un second calcul divergent de "l'IA est-elle configurée" (même discipline que la décision
- * d'architecture Sprint 8A.2 pour `GetGenerationCapabilitiesUseCase` : pas de réouverture du cœur
- * typé d'ai-benchmark).
+ * n'a pas de `PromptTemplate` bloquant en base : les deux prompts métier sont statiques dans le
+ * code (voir `StaticPromptTemplateProvider`). Le SEUL vrai blocage possible est l'absence de
+ * provider IA configuré — vérifié en réutilisant le MÊME registre que
+ * `ProcessAnalysisJobUseCase`/`ProcessDocumentExtractionUseCase`, jamais un second calcul
+ * divergent de "l'IA est-elle configurée". Checkpoint TENDEROS-2.1-P2.3-E4.1 — `resolveModel
+ * ForAnalysis` (via `AiModelRouter`) fournit désormais TOUJOURS `provider: "OPENAI"` explicitement
+ * au registre, jamais `config.aiProvider` : cette vérification passe `{ provider: "OPENAI" }`
+ * explicitement pour mirroir EXACTEMENT ce chemin réel, jamais le comportement historique
+ * (`config.aiProvider`) qui ne correspond plus à ce qui est réellement invoqué.
  */
 @Injectable()
 export class GetAnalysisCapabilitiesUseCase {
@@ -60,7 +60,7 @@ export class GetAnalysisCapabilitiesUseCase {
 
   private resolveOutcome(): { ready: boolean; reasonCode?: AnalysisCapabilityReasonCode } {
     try {
-      this.aiProviderRegistry.resolve();
+      this.aiProviderRegistry.resolve({ provider: "OPENAI" });
       return { ready: true };
     } catch (error) {
       if (error instanceof AiProviderNotConfiguredError) {

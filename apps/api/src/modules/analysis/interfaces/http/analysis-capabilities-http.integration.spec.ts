@@ -12,8 +12,14 @@ import { PrismaMembershipRepository } from "../../../memberships/infrastructure/
 /**
  * Mission — preuve bout-en-bout de `GET /tenders/:tenderId/analysis-capabilities`, réel HTTP +
  * PostgreSQL, réutilisant le VRAI `DefaultAIProviderRegistry` câblé dans `AppModule` (jamais un
- * double) — l'environnement de test ne configure aucun `AI_PROVIDER`, donc `ready: false` /
- * `AI_PROVIDER_NOT_CONFIGURED` est le résultat réel et déterministe ici, pour les deux tâches.
+ * double). Checkpoint TENDEROS-2.1-P2.3-E4.1 — `GetAnalysisCapabilitiesUseCase` résout désormais
+ * le provider avec un sélecteur EXPLICITE `{ provider: "OPENAI" }` (mirroir exact de
+ * `resolveModelForAnalysis`/`AiModelRouter`, qui fournit toujours `provider: "OPENAI"` sans jamais
+ * consulter `config.aiProvider`/`AI_PROVIDER`). Un `OPENAI_API_KEY` réel est présent dans cet
+ * environnement (`apps/api/.env`) : le résultat réel et déterministe ici est donc `ready: true`
+ * pour les deux tâches, MÊME si `AI_PROVIDER` reste non configuré — exactement ce que fait
+ * réellement une analyse au runtime désormais (avant ce checkpoint, cet endpoint mentait :
+ * il rapportait `AI_PROVIDER_NOT_CONFIGURED` alors qu'une analyse réelle aurait réussi).
  */
 describe("Analysis — capabilities endpoint, real HTTP + PostgreSQL", () => {
   let app: INestApplication;
@@ -91,14 +97,14 @@ describe("Analysis — capabilities endpoint, real HTTP + PostgreSQL", () => {
     await app.close();
   }, 30000);
 
-  it("reports AI_PROVIDER_NOT_CONFIGURED for both ANALYZE_DOCUMENT and CONSOLIDATE_TENDER_ANALYSIS when no AI provider is configured in this environment", async () => {
+  it("BLOQUANT — Checkpoint TENDEROS-2.1-P2.3-E4.1: reports both ANALYZE_DOCUMENT and CONSOLIDATE_TENDER_ANALYSIS as ready via the explicit { provider: OPENAI } selector, even though AI_PROVIDER itself is unset in this environment (mirrors the real AiModelRouter runtime path, never config.aiProvider)", async () => {
     const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/analysis-capabilities`, { headers: authHeaders(tokenOwner) });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { items: { taskType: string; ready: boolean; reasonCode?: string }[] };
 
     expect(body.items).toEqual([
-      { taskType: "ANALYZE_DOCUMENT", ready: false, reasonCode: "AI_PROVIDER_NOT_CONFIGURED" },
-      { taskType: "CONSOLIDATE_TENDER_ANALYSIS", ready: false, reasonCode: "AI_PROVIDER_NOT_CONFIGURED" },
+      { taskType: "ANALYZE_DOCUMENT", ready: true },
+      { taskType: "CONSOLIDATE_TENDER_ANALYSIS", ready: true },
     ]);
   });
 

@@ -3048,6 +3048,37 @@ model RoutingDecision {
   @@map("routing_decisions")
 }
 
+/// Checkpoint TENDEROS-2.1-P2.3-E4, mission §13 — override utilisateur explicite du modèle IA
+/// (GPT_5_4_MINI | GPT_5_4_NANO) pour une tâche donnée. Absence de ligne = AUTOMATIC (mission §10 :
+/// jamais enregistré comme une valeur — "reset vers automatique" = suppression de la ligne, jamais
+/// un `modelOverride = "AUTO"` stocké, pour que la résolution AUTOMATIC re-dérive toujours de la
+/// matrice de routing COURANTE, jamais figée au moment de l'écriture — mission §37). Scopé par
+/// (userId, organizationId), jamais seulement userId : un utilisateur multi-organisations peut
+/// avoir un choix différent par organisation (mission §38, isolation testée explicitement). Aucune
+/// FK Prisma déclarée vers User/Organization (même motif que la majorité des tables scopées par
+/// organizationId dans ce schéma, ex. SavedSearch/ExternalTender — jamais un besoin de traversée
+/// Prisma, uniquement un scoping applicatif systématique).
+model AiModelPreference {
+  id String @id @default(uuid()) @db.Uuid
+
+  userId         String @map("user_id") @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// Un des AiTaskType réels (shared-kernel/ai-task-type.ts) — catalogue applicatif, jamais une
+  /// énumération DB séparée à resynchroniser (même motif que RoutingPolicy.promptKey ci-dessus).
+  taskType String @map("task_type") @db.VarChar(40)
+
+  /// GPT_5_4_MINI | GPT_5_4_NANO — jamais "AUTO" (voir doc de tête). CHECK (migration).
+  modelOverride String @map("model_override") @db.VarChar(20)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, organizationId, taskType])
+  @@index([organizationId, taskType])
+  @@map("ai_model_preferences")
+}
+
 /// Sprint 6 §"Prompt Management" — un template par (organisation, type de tâche de génération),
 /// jamais de variantes concurrentes en MVP. Système entièrement séparé du placeholder statique
 /// d'Analysis (`PromptTemplatePort`/`PromptKey`, Sprint 4.1/4.2) — aucun vocabulaire partagé,

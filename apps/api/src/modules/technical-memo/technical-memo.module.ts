@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AiRoutingModule } from "../ai-routing";
 import { AnalysisModule } from "../analysis/analysis.module";
 import { BillingModule } from "../billing";
 import { CandidateCompanyModule } from "../candidate-company";
@@ -72,6 +73,7 @@ import { TenderTechnicalMemosController } from "./interfaces/http/tender-technic
     CompanyProfileModule,
     CandidateCompanyModule,
     BillingModule,
+    AiRoutingModule,
   ],
   controllers: [TenderTechnicalMemosController, TechnicalMemosController],
   providers: [

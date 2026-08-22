@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AiRoutingModule } from "../ai-routing";
 import { AnalysisModule } from "../analysis";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { IdentityModule } from "../identity";
@@ -41,7 +42,7 @@ import { ChatController } from "./interfaces/http/chat.controller";
  * dépendance vers Workspace/Generation/Export.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, KnowledgeBaseModule, AnalysisModule, OpportunityModule, OutboxWriterModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, KnowledgeBaseModule, AnalysisModule, OpportunityModule, OutboxWriterModule, AiRoutingModule],
   controllers: [ChatController],
   providers: [
     CreateConversationUseCase,

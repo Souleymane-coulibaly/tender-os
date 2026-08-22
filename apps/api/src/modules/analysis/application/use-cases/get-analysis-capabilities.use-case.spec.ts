@@ -10,8 +10,10 @@ const ORG = "org-1";
 const TENDER = "tender-1";
 
 class FakeAiProviderRegistry implements AIProviderRegistry {
+  readonly resolveCalls: Array<{ provider?: string } | undefined> = [];
   constructor(private readonly behavior: "ready" | "not_configured") {}
-  resolve(): AIProvider {
+  resolve(selector?: { provider?: string }): AIProvider {
+    this.resolveCalls.push(selector);
     if (this.behavior === "not_configured") {
       throw new AiProviderNotConfiguredError({ reason: "no AI_PROVIDER configured" });
     }
@@ -46,6 +48,15 @@ describe("GetAnalysisCapabilitiesUseCase", () => {
       { taskType: PromptKey.AnalyzeDocument, ready: false, reasonCode: "AI_PROVIDER_NOT_CONFIGURED" },
       { taskType: PromptKey.ConsolidateTenderAnalysis, ready: false, reasonCode: "AI_PROVIDER_NOT_CONFIGURED" },
     ]);
+  });
+
+  it("BLOQUANT — Checkpoint TENDEROS-2.1-P2.3-E4.1: resolves the provider with an explicit { provider: OPENAI } selector, mirroring resolveModelForAnalysis's real runtime call (never config.aiProvider, which the real path no longer consults)", async () => {
+    const registry = new FakeAiProviderRegistry("ready");
+    const useCase = new GetAnalysisCapabilitiesUseCase(getTenderUseCase as unknown as GetTenderUseCase, registry);
+
+    await useCase.execute({ organizationId: ORG, tenderId: TENDER, actorId: "user-1", actorRole: "BID_MANAGER" });
+
+    expect(registry.resolveCalls).toEqual([{ provider: "OPENAI" }]);
   });
 
   it("propagates a TENDER_NOT_FOUND from GetTenderUseCase unchanged, never a silently empty capability list", async () => {

@@ -77,4 +77,23 @@ describe("StaticPromptTemplateProvider — couverture prompt/schéma", () => {
       expect(rendered.systemPrompt).not.toContain(TENDEROS_SYSTEM_PROMPT);
     });
   });
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E4.2 (task isolation / model independence)", () => {
+    it("BLOQUANT — mission §17 TEST_TASK_ISOLATION: neither Analysis prompt mentions Chat/Technical Memo-specific vocabulary", () => {
+      const analyzeDocument = provider.render(PromptKey.AnalyzeDocument, { chunksText: "[0] exemple" });
+      const consolidate = provider.render(PromptKey.ConsolidateTenderAnalysis, { documentAnalysesJson: "[]" });
+      for (const rendered of [analyzeDocument, consolidate]) {
+        expect(rendered.systemPrompt).not.toContain("insufficientContext");
+        expect(rendered.systemPrompt).not.toContain("missingDataNotes");
+      }
+    });
+
+    it("BLOQUANT — mission §18 TEST_MODEL_INDEPENDENCE: never names a production model — the ANALYZE_DOCUMENT/CONSOLIDATE_TENDER_ANALYSIS/MINI default lives exclusively in AiModelRouter's routing matrix, never here", () => {
+      const analyzeDocument = provider.render(PromptKey.AnalyzeDocument, { chunksText: "[0] exemple" });
+      const consolidate = provider.render(PromptKey.ConsolidateTenderAnalysis, { documentAnalysesJson: "[]" });
+      for (const rendered of [analyzeDocument, consolidate]) {
+        expect(rendered.systemPrompt.toLowerCase()).not.toContain("gpt-5.4");
+      }
+    });
+  });
 });

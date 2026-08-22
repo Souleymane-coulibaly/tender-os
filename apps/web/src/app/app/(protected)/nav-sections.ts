@@ -39,6 +39,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
       { href: "/app/members", label: "Membres" },
       { href: "/app/integrations/api-keys", label: "Intégrations", tourTarget: "integrations" },
       { href: "/app/ai-configuration/models", label: "Configuration IA" },
+      { href: "/app/ai-preferences", label: "IA / Modèles" },
       { href: "/app/pricing", label: "Pricing organisation" },
     ],
   },

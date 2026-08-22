@@ -85,3 +85,14 @@ export class TechnicalMemoStaleExportBlockedError extends DomainError {
     super(`This technical memo cannot be exported as the current version while its freshness is ${input.freshness}. Refresh and regenerate stale sections first.`);
   }
 }
+
+/** Checkpoint TENDEROS-2.1-P2.3-E4.1 — `AiModelRouter` est désormais la SEULE autorité de
+ *  sélection du modèle, jamais un repli silencieux (mission §17). Ne devrait jamais survenir en
+ *  production réelle (`AiRoutingModule` est câblé globalement) — signale un problème de
+ *  configuration/déploiement, jamais une cause métier normale. */
+export class AiModelRouterUnavailableError extends DomainError {
+  readonly code = "AI_MODEL_ROUTER_UNAVAILABLE";
+  constructor() {
+    super("The AI model router is not available. Contact support.");
+  }
+}

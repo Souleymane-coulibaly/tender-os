@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AiRoutingModule } from "../ai-routing";
 import { AnalysisModule } from "../analysis";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { IdentityModule } from "../identity";
@@ -49,15 +50,16 @@ import { PromptTemplatesController } from "./interfaces/http/prompt-templates.co
  * les 7 use cases de lecture d'Analysis, `GetTenderUseCase`, `AssertClientAccessUseCase`/
  * `GetClientAccountUseCase`, `SearchKnowledgeBaseUseCase`) : aucun de ces modules n'importe jamais
  * Generation en retour, évitant tout cycle Nest (même motif qu'ai-benchmark → analysis, Sprint 5.2).
- * L'intégration au routage Sprint 5.2 (`ROUTING_POLICY_RESOLVER`/`GENERATION_ROUTING_DECISION_
- * WRITER`, tokens propres à Generation) passe par le pont `@Global()` `RoutingPolicyBridgeModule`
- * (ai-benchmark, importé par `AppModule`) — correctif Sprint 6 (audit Codex P1-1/P1-2) :
- * `ProcessGenerationUseCase` échoue désormais explicitement (`NoActiveRoutingPolicyError`) si ce
- * pont est absent ou si aucune `RoutingPolicy` active n'existe pour le `taskType`, jamais un repli
- * silencieux sur un modèle codé en dur.
+ * L'écriture de la `RoutingDecision` (`GENERATION_ROUTING_DECISION_WRITER`, token propre à
+ * Generation) passe par le pont `@Global()` `RoutingPolicyBridgeModule` (ai-benchmark, importé par
+ * `AppModule`). Checkpoint TENDEROS-2.1-P2.3-E4.1 — la sélection du MODÈLE, elle, passe
+ * exclusivement par `AiModelRouter` (`AiRoutingModule`, importé ci-dessus) : `RoutingPolicy`
+ * (correctif Sprint 6, audit Codex P1-1/P1-2) ne court-circuite plus jamais ce choix.
+ * `ProcessGenerationUseCase` échoue explicitement (`AiModelRouterUnavailableError`) UNIQUEMENT si
+ * `AiRoutingModule` lui-même n'est pas câblé, jamais un repli silencieux sur un modèle codé en dur.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, KnowledgeBaseModule, AnalysisModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, KnowledgeBaseModule, AnalysisModule, AiRoutingModule],
   controllers: [GenerationController, PromptTemplatesController],
   providers: [
     CreatePromptTemplateUseCase,

@@ -224,6 +224,19 @@ export class RoutingDecisionPersistenceFailedError extends DomainError {
   }
 }
 
+/** Checkpoint TENDEROS-2.1-P2.3-E4.1 — `AiModelRouter` est désormais la SEULE autorité de
+ *  sélection du modèle, jamais un repli silencieux (mission §17). Ne devrait jamais survenir en
+ *  production réelle (`AiRoutingModule` est câblé globalement) — signale un problème de
+ *  configuration/déploiement, jamais une cause métier normale. Remplace `NoActiveRoutingPolicyError`
+ *  (Sprint 6) sur ce chemin runtime — cette dernière reste définie pour compatibilité (HTTP filter,
+ *  fixtures de test) mais n'est plus jamais levée par `ProcessGenerationUseCase`. */
+export class AiModelRouterUnavailableError extends DomainError {
+  readonly code = "AI_MODEL_ROUTER_UNAVAILABLE";
+  constructor() {
+    super("The AI model router is not available. Contact support.");
+  }
+}
+
 // Aucune classe d'erreur "provider IA" propre à Generation : puisque le module réutilise TEL QUEL
 // `AIProviderRegistry`/`AIProvider` d'Analysis (décision A5, voir rapport final §H), les erreurs
 // réellement levées par `.complete()` sont `AiTimeoutError`/`AiRateLimitedError`/etc. d'Analysis,

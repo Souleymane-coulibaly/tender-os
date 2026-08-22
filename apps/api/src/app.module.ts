@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { HealthModule } from "./health/health.module";
 import { AdministrativeDossierModule } from "./modules/administrative-dossier";
 import { AiBenchmarkModule, RoutingPolicyBridgeModule } from "./modules/ai-benchmark";
+import { AiRoutingModule } from "./modules/ai-routing";
 import { AiSuggestionModule } from "./modules/ai-suggestion";
 import { AiSuggestionBridgeModule } from "./modules/ai-suggestion-bridge";
 import { AnalysisModule } from "./modules/analysis/analysis.module";
@@ -96,6 +97,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     KnowledgeBaseModule,
     RoutingPolicyBridgeModule,
     AiBenchmarkModule,
+    AiRoutingModule,
     GenerationModule,
     PricingModule,
     ExportModule,

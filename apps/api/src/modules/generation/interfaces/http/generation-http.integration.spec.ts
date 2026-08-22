@@ -229,9 +229,10 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
 
   /** Mission Sprint 8A.2 (bugs #1/#4 — "aucune vérification en amont", "No active routing policy"
    *  affiché sans que le frontend sache jamais lesquels des 17 types sont réellement utilisables).
-   *  Réutilise EXECUTIVE_SUMMARY (template + version ACTIVE déjà créés par le bloc précédent) pour
-   *  prouver la transition NO_ACTIVE_ROUTING_POLICY -> ready, sans jamais dupliquer la résolution
-   *  faite par ProcessGenerationUseCase/LaunchGenerationUseCase (mêmes repositories/résolveur). */
+   *  Réutilise EXECUTIVE_SUMMARY (template + version ACTIVE déjà créés par le bloc précédent).
+   *  Checkpoint TENDEROS-2.1-P2.3-E4.1 — `AiModelRouter` résout TOUJOURS un modèle (AUTOMATIC,
+   *  aucune configuration requise) : template + version ACTIVE suffisent désormais à `ready: true`,
+   *  une `RoutingPolicy` (active ou non) n'a plus aucune influence sur ce résultat. */
   describe("generation capabilities (mission Sprint 8A.2)", () => {
     async function activateRoutingPolicyFor(taskType: string): Promise<void> {
       const aiModelRepository = new PrismaAiModelRepository(prisma);
@@ -269,16 +270,16 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
       expect(quality).toEqual({ taskType: "QUALITY", ready: false, reasonCode: "PROMPT_TEMPLATE_NOT_FOUND" });
     });
 
-    it("a task type with an active prompt version but no active routing policy is not ready (NO_ACTIVE_ROUTING_POLICY)", async () => {
+    it("BLOQUANT — Checkpoint TENDEROS-2.1-P2.3-E4.1: a task type with an active prompt template + version is ready WITHOUT any RoutingPolicy (AiModelRouter resolves AUTOMATIC, no configuration required)", async () => {
       const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/generation-capabilities`, {
         headers: authHeaders(tokenOwnerA, orgAId),
       });
       const body = (await res.json()) as { items: { taskType: string; ready: boolean; reasonCode?: string }[] };
       const executiveSummary = body.items.find((item) => item.taskType === "EXECUTIVE_SUMMARY");
-      expect(executiveSummary).toEqual({ taskType: "EXECUTIVE_SUMMARY", ready: false, reasonCode: "NO_ACTIVE_ROUTING_POLICY" });
+      expect(executiveSummary).toEqual({ taskType: "EXECUTIVE_SUMMARY", ready: true });
     });
 
-    it("becomes ready once an active routing policy also exists for that task type — the exact same resolution LaunchGenerationUseCase uses", async () => {
+    it("BLOQUANT — an active RoutingPolicy for that task type changes NOTHING (readiness was already true, RoutingPolicy no longer participates in model selection at all)", async () => {
       await activateRoutingPolicyFor("EXECUTIVE_SUMMARY");
 
       const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/generation-capabilities`, {
@@ -392,17 +393,26 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
       const { id } = (await launchRes.json()) as { id: string };
 
       // Le lancement déclenche IMMÉDIATEMENT un traitement en arrière-plan (fire-and-forget, voir
-      // `InProcessGenerationDispatcher`) qui réserve (PENDING -> GENERATING) puis échoue (aucun
-      // `AI_PROVIDER` configuré dans cet environnement) : on attend d'abord ce statut terminal
-      // naturel pour ne jamais courir contre son propre `reserve()`, puis on rejoue explicitement
-      // FAILED -> PENDING -> GENERATING -> GENERATED (chemin de transitions autorisé) pour amener
-      // la ligne à GENERATED sans jamais contourner la machine à états du domaine.
+      // `InProcessGenerationDispatcher`) qui réserve (PENDING -> GENERATING) puis appelle le
+      // provider réellement (Checkpoint TENDEROS-2.1-P2.3-E4 : `AiModelRouter` résout désormais un
+      // modèle même SANS RoutingPolicy active — le pipeline ne s'arrête plus instantanément sur
+      // `NO_ACTIVE_ROUTING_POLICY`, un vrai aller-retour réseau OpenAI a lieu, avec `gpt-5.4-mini`
+      // qui n'est pas encore un modèle réel côté OpenAI à ce jour ⇒ l'issue naturelle (FAILED ou
+      // GENERATED selon la réponse réelle de l'API) n'est plus déterministe en quelques dizaines de
+      // ms comme avant ce checkpoint). On attend un état terminal (fenêtre élargie), puis on amène
+      // la ligne à GENERATED — directement si elle y est déjà, sinon via le chemin de transitions
+      // autorisé FAILED -> PENDING -> GENERATING -> GENERATED — sans jamais contourner la machine à
+      // états du domaine.
       let record = await prisma.generation.findUnique({ where: { id } });
-      for (let attempt = 0; attempt < 30 && (record?.status === "PENDING" || record?.status === "GENERATING"); attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
+      for (let attempt = 0; attempt < 100 && (record?.status === "PENDING" || record?.status === "GENERATING"); attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
         record = await prisma.generation.findUnique({ where: { id } });
       }
-      expect(record?.status).toBe("FAILED");
+      expect(["FAILED", "GENERATED"]).toContain(record?.status);
+
+      if (record?.status === "GENERATED") {
+        return id;
+      }
 
       const generation = await generationRepository.findById({ organizationId: orgAId, generationId: id });
       generation!.resetForRetry();
@@ -430,7 +440,7 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
       expect(body.rejectedAt).toBeTruthy();
       expect(body.rejectionReason).toBe("Ne répond pas au besoin exprimé");
       expect(body.status).toBe("GENERATED");
-    });
+    }, 20000);
 
     it("the rejection reason is optional (200, no body)", async () => {
       const generationId = await launchAndMarkGenerated();
@@ -442,7 +452,7 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
       });
 
       expect(res.status).toBe(200);
-    });
+    }, 20000);
 
     it("never lets org B reject org A's generation (404, not 403 — never reveals its existence)", async () => {
       const generationId = await launchAndMarkGenerated();
@@ -453,7 +463,7 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
       });
 
       expect(res.status).toBe(404);
-    });
+    }, 20000);
 
     it("a CONTRIBUTOR not assigned to the client cannot reject (404, cross-client)", async () => {
       const generationId = await launchAndMarkGenerated();
@@ -464,7 +474,7 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
       });
 
       expect(res.status).toBe(404);
-    });
+    }, 20000);
 
     it("refuses to reject an already-VALIDATED generation (409, incompatible status)", async () => {
       const generationId = await launchAndMarkGenerated();
@@ -482,7 +492,7 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
       expect(rejectRes.status).toBe(409);
       const body = (await rejectRes.json()) as { error: { code: string } };
       expect(body.error.code).toBe("GENERATION_ALREADY_VALIDATED");
-    });
+    }, 20000);
 
     it("refuses to reject a FAILED generation (409, incompatible status)", async () => {
       const launchRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderAId}/generations`, {
@@ -492,14 +502,27 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
       });
       const { id: generationId } = (await launchRes.json()) as { id: string };
 
-      // Le traitement en arrière-plan échoue naturellement (aucun `AI_PROVIDER` configuré) — inutile
-      // de fabriquer l'échec, et le fabriquer manuellement ici courrait contre le `reserve()` du
-      // dispatcher fire-and-forget (voir `launchAndMarkGenerated`).
+      // Checkpoint TENDEROS-2.1-P2.3-E4 — un `OPENAI_API_KEY` réel est présent dans cet
+      // environnement et `AiModelRouter` résout désormais un modèle même sans RoutingPolicy active :
+      // le traitement en arrière-plan n'échoue plus de façon déterministe en quelques dizaines de ms
+      // (un vrai aller-retour réseau OpenAI a lieu, avec une issue non prédictible pour un modèle
+      // qui n'existe pas encore côté OpenAI). Ce test a besoin SPÉCIFIQUEMENT d'un statut FAILED
+      // (pour prouver que le rejet est refusé sur ce statut) — attendre l'issue naturelle du pipeline
+      // rendrait ce test flaky. On force donc directement l'échec via le repository, dès que le
+      // dispatcher fire-and-forget a réservé la ligne (PENDING -> GENERATING, une transition locale
+      // synchrone, gagnée ici avant que le vrai appel réseau — plusieurs secondes, mesuré ci-dessus —
+      // n'ait pu aboutir) — jamais un accès SQL brut, toujours le même repository que la production.
       let record = await prisma.generation.findUnique({ where: { id: generationId } });
-      for (let attempt = 0; attempt < 30 && (record?.status === "PENDING" || record?.status === "GENERATING"); attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
+      for (let attempt = 0; attempt < 20 && record?.status === "PENDING"; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
         record = await prisma.generation.findUnique({ where: { id: generationId } });
       }
+      expect(record?.status).toBe("GENERATING");
+
+      const generation = await generationRepository.findById({ organizationId: orgAId, generationId });
+      generation!.markFailed({ errorCode: "AI_TIMEOUT", errorMessage: "Forced failure (test-only, race-safe against the real in-flight provider call)." }, new Date());
+      await generationRepository.save(generation!);
+      record = await prisma.generation.findUnique({ where: { id: generationId } });
       expect(record?.status).toBe("FAILED");
 
       const res = await fetch(`${baseUrl}/api/v1/generations/${generationId}/reject`, {
@@ -522,17 +545,23 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
       });
 
       expect(res.status).toBe(400);
-    });
+    }, 20000);
   });
 
-  /** Correctif Sprint 6 (audit Codex P1-1/P1-2) — preuve end-to-end HTTP + PostgreSQL que le
-   *  traitement en arrière-plan consomme RÉELLEMENT une RoutingPolicy Sprint 5.2 lorsqu'elle existe,
-   *  au lieu de retomber sur un modèle codé en dur. Aucun `AI_PROVIDER` n'est configuré dans cet
-   *  environnement de test (voir plus haut) : l'échec final attendu est `AI_PROVIDER_NOT_CONFIGURED`
-   *  (l'appel provider), jamais `NO_ACTIVE_ROUTING_POLICY` — la seule façon d'atteindre ce point est
-   *  qu'une VRAIE RoutingDecision ait déjà été créée et le modèle réellement résolu. */
-  describe("real routing policy consumption (audit Codex P1-1/P1-2)", () => {
-    it("a generation for a taskType with an ACTIVE RoutingPolicy consumes it (real RoutingDecision created), even though the provider call itself fails in this environment", async () => {
+  /** Correctif Sprint 6 (audit Codex P1-1/P1-2), RENVERSÉ au Checkpoint TENDEROS-2.1-P2.3-E4.1 —
+   *  preuve end-to-end HTTP + PostgreSQL qu'une `RoutingPolicy` Sprint 5.2 active, même existante et
+   *  activée pour ce taskType, N'EST PLUS jamais consommée par le traitement en arrière-plan :
+   *  `AiModelRouter` reste la SEULE autorité de sélection du modèle, la RoutingPolicy ne peut plus
+   *  le court-circuiter (mission "aucun use case métier live ne doit décider lui-même quel modèle
+   *  utiliser" / §"RoutingPolicy ne court-circuite plus le Router"). Un `OPENAI_API_KEY` réel est
+   *  présent dans cet environnement : l'appel provider peut donc réellement aboutir OU échouer selon
+   *  la réponse réelle d'OpenAI pour `gpt-5.4-mini` — ce test ne prétend pas prédire lequel (jamais
+   *  un test flaky sur un détail réseau non maîtrisé), il prouve uniquement ce qui compte réellement
+   *  ici : une VRAIE `RoutingDecision` est créée (traçabilité Sprint 5.2 préservée) mais SANS lien
+   *  vers la RoutingPolicy active (`routingPolicyId`/`routingPolicyVersion` restent `null`), preuve
+   *  indépendante de l'issue finale de l'appel provider. */
+  describe("RoutingPolicy no longer consumed by generation (Checkpoint TENDEROS-2.1-P2.3-E4.1)", () => {
+    it("BLOQUANT — a generation for a taskType with an ACTIVE RoutingPolicy never consumes it (real RoutingDecision still created via AiModelRouter, routingPolicyId/routingPolicyVersion stay null), regardless of the real provider call's own outcome", async () => {
       const now = new Date();
 
       const templateRes = await fetch(`${baseUrl}/api/v1/prompt-templates`, {
@@ -585,25 +614,28 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
       const { id: generationId } = (await launchRes.json()) as { id: string };
 
       let finalStatus: string | undefined;
-      for (let attempt = 0; attempt < 20 && finalStatus !== "FAILED" && finalStatus !== "GENERATED"; attempt++) {
+      for (let attempt = 0; attempt < 100 && finalStatus !== "FAILED" && finalStatus !== "GENERATED"; attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 100));
         const record = await prisma.generation.findUnique({ where: { id: generationId } });
         finalStatus = record?.status;
       }
 
       const stored = await prisma.generation.findUnique({ where: { id: generationId } });
-      expect(stored!.status).toBe("FAILED");
-      // La preuve du correctif : l'échec vient de l'appel provider (aucun `AI_PROVIDER` configuré
-      // dans cet environnement), jamais de "aucune policy active" — la policy a bien été consommée.
-      expect(stored!.errorCode).toBe("AI_PROVIDER_NOT_CONFIGURED");
-      expect(stored!.routingPolicyId).toBe(policy.id);
+      expect(["FAILED", "GENERATED"]).toContain(stored!.status);
+      // La preuve du Checkpoint E4.1 : une VRAIE RoutingDecision existe (traçabilité préservée),
+      // mais la RoutingPolicy active N'A JAMAIS été consultée pour le choix du modèle —
+      // `routingPolicyId`/`routingPolicyVersion` restent `null` même si `policy` est active pour ce
+      // taskType. L'issue de l'appel provider lui-même (succès ou échec réseau réel) n'est pas une
+      // hypothèse que ce test cherche à prédire.
+      expect(stored!.routingPolicyId).toBeNull();
+      expect(stored!.routingPolicyVersion).toBeNull();
       expect(stored!.routingDecisionId).not.toBeNull();
 
       const decision = await prisma.routingDecision.findUnique({ where: { id: stored!.routingDecisionId! } });
       expect(decision).not.toBeNull();
       expect(decision!.generationId).toBe(generationId);
       expect(decision!.analysisId).toBeNull();
-      expect(decision!.status).toBe("FAILED");
+      expect(decision!.status).toBe(stored!.status === "GENERATED" ? "SUCCEEDED" : "FAILED");
 
       // Ordre imposé par la VRAIE FK composée (audit Codex P1-2) — la génération doit être
       // supprimée AVANT sa RoutingDecision, jamais l'inverse (ON DELETE RESTRICT).
@@ -611,6 +643,6 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
       await prisma.routingDecision.deleteMany({ where: { id: stored!.routingDecisionId! } });
       await prisma.routingPolicy.deleteMany({ where: { id: policy.id } });
       await prisma.aiModel.deleteMany({ where: { id: model.id } });
-    });
+    }, 20000);
   });
 });

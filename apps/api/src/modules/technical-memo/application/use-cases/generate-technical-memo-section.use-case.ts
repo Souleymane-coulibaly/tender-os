@@ -1,11 +1,12 @@
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import { AiModelRouter } from "../../../ai-routing";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import { AI_PROVIDER_REGISTRY, AiTimeoutError, GetEffectiveTenderAnalysisSummaryUseCase, type AIProvider, type AIProviderRegistry, type AIProviderRequest, type AIProviderResult } from "../../../analysis";
 import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { TechnicalMemoCoverageStatus, TechnicalMemoSectionRevisionSource } from "../../domain/enums";
-import { TechnicalMemoAnalysisNotCurrentError, TechnicalMemoSectionNotFoundError } from "../../domain/errors";
+import { AiModelRouterUnavailableError, TechnicalMemoAnalysisNotCurrentError, TechnicalMemoSectionNotFoundError } from "../../domain/errors";
 import { TechnicalMemoSectionCitation } from "../../domain/technical-memo-section-citation.value-object";
 import { TechnicalMemoSectionRevision } from "../../domain/technical-memo-section-revision.entity";
 import { buildTechnicalMemoSystemPrompt, TECHNICAL_MEMO_SYSTEM_PROMPT_VERSION } from "../../infrastructure/technical-memo-system-prompt";
@@ -14,7 +15,6 @@ import { isRetryableAiError } from "../policies/ai-error-classification";
 import { assertTechnicalMemoAccess } from "../policies/technical-memo-access.policy";
 import { ATOMIC_TRANSACTION_RUNNER, type AtomicTransactionRunner } from "../ports/atomic-transaction-runner";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
-import { ROUTING_POLICY_RESOLVER, type RoutingPolicyResolver } from "../ports/routing-policy-resolver";
 import { ROUTING_DECISION_WRITER, type RoutingDecisionWriter } from "../ports/routing-decision-writer";
 import { TECHNICAL_MEMO_SECTION_REPOSITORY, type TechnicalMemoSectionRepository } from "../ports/technical-memo-section.repository";
 import {
@@ -89,15 +89,17 @@ export class GenerateTechnicalMemoSectionUseCase {
     private readonly accessService: TechnicalMemoAccessService,
     private readonly contextAssembler: TechnicalMemoSectionContextAssembler,
     private readonly getEffectiveTenderAnalysisSummaryUseCase: GetEffectiveTenderAnalysisSummaryUseCase,
-    // Consolidation IA — Checkpoint A §3 : résolveur optionnel (motif d'Analyse, jamais celui,
-    // obligatoire, de Génération — Mémoire technique a un comportement historique à préserver).
-    // Absent ⇒ repli strict sur `TechnicalMemoAiConfig.aiModel`, jamais une exception.
-    @Optional() @Inject(ROUTING_POLICY_RESOLVER) private readonly routingPolicyResolver: RoutingPolicyResolver | undefined,
-    // Consolidation IA — Checkpoint D : writer optionnel (même motif best-effort qu'Analyse) — absent
-    // ou en échec, la décision n'est simplement pas persistée durablement, jamais une cause d'échec
-    // de la génération de section elle-même (voir `createRoutingDecision`/`completeRoutingDecision`).
+    // Consolidation IA — Checkpoint D : writer optionnel (best-effort) — absent ou en échec, la
+    // décision n'est simplement pas persistée durablement, jamais une cause d'échec de la
+    // génération de section elle-même (voir `createRoutingDecision`/`completeRoutingDecision`).
     @Optional() @Inject(ROUTING_DECISION_WRITER) private readonly routingDecisionWriter: RoutingDecisionWriter | undefined,
     @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
+    // Checkpoint TENDEROS-2.1-P2.3-E4.1 — `AiModelRouter` est désormais la SEULE autorité de
+    // sélection du modèle : `RoutingPolicyResolver`/`TechnicalMemoAiConfig.aiModel` ne participent
+    // plus à la décision (voir `generate()`). `@Optional()` reste défensif uniquement (jamais un
+    // crash au démarrage) — un appel réel sans Router échoue PROPREMENT
+    // (`AiModelRouterUnavailableError`), jamais un repli silencieux (mission §17).
+    @Optional() private readonly aiModelRouter?: AiModelRouter,
   ) {}
 
   async execute(command: GenerateTechnicalMemoSectionCommand): Promise<TechnicalMemoSectionRevision> {
@@ -180,29 +182,19 @@ export class GenerateTechnicalMemoSectionUseCase {
   private async generate(input: { command: GenerateTechnicalMemoSectionCommand; memo: Awaited<ReturnType<TechnicalMemoAccessService["loadMemo"]>>; section: Awaited<ReturnType<TechnicalMemoSectionRepository["findById"]>> }): Promise<GenerationOutcome> {
     const section = input.section!;
 
-    // Consolidation IA — Checkpoint A §3 : consulte le moteur de routing partagé (task type
-    // `TECHNICAL_MEMO_SECTION`) avant de retomber sur le modèle statique — jamais une cause
-    // d'échec de la génération si la résolution échoue ou ne trouve aucune policy active.
-    let resolvedModel = this.config.aiModel;
-    let resolvedProvider = this.config.aiProvider;
-    let routingPolicyId: string | undefined;
-    let routingPolicyVersion: number | undefined;
-    if (this.routingPolicyResolver) {
-      try {
-        const decision = await this.routingPolicyResolver.resolveActive({ organizationId: input.command.organizationId, promptKey: "TECHNICAL_MEMO_SECTION" });
-        if (decision) {
-          resolvedModel = decision.primaryModel.modelKey;
-          resolvedProvider = decision.primaryModel.provider;
-          routingPolicyId = decision.policyId;
-          routingPolicyVersion = decision.policyVersion;
-        }
-      } catch (error) {
-        this.logger.warn(
-          `Routing policy resolution failed for technical memo section ${input.command.technicalMemoSectionId}, falling back to the static model configuration: ` +
-            `${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
+    // Checkpoint TENDEROS-2.1-P2.3-E4.1 — `AiModelRouter` est la SEULE autorité de sélection du
+    // modèle (mission "aucun use case métier live ne doit décider lui-même quel modèle utiliser").
+    // Jamais de repli vers `TechnicalMemoAiConfig.aiModel`/une RoutingPolicy : un Router
+    // indisponible échoue PROPREMENT (mission §17), jamais silencieusement vers un modèle codé en
+    // dur.
+    if (!this.aiModelRouter) {
+      return this.toFailureOutcome(new AiModelRouterUnavailableError());
     }
+    const routed = await this.aiModelRouter.resolve({ taskType: "TECHNICAL_MEMO_SECTION", organizationId: input.command.organizationId, userId: input.command.actorId });
+    const resolvedModel = routed.modelKey;
+    const resolvedProvider = routed.provider;
+    const routingPolicyId: string | undefined = undefined;
+    const routingPolicyVersion: number | undefined = undefined;
 
     let provider: AIProvider;
     try {

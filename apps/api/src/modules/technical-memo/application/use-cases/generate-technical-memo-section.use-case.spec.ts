@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AiModelRouter } from "../../../ai-routing";
+import { InMemoryAiModelPreferenceRepository } from "../../../ai-routing/test-support/fakes";
 import { TechnicalMemoCoverageStatus, TechnicalMemoRequirementFindingType, TechnicalMemoSectionRevisionSource, TechnicalMemoSectionStatus, TechnicalMemoStatus, TechnicalMemoTemplateOrigin } from "../../domain/enums";
 import { TechnicalMemo } from "../../domain/technical-memo.aggregate";
 import { TechnicalMemoSection } from "../../domain/technical-memo-section.entity";
@@ -8,7 +10,6 @@ import {
   FakeAIProvider,
   FakeAIProviderRegistry,
   FakeAtomicTransactionRunner,
-  FakeRoutingPolicyResolver,
   fakeSectionAIProviderResult,
   FixedClock,
   InMemoryAuditLogWriter,
@@ -59,11 +60,15 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
     };
   }
 
+  // Checkpoint TENDEROS-2.1-P2.3-E4.1 — un `AiModelRouter` réel (jamais `undefined`) est câblé par
+  // défaut, comme en production : les tests qui ne testent pas spécifiquement le routing exercent
+  // donc le vrai chemin AUTOMATIC → gpt-5.4-mini. Passer explicitement `null` simule l'absence de
+  // Router (cas défensif `@Optional()`, jamais le cas réel en production).
   function buildUseCase(
     provider: FakeAIProvider,
-    routingPolicyResolver?: FakeRoutingPolicyResolver,
     routingDecisionWriter?: RecordingRoutingDecisionWriter | ThrowingRoutingDecisionWriter,
     entitlementService?: ReturnType<typeof fakeEntitlementService>,
+    aiModelRouter: AiModelRouter | null = new AiModelRouter(new InMemoryAiModelPreferenceRepository()),
   ): GenerateTechnicalMemoSectionUseCase {
     return new GenerateTechnicalMemoSectionUseCase(
       sectionRepository,
@@ -78,9 +83,9 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
       accessService as unknown as TechnicalMemoAccessService,
       contextAssembler as unknown as TechnicalMemoSectionContextAssembler,
       getEffectiveTenderAnalysisSummaryUseCase as never,
-      routingPolicyResolver as never,
       routingDecisionWriter as never,
       (entitlementService ?? fakeEntitlementService()) as never,
+      aiModelRouter ?? undefined,
     );
   }
 
@@ -254,49 +259,39 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
     });
   });
 
-  describe("Consolidation IA — Checkpoint A §3/§6 (routing partagé)", () => {
+  describe("Checkpoint TENDEROS-2.1-P2.3-E4.1 — AiModelRouter est la SEULE autorité de sélection du modèle", () => {
     function successProvider(): FakeAIProvider {
       return new FakeAIProvider([{ kind: "success", result: fakeSectionAIProviderResult({ content: JSON.stringify({ content: "Texte généré.", citations: [], missingDataNotes: [] }) }) }]);
     }
 
-    it("no RoutingPolicy resolver wired (undefined) — behaves exactly as before, uses TechnicalMemoAiConfig.aiModel", async () => {
+    it("mission §34 TEST_DEFAULT_MINI — TECHNICAL_MEMO_SECTION (real task type) resolves to gpt-5.4-mini via AUTOMATIC, no configuration required", async () => {
       const provider = successProvider();
-      const useCase = buildUseCase(provider, undefined);
+      const aiModelRouter = new AiModelRouter(new InMemoryAiModelPreferenceRepository());
+      const useCase = buildUseCase(provider, undefined, undefined, aiModelRouter);
 
       await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
 
-      expect(provider.requests[0]?.model).toBe("gpt-4o-mini");
+      expect(provider.requests[0]?.model).toBe("gpt-5.4-mini");
     });
 
-    it("resolver present but no active RoutingPolicy (returns null) — falls back to TechnicalMemoAiConfig.aiModel, never throws", async () => {
+    it("passes the real actorId as userId to AiModelRouter.resolve (mission §18 — backend authoritative)", async () => {
       const provider = successProvider();
-      const resolver = new FakeRoutingPolicyResolver(null);
-      const useCase = buildUseCase(provider, resolver);
+      const aiModelRouter = new AiModelRouter(new InMemoryAiModelPreferenceRepository());
+      const resolveSpy = vi.spyOn(aiModelRouter, "resolve");
+      const useCase = buildUseCase(provider, undefined, undefined, aiModelRouter);
 
-      await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
+      await useCase.execute({ organizationId: "org-1", actorId: "user-42", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
 
-      expect(provider.requests[0]?.model).toBe("gpt-4o-mini");
-      expect(resolver.calls).toEqual([{ organizationId: "org-1", promptKey: "TECHNICAL_MEMO_SECTION" }]);
+      expect(resolveSpy).toHaveBeenCalledWith({ taskType: "TECHNICAL_MEMO_SECTION", organizationId: "org-1", userId: "user-42" });
     });
 
-    it("an active RoutingPolicy resolves — the routed model is used instead of TechnicalMemoAiConfig.aiModel", async () => {
+    it("BLOQUANT — no AiModelRouter wired (defensive @Optional() case, never true in production) — fails CLEANLY, never a silent fallback to a hardcoded model, provider is never called", async () => {
       const provider = successProvider();
-      const resolver = new FakeRoutingPolicyResolver({ policyId: "policy-1", policyVersion: 1, primaryModel: { provider: "OPENAI", modelKey: "gpt-4.1-mini" } });
-      const useCase = buildUseCase(provider, resolver);
+      const useCase = buildUseCase(provider, undefined, undefined, null);
 
-      await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
+      await expect(useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" })).rejects.toThrow();
 
-      expect(provider.requests[0]?.model).toBe("gpt-4.1-mini");
-    });
-
-    it("BLOQUANT — the routing resolver throwing never fails the generation, falls back to TechnicalMemoAiConfig.aiModel", async () => {
-      const provider = successProvider();
-      const resolver = new FakeRoutingPolicyResolver(null, true);
-      const useCase = buildUseCase(provider, resolver);
-
-      const revision = await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
-
-      expect(revision.aiModel).toBe("gpt-4o-mini");
+      expect(provider.requests).toHaveLength(0);
     });
   });
 
@@ -307,7 +302,7 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
 
     it("BLOQUANT — no writer wired (undefined) — behaves exactly as before, never throws", async () => {
       const provider = successProvider();
-      const useCase = buildUseCase(provider, undefined, undefined);
+      const useCase = buildUseCase(provider, undefined);
 
       const revision = await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
 
@@ -317,14 +312,14 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
     it("complete() is called exactly once on success, with the correct technicalMemoSectionId/tenderId/promptKey/model", async () => {
       const provider = successProvider();
       const writer = new RecordingRoutingDecisionWriter();
-      const useCase = buildUseCase(provider, undefined, writer);
+      const useCase = buildUseCase(provider, writer);
 
       await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
 
       expect(writer.created).toHaveLength(1);
-      expect(writer.created[0]).toMatchObject({ organizationId: "org-1", tenderId: "tender-1", technicalMemoSectionId: "section-1", promptKey: "TECHNICAL_MEMO_SECTION", primaryModel: "gpt-4o-mini" });
+      expect(writer.created[0]).toMatchObject({ organizationId: "org-1", tenderId: "tender-1", technicalMemoSectionId: "section-1", promptKey: "TECHNICAL_MEMO_SECTION", primaryModel: "gpt-5.4-mini" });
       expect(writer.completed).toHaveLength(1);
-      expect(writer.completed[0]).toMatchObject({ id: writer.created[0]?.id, selectedModel: "gpt-4o-mini", status: "SUCCEEDED", fallbackLevel: 0, fallbackAttempts: 0 });
+      expect(writer.completed[0]).toMatchObject({ id: writer.created[0]?.id, selectedModel: "gpt-5.4-mini", status: "SUCCEEDED", fallbackLevel: 0, fallbackAttempts: 0 });
     });
 
     /**
@@ -340,7 +335,7 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
       const providerCompleteSpy = vi.spyOn(provider, "complete");
       const createSpy = vi.spyOn(writer, "create");
       const completeSpy = vi.spyOn(writer, "complete");
-      const useCase = buildUseCase(provider, undefined, writer);
+      const useCase = buildUseCase(provider, writer);
 
       await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
 
@@ -356,7 +351,7 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
         { kind: "success", result: fakeSectionAIProviderResult({ content: JSON.stringify({ content: "Texte avec source inventée.", citations: [{ sourceRef: "KB:forged-entry" }], missingDataNotes: [] }) }) },
       ]);
       const writer = new RecordingRoutingDecisionWriter();
-      const useCase = buildUseCase(provider, undefined, writer);
+      const useCase = buildUseCase(provider, writer);
 
       await expect(useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" })).rejects.toThrow();
 
@@ -368,7 +363,7 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
     it("BLOQUANT — a writer that throws on create()/complete() never fails an otherwise-successful generation", async () => {
       const provider = successProvider();
       const writer = new ThrowingRoutingDecisionWriter();
-      const useCase = buildUseCase(provider, undefined, writer);
+      const useCase = buildUseCase(provider, writer);
 
       const revision = await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
 
@@ -380,7 +375,7 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
     it("refuses generation (and never mutates the section) when the organization is not entitled to operate on this tender", async () => {
       const provider = new FakeAIProvider([{ kind: "success", result: fakeSectionAIProviderResult({ content: JSON.stringify({ content: "Texte généré.", citations: [], missingDataNotes: [] }) }) }]);
       const entitlementService = fakeEntitlementService(false);
-      const useCase = buildUseCase(provider, undefined, undefined, entitlementService);
+      const useCase = buildUseCase(provider, undefined, entitlementService);
 
       await expect(useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" })).rejects.toMatchObject({
         code: "TENDER_OPERATION_NOT_ENTITLED",

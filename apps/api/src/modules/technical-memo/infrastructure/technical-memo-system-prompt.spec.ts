@@ -23,3 +23,15 @@ describe("buildTechnicalMemoSystemPrompt — Consolidation IA Checkpoint B (Prom
     expect(prompt).toContain('{"content": string, "citations": [{"sourceRef": string, "excerpt"?: string}], "missingDataNotes": string[]}');
   });
 });
+
+describe("buildTechnicalMemoSystemPrompt — Checkpoint TENDEROS-2.1-P2.3-E4.2 (task isolation / model independence)", () => {
+  it("BLOQUANT — mission §17 TEST_TASK_ISOLATION: never mentions Chat-specific vocabulary (insufficientContext, historique de conversation)", () => {
+    const prompt = buildTechnicalMemoSystemPrompt();
+    expect(prompt).not.toContain("insufficientContext");
+    expect(prompt).not.toContain("historique de conversation");
+  });
+
+  it("BLOQUANT — mission §18 TEST_MODEL_INDEPENDENCE: never names a production model — the TECHNICAL_MEMO_SECTION/MINI default lives exclusively in AiModelRouter's routing matrix, never here", () => {
+    expect(buildTechnicalMemoSystemPrompt().toLowerCase()).not.toContain("gpt-5.4");
+  });
+});

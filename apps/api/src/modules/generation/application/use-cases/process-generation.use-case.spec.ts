@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AiRateLimitedError, AiTimeoutError } from "../../../analysis";
+import { AiModelRouter } from "../../../ai-routing";
+import { InMemoryAiModelPreferenceRepository } from "../../../ai-routing/test-support/fakes";
 import { ProcessGenerationUseCase } from "./process-generation.use-case";
 import { GenerationOutputMode } from "../../domain/generation-output-mode";
 import { GenerationStatus } from "../../domain/generation-status";
@@ -9,11 +11,9 @@ import { PromptTemplate } from "../../domain/prompt-template.aggregate";
 import { PromptVersion } from "../../domain/prompt-version.entity";
 import { loadGenerationConfig } from "../../infrastructure/generation-config";
 import { GenerationContextBuilder } from "../services/generation-context-builder";
-import type { ActiveRoutingDecision } from "../ports/routing-policy-resolver";
 import {
   FakeAIProvider,
   FakeAIProviderRegistry,
-  FakeRoutingPolicyResolver,
   FixedClock,
   InMemoryAuditLogWriter,
   InMemoryGenerationRepository,
@@ -22,8 +22,6 @@ import {
   InMemoryRoutingDecisionWriter,
   SequentialIdGenerator,
   ThrowingRoutingDecisionWriter,
-  ThrowingRoutingPolicyResolver,
-  defaultActiveRoutingDecision,
   fakeAIProviderResult,
 } from "../../test-support/fakes";
 import { SimplePlaceholderPromptRenderer } from "../../infrastructure/simple-placeholder-prompt.renderer";
@@ -42,14 +40,14 @@ class FakeContextBuilder {
   }
 }
 
+// Checkpoint TENDEROS-2.1-P2.3-E4.1 — un `AiModelRouter` réel (jamais `undefined`) est câblé par
+// défaut, comme en production : les tests qui ne testent pas spécifiquement le routing exercent
+// donc le vrai chemin AUTOMATIC. Passer explicitement `null` simule l'absence de Router (cas
+// défensif `@Optional()`, jamais le cas réel en production).
 function buildHarness(options: {
   behaviors: ConstructorParameters<typeof FakeAIProvider>[0];
-  /** Correctif Sprint 6 (audit Codex P1-1) — une décision active PAR DÉFAUT (le chemin normal),
-   *  jamais `undefined`/`null` implicite : passer `null` explicitement pour tester l'absence de
-   *  policy (son propre test dédié, voir plus bas). */
-  routingDecision?: ActiveRoutingDecision | null;
   routingDecisionWriter?: InMemoryRoutingDecisionWriter | ThrowingRoutingDecisionWriter;
-  routingPolicyResolver?: ThrowingRoutingPolicyResolver;
+  aiModelRouter?: AiModelRouter | null;
 }) {
   const clock = new FixedClock(NOW);
   const generationRepository = new InMemoryGenerationRepository();
@@ -63,8 +61,7 @@ function buildHarness(options: {
   const config = { ...loadGenerationConfig({}), aiMaxRetries: 1, aiRetryDelayMs: 0 };
   const idGenerator = new SequentialIdGenerator();
   const routingDecisionWriter = options.routingDecisionWriter ?? new InMemoryRoutingDecisionWriter();
-  const decision = options.routingDecision === undefined ? defaultActiveRoutingDecision() : options.routingDecision;
-  const routingPolicyResolver = options.routingPolicyResolver ?? new FakeRoutingPolicyResolver(decision);
+  const aiModelRouter = options.aiModelRouter === undefined ? new AiModelRouter(new InMemoryAiModelPreferenceRepository()) : options.aiModelRouter;
 
   const useCase = new ProcessGenerationUseCase(
     generationRepository,
@@ -77,8 +74,8 @@ function buildHarness(options: {
     config,
     clock,
     idGenerator,
-    routingPolicyResolver,
     routingDecisionWriter,
+    aiModelRouter ?? undefined,
   );
 
   return {
@@ -139,6 +136,54 @@ async function seedFreeTextGeneration(h: ReturnType<typeof buildHarness>) {
   return { template, version, generation };
 }
 
+/** Checkpoint TENDEROS-2.1-P2.3-E4 — variante paramétrée par TaskType (jamais EXECUTIVE_SUMMARY en
+ *  dur) et par acteur (`createdBy`), nécessaire pour exercer `AiModelRouter` (défaut par tâche +
+ *  override utilisateur). */
+async function seedFreeTextGenerationForTask(h: ReturnType<typeof buildHarness>, taskType: GenerationTaskType, createdBy = "user-1") {
+  const template = PromptTemplate.create({
+    id: `template-${taskType}`,
+    organizationId: ORG,
+    taskType,
+    name: "Template",
+    outputMode: GenerationOutputMode.FreeText,
+    createdBy: "user-1",
+    occurredAt: NOW,
+  });
+  await h.promptTemplateRepository.create(template);
+
+  const version = PromptVersion.create({
+    id: `version-${taskType}`,
+    organizationId: ORG,
+    promptTemplateId: template.id,
+    version: 1,
+    systemPrompt: "You are helpful.",
+    userPromptTemplate: "Summarize {{tender.title}}",
+    requiredVariables: ["tender.title"],
+    authorUserId: "user-1",
+    occurredAt: NOW,
+  });
+  version.activate(NOW);
+  await h.promptVersionRepository.create(version);
+
+  const generation = Generation.create({
+    id: `gen-${taskType}`,
+    organizationId: ORG,
+    clientAccountId: "client-1",
+    tenderId: "tender-1",
+    taskType,
+    rootGenerationId: `gen-${taskType}`,
+    version: 1,
+    promptTemplateId: template.id,
+    promptVersionId: version.id,
+    promptVersionNumber: version.version,
+    createdBy,
+    createdByRole: "OWNER",
+    occurredAt: NOW,
+  });
+  await h.generationRepository.create(generation);
+  return { template, version, generation };
+}
+
 describe("ProcessGenerationUseCase", () => {
   it("happy path: reserves, calls the provider once, persists content/tokens/latency, ends GENERATED", async () => {
     const h = buildHarness({ behaviors: [{ kind: "success", result: fakeAIProviderResult({ content: "Le résumé exécutif." }) }] });
@@ -166,17 +211,19 @@ describe("ProcessGenerationUseCase", () => {
       organizationId: ORG,
       generationId: generation.id,
       taskType: GenerationTaskType.ExecutiveSummary,
-      routingPolicyId: "policy-1",
-      routingPolicyVersion: 1,
       primaryProvider: "OPENAI",
-      primaryModel: "gpt-4o-mini",
+      primaryModel: "gpt-5.4-mini",
     });
+    // Checkpoint E4.1 — plus de RoutingPolicy dans le chemin runtime : `routingPolicyId`/
+    // `routingPolicyVersion` restent définitivement undefined, jamais une valeur fabriquée.
+    expect(writer.created[0]!.routingPolicyId).toBeUndefined();
+    expect(writer.created[0]!.routingPolicyVersion).toBeUndefined();
     expect(writer.completed).toHaveLength(1);
     expect(writer.completed[0]).toMatchObject({ id: writer.created[0]!.id, status: "SUCCEEDED", fallbackLevel: 0 });
 
     const stored = await h.generationRepository.findById({ organizationId: ORG, generationId: generation.id });
-    expect(stored?.routingPolicyId).toBe("policy-1");
-    expect(stored?.routingPolicyVersion).toBe(1);
+    expect(stored?.routingPolicyId).toBeUndefined();
+    expect(stored?.routingPolicyVersion).toBeUndefined();
     expect(stored?.routingDecisionId).toBe(writer.created[0]!.id);
   });
 
@@ -193,31 +240,19 @@ describe("ProcessGenerationUseCase", () => {
     expect(stored?.currency).toBe("EUR");
   });
 
-  it("correctif P1-1 (audit Codex) — no active routing policy: fails EXPLICITLY, never calls the provider, never creates a RoutingDecision (no silent fallback to a hardcoded model)", async () => {
+  it("BLOQUANT — no AiModelRouter wired (defensive @Optional() case, never true in production): fails EXPLICITLY, never calls the provider, never creates a RoutingDecision (no silent fallback to a hardcoded model)", async () => {
     const writer = new InMemoryRoutingDecisionWriter();
-    const h = buildHarness({ behaviors: [], routingDecision: null, routingDecisionWriter: writer });
+    const h = buildHarness({ behaviors: [], aiModelRouter: null, routingDecisionWriter: writer });
     const { generation } = await seedFreeTextGeneration(h);
 
     await h.useCase.execute({ organizationId: ORG, generationId: generation.id });
 
     const stored = await h.generationRepository.findById({ organizationId: ORG, generationId: generation.id });
     expect(stored?.status).toBe(GenerationStatus.Failed);
-    expect(stored?.errorCode).toBe("NO_ACTIVE_ROUTING_POLICY");
+    expect(stored?.errorCode).toBe("AI_MODEL_ROUTER_UNAVAILABLE");
     expect(stored?.routingDecisionId).toBeUndefined();
     expect(h.aiProvider.requests).toHaveLength(0);
     expect(writer.created).toHaveLength(0);
-  });
-
-  it("a routing policy resolution error is treated identically to 'no active policy' — never an unhandled exception", async () => {
-    const h = buildHarness({ behaviors: [], routingPolicyResolver: new ThrowingRoutingPolicyResolver() });
-    const { generation } = await seedFreeTextGeneration(h);
-
-    await expect(h.useCase.execute({ organizationId: ORG, generationId: generation.id })).resolves.toBeUndefined();
-
-    const stored = await h.generationRepository.findById({ organizationId: ORG, generationId: generation.id });
-    expect(stored?.status).toBe(GenerationStatus.Failed);
-    expect(stored?.errorCode).toBe("NO_ACTIVE_ROUTING_POLICY");
-    expect(h.aiProvider.requests).toHaveLength(0);
   });
 
   it("correctif P1-2 (audit Codex) — a policy resolves but the RoutingDecision cannot be persisted durably: fails explicitly, never an untraceable provider call", async () => {
@@ -353,33 +388,12 @@ describe("ProcessGenerationUseCase", () => {
     expect(stored?.errorCode).toBe("GENERATION_CITATION_VALIDATION_FAILED");
   });
 
-  it("escalates exactly once to the fallback model when the primary fails and a matching escalation condition is configured", async () => {
-    const h = buildHarness({
-      behaviors: [
-        { kind: "error", error: new AiRateLimitedError() },
-        { kind: "error", error: new AiRateLimitedError() },
-        { kind: "success", result: fakeAIProviderResult({ content: "Escalated content" }) },
-      ],
-      routingDecision: defaultActiveRoutingDecision({
-        escalationModel: { provider: "OPENAI", modelKey: "gpt-4o" },
-        escalationConditions: ["PROVIDER_ERROR"],
-      }),
-    });
-    const { generation } = await seedFreeTextGeneration(h);
+  // Checkpoint E4.1 — l'escalade (Sprint 5.2) dépendait ENTIÈREMENT d'une `RoutingPolicy.
+  // escalationModel`, elle-même retirée du chemin runtime : il n'existe plus de second modèle vers
+  // lequel escalader. L'ancien test "escalates exactly once..." est supprimé, il exerçait un
+  // chemin de code qui n'existe plus.
 
-    await h.useCase.execute({ organizationId: ORG, generationId: generation.id });
-
-    const stored = await h.generationRepository.findById({ organizationId: ORG, generationId: generation.id });
-    expect(stored?.status).toBe(GenerationStatus.Generated);
-    expect(stored?.fallbackLevel).toBe(1);
-    expect(stored?.modelKey).toBe("gpt-4o");
-    expect(stored?.generatedContent).toBe("Escalated content");
-
-    const writer = h.routingDecisionWriter as InMemoryRoutingDecisionWriter;
-    expect(writer.completed[0]).toMatchObject({ fallbackLevel: 1, fallbackAttempts: 1, selectedModel: "gpt-4o", status: "SUCCEEDED" });
-  });
-
-  it("never escalates twice, and never escalates without a configured escalation model", async () => {
+  it("BLOQUANT — never a second model attempt after retries are exhausted, fallbackLevel stays 0 (no escalation mechanism exists anymore)", async () => {
     const h = buildHarness({
       behaviors: [{ kind: "error", error: new AiRateLimitedError() }, { kind: "error", error: new AiRateLimitedError() }],
     });
@@ -389,7 +403,7 @@ describe("ProcessGenerationUseCase", () => {
 
     const stored = await h.generationRepository.findById({ organizationId: ORG, generationId: generation.id });
     expect(stored?.status).toBe(GenerationStatus.Failed);
-    expect(h.aiProvider.requests).toHaveLength(2); // 1 attempt + 1 retry, no escalation call
+    expect(h.aiProvider.requests).toHaveLength(2); // 1 attempt + 1 retry (aiMaxRetries: 1), never a third/escalated call
   });
 
   it("is a no-op if the generation is not startable (e.g. already GENERATING)", async () => {
@@ -400,5 +414,47 @@ describe("ProcessGenerationUseCase", () => {
 
     await expect(h.useCase.execute({ organizationId: ORG, generationId: generation.id })).resolves.toBeUndefined();
     expect(h.aiProvider.requests).toHaveLength(0);
+  });
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E4.1 — AiModelRouter est la SEULE autorité de sélection du modèle", () => {
+    it("mission §33 TEST_DEFAULT_NANO — SECTION_SUMMARY (real Generation task type) resolves to gpt-5.4-nano via AUTOMATIC, no configuration required", async () => {
+      const aiModelRouter = new AiModelRouter(new InMemoryAiModelPreferenceRepository());
+      const h = buildHarness({ behaviors: [{ kind: "success", result: fakeAIProviderResult() }], aiModelRouter });
+      const { generation } = await seedFreeTextGenerationForTask(h, GenerationTaskType.SectionSummary);
+
+      await h.useCase.execute({ organizationId: ORG, generationId: generation.id });
+
+      const stored = await h.generationRepository.findById({ organizationId: ORG, generationId: generation.id });
+      expect(stored?.status).toBe(GenerationStatus.Generated);
+      expect(h.aiProvider.requests[0]?.model).toBe("gpt-5.4-nano");
+      expect(stored?.routingPolicyId).toBeUndefined();
+    });
+
+    it("mission §34 TEST_DEFAULT_MINI — EXECUTIVE_SUMMARY (real Generation task type) resolves to gpt-5.4-mini via AUTOMATIC", async () => {
+      const aiModelRouter = new AiModelRouter(new InMemoryAiModelPreferenceRepository());
+      const h = buildHarness({ behaviors: [{ kind: "success", result: fakeAIProviderResult() }], aiModelRouter });
+      const { generation } = await seedFreeTextGenerationForTask(h, GenerationTaskType.ExecutiveSummary);
+
+      await h.useCase.execute({ organizationId: ORG, generationId: generation.id });
+
+      expect(h.aiProvider.requests[0]?.model).toBe("gpt-5.4-mini");
+    });
+
+    it("mission §35 TEST_USER_OVERRIDE — a compatible user override (createdBy) is honored, then a reset returns to the task default", async () => {
+      const preferenceRepository = new InMemoryAiModelPreferenceRepository();
+      const aiModelRouter = new AiModelRouter(preferenceRepository);
+      await preferenceRepository.set({ id: "pref-1", userId: "user-override", organizationId: ORG, taskType: "SECTION_SUMMARY", modelOverride: "GPT_5_4_MINI", occurredAt: NOW });
+
+      const h1 = buildHarness({ behaviors: [{ kind: "success", result: fakeAIProviderResult() }], aiModelRouter });
+      const { generation: gen1 } = await seedFreeTextGenerationForTask(h1, GenerationTaskType.SectionSummary, "user-override");
+      await h1.useCase.execute({ organizationId: ORG, generationId: gen1.id });
+      expect(h1.aiProvider.requests[0]?.model).toBe("gpt-5.4-mini");
+
+      await preferenceRepository.reset({ userId: "user-override", organizationId: ORG, taskType: "SECTION_SUMMARY" });
+      const h2 = buildHarness({ behaviors: [{ kind: "success", result: fakeAIProviderResult() }], aiModelRouter });
+      const { generation: gen2 } = await seedFreeTextGenerationForTask(h2, GenerationTaskType.SectionSummary, "user-override");
+      await h2.useCase.execute({ organizationId: ORG, generationId: gen2.id });
+      expect(h2.aiProvider.requests[0]?.model).toBe("gpt-5.4-nano");
+    });
   });
 });

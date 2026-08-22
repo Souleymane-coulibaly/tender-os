@@ -50,3 +50,15 @@ export class ChatCitationValidationFailedError extends DomainError {
     super(`Une citation générée n'a pas pu être vérifiée : ${input.reason}`);
   }
 }
+
+/** Checkpoint TENDEROS-2.1-P2.3-E4.1 — `AiModelRouter` est désormais la SEULE autorité de
+ *  sélection du modèle (mission "aucun use case métier live ne doit décider lui-même quel modèle
+ *  utiliser"), jamais un repli silencieux vers un modèle codé en dur (mission §17). Ne devrait
+ *  jamais survenir en production réelle (`AiRoutingModule` est câblé globalement) — signale un
+ *  problème de configuration/déploiement, jamais une cause métier normale. */
+export class AiModelRouterUnavailableError extends DomainError {
+  readonly code = "AI_MODEL_ROUTER_UNAVAILABLE";
+  constructor() {
+    super("The AI model router is not available. Contact support.");
+  }
+}

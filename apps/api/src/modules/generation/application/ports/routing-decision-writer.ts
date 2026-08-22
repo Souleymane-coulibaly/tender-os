@@ -3,11 +3,16 @@
  * pas une vraie RoutingDecision") — même motif que `RoutingPolicyResolver` : le port vit ici, dans
  * le module qui l'utilise, jamais dans le module qui l'implémente (`ai-benchmark`). Structurellement
  * proche de `analysis/application/ports/routing-decision-writer.ts`, jamais un import direct de ce
- * dernier (créerait une dépendance `generation → analysis` que rien ne justifie fonctionnellement) —
- * et volontairement distinct sur un point : ici `routingPolicyId`/`routingPolicyVersion` sont
- * OBLIGATOIRES, jamais optionnels, puisque `create()` n'est appelée QUE lorsqu'une RoutingPolicy
- * active a réellement été résolue (voir `NoActiveRoutingPolicyError` : la génération échoue
- * explicitement avant tout appel provider si ce n'est pas le cas — jamais de décision "creuse").
+ * dernier (créerait une dépendance `generation → analysis` que rien ne justifie fonctionnellement).
+ *
+ * Checkpoint TENDEROS-2.1-P2.3-E4 — `routingPolicyId`/`routingPolicyVersion` sont devenus
+ * OPTIONNELS (initialement obligatoires, Sprint 6 : `create()` n'était appelée QUE lorsqu'une
+ * RoutingPolicy active avait réellement été résolue, `NoActiveRoutingPolicyError` sinon). Ce
+ * checkpoint remplace cet échec dur par un repli sur `AiModelRouter` (mission §9, NANO/MINI par
+ * TaskType, AUTOMATIC sans configuration requise) quand aucune policy n'est active — `create()` est
+ * désormais aussi appelée pour CE cas, avec `routingPolicyId`/`routingPolicyVersion` à `undefined`
+ * (jamais une valeur fabriquée) : la colonne DB est déjà nullable (`routing_decisions.routing_
+ * policy_id`), aucune migration nécessaire.
  *
  * `create()` est appelée AVANT le premier appel provider ; `complete()` une seule fois à la toute
  * fin, qu'il y ait eu fallback ou non. Jamais de prompt/document complet ni de clé API dans ces
@@ -20,8 +25,8 @@ export type CreateRoutingDecisionInput = Readonly<{
   tenderId: string;
   generationId: string;
   taskType: string;
-  routingPolicyId: string;
-  routingPolicyVersion: number;
+  routingPolicyId?: string | undefined;
+  routingPolicyVersion?: number | undefined;
   primaryProvider: string;
   primaryModel: string;
   occurredAt: Date;

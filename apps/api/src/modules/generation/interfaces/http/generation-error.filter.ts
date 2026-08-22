@@ -35,7 +35,11 @@ const STATUS_BY_CODE: Record<string, number> = {
   PROMPT_TEMPLATE_ARCHIVED: HttpStatus.CONFLICT,
   PROMPT_VERSION_NOT_FOUND: HttpStatus.NOT_FOUND,
   NO_ACTIVE_PROMPT_VERSION: HttpStatus.CONFLICT,
+  // Checkpoint TENDEROS-2.1-P2.3-E4.1 — `NO_ACTIVE_ROUTING_POLICY` n'est plus jamais produit par
+  // `ProcessGenerationUseCase` (RoutingPolicy retirée du chemin runtime) ; l'entrée reste pour
+  // compatibilité (jamais atteinte). `AI_MODEL_ROUTER_UNAVAILABLE` est son remplaçant.
   NO_ACTIVE_ROUTING_POLICY: HttpStatus.CONFLICT,
+  AI_MODEL_ROUTER_UNAVAILABLE: HttpStatus.INTERNAL_SERVER_ERROR,
   ROUTING_DECISION_PERSISTENCE_FAILED: HttpStatus.INTERNAL_SERVER_ERROR,
   PROMPT_VERSION_ACTIVATION_CONFLICT: HttpStatus.CONFLICT,
   PROMPT_VARIABLE_MISSING: HttpStatus.UNPROCESSABLE_ENTITY,

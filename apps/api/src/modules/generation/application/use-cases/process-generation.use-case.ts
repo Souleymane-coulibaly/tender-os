@@ -1,15 +1,15 @@
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import { AiModelRouter } from "../../../ai-routing";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import type { AiTaskType } from "../../../../shared-kernel/ai-task-type";
 import {
   AiTimeoutError,
   AI_PROVIDER_REGISTRY,
-  evaluateEscalationConditions,
   type AIProvider,
   type AIProviderRegistry,
   type AIProviderRequest,
   type AIProviderResult,
-  type EscalationSignals,
 } from "../../../analysis";
 import {
   validateGenerationCitations,
@@ -17,8 +17,8 @@ import {
 } from "../../domain/generation-citation-validator";
 import { GenerationOutputMode } from "../../domain/generation-output-mode";
 import {
+  AiModelRouterUnavailableError,
   GenerationSchemaValidationFailedError,
-  NoActiveRoutingPolicyError,
   PromptTemplateNotFoundError,
   PromptVersionNotFoundError,
   RoutingDecisionPersistenceFailedError,
@@ -36,7 +36,6 @@ import {
   type CompleteRoutingDecisionResult,
   type RoutingDecisionWriter,
 } from "../ports/routing-decision-writer";
-import { ROUTING_POLICY_RESOLVER, type ActiveRoutingDecision, type RoutingPolicyResolver } from "../ports/routing-policy-resolver";
 import { estimateGenerationCost } from "../services/estimate-generation-cost";
 import { GenerationContextBuilder, type GenerationContext } from "../services/generation-context-builder";
 import { getStructuredOutputSchema } from "../services/structured-output-registry";
@@ -53,9 +52,16 @@ type Phase2Result =
 
 /** Métadonnées de routage réellement résolues pour CETTE génération — attachées à l'outcome final,
  *  qu'il s'agisse d'un succès ou d'un échec survenu APRÈS la création de la décision (correctif
- *  Sprint 6, audit Codex P1-2). `undefined` uniquement lorsque la génération a échoué AVANT toute
- *  résolution (voir `NoActiveRoutingPolicyError`). */
-type ResolvedRouting = Readonly<{ routingPolicyId: string; routingPolicyVersion: number; routingDecisionId?: string | undefined }>;
+ *  Sprint 6, audit Codex P1-2). Checkpoint TENDEROS-2.1-P2.3-E4.1 — `RoutingPolicy` a été retirée
+ *  du chemin runtime : `routingPolicyId`/`routingPolicyVersion` n'existent plus, seul
+ *  `routingDecisionId` (pointeur vers la `RoutingDecision` Sprint 5.2, toujours persistée par
+ *  `AiModelRouter`) subsiste. */
+type ResolvedRouting = Readonly<{ routingDecisionId?: string | undefined }>;
+
+/** Sélecteur de modèle unifié pour CETTE génération. Checkpoint TENDEROS-2.1-P2.3-E4.1 —
+ *  `AiModelRouter` est la SEULE autorité : plus de RoutingPolicy, plus de modèle d'escalade (voir
+ *  la docstring de classe). */
+type ResolvedModelForGeneration = Readonly<{ provider: string; model: string }>;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -65,13 +71,18 @@ function sleep(ms: number): Promise<void> {
  * Orchestrateur de génération — même motif en 3 phases que `ProcessAnalysisJobUseCase` : jamais un
  * appel provider dans une transaction Prisma.
  * 1. `reserveForGenerating` — réservation atomique COURTE (PENDING → GENERATING).
- * 2. Résolution OBLIGATOIRE d'une `RoutingPolicy` active (correctif Sprint 6, audit Codex P1-1 —
- *    "routing dormant") : contrairement à `resolveModelForAnalysis` (qui retombe sur un modèle
- *    legacy Sprint 4.1/4.2, un comportement PRÉ-EXISTANT et validé), Generation n'a aucun
- *    comportement historique à préserver — l'absence de policy active est donc un échec explicite
- *    (`NoActiveRoutingPolicyError`), jamais un repli silencieux sur `GenerationConfig.aiModel`.
- * 3. Une fois une policy résolue : création d'une VRAIE `RoutingDecision` Sprint 5.2 (correctif
- *    P1-2) AVANT le premier appel provider, `runPhase2` (contexte, rendu, appel provider HORS
+ * 2. Résolution du modèle (`resolveModel`) — Checkpoint TENDEROS-2.1-P2.3-E4.1 : `AiModelRouter`
+ *    est désormais la SEULE autorité de sélection du modèle (NANO/MINI par TaskType, AUTOMATIC sans
+ *    configuration requise). `RoutingPolicy` (Sprint 6, audit Codex P1-1) a été entièrement retirée
+ *    de ce chemin runtime — un administrateur ne peut plus court-circuiter le Router pour une
+ *    génération. `AiModelRouterUnavailableError` reste levée UNIQUEMENT si `AiModelRouter`
+ *    lui-même n'est pas câblé (repli défensif `@Optional()`, jamais atteint en production).
+ *    L'escalade vers un second modèle (Sprint 5.2 §"Fallback simple") disparaît avec la
+ *    RoutingPolicy dont elle dépendait entièrement — le retry réseau borné (`config.aiMaxRetries`)
+ *    reste l'unique mécanisme de résilience, même discipline que les 3 autres pipelines IA.
+ * 3. Une fois un modèle résolu : création d'une VRAIE `RoutingDecision` Sprint 5.2 (correctif
+ *    P1-2) AVANT le premier appel provider — `routingPolicyId`/`routingPolicyVersion` ne sont plus
+ *    jamais renseignés (RoutingPolicy retirée) —, `runPhase2` (contexte, rendu, appel provider HORS
  *    transaction, validation stricte schéma + citations — jamais persisté si invalide), puis
  *    complétion de la décision (coût réel via les pricing snapshots Sprint 5.2, correctif P2-3).
  * 4. `finalizeGeneration` — finalisation atomique COURTE, compare-and-set sur `attemptCount`.
@@ -91,11 +102,13 @@ export class ProcessGenerationUseCase {
     @Inject(GENERATION_CONFIG) private readonly config: GenerationConfig,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
-    // Optionnel — même discipline que ProcessAnalysisJobUseCase : absent (RoutingPolicyBridgeModule
-    // non importé), ce use case échoue explicitement CHAQUE génération avec NoActiveRoutingPolicyError,
-    // jamais un crash au démarrage ni un repli silencieux.
-    @Optional() @Inject(ROUTING_POLICY_RESOLVER) private readonly routingPolicyResolver?: RoutingPolicyResolver,
     @Optional() @Inject(GENERATION_ROUTING_DECISION_WRITER) private readonly routingDecisionWriter?: RoutingDecisionWriter,
+    // Checkpoint TENDEROS-2.1-P2.3-E4.1 — `AiModelRouter` est désormais la SEULE autorité de
+    // sélection du modèle (voir `resolveModel()`) : `RoutingPolicyResolver` ne participe plus à la
+    // décision. `@Optional()` reste défensif uniquement (jamais un crash au démarrage) — un appel
+    // réel sans Router échoue PROPREMENT (`AiModelRouterUnavailableError`), jamais un repli
+    // silencieux (mission §17).
+    @Optional() private readonly aiModelRouter?: AiModelRouter,
   ) {}
 
   async execute(command: ProcessGenerationCommand): Promise<void> {
@@ -132,9 +145,9 @@ export class ProcessGenerationUseCase {
       return;
     }
 
-    const decision = await this.resolveActivePolicy(command.organizationId, generation.taskType, command.generationId);
-    if (!decision) {
-      const error = new NoActiveRoutingPolicyError();
+    const resolution = await this.resolveModel(command.organizationId, generation.taskType, generation.createdBy);
+    if (!resolution) {
+      const error = new AiModelRouterUnavailableError();
       const outcome: FinalizeGenerationOutcome = { kind: "failed", errorCode: error.code, errorMessage: error.message };
       await this.finalize(command, generation.attemptCount, outcome);
       await this.recordAuditLog(command, outcome);
@@ -146,18 +159,16 @@ export class ProcessGenerationUseCase {
       id: routingDecisionId,
       command,
       generation,
-      decision,
+      resolution,
     });
     if (!decisionCreated) {
-      // Correctif Sprint 6 (audit Codex P1-2) — une policy active a été trouvée mais la décision n'a
-      // pas pu être persistée durablement : jamais d'appel provider sans trace de routage
-      // exploitable, jamais un succès non traçable. L'erreur DÉTAILLÉE est déjà journalisée en ERROR
-      // par `createRoutingDecision` (jamais silencieuse) ; ce code reste générique côté génération.
+      // Correctif Sprint 6 (audit Codex P1-2) — un modèle a bien été résolu mais la décision n'a pas
+      // pu être persistée durablement : jamais d'appel provider sans trace de routage exploitable,
+      // jamais un succès non traçable. L'erreur DÉTAILLÉE est déjà journalisée en ERROR par
+      // `createRoutingDecision` (jamais silencieuse) ; ce code reste générique côté génération.
       const persistenceError = new RoutingDecisionPersistenceFailedError();
       const outcome: FinalizeGenerationOutcome = {
         kind: "failed",
-        routingPolicyId: decision.policyId,
-        routingPolicyVersion: decision.policyVersion,
         errorCode: persistenceError.code,
         errorMessage: persistenceError.message,
       };
@@ -166,43 +177,24 @@ export class ProcessGenerationUseCase {
       return;
     }
 
-    let { outcome } = await this.runPhase2({
+    const { outcome } = await this.runPhase2({
       organizationId: command.organizationId,
       generation,
       template: { outputMode: template.outputMode, structuredSchemaKey: template.structuredSchemaKey },
       version,
-      selector: { provider: decision.primaryModel.provider, model: decision.primaryModel.modelKey },
+      selector: { provider: resolution.provider, model: resolution.model },
     });
 
-    let fallbackLevel = 0;
-    if (outcome.kind === "failed" && decision.escalationModel) {
-      const reason = evaluateEscalationConditions(this.toEscalationSignals(outcome.errorCode), decision.escalationConditions);
-      if (reason) {
-        this.logger.warn(`Generation ${command.generationId} escalating to fallback model after "${reason}".`);
-        const escalationResult = await this.runPhase2({
-          organizationId: command.organizationId,
-          generation,
-          template: { outputMode: template.outputMode, structuredSchemaKey: template.structuredSchemaKey },
-          version,
-          selector: { provider: decision.escalationModel.provider, model: decision.escalationModel.modelKey },
-          fallbackLevel: 1,
-        });
-        outcome = escalationResult.outcome;
-        fallbackLevel = 1;
-      }
-    }
-
+    // Checkpoint TENDEROS-2.1-P2.3-E4.1 — plus d'escalade vers un second modèle (dépendait
+    // entièrement d'une RoutingPolicy, retirée du chemin runtime) : `fallbackLevel` reste toujours
+    // `0`, même discipline que `ProcessAnalysisJobUseCase`.
     const realCost = await this.completeRoutingDecision({
       id: routingDecisionId,
       outcome,
-      fallbackLevel,
+      fallbackLevel: 0,
     });
 
-    const routing: ResolvedRouting = {
-      routingPolicyId: decision.policyId,
-      routingPolicyVersion: decision.policyVersion,
-      routingDecisionId,
-    };
+    const routing: ResolvedRouting = { routingDecisionId };
     const finalOutcome: FinalizeGenerationOutcome =
       outcome.kind === "generated"
         ? {
@@ -217,25 +209,15 @@ export class ProcessGenerationUseCase {
     await this.recordAuditLog(command, finalOutcome);
   }
 
-  /** Correctif Sprint 6 (audit Codex P1-1) — résolution OBLIGATOIRE, jamais de repli. Toute erreur
-   *  du résolveur (absence de câblage, erreur infra) est traitée identiquement à "aucune policy
-   *  active" : le résolveur cassé n'a jamais existé pour cette génération, jamais une cause
-   *  d'exception non gérée. */
-  private async resolveActivePolicy(
-    organizationId: string,
-    taskType: string,
-    generationId: string,
-  ): Promise<ActiveRoutingDecision | null> {
-    if (!this.routingPolicyResolver) return null;
-    try {
-      return await this.routingPolicyResolver.resolveActive({ organizationId, promptKey: taskType });
-    } catch (error) {
-      this.logger.warn(
-        `Routing policy resolution failed for generation ${generationId} (treated as "no active policy"): ` +
-          `${error instanceof Error ? error.message : String(error)}`,
-      );
-      return null;
-    }
+  /** Checkpoint TENDEROS-2.1-P2.3-E4.1 — `AiModelRouter` est la SEULE autorité de sélection du
+   *  modèle (NANO/MINI par TaskType + override utilisateur via `createdBy`, AUTOMATIC sans
+   *  configuration requise). `null` UNIQUEMENT si `AiModelRouter` lui-même n'est pas câblé
+   *  (`execute()` lève alors `AiModelRouterUnavailableError`, mission §17 — jamais un repli
+   *  silencieux vers un modèle codé en dur). */
+  private async resolveModel(organizationId: string, taskType: string, createdBy: string): Promise<ResolvedModelForGeneration | null> {
+    if (!this.aiModelRouter) return null;
+    const routed = await this.aiModelRouter.resolve({ taskType: taskType as AiTaskType, organizationId, userId: createdBy });
+    return { provider: routed.provider, model: routed.modelKey };
   }
 
   /** Correctif Sprint 6 (audit Codex P1-2) — persistance DURABLE de la décision de routage, créée
@@ -248,11 +230,11 @@ export class ProcessGenerationUseCase {
     id: string;
     command: ProcessGenerationCommand;
     generation: { id: string; organizationId: string; clientAccountId: string; tenderId: string; taskType: string };
-    decision: ActiveRoutingDecision;
+    resolution: ResolvedModelForGeneration;
   }): Promise<boolean> {
     if (!this.routingDecisionWriter) {
       this.logger.error(
-        `No RoutingDecisionWriter wired for generation ${input.generation.id} despite an active routing policy — ` +
+        `No RoutingDecisionWriter wired for generation ${input.generation.id} despite a resolved model — ` +
           `RoutingPolicyBridgeModule is likely not imported by AppModule.`,
       );
       return false;
@@ -265,10 +247,8 @@ export class ProcessGenerationUseCase {
         tenderId: input.generation.tenderId,
         generationId: input.generation.id,
         taskType: input.generation.taskType,
-        routingPolicyId: input.decision.policyId,
-        routingPolicyVersion: input.decision.policyVersion,
-        primaryProvider: input.decision.primaryModel.provider,
-        primaryModel: input.decision.primaryModel.modelKey,
+        primaryProvider: input.resolution.provider,
+        primaryModel: input.resolution.model,
         occurredAt: this.clock.now(),
       });
       return true;
@@ -338,19 +318,19 @@ export class ProcessGenerationUseCase {
 
   /** Intégralement hors transaction Prisma — construction du contexte, rendu, appel provider avec
    *  timeout/retry bornés, validation stricte (schéma structuré + citations, jamais une confiance
-   *  auto-déclarée). Appelée une seconde fois pour l'unique palier d'escalade autorisé. Le coût
-   *  calculé ici (`estimateGenerationCost`, configuration statique) reste un REPLI informatif —
-   *  `execute()` le remplace par le coût réel des pricing snapshots Sprint 5.2 quand disponible
-   *  (correctif P2-3), jamais l'inverse. */
+   *  auto-déclarée). Checkpoint TENDEROS-2.1-P2.3-E4.1 — `selector` provient exclusivement
+   *  d'`AiModelRouter` : plus d'escalade vers un second modèle (dépendait entièrement d'une
+   *  RoutingPolicy, retirée du chemin runtime), cette méthode n'est donc plus jamais appelée deux
+   *  fois pour la même génération. Le coût calculé ici (`estimateGenerationCost`, configuration
+   *  statique) reste un REPLI informatif — `execute()` le remplace par le coût réel des pricing
+   *  snapshots Sprint 5.2 quand disponible (correctif P2-3), jamais l'inverse. */
   private async runPhase2(input: {
     organizationId: string;
     generation: { id: string; tenderId: string; taskType: string; targetRef?: string | undefined; createdBy: string; createdByRole?: string | undefined };
     template: { outputMode: string; structuredSchemaKey?: string | undefined };
     version: Parameters<PromptRenderer["render"]>[0];
     selector: { provider?: string | undefined; model: string };
-    fallbackLevel?: number;
   }): Promise<Phase2Result> {
-    const fallbackLevel = input.fallbackLevel ?? 0;
     let provider: AIProvider;
     try {
       provider = this.providerRegistry.resolve(input.selector.provider ? { provider: input.selector.provider } : undefined);
@@ -406,7 +386,7 @@ export class ProcessGenerationUseCase {
             kind: "generated",
             modelProvider: provider.name,
             modelKey: input.selector.model,
-            fallbackLevel,
+            fallbackLevel: 0,
             generatedContent: parsed.generatedContent,
             structuredContent: parsed.structuredContent,
             inputTokenCount: result.usage.inputTokens,
@@ -497,20 +477,6 @@ export class ProcessGenerationUseCase {
       return (error as { code: string }).code;
     }
     return "GENERATION_UNKNOWN_ERROR";
-  }
-
-  private toEscalationSignals(errorCode: string): EscalationSignals {
-    return {
-      jsonValid: errorCode !== "GENERATION_SCHEMA_VALIDATION_FAILED" && errorCode !== "AI_INVALID_RESPONSE",
-      provenanceStatus: errorCode === "GENERATION_CITATION_VALIDATION_FAILED" ? "CITATION_NOT_FOUND" : "NOT_APPLICABLE",
-      complete: true,
-      providerErrorOccurred:
-        errorCode === "AI_PROVIDER_UNAVAILABLE" ||
-        errorCode === "AI_RATE_LIMITED" ||
-        errorCode === "AI_AUTHENTICATION_FAILED" ||
-        errorCode === "AI_PROVIDER_NOT_CONFIGURED",
-      timedOut: errorCode === "AI_TIMEOUT",
-    };
   }
 
   private async recordAuditLog(command: ProcessGenerationCommand, outcome: FinalizeGenerationOutcome): Promise<void> {
