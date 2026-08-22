@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import { CONNECTOR_PROVIDERS, canManageConnectors, canUseConnectors, type ExternalConnectionSummary } from "../../../../../lib/connectors-types";
 import { fetchDocumentsForPicker, fetchExternalConnections, fetchTendersForPicker } from "../../../connectors-actions";
+import { fetchEntitlements } from "../../../billing-actions";
 import { ApiErrorState } from "../../api-error-state";
 import { ConnectorProviderCard } from "./connector-provider-card";
 
@@ -14,8 +15,12 @@ export default async function ConnectorsPage({ searchParams }: { searchParams: P
 
   let connections: ExternalConnectionSummary[];
   let actorRole: string | undefined;
+  let hasEntitlement = false;
   try {
-    [connections, actorRole] = await Promise.all([fetchExternalConnections(), getCurrentMembershipRole()]);
+    const [connectionsResult, actorRoleResult, entitlements] = await Promise.all([fetchExternalConnections(), getCurrentMembershipRole(), fetchEntitlements()]);
+    connections = connectionsResult;
+    actorRole = actorRoleResult;
+    hasEntitlement = entitlements.entitlements.includes("AUTOMATION_CONNECTORS");
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
@@ -46,6 +51,7 @@ export default async function ConnectorsPage({ searchParams }: { searchParams: P
             connection={connections.find((c) => c.provider === provider && c.status !== "REVOKED")}
             canManage={canManage}
             canUse={canUse}
+            hasEntitlement={hasEntitlement}
             tenders={tenders}
             documents={documents}
           />

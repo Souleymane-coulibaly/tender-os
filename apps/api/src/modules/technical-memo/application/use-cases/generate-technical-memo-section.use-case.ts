@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import { AI_PROVIDER_REGISTRY, AiTimeoutError, GetEffectiveTenderAnalysisSummaryUseCase, type AIProvider, type AIProviderRegistry, type AIProviderRequest, type AIProviderResult } from "../../../analysis";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { TechnicalMemoCoverageStatus, TechnicalMemoSectionRevisionSource } from "../../domain/enums";
 import { TechnicalMemoAnalysisNotCurrentError, TechnicalMemoSectionNotFoundError } from "../../domain/errors";
@@ -91,11 +92,12 @@ export class GenerateTechnicalMemoSectionUseCase {
     // Consolidation IA — Checkpoint A §3 : résolveur optionnel (motif d'Analyse, jamais celui,
     // obligatoire, de Génération — Mémoire technique a un comportement historique à préserver).
     // Absent ⇒ repli strict sur `TechnicalMemoAiConfig.aiModel`, jamais une exception.
-    @Optional() @Inject(ROUTING_POLICY_RESOLVER) private readonly routingPolicyResolver?: RoutingPolicyResolver,
+    @Optional() @Inject(ROUTING_POLICY_RESOLVER) private readonly routingPolicyResolver: RoutingPolicyResolver | undefined,
     // Consolidation IA — Checkpoint D : writer optionnel (même motif best-effort qu'Analyse) — absent
     // ou en échec, la décision n'est simplement pas persistée durablement, jamais une cause d'échec
     // de la génération de section elle-même (voir `createRoutingDecision`/`completeRoutingDecision`).
-    @Optional() @Inject(ROUTING_DECISION_WRITER) private readonly routingDecisionWriter?: RoutingDecisionWriter,
+    @Optional() @Inject(ROUTING_DECISION_WRITER) private readonly routingDecisionWriter: RoutingDecisionWriter | undefined,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: GenerateTechnicalMemoSectionCommand): Promise<TechnicalMemoSectionRevision> {
@@ -108,17 +110,26 @@ export class GenerateTechnicalMemoSectionUseCase {
       requireUseOrgPermission: true,
     });
 
-    // Checkpoint 2.1-P2.1-FIX-D (mission §22) — bloque AVANT toute mutation d'état (jamais un
-    // passage GENERATING suivi d'un échec) : UNIQUEMENT si cette section a réellement des
-    // exigences DCE liées (mission §12/§13, jamais une dépendance fabriquée pour une section qui
-    // n'en a aucune — voir `TechnicalMemoAnalysisNotCurrentError`).
-    await this.assertAnalysisPrecondition(command, memo);
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — opération "cœur AO" (génération ET régénération, un seul
+    // use case pour les deux — voir docstring de classe) : allocation du Pass (si nécessaire) au
+    // moment de CETTE mutation réelle, avec compensation automatique si elle échoue ensuite (mission
+    // §2/§3/§4). `tenderId` dérivé du mémo (le command ne le porte pas).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: memo.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => {
+        // Checkpoint 2.1-P2.1-FIX-D (mission §22) — bloque AVANT toute mutation d'état (jamais un
+        // passage GENERATING suivi d'un échec) : UNIQUEMENT si cette section a réellement des
+        // exigences DCE liées (mission §12/§13, jamais une dépendance fabriquée pour une section qui
+        // n'en a aucune — voir `TechnicalMemoAnalysisNotCurrentError`).
+        await this.assertAnalysisPrecondition(command, memo);
 
-    const section = await this.beginGeneration(command);
+        const section = await this.beginGeneration(command);
 
-    const outcome = await this.generate({ command, memo, section: section });
+        const outcome = await this.generate({ command, memo, section: section });
 
-    return this.finalize(command, outcome);
+        return this.finalize(command, outcome);
+      },
+    );
   }
 
   private async assertAnalysisPrecondition(command: GenerateTechnicalMemoSectionCommand, memo: Awaited<ReturnType<TechnicalMemoAccessService["loadMemo"]>>): Promise<void> {

@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { BillingModule } from "../billing";
 import { CandidateCompanyModule } from "../candidate-company";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { CompanyProfileModule } from "../company-profile";
@@ -136,6 +137,7 @@ import { AdministrativeDossierStructuredController } from "./interfaces/http/adm
     CompanyProfileModule,
     SubcontractorsModule,
     DocumentGenerationModule,
+    BillingModule,
     OutboxWriterModule,
   ],
   controllers: [AdministrativeDossierController, AdministrativeDossierStructuredController, AdministrativeDossierFormFillController],

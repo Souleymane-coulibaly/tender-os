@@ -3,7 +3,9 @@ import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-ap
 import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../../lib/client-portfolio-types";
 import { API_KEY_SCOPE_LABELS, API_KEY_STATUS_LABELS, apiKeyStatusBadgeClass, canManageIntegrations, type ApiKeySummary } from "../../../../../lib/integrations-types";
 import { fetchApiKeys } from "../../../integrations-actions";
+import { fetchEntitlements } from "../../../billing-actions";
 import { ApiErrorState } from "../../api-error-state";
+import { EntitlementUpgradeNotice } from "../../entitlement-upgrade-notice";
 import { CreateApiKeyForm } from "./create-api-key-form";
 import { RevokeApiKeyButton } from "./revoke-api-key-button";
 
@@ -13,12 +15,18 @@ export default async function ApiKeysPage() {
   let apiKeys: ApiKeySummary[];
   let clients: ClientAccountSummary[];
   let actorRole: string | undefined;
+  let hasPublicApiEntitlement = false;
   try {
-    [apiKeys, clients, actorRole] = await Promise.all([
+    const [apiKeysResult, clientsResult, actorRoleResult, entitlements] = await Promise.all([
       fetchApiKeys(),
       appApiFetch<ClientPortfolioPage<ClientAccountSummary>>("/api/v1/clients?limit=100&status=ACTIVE").then((page) => page.items),
       getCurrentMembershipRole(),
+      fetchEntitlements(),
     ]);
+    apiKeys = apiKeysResult;
+    clients = clientsResult;
+    actorRole = actorRoleResult;
+    hasPublicApiEntitlement = entitlements.entitlements.includes("PUBLIC_API");
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
@@ -28,10 +36,14 @@ export default async function ApiKeysPage() {
   return (
     <div className="flex flex-col gap-6">
       {canManage ? (
-        <section className="rounded border border-neutral-200 p-4">
-          <h2 className="mb-3 text-sm font-semibold">Nouvelle clé API</h2>
-          <CreateApiKeyForm clients={clients} />
-        </section>
+        hasPublicApiEntitlement ? (
+          <section className="rounded border border-neutral-200 p-4">
+            <h2 className="mb-3 text-sm font-semibold">Nouvelle clé API</h2>
+            <CreateApiKeyForm clients={clients} />
+          </section>
+        ) : (
+          <EntitlementUpgradeNotice featureLabel="L'accès à l'API publique" />
+        )
       ) : null}
 
       <section>

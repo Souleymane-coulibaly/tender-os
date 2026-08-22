@@ -56,6 +56,19 @@ export class SubmissionDeadlinePassedError extends DomainError {
   }
 }
 
+/** Checkpoint TENDEROS-2.1-P2.3-E1.5, mission §3 (GUARD STATUS DU DÉPÔT) — un Tender Archived
+ *  (notamment via `AbandonTenderUseCase`) ne peut plus recevoir de dépôt, quel que soit son état de
+ *  préparation par ailleurs. Vérifié à deux moments (mission §2 RACE PRODUIT) : une première fois tôt
+ *  (retour rapide, expérience utilisateur), puis relu à l'instant précis de la mutation, DANS la
+ *  transaction Postgres qui consomme le crédit AO et écrit la Submission — jamais un snapshot
+ *  antérieur (même discipline TOCTOU que la readiness ci-dessus). */
+export class TenderArchivedForSubmissionError extends DomainError {
+  readonly code = "TENDER_ARCHIVED_FOR_SUBMISSION";
+  constructor() {
+    super("Ce marché a été abandonné ou archivé — aucun dépôt ne peut plus y être enregistré.");
+  }
+}
+
 /** Mission §30 — jamais révéler qu'une ressource existe chez un autre tenant : ce code reste
  *  générique côté message, la distinction se fait uniquement dans le contexte serveur (log). */
 export class SubmissionProofCrossOrganizationError extends DomainError {

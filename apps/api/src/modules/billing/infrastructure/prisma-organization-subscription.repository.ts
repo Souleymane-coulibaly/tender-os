@@ -3,7 +3,7 @@ import type { OrganizationSubscription as PrismaOrganizationSubscription } from 
 import { SubscriptionStatus } from "../domain/subscription-status";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
 import { OrganizationSubscription } from "../domain/organization-subscription.aggregate";
-import { parseBillingInterval } from "../domain/billing-interval";
+import { BillingInterval, parseBillingInterval } from "../domain/billing-interval";
 import { parsePlanSource } from "../domain/plan-source";
 import { parseSubscriptionPlanTier } from "../domain/plan-tier";
 import { parseSubscriptionStatus } from "../domain/subscription-status";
@@ -44,6 +44,13 @@ export class PrismaOrganizationSubscriptionRepository implements OrganizationSub
 
   async listTrialing(): Promise<OrganizationSubscription[]> {
     const rows = await this.prisma.currentClient().organizationSubscription.findMany({ where: { status: SubscriptionStatus.Trialing } });
+    return rows.map(toDomain);
+  }
+
+  async listActiveOrTrialingYearly(): Promise<OrganizationSubscription[]> {
+    const rows = await this.prisma.currentClient().organizationSubscription.findMany({
+      where: { billingInterval: BillingInterval.Yearly, status: { in: [SubscriptionStatus.Active, SubscriptionStatus.Trialing] } },
+    });
     return rows.map(toDomain);
   }
 

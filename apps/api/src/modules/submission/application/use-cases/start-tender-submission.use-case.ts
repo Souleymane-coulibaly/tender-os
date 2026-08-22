@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { TenderSubmission } from "../../domain/tender-submission.aggregate";
 import { ActiveTenderSubmissionAlreadyExistsError, CustomPlatformNameRequiredError } from "../../domain/errors";
@@ -32,11 +33,22 @@ export class StartTenderSubmissionUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: StartTenderSubmissionCommand): Promise<TenderSubmissionSummary> {
     await this.accessService.assertTenderAccess({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: command.tenderId, permission: ClientPermission.ManageSubmission });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — ferme le finding Codex "Submission.start non gaté" :
+    // AVANT toute mutation persistante (mission §3), allocation du Pass (si nécessaire) avec
+    // compensation automatique si l'opération échoue ensuite (mission §2/§4).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command),
+    );
+  }
+
+  private async executeEntitled(command: StartTenderSubmissionCommand): Promise<TenderSubmissionSummary> {
     if (requiresCustomPlatformName(command.platform) && !command.customPlatformName?.trim()) {
       throw new CustomPlatformNameRequiredError();
     }

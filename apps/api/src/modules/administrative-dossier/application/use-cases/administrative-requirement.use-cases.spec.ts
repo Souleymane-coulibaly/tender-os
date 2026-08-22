@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { EntitlementService } from "../../../billing";
 import { CreateAdministrativeRequirementUseCase, ListAdministrativeRequirementsUseCase, UpdateAdministrativeRequirementUseCase } from "./administrative-requirement.use-cases";
 import type { AdministrativeRequirementRepository } from "../ports/administrative-requirement.repository";
 import type { AdministrativeDossierRepository } from "../ports/administrative-dossier.repository";
@@ -44,10 +45,16 @@ function inMemoryRepository(seed: AdministrativeRequirement[] = []): Administrat
 function fakeDossierRepository(dossier: AdministrativeDossier | null): AdministrativeDossierRepository {
   return { create: async () => {}, findById: async () => dossier, findByTenderId: async () => dossier, save: async () => {} };
 }
+function fakeEntitlementService(): EntitlementService {
+  return {
+    canOperateOnTender: vi.fn(async () => true),
+    runTenderOperationEntitled: vi.fn(async (_input: unknown, operation: () => Promise<unknown>) => operation()),
+  } as unknown as EntitlementService;
+}
 
 describe("CreateAdministrativeRequirementUseCase", () => {
   it("creates a MANUAL requirement, always starting SUGGESTED", async () => {
-    const useCase = new CreateAdministrativeRequirementUseCase(fakeAccessService(), inMemoryRepository(), fakeAuditLogWriter(), fakeClock(), fakeIdGenerator());
+    const useCase = new CreateAdministrativeRequirementUseCase(fakeAccessService(), inMemoryRepository(), fakeAuditLogWriter(), fakeClock(), fakeIdGenerator(), fakeEntitlementService());
     const summary = await useCase.execute({
       organizationId: ORGANIZATION_ID,
       actorId: "user-1",

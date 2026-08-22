@@ -14,7 +14,7 @@ export class PrismaTenderStatusHistoryRepository implements TenderStatusHistoryR
     organizationId: string;
     tenderId: string;
   }): Promise<TenderStatusHistoryEntry[]> {
-    const records = await this.prisma.tenderStatusHistoryEntry.findMany({
+    const records = await this.prisma.currentClient().tenderStatusHistoryEntry.findMany({
       where: { tenderId: input.tenderId, organizationId: input.organizationId },
       orderBy: { changedAt: "desc" },
     });
@@ -38,7 +38,13 @@ export class PrismaTenderStatusHistoryRepository implements TenderStatusHistoryR
     changedBy: string;
     occurredAt: Date;
   }): Promise<void> {
-    await this.prisma.tenderStatusHistoryEntry.create({
+    // Checkpoint TENDEROS-2.1-P2.3-E1.5, mission §4/§7 (ATOMICITÉ ABANDON) — `currentClient()`
+    // (au lieu de `this.prisma` brut) : rejoint la transaction ambiante ouverte par
+    // `AtomicTransactionRunner` (voir `AbandonTenderUseCase`) au lieu d'écrire sur une connexion
+    // séparée, sans quoi cette écriture ne participerait PAS au rollback d'un échec ultérieur dans la
+    // même opération (release Pass, audit, outbox) — état partiel durable, exactement ce que la
+    // mission interdit.
+    await this.prisma.currentClient().tenderStatusHistoryEntry.create({
       data: {
         id: randomUUID(),
         organizationId: input.organizationId,

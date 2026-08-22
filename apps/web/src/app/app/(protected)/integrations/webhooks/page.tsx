@@ -4,7 +4,9 @@ import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-ap
 import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../../lib/client-portfolio-types";
 import { WEBHOOK_SUBSCRIPTION_STATUS_LABELS, canManageIntegrations, webhookSubscriptionStatusBadgeClass, type WebhookSubscriptionSummary } from "../../../../../lib/integrations-types";
 import { fetchWebhooks } from "../../../integrations-actions";
+import { fetchEntitlements } from "../../../billing-actions";
 import { ApiErrorState } from "../../api-error-state";
+import { EntitlementUpgradeNotice } from "../../entitlement-upgrade-notice";
 import { CreateWebhookForm } from "./create-webhook-form";
 
 export const metadata: Metadata = { title: "Webhooks — TenderOS" };
@@ -13,12 +15,18 @@ export default async function WebhooksPage() {
   let webhooks: WebhookSubscriptionSummary[];
   let clients: ClientAccountSummary[];
   let actorRole: string | undefined;
+  let hasWebhooksEntitlement = false;
   try {
-    [webhooks, clients, actorRole] = await Promise.all([
+    const [webhooksResult, clientsResult, actorRoleResult, entitlements] = await Promise.all([
       fetchWebhooks(),
       appApiFetch<ClientPortfolioPage<ClientAccountSummary>>("/api/v1/clients?limit=100&status=ACTIVE").then((page) => page.items),
       getCurrentMembershipRole(),
+      fetchEntitlements(),
     ]);
+    webhooks = webhooksResult;
+    clients = clientsResult;
+    actorRole = actorRoleResult;
+    hasWebhooksEntitlement = entitlements.entitlements.includes("WEBHOOKS");
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
@@ -28,10 +36,14 @@ export default async function WebhooksPage() {
   return (
     <div className="flex flex-col gap-6">
       {canManage ? (
-        <section className="rounded border border-neutral-200 p-4">
-          <h2 className="mb-3 text-sm font-semibold">Nouveau webhook</h2>
-          <CreateWebhookForm clients={clients} />
-        </section>
+        hasWebhooksEntitlement ? (
+          <section className="rounded border border-neutral-200 p-4">
+            <h2 className="mb-3 text-sm font-semibold">Nouveau webhook</h2>
+            <CreateWebhookForm clients={clients} />
+          </section>
+        ) : (
+          <EntitlementUpgradeNotice featureLabel="Les webhooks" />
+        )
       ) : null}
 
       <section>

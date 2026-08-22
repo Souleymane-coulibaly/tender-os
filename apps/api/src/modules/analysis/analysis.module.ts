@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AiSuggestionModule } from "../ai-suggestion";
+import { BillingModule } from "../billing";
 import { DceModule } from "../dce";
 import { DocumentsModule } from "../documents";
 import { ExtractionModule } from "../extraction";
@@ -54,7 +55,7 @@ import { StaticPromptTemplateProvider } from "./infrastructure/static-prompt-tem
 import { AnalysisController } from "./interfaces/http/analysis.controller";
 
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ExtractionModule, AiSuggestionModule, OutboxWriterModule, DocumentsModule, DceModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ExtractionModule, AiSuggestionModule, OutboxWriterModule, DocumentsModule, DceModule, BillingModule],
   controllers: [AnalysisController],
   providers: [
     StartTenderAnalysisUseCase,

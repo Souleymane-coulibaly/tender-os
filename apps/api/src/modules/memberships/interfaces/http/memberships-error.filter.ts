@@ -22,6 +22,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   USER_NOT_FOUND: HttpStatus.NOT_FOUND,
   ORGANIZATION_NOT_FOUND: HttpStatus.NOT_FOUND,
   ORGANIZATION_SLUG_ALREADY_TAKEN: HttpStatus.CONFLICT,
+  // Checkpoint TENDEROS-2.1-P2.3-E1 — même statut que `INSUFFICIENT_AO_CREDITS` (billing) : une
+  // limite de plan/quota commerciale, jamais une simple erreur de validation.
+  SEAT_LIMIT_EXCEEDED: HttpStatus.PAYMENT_REQUIRED,
 };
 
 @Catch(DomainError)

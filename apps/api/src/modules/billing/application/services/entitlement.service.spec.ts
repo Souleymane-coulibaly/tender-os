@@ -10,10 +10,14 @@ import { QuotaType, UNLIMITED } from "../../domain/quota-type";
 import {
   FIXED_NOW,
   FixedClock,
+  InMemoryAuditLogWriter,
   InMemoryEntitlementOverrideRepository,
   InMemoryOrganizationSubscriptionRepository,
   InMemoryPassPurchaseRepository,
+  FakeOutboxWriter,
 } from "../../test-support/fakes";
+import { ReleasePassForTenderUseCase } from "../use-cases/release-pass-for-tender.use-case";
+import { ReservePassForTenderUseCase } from "../use-cases/reserve-pass-for-tender.use-case";
 import { DefaultEntitlementService } from "./entitlement.service";
 
 const ORG_A = "org-a";
@@ -24,13 +28,19 @@ describe("DefaultEntitlementService", () => {
   let subscriptions: InMemoryOrganizationSubscriptionRepository;
   let passes: InMemoryPassPurchaseRepository;
   let overrides: InMemoryEntitlementOverrideRepository;
+  let auditLogWriter: InMemoryAuditLogWriter;
+  let outboxWriter: FakeOutboxWriter;
   let service: DefaultEntitlementService;
 
   beforeEach(() => {
     subscriptions = new InMemoryOrganizationSubscriptionRepository();
     passes = new InMemoryPassPurchaseRepository();
     overrides = new InMemoryEntitlementOverrideRepository();
-    service = new DefaultEntitlementService(subscriptions, passes, overrides, new FixedClock());
+    auditLogWriter = new InMemoryAuditLogWriter();
+    outboxWriter = new FakeOutboxWriter();
+    const reservePassForTenderUseCase = new ReservePassForTenderUseCase(subscriptions, passes, auditLogWriter, outboxWriter as never);
+    const releasePassForTenderUseCase = new ReleasePassForTenderUseCase(passes, auditLogWriter, outboxWriter as never);
+    service = new DefaultEntitlementService(subscriptions, passes, overrides, new FixedClock(), reservePassForTenderUseCase, releasePassForTenderUseCase);
   });
 
   it("returns null plan and refuses every feature/limit for an organization with no subscription and no Pass", async () => {
@@ -124,20 +134,139 @@ describe("DefaultEntitlementService", () => {
     });
   });
 
-  it("an organization with an AVAILABLE (unconsumed) Pass cannot operate on any tender yet", async () => {
-    const pass = PassPurchase.create({
-      id: "pass-2",
-      organizationId: ORG_A,
-      externalReference: "cs_test_2",
-      priceCents: 9900,
-      currency: "EUR",
-      occurredAt: FIXED_NOW,
-    });
-    await passes.create(pass);
+  describe("Checkpoint TENDEROS-2.1-P2.3-E1.3 — canOperateOnTender is PURE (correctif finding Codex P1-A)", () => {
+    it("mission §12 CHECK PURE — calling canOperateOnTender 10 times against an AVAILABLE Pass never reserves it, never writes anything", async () => {
+      const pass = PassPurchase.create({ id: "pass-pure", organizationId: ORG_A, externalReference: "cs_test_pure", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      await passes.create(pass);
 
-    expect(await service.canOperateOnTender(ORG_A, TENDER_A)).toBe(false);
-    // Mais le plan de base de l'organisation est déjà résolu comme PASS (mission §36 — l'achat existe).
-    expect(await service.getEffectivePlanTier(ORG_A)).toBe(PlanTier.Pass);
+      for (let i = 0; i < 10; i++) {
+        expect(await service.canOperateOnTender(ORG_A, TENDER_A)).toBe(true);
+      }
+
+      const stillAvailable = await passes.findById(ORG_A, "pass-pure");
+      expect(stillAvailable?.status).toBe("AVAILABLE");
+      expect(stillAvailable?.reservedTenderId).toBeUndefined();
+      expect(auditLogWriter.entries).toHaveLength(0);
+      expect(outboxWriter.events).toHaveLength(0);
+    });
+
+    it("a Pass already RESERVED for Tender A does not block Tender A's own continued operations (pure re-read, no re-reservation)", async () => {
+      const pass = PassPurchase.create({ id: "pass-2", organizationId: ORG_A, externalReference: "cs_test_2", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      pass.reserveForTender(TENDER_A, FIXED_NOW);
+      await passes.create(pass);
+
+      expect(await service.canOperateOnTender(ORG_A, TENDER_A)).toBe(true);
+    });
+
+    it("once the only Pass is CONSUMED for Tender A, a different Tender in preparation can no longer be authorized (nothing left available or reservable)", async () => {
+      const pass = PassPurchase.create({ id: "pass-2b", organizationId: ORG_A, externalReference: "cs_test_2b", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      pass.consumeForTender(TENDER_A, FIXED_NOW);
+      await passes.create(pass);
+
+      expect(await service.canOperateOnTender(ORG_A, TENDER_A)).toBe(true);
+      expect(await service.canOperateOnTender(ORG_A, "tender-c")).toBe(false);
+    });
+  });
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E1.3 — runTenderOperationEntitled (allocation explicite, séparée du check)", () => {
+    async function noopOperation(): Promise<string> {
+      return "ok";
+    }
+
+    it("mission TEST 1 — Tender A's first paying operation reserves the organization's only available Pass", async () => {
+      const pass = PassPurchase.create({ id: "pass-2", organizationId: ORG_A, externalReference: "cs_test_2", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      await passes.create(pass);
+
+      const result = await service.runTenderOperationEntitled({ organizationId: ORG_A, tenderId: TENDER_A, actorId: "user-1", occurredAt: FIXED_NOW }, noopOperation);
+
+      expect(result).toBe("ok");
+      const reserved = await passes.findById(ORG_A, "pass-2");
+      expect(reserved?.status).toBe("RESERVED");
+      expect(reserved?.reservedTenderId).toBe(TENDER_A);
+    });
+
+    it("mission TEST 2 — once reserved for Tender A, the SAME Pass refuses Tender B's first paying operation (never two Tenders prepared simultaneously on one Pass)", async () => {
+      const pass = PassPurchase.create({ id: "pass-2", organizationId: ORG_A, externalReference: "cs_test_2", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      await passes.create(pass);
+      await service.runTenderOperationEntitled({ organizationId: ORG_A, tenderId: TENDER_A, actorId: "user-1", occurredAt: FIXED_NOW }, noopOperation);
+
+      await expect(service.runTenderOperationEntitled({ organizationId: ORG_A, tenderId: TENDER_B, actorId: "user-1", occurredAt: FIXED_NOW }, noopOperation)).rejects.toMatchObject({
+        code: "TENDER_OPERATION_NOT_ENTITLED",
+      });
+    });
+
+    it("mission TEST 3 — Tender A keeps being authorized across repeated calls (DCE, then Analysis, then Memo) — reservation is idempotent, never re-attempted", async () => {
+      const pass = PassPurchase.create({ id: "pass-2", organizationId: ORG_A, externalReference: "cs_test_2", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      await passes.create(pass);
+
+      await service.runTenderOperationEntitled({ organizationId: ORG_A, tenderId: TENDER_A, actorId: "user-1", occurredAt: FIXED_NOW }, noopOperation);
+      await service.runTenderOperationEntitled({ organizationId: ORG_A, tenderId: TENDER_A, actorId: "user-1", occurredAt: FIXED_NOW }, noopOperation);
+      await service.runTenderOperationEntitled({ organizationId: ORG_A, tenderId: TENDER_A, actorId: "user-1", occurredAt: FIXED_NOW }, noopOperation);
+
+      const reserved = await passes.findById(ORG_A, "pass-2");
+      expect(reserved?.status).toBe("RESERVED"); // jamais passé à autre chose par les rappels
+      expect(auditLogWriter.entries.filter((e) => e.action === "PassReservedForTender")).toHaveLength(1); // une SEULE réservation réelle
+    });
+
+    it("with TWO available Passes, Tender A and Tender B can each reserve their own — never forced to share, never a false refusal", async () => {
+      const passX = PassPurchase.create({ id: "pass-x", organizationId: ORG_A, externalReference: "cs_test_x", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      const passY = PassPurchase.create({ id: "pass-y", organizationId: ORG_A, externalReference: "cs_test_y", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      await passes.create(passX);
+      await passes.create(passY);
+
+      await service.runTenderOperationEntitled({ organizationId: ORG_A, tenderId: TENDER_A, actorId: "user-1", occurredAt: FIXED_NOW }, noopOperation);
+      await service.runTenderOperationEntitled({ organizationId: ORG_A, tenderId: TENDER_B, actorId: "user-1", occurredAt: FIXED_NOW }, noopOperation);
+
+      const reservedTenderIds = [(await passes.findById(ORG_A, "pass-x"))?.reservedTenderId, (await passes.findById(ORG_A, "pass-y"))?.reservedTenderId].sort();
+      expect(reservedTenderIds).toEqual([TENDER_A, TENDER_B].sort());
+    });
+
+    it("mission §4/§11 TEST ÉCHEC MÉTIER — a freshly-reserved Pass is released back to AVAILABLE when the operation throws, never lost to the client", async () => {
+      const pass = PassPurchase.create({ id: "pass-fail", organizationId: ORG_A, externalReference: "cs_test_fail", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      await passes.create(pass);
+
+      await expect(
+        service.runTenderOperationEntitled({ organizationId: ORG_A, tenderId: TENDER_A, actorId: "user-1", occurredAt: FIXED_NOW }, async () => {
+          throw new Error("business mutation failed");
+        }),
+      ).rejects.toThrow("business mutation failed"); // jamais un try/catch silencieux — l'erreur d'origine ressort telle quelle
+
+      const released = await passes.findById(ORG_A, "pass-fail");
+      expect(released?.status).toBe("AVAILABLE");
+      expect(released?.reservedTenderId).toBeUndefined();
+
+      // Tender B peut désormais légitimement utiliser ce Pass — il n'a jamais été perdu.
+      const forTenderB = await service.runTenderOperationEntitled({ organizationId: ORG_A, tenderId: TENDER_B, actorId: "user-1", occurredAt: FIXED_NOW }, noopOperation);
+      expect(forTenderB).toBe("ok");
+      expect((await passes.findById(ORG_A, "pass-fail"))?.reservedTenderId).toBe(TENDER_B);
+    });
+
+    it("a Pass already ASSIGNED (RESERVED or CONSUMED) before this call is NEVER released on a later failure — only a FRESH reservation from THIS call is compensated", async () => {
+      const pass = PassPurchase.create({ id: "pass-preexisting", organizationId: ORG_A, externalReference: "cs_test_preexisting", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      pass.reserveForTender(TENDER_A, FIXED_NOW);
+      await passes.create(pass);
+
+      await expect(
+        service.runTenderOperationEntitled({ organizationId: ORG_A, tenderId: TENDER_A, actorId: "user-1", occurredAt: FIXED_NOW }, async () => {
+          throw new Error("a later, unrelated operation on the SAME already-entitled tender fails");
+        }),
+      ).rejects.toThrow();
+
+      const stillReserved = await passes.findById(ORG_A, "pass-preexisting");
+      expect(stillReserved?.status).toBe("RESERVED");
+      expect(stillReserved?.reservedTenderId).toBe(TENDER_A);
+    });
+
+    it("an active subscription never touches the Pass repository at all (SUBSCRIPTION_COVERED, no reservation attempted)", async () => {
+      await subscriptions.save(
+        OrganizationSubscription.create({ id: "sub-cov", organizationId: ORG_A, planTier: PlanTier.Business, billingInterval: BillingInterval.Monthly, source: PlanSource.Stripe, occurredAt: FIXED_NOW }),
+      );
+
+      const result = await service.runTenderOperationEntitled({ organizationId: ORG_A, tenderId: TENDER_A, actorId: "user-1", occurredAt: FIXED_NOW }, noopOperation);
+
+      expect(result).toBe("ok");
+      expect(auditLogWriter.entries.filter((e) => e.action === "PassReservedForTender")).toHaveLength(0);
+    });
   });
 
   describe("correctif audit Codex 22A (P1-02) — précédence override", () => {

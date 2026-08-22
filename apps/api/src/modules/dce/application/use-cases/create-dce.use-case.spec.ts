@@ -20,14 +20,20 @@ describe("CreateDceUseCase", () => {
     auditLogWriter = new InMemoryAuditLogWriter();
   });
 
-  function buildUseCase(getTenderUseCase: GetTenderUseCase = fakeGetTenderUseCase()) {
-    return new CreateDceUseCase(
-      dceRepository,
-      auditLogWriter,
-      new FixedClock(),
-      new SequentialIdGenerator(),
-      getTenderUseCase,
-    );
+  function fakeEntitlementService(allowed = true) {
+    return {
+      canOperateOnTender: vi.fn(async () => allowed),
+      runTenderOperationEntitled: vi.fn(async (_input: unknown, operation: () => Promise<unknown>) => {
+        if (!allowed) {
+          throw Object.assign(new Error("not entitled"), { code: "TENDER_OPERATION_NOT_ENTITLED" });
+        }
+        return operation();
+      }),
+    };
+  }
+
+  function buildUseCase(getTenderUseCase: GetTenderUseCase = fakeGetTenderUseCase(), entitlementService?: ReturnType<typeof fakeEntitlementService>) {
+    return new CreateDceUseCase(dceRepository, auditLogWriter, new FixedClock(), new SequentialIdGenerator(), getTenderUseCase, (entitlementService ?? fakeEntitlementService()) as never);
   }
 
   it("creates a DRAFT DCE for a tender that has none yet, and records an audit entry", async () => {
@@ -64,6 +70,18 @@ describe("CreateDceUseCase", () => {
 
     expect(second.id).toBe(first.id);
     expect(auditLogWriter.entries).toHaveLength(1);
+  });
+
+  it("Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 1, mission TEST 1 — refuses (never creates a DCE) when the organization has no entitlement (no subscription, no Pass) to operate on this tender", async () => {
+    const entitlementService = fakeEntitlementService(false);
+    const useCase = buildUseCase(fakeGetTenderUseCase(), entitlementService);
+
+    await expect(
+      useCase.execute({ organizationId: "org-1", tenderId: "tender-1", actorId: "user-1", actorRole: "BID_MANAGER" }),
+    ).rejects.toMatchObject({ code: "TENDER_OPERATION_NOT_ENTITLED" });
+
+    expect(entitlementService.runTenderOperationEntitled).toHaveBeenCalledWith(expect.objectContaining({ organizationId: "org-1", tenderId: "tender-1" }), expect.any(Function));
+    expect(auditLogWriter.entries).toHaveLength(0);
   });
 
   it("refuses when the actor lacks dce:create", async () => {

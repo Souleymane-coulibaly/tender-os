@@ -32,7 +32,7 @@ export class GrantMonthlyAoCreditsUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
   ) {}
 
-  async execute(command: GrantMonthlyAoCreditsCommand): Promise<AoCreditLedgerEntry> {
+  async execute(command: GrantMonthlyAoCreditsCommand): Promise<{ entry: AoCreditLedgerEntry; alreadyApplied: boolean }> {
     const subscription = await this.subscriptionRepository.findByOrganizationId(command.organizationId);
     // V2 Sprint 25 (Trial Starter) — `isEntitled` (ACTIVE ou TRIALING), voir `entitlement.service.ts`.
     if (!subscription || !subscription.isEntitled) {
@@ -64,6 +64,10 @@ export class GrantMonthlyAoCreditsUseCase {
       });
     }
 
-    return entry;
+    // Checkpoint TENDEROS-2.1-P2.3-E1.2, ANNUAL CATCHUP — `alreadyApplied` désormais exposé à
+    // l'appelant (`GrantMonthlyAoCreditsForYearlySubscriptionsUseCase`), qui doit savoir SI un
+    // rattrapage a réellement produit un nouveau crédit pour chaque période, jamais seulement que
+    // l'appel a réussi (idempotence transparente pour tout appelant qui n'en a pas besoin).
+    return { entry, alreadyApplied };
   }
 }

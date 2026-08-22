@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { ListDceDocumentsUseCase } from "../../../dce";
 import { assertLotBelongsToTender, TENDER_LOT_REPOSITORY, type TenderLotRepository } from "../../../tenders";
@@ -50,6 +51,7 @@ export class CreatePricingScheduleUseCase {
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly accessService: PricingScheduleAccessService,
     private readonly listDceDocumentsUseCase: ListDceDocumentsUseCase,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: CreatePricingScheduleCommand): Promise<PricingSchedule> {
@@ -62,6 +64,19 @@ export class CreatePricingScheduleUseCase {
       requireUseOrgPermission: true,
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.4, mission §2/§3 (P1 Codex) — correctif du bypass : Pricing
+    // Schedule n'était gaté par AUCUNE vérification d'entitlement. Un DCE déjà importé pour ce
+    // Tender n'est JAMAIS une preuve d'entitlement actuel (mission §3) — l'entitlement est
+    // réévalué ICI, à l'instant de CETTE mutation, via l'autorité centrale unique (jamais un second
+    // moteur). Allocation du Pass (si nécessaire) avec compensation automatique si l'opération
+    // échoue ensuite (mission §5/§6).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command, clientAccountId, candidateCompanyId),
+    );
+  }
+
+  private async executeEntitled(command: CreatePricingScheduleCommand, clientAccountId: string, candidateCompanyId: string | undefined): Promise<PricingSchedule> {
     // Anti-IDOR (même motif que `CreateTechnicalMemoUseCase`) — un `lotId` fourni doit réellement
     // appartenir à CE Tender.
     await assertLotBelongsToTender(this.tenderLotRepository, { organizationId: command.organizationId, tenderId: command.tenderId, lotId: command.lotId });

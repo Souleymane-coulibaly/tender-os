@@ -43,6 +43,18 @@ export class PrismaAoCreditLedgerRepository implements AoCreditLedgerRepository 
     return row?.balance ?? 0;
   }
 
+  /**
+   * Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 2 — correctif d'un gap audité (jusqu'ici seuls
+   * `grantTrial()`/`reverseConsumption()` protégeaient leur `INSERT` par un `try/catch` sur la
+   * violation d'index unique) : un job mensuel relancé (retry, redémarrage, double exécution) et le
+   * webhook Stripe `invoice.paid` peuvent désormais tous deux tenter un grant pour LE MÊME
+   * (organizationId, period) à quelques millisecondes d'écart — les deux passent le `findFirst`
+   * ci-dessous (aucun n'a encore commité), un seul `INSERT` réussit. Le second échoue (P2002) sur
+   * l'index unique partiel déjà en place (`ao_credit_ledger_entries_grant_period_unique`) ; sa
+   * transaction ENTIÈRE échoue avec (solde incrémenté y compris — jamais un double crédit), et ce
+   * repository relit HORS transaction (rollback terminé) l'entrée gagnante plutôt que de laisser
+   * l'erreur brute remonter.
+   */
   async grant(input: {
     organizationId: string;
     period: string;
@@ -50,30 +62,38 @@ export class PrismaAoCreditLedgerRepository implements AoCreditLedgerRepository 
     rolloverCap: number;
     occurredAt: Date;
   }): Promise<{ entry: AoCreditLedgerEntry; alreadyApplied: boolean }> {
-    return this.prisma.withTransaction(async (tx) => {
-      const existing = await tx.aoCreditLedgerEntry.findFirst({ where: { organizationId: input.organizationId, type: AoCreditMovementType.Grant, period: input.period } });
-      if (existing) {
-        return { entry: toDomain(existing), alreadyApplied: true };
-      }
+    try {
+      return await this.prisma.withTransaction(async (tx) => {
+        const existing = await tx.aoCreditLedgerEntry.findFirst({ where: { organizationId: input.organizationId, type: AoCreditMovementType.Grant, period: input.period } });
+        if (existing) {
+          return { entry: toDomain(existing), alreadyApplied: true };
+        }
 
-      const balanceRow = await this.ensureBalanceRow(tx, input.organizationId);
-      const appliedAmount = Math.max(0, Math.min(input.nominalAmount, input.rolloverCap - balanceRow.balance));
-      const balanceAfter = balanceRow.balance + appliedAmount;
+        const balanceRow = await this.ensureBalanceRow(tx, input.organizationId);
+        const appliedAmount = Math.max(0, Math.min(input.nominalAmount, input.rolloverCap - balanceRow.balance));
+        const balanceAfter = balanceRow.balance + appliedAmount;
 
-      await tx.organizationAoCreditBalance.update({ where: { organizationId: input.organizationId }, data: { balance: balanceAfter } });
+        await tx.organizationAoCreditBalance.update({ where: { organizationId: input.organizationId }, data: { balance: balanceAfter } });
 
-      const domainEntry = createAoCreditLedgerEntry({
-        id: randomUUID(),
-        organizationId: input.organizationId,
-        type: AoCreditMovementType.Grant,
-        amount: appliedAmount,
-        balanceAfter,
-        period: input.period,
-        occurredAt: input.occurredAt,
+        const domainEntry = createAoCreditLedgerEntry({
+          id: randomUUID(),
+          organizationId: input.organizationId,
+          type: AoCreditMovementType.Grant,
+          amount: appliedAmount,
+          balanceAfter,
+          period: input.period,
+          occurredAt: input.occurredAt,
+        });
+        const created = await tx.aoCreditLedgerEntry.create({ data: this.toRow(domainEntry) });
+        return { entry: toDomain(created), alreadyApplied: false };
       });
-      const created = await tx.aoCreditLedgerEntry.create({ data: this.toRow(domainEntry) });
-      return { entry: toDomain(created), alreadyApplied: false };
-    });
+    } catch (error) {
+      if (isUniqueConstraintViolation(error)) {
+        const winning = await this.prisma.currentClient().aoCreditLedgerEntry.findFirstOrThrow({ where: { organizationId: input.organizationId, type: AoCreditMovementType.Grant, period: input.period } });
+        return { entry: toDomain(winning), alreadyApplied: true };
+      }
+      throw error;
+    }
   }
 
   async grantTrial(input: { organizationId: string; occurredAt: Date }): Promise<{ entry: AoCreditLedgerEntry; alreadyApplied: boolean }> {
@@ -117,34 +137,64 @@ export class PrismaAoCreditLedgerRepository implements AoCreditLedgerRepository 
     }
   }
 
+  /**
+   * Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 4 (AO CREDIT IDEMPOTENCE) — clé logique
+   * `organizationId + tenderId + CONSUMPTION` : un Tender ne peut jamais produire une seconde
+   * décrémentation, quel que soit le nombre d'appels (retry, replace, multi-lot, resoumission après
+   * retrait — `RecordTenderSubmissionUseCase` appelle ce chemin à chaque dépôt réussi, jamais
+   * seulement au "premier" au sens applicatif). Double protection, même motif que
+   * `grantTrial()`/`reverseConsumption()` ci-dessus :
+   *   1. Pré-vérification `findFirst` (chemin rapide, non-concurrent) — une CONSUMPTION déjà
+   *      présente pour ce (organizationId, tenderId) rend l'appel un no-op immédiat, AUCUNE
+   *      décrémentation supplémentaire.
+   *   2. Sous concurrence réelle (deux premiers dépôts simultanés pour le MÊME tenderId), seule
+   *      l'autorité réelle est l'index unique PARTIEL `(organization_id, tender_id) WHERE
+   *      type = 'CONSUMPTION'` : le second `INSERT` échoue (P2002), fait échouer TOUTE sa
+   *      transaction (solde décrémenté y compris — jamais un solde orphelin), et ce repository
+   *      relit HORS transaction (rollback terminé) l'entrée gagnante pour renvoyer un résultat
+   *      idempotent au lieu de laisser l'erreur brute remonter.
+   */
   async consume(input: { organizationId: string; tenderId: string; amount: number; occurredAt: Date }): Promise<{ applied: boolean; entry: AoCreditLedgerEntry | null }> {
-    return this.prisma.withTransaction(async (tx) => {
-      await this.ensureBalanceRow(tx, input.organizationId);
+    try {
+      return await this.prisma.withTransaction(async (tx) => {
+        const existing = await tx.aoCreditLedgerEntry.findFirst({ where: { organizationId: input.organizationId, type: AoCreditMovementType.Consumption, tenderId: input.tenderId } });
+        if (existing) {
+          return { applied: true, entry: toDomain(existing) };
+        }
 
-      // Compare-and-set atomique : la clause WHERE `balance >= amount` est la SEULE autorité réelle
-      // de la transition, jamais une lecture-puis-écriture inconditionnelle (même motif que le
-      // correctif P1 `reclaimStaleGenerating`, Sprint 21).
-      const result = await tx.organizationAoCreditBalance.updateMany({
-        where: { organizationId: input.organizationId, balance: { gte: input.amount } },
-        data: { balance: { decrement: input.amount } },
+        await this.ensureBalanceRow(tx, input.organizationId);
+
+        // Compare-and-set atomique : la clause WHERE `balance >= amount` est la SEULE autorité
+        // réelle de la transition, jamais une lecture-puis-écriture inconditionnelle (même motif que
+        // le correctif P1 `reclaimStaleGenerating`, Sprint 21).
+        const result = await tx.organizationAoCreditBalance.updateMany({
+          where: { organizationId: input.organizationId, balance: { gte: input.amount } },
+          data: { balance: { decrement: input.amount } },
+        });
+        if (result.count === 0) {
+          return { applied: false, entry: null };
+        }
+
+        const balanceRow = await tx.organizationAoCreditBalance.findUniqueOrThrow({ where: { organizationId: input.organizationId } });
+        const domainEntry = createAoCreditLedgerEntry({
+          id: randomUUID(),
+          organizationId: input.organizationId,
+          type: AoCreditMovementType.Consumption,
+          amount: -input.amount,
+          balanceAfter: balanceRow.balance,
+          tenderId: input.tenderId,
+          occurredAt: input.occurredAt,
+        });
+        const created = await tx.aoCreditLedgerEntry.create({ data: this.toRow(domainEntry) });
+        return { applied: true, entry: toDomain(created) };
       });
-      if (result.count === 0) {
-        return { applied: false, entry: null };
+    } catch (error) {
+      if (isUniqueConstraintViolation(error)) {
+        const winning = await this.prisma.currentClient().aoCreditLedgerEntry.findFirstOrThrow({ where: { organizationId: input.organizationId, type: AoCreditMovementType.Consumption, tenderId: input.tenderId } });
+        return { applied: true, entry: toDomain(winning) };
       }
-
-      const balanceRow = await tx.organizationAoCreditBalance.findUniqueOrThrow({ where: { organizationId: input.organizationId } });
-      const domainEntry = createAoCreditLedgerEntry({
-        id: randomUUID(),
-        organizationId: input.organizationId,
-        type: AoCreditMovementType.Consumption,
-        amount: -input.amount,
-        balanceAfter: balanceRow.balance,
-        tenderId: input.tenderId,
-        occurredAt: input.occurredAt,
-      });
-      const created = await tx.aoCreditLedgerEntry.create({ data: this.toRow(domainEntry) });
-      return { applied: true, entry: toDomain(created) };
-    });
+      throw error;
+    }
   }
 
   async adjust(input: { organizationId: string; amount: number; reason: string; actorPlatformAdministratorId: string; occurredAt: Date }): Promise<AoCreditLedgerEntry> {
@@ -238,6 +288,15 @@ export class PrismaAoCreditLedgerRepository implements AoCreditLedgerRepository 
   async findGrantByPeriod(organizationId: string, period: string): Promise<AoCreditLedgerEntry | null> {
     const row = await this.prisma.currentClient().aoCreditLedgerEntry.findFirst({ where: { organizationId, type: AoCreditMovementType.Grant, period } });
     return row ? toDomain(row) : null;
+  }
+
+  async findLatestGrantPeriod(organizationId: string): Promise<string | null> {
+    const row = await this.prisma.currentClient().aoCreditLedgerEntry.findFirst({
+      where: { organizationId, type: AoCreditMovementType.Grant },
+      orderBy: { period: "desc" },
+      select: { period: true },
+    });
+    return row?.period ?? null;
   }
 
   async list(organizationId: string, options: { cursor?: string | undefined; limit: number }): Promise<AoCreditLedgerPage> {

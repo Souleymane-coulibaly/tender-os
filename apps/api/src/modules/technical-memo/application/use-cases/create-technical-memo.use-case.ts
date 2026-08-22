@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { CreateDocumentWithFirstVersionUseCase, DocumentDomain, DocumentOrigin, type IncomingFile } from "../../../documents";
 import { assertLotBelongsToTender, TENDER_LOT_REPOSITORY, type TenderLotRepository } from "../../../tenders";
@@ -55,6 +56,7 @@ export class CreateTechnicalMemoUseCase {
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly accessService: TechnicalMemoAccessService,
     private readonly createDocumentWithFirstVersionUseCase: CreateDocumentWithFirstVersionUseCase,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: CreateTechnicalMemoCommand): Promise<CreateTechnicalMemoResult> {
@@ -67,6 +69,16 @@ export class CreateTechnicalMemoUseCase {
       requireUseOrgPermission: true,
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — opération "cœur AO" : allocation du Pass (si nécessaire)
+    // au moment de CETTE mutation réelle, avec compensation automatique si elle échoue ensuite
+    // (mission §2/§3/§4).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command, clientAccountId),
+    );
+  }
+
+  private async executeEntitled(command: CreateTechnicalMemoCommand, clientAccountId: string): Promise<CreateTechnicalMemoResult> {
     // Anti-IDOR (mission §81) — un `lotId` fourni doit réellement appartenir à CE Tender, jamais
     // accepté tel quel (même motif que `assertLotBelongsToTender` déjà utilisé par Chat/Workspace).
     await assertLotBelongsToTender(this.tenderLotRepository, { organizationId: command.organizationId, tenderId: command.tenderId, lotId: command.lotId });

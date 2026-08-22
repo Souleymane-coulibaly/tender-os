@@ -7947,10 +7947,12 @@ model OrganizationPassPurchase {
   organizationId String       @map("organization_id") @db.Uuid
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  /// AVAILABLE | CONSUMED (billing/domain/pass-purchase-status.ts). Jamais de statut EXPIRED en
-  /// colonne : la politique de durée commerciale n'est pas tranchée (mission §10) — voir
+  /// AVAILABLE | RESERVED | CONSUMED (billing/domain/pass-purchase-status.ts). Jamais de statut
+  /// EXPIRED en colonne : la politique de durée commerciale n'est pas tranchée (mission §10) — voir
   /// `expiresAt`, calculé à la lecture uniquement, même motif que `OrganizationMembership.expiresAt`
-  /// ("aucun job planifié ne fait transiter le statut").
+  /// ("aucun job planifié ne fait transiter le statut"). RESERVED ajouté Checkpoint P2.3-E1.2
+  /// (mission "1 Pass AO = 1 Tender / 1 AO") — jamais de CHECK constraint sur cette colonne
+  /// (VARCHAR libre, validé uniquement côté application, voir `parsePassPurchaseStatus`).
   status String @db.VarChar(20)
 
   /// Idempotence webhook Stripe (mission §41, livré en 22C) — référence externe unique (ex. id de
@@ -7968,15 +7970,28 @@ model OrganizationPassPurchase {
 
   /// Référence scalaire simple vers Tender.id, jamais de relation Prisma formelle — même motif que
   /// `AuditLog.resourceId` / `ExternalTenderPromotion` : découplage volontaire entre `billing` et
-  /// `tenders`, aucune colonne ajoutée côté Tender.
+  /// `tenders`, aucune colonne ajoutée côté Tender. Checkpoint TENDEROS-2.1-P2.3-E1.3, mission §9 —
+  /// unicité RÉELLE `(organization_id, consumed_tender_id) WHERE status = 'CONSUMED'` posée à la
+  /// main dans la migration (même motif que `reservedTenderId` ci-dessous) : un Tender ne peut
+  /// jamais avoir deux Pass CONSUMED simultanément.
   consumedTenderId String?   @map("consumed_tender_id") @db.Uuid
   consumedAt       DateTime? @map("consumed_at")
+
+  /// Checkpoint TENDEROS-2.1-P2.3-E1.2 — affectation au premier usage métier payant du Tender
+  /// (mission "1 Pass AO = 1 Tender / 1 AO"), DISTINCTE de `consumedTenderId` (consommation
+  /// commerciale finale, au premier dépôt réussi). Unicité RÉELLE `(organization_id,
+  /// reserved_tender_id) WHERE status = 'RESERVED'` posée à la main dans la migration (non
+  /// représentable via `@@unique` en Prisma faute de clause WHERE — même motif que les index
+  /// partiels déjà en place sur `ao_credit_ledger_entries`).
+  reservedTenderId String?   @map("reserved_tender_id") @db.Uuid
+  reservedAt       DateTime? @map("reserved_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId, status])
   @@index([consumedTenderId])
+  @@index([reservedTenderId])
   @@map("organization_pass_purchases")
 }
 
@@ -8059,7 +8074,11 @@ model AoCreditLedgerEntry {
   period String? @db.VarChar(7)
 
   /// CONSUMPTION/REVERSAL — référence scalaire vers Tender.id, jamais une relation Prisma formelle
-  /// (même motif que `OrganizationPassPurchase.consumedTenderId`).
+  /// (même motif que `OrganizationPassPurchase.consumedTenderId`). Checkpoint P2.3-E1.1 FINDING 4 —
+  /// idempotence CONSUMPTION par (organizationId, tenderId) via un second index unique PARTIEL
+  /// (même limitation Prisma que `period` ci-dessus — posé à la main dans la migration, même motif
+  /// que l'index REVERSAL déjà en place) : un Tender ne produit jamais plus d'une ligne CONSUMPTION,
+  /// quel que soit le nombre de tentatives (retry/replace/multi-lot/resoumission après retrait).
   tenderId String? @map("tender_id") @db.Uuid
 
   /// MANUAL_ADJUSTMENT/REVERSAL — obligatoire (mission §31/§35), Platform Admin uniquement.

@@ -149,6 +149,18 @@ describe("Dossier de réponse (response-package) — real HTTP + PostgreSQL (Nes
         { id: orgBId, name: "Package Org B HTTP", slug: `package-org-b-http-${orgBId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
       ],
     });
+    // Checkpoint TENDEROS-2.1-P2.3-E1.2, §11 (non-régression) — `CreateTechnicalMemoUseCase` est
+    // entitlement-gated depuis le Checkpoint E1.1 (FINDING 1) : sans ceci, "TEST TECHNICAL MEMO
+    // CHANGE" (seul test de ce fichier à créer un mémoire via le VRAI endpoint HTTP plutôt qu'un
+    // seed Prisma direct) échoue en 402. Même motif déjà établi dans
+    // dce-http.integration.spec.ts/analysis-http.integration.spec.ts — ENTERPRISE (illimité) pour
+    // ne jamais faire porter à ces tests un souci de quota/AO credits qui n'est pas leur sujet.
+    await prisma.organizationSubscription.createMany({
+      data: [
+        { id: randomUUID(), organizationId: orgAId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+        { id: randomUUID(), organizationId: orgBId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+      ],
+    });
 
     const ownerA = await registerAndLogin(`package-owner-a-${randomUUID()}@smoke.test`);
     const ownerB = await registerAndLogin(`package-owner-b-${randomUUID()}@smoke.test`);
@@ -187,6 +199,7 @@ describe("Dossier de réponse (response-package) — real HTTP + PostgreSQL (Nes
     await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: [orgAId, orgBId] } } } });
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
@@ -1057,4 +1070,24 @@ describe("Dossier de réponse (response-package) — real HTTP + PostgreSQL (Nes
     const freshnessAfterRebuildRes = await fetch(`${baseUrl}/api/v1/response-packages/${pkg.id}/freshness`, { headers: authHeaders(tokenOwnerA, orgAId) });
     expect((await freshnessAfterRebuildRes.json()) as { freshness: string }).toMatchObject({ freshness: "CURRENT" });
   }, 30000);
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E1.5, mission §8 (HTTP 402 — DETTE DE PREUVE)", () => {
+    // Dernier describe block du fichier (vitest exécute `it`/`describe` d'un même fichier en ordre
+    // de déclaration, jamais en parallèle) — réutilise orgB, dont l'abonnement ENTERPRISE n'est
+    // JAMAIS relu ailleurs dans ce fichier (seule son existence en tant qu'organisation distincte
+    // sert aux tests d'isolation cross-org ci-dessus), même motif déjà établi dans
+    // `pricing-schedule-http.integration.spec.ts` — aucune nouvelle organisation/inscription requise.
+    it("POST .../response-packages without entitlement (subscription PAST_DUE, no Pass) refuses with 402 TENDER_OPERATION_NOT_ENTITLED — no ResponsePackage row persisted", async () => {
+      const { tenderId, lotId } = await createClientTenderAndLot({ organizationId: orgBId, userId: userIds[1]! });
+      await prisma.organizationSubscription.update({ where: { organizationId: orgBId }, data: { status: "PAST_DUE" } });
+
+      const createRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/response-packages`, { method: "POST", headers: authHeaders(tokenOwnerB, orgBId), body: JSON.stringify({ lotId }) });
+      expect(createRes.status).toBe(402);
+      const body = (await createRes.json()) as { error: { code: string } };
+      expect(body.error.code).toBe("TENDER_OPERATION_NOT_ENTITLED");
+
+      const persisted = await prisma.responsePackage.findFirst({ where: { organizationId: orgBId, tenderId } });
+      expect(persisted).toBeNull();
+    });
+  });
 });

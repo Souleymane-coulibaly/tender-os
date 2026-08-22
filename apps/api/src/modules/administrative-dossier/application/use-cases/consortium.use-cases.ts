@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { Consortium, type ConsortiumMember, type ConsortiumType } from "../../domain/consortium.aggregate";
 import { ConsortiumNotFoundError } from "../../domain/errors";
@@ -11,7 +12,9 @@ import { AdministrativeDossierAccessService } from "../services/administrative-d
 export type EnsureConsortiumCommand = Readonly<{ organizationId: string; actorId: string; actorRole: string; tenderId: string; type: ConsortiumType }>;
 
 /** Mission §15 — un groupement par Tender, création idempotente (même motif que
- *  `EnsureAdministrativeDossierUseCase`). */
+ *  `EnsureAdministrativeDossierUseCase`). Checkpoint TENDEROS-2.1-P2.3-E1.3, mission §20 — point
+ *  d'entrée INDÉPENDANT (n'exige jamais un dossier administratif préexistant, contrairement à
+ *  `CreateAdministrativeDocumentUseCase`) : gaté au même titre que `EnsureAdministrativeDossierUseCase`. */
 @Injectable()
 export class EnsureConsortiumUseCase {
   constructor(
@@ -19,17 +22,23 @@ export class EnsureConsortiumUseCase {
     @Inject(CONSORTIUM_REPOSITORY) private readonly repository: ConsortiumRepository,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: EnsureConsortiumCommand): Promise<ConsortiumSummary> {
     await this.accessService.assertTenderAccess({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: command.tenderId, permission: ClientPermission.ManageAdministrativeDossier });
 
-    const existing = await this.repository.findByTenderId({ organizationId: command.organizationId, tenderId: command.tenderId });
-    if (existing) return toConsortiumSummary(existing);
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => {
+        const existing = await this.repository.findByTenderId({ organizationId: command.organizationId, tenderId: command.tenderId });
+        if (existing) return toConsortiumSummary(existing);
 
-    const consortium = Consortium.create({ id: this.idGenerator.generate(), organizationId: command.organizationId, tenderId: command.tenderId, type: command.type, createdBy: command.actorId, occurredAt: this.clock.now() });
-    await this.repository.create(consortium);
-    return toConsortiumSummary(consortium);
+        const consortium = Consortium.create({ id: this.idGenerator.generate(), organizationId: command.organizationId, tenderId: command.tenderId, type: command.type, createdBy: command.actorId, occurredAt: this.clock.now() });
+        await this.repository.create(consortium);
+        return toConsortiumSummary(consortium);
+      },
+    );
   }
 }
 

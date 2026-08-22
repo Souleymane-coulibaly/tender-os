@@ -11,8 +11,10 @@ import {
   SubmissionPackageMissingError,
   SubmissionPackageOutdatedError,
   SubmissionPackageVersionMismatchError,
+  TenderArchivedForSubmissionError,
   TenderNotReadyForSubmissionError,
 } from "../../domain/errors";
+import { TenderStatus } from "../../../tenders";
 import type { SubmissionReadinessReason } from "../../domain/submission-readiness-reason";
 import { SubmissionPlatform } from "../../domain/submission-platform";
 import { TenderSubmissionStatus } from "../../domain/tender-submission-status";
@@ -33,11 +35,27 @@ function fakeClock() {
 function fakeIdGenerator(id = "sub-new") {
   return { generate: () => id };
 }
-function fakeAccessService(submissionDeadline?: string): SubmissionAccessService {
-  return { assertTenderAccess: vi.fn(async () => ({ clientAccountId: "client-1", submissionDeadline }) as never) } as unknown as SubmissionAccessService;
+function fakeAccessService(submissionDeadline?: string, status: TenderStatus = TenderStatus.ReadyToSubmit): SubmissionAccessService {
+  return { assertTenderAccess: vi.fn(async () => ({ clientAccountId: "client-1", submissionDeadline, status }) as never) } as unknown as SubmissionAccessService;
+}
+// Checkpoint TENDEROS-2.1-P2.3-E1.5, mission §3 — relecture DANS la transaction (voir
+// `assertTenderStillOpenForSubmission`) : par défaut un statut "normal" (jamais Archived), pour que
+// les tests existants (qui n'exercent PAS ce guard) restent inchangés.
+function fakeTenderRepository(status: TenderStatus = TenderStatus.ReadyToSubmit): { findById: ReturnType<typeof vi.fn> } {
+  return { findById: vi.fn(async () => ({ status }) as never) };
 }
 function fakeAuditLogWriter(): AuditLogWriter {
   return { record: vi.fn(async () => undefined) };
+}
+// Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 4 — la transaction rejoint toujours l'appel direct
+// (aucune transaction ambiante réelle en test unitaire, même motif que les autres
+// `FakeAtomicTransactionRunner` du dépôt) ; le fake de consommation est un no-op par défaut, un
+// test dédié vérifie le câblage exact des arguments passés.
+function fakeAtomicTransactionRunner(): { run: ReturnType<typeof vi.fn> } {
+  return { run: vi.fn(async (fn: () => Promise<unknown>) => fn()) };
+}
+function fakeConsumeAoCreditUseCase(): { execute: ReturnType<typeof vi.fn> } {
+  return { execute: vi.fn(async () => undefined) };
 }
 // Checkpoint TENDEROS-2.1-P2.2-F4.1 — chaque `SubmissionPackage` legacy porte désormais une
 // provenance V2 stampée ; ce fichier teste `RecordTenderSubmissionUseCase`, jamais le CONTENU du
@@ -108,6 +126,9 @@ function buildUseCase(input: {
   repository: TenderSubmissionRepository;
   readinessUseCase?: GetTenderSubmissionReadinessUseCase;
   submittableResponsePackageVersionUseCase?: GetSubmittableResponsePackageVersionUseCase;
+  consumeAoCreditUseCase?: { execute: ReturnType<typeof vi.fn> };
+  atomicTransactionRunner?: { run: ReturnType<typeof vi.fn> };
+  tenderRepository?: { findById: ReturnType<typeof vi.fn> };
 }): RecordTenderSubmissionUseCase {
   return new RecordTenderSubmissionUseCase(
     input.accessService ?? fakeAccessService(),
@@ -118,6 +139,9 @@ function buildUseCase(input: {
     fakeAuditLogWriter(),
     fakeClock(),
     fakeIdGenerator(),
+    (input.atomicTransactionRunner ?? fakeAtomicTransactionRunner()) as never,
+    (input.tenderRepository ?? fakeTenderRepository()) as never,
+    (input.consumeAoCreditUseCase ?? fakeConsumeAoCreditUseCase()) as never,
   );
 }
 
@@ -369,6 +393,81 @@ describe("RecordTenderSubmissionUseCase", () => {
         useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.AwsAchat, submittedAt: NOW }),
       ).rejects.toBeInstanceOf(ResponsePackageArtifactMissingError);
       expect(repository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 4 — AO credit consumption relocated here", () => {
+    it("consumes exactly one AO credit, inside the atomic transaction, when creating a fresh submission", async () => {
+      const consumeAoCreditUseCase = fakeConsumeAoCreditUseCase();
+      const atomicTransactionRunner = fakeAtomicTransactionRunner();
+      const useCase = buildUseCase({ resolver: resolverWith([completedPackage()]), repository: inMemoryRepository(), consumeAoCreditUseCase, atomicTransactionRunner });
+
+      const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW });
+
+      expect(result.status).toBe(TenderSubmissionStatus.Submitted);
+      expect(atomicTransactionRunner.run).toHaveBeenCalledOnce();
+      expect(consumeAoCreditUseCase.execute).toHaveBeenCalledOnce();
+      expect(consumeAoCreditUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, actorId: "user-1" }));
+    });
+
+    it("also consumes exactly one AO credit when completing a SUBMISSION_IN_PROGRESS row", async () => {
+      const started = TenderSubmission.start({ id: "sub-1", organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, packageId: "pkg-1", packageVersion: 1, packageHash: "a".repeat(64), startedByUserId: "user-1", platform: SubmissionPlatform.Place, occurredAt: NOW });
+      const consumeAoCreditUseCase = fakeConsumeAoCreditUseCase();
+      const useCase = buildUseCase({ resolver: resolverWith([completedPackage()]), repository: inMemoryRepository(started), consumeAoCreditUseCase });
+
+      const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.AwsAchat, submittedAt: NOW });
+
+      expect(result.status).toBe(TenderSubmissionStatus.Submitted);
+      expect(consumeAoCreditUseCase.execute).toHaveBeenCalledOnce();
+      expect(consumeAoCreditUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, actorId: "user-1" }));
+    });
+
+    it("a credit refusal blocks the deposit entirely — no Submission ever persisted (same transaction)", async () => {
+      class InsufficientCreditError extends Error {}
+      const consumeAoCreditUseCase = { execute: vi.fn(async () => { throw new InsufficientCreditError("no credit left"); }) };
+      const repository = inMemoryRepository();
+      const useCase = buildUseCase({ resolver: resolverWith([completedPackage()]), repository, consumeAoCreditUseCase });
+
+      await expect(
+        useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW }),
+      ).rejects.toBeInstanceOf(InsufficientCreditError);
+
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E1.5, mission §3 (GUARD STATUS DU DÉPÔT)", () => {
+    it("refuses a submission for a Tender whose EARLY snapshot is already Archived, before any readiness/package work", async () => {
+      const readiness = fakeReadinessUseCase();
+      const useCase = buildUseCase({
+        accessService: fakeAccessService(undefined, TenderStatus.Archived),
+        resolver: resolverWith([completedPackage()]),
+        repository: inMemoryRepository(),
+        readinessUseCase: readiness.useCase,
+      });
+
+      await expect(
+        useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW }),
+      ).rejects.toBeInstanceOf(TenderArchivedForSubmissionError);
+      // Refus précoce — jamais même la résolution readiness n'est tentée pour rien.
+      expect(readiness.resolveSpy).not.toHaveBeenCalled();
+    });
+
+    it("mission §2 (RACE TOCTOU) — the EARLY snapshot was still open, but the tender was archived by then; the fresh re-read INSIDE the transaction refuses, and no Submission is persisted", async () => {
+      const repository = inMemoryRepository();
+      const tenderRepository = fakeTenderRepository(TenderStatus.Archived);
+      const useCase = buildUseCase({
+        accessService: fakeAccessService(undefined, TenderStatus.ReadyToSubmit),
+        resolver: resolverWith([completedPackage()]),
+        repository,
+        tenderRepository,
+      });
+
+      await expect(
+        useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, packageId: "pkg-1", platform: SubmissionPlatform.Place, submittedAt: NOW }),
+      ).rejects.toBeInstanceOf(TenderArchivedForSubmissionError);
+      expect(tenderRepository.findById).toHaveBeenCalledOnce();
+      expect(repository.create).not.toHaveBeenCalled();
     });
   });
 });

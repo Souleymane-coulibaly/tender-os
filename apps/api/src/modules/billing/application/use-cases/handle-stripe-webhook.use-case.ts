@@ -24,19 +24,31 @@ type StripeCheckoutSessionPayload = {
   mode: "payment" | "subscription" | "setup";
   metadata?: Record<string, string> | null;
 };
+// Correctif audit P2.3-E1 (P0) — `current_period_start`/`current_period_end` n'existent PLUS au
+// niveau racine de l'objet `Subscription` depuis la révision API Stripe 2025-03-31 (vérifié contre
+// les types du SDK installé, `stripe@22.5.0`, `SubscriptionItem` dans `Subscriptions.d.ts`/
+// `SubscriptionItems.d.ts` — absent de `Subscription`, présent uniquement par item) : ils sont
+// désormais portés par CHAQUE `SubscriptionItem` (`items.data[].current_period_start/end`). Lire
+// l'ancien chemin racine renvoyait `undefined` → `new Date(NaN)` → `RangeError` à l'écriture Prisma,
+// faisant systématiquement échouer `customer.subscription.created`/`updated` (jamais un abonnement
+// payé/trial créé en base). Une Subscription TenderOS ne porte jamais qu'un seul item (un seul
+// Price par abonnement), donc `items.data[0]` est la même ligne déjà utilisée pour résoudre le plan.
 type StripeSubscriptionPayload = {
   id: string;
   customer: string;
   status: string;
-  items: { data: Array<{ price: { id: string } }> };
-  current_period_start: number;
-  current_period_end: number;
+  items: { data: Array<{ price: { id: string }; current_period_start: number; current_period_end: number }> };
   /** V2 Sprint 25 (Trial Starter) — `null` hors Trial, fin de période d'essai (Unix seconds) sinon. */
   trial_end: number | null;
   metadata?: Record<string, string> | null;
 };
+// Correctif audit P2.3-E1 (P0) — `invoice.subscription` n'existe PLUS au niveau racine de l'objet
+// `Invoice` depuis la révision API Stripe 2025-03-31 (vérifié contre les types du SDK installé —
+// absent de `Invoice`, désormais sous `invoice.parent.subscription_details.subscription`). Lire
+// l'ancien chemin racine renvoyait toujours `undefined`, rendant `invoice.paid`/`invoice.payment_failed`
+// no-op à 100 % en production (jamais de grant mensuel de crédits AO, jamais de bascule PAST_DUE).
 type StripeInvoicePayload = {
-  subscription: string | null;
+  parent: { subscription_details: { subscription: string | null } | null } | null;
   period_start: number;
 };
 
@@ -137,7 +149,8 @@ export class HandleStripeWebhookUseCase {
           this.logger.warn(`${eventType} missing metadata.organizationId (subscription=${subscription.id}).`);
           return;
         }
-        const priceId = subscription.items.data[0]?.price.id;
+        const item = subscription.items.data[0];
+        const priceId = item?.price.id;
         const plan = priceId ? resolvePlanFromStripePriceId(priceId) : null;
         if (!plan) {
           // Correctif audit Codex 22C (P1-02) — jamais un succès silencieux : un Price non reconnu
@@ -145,6 +158,12 @@ export class HandleStripeWebhookUseCase {
           // l'événement soit rejoué après correction, jamais un abonnement local qui reste
           // silencieusement divergent de Stripe pour toujours.
           throw new StripeUnrecognizedPriceError(priceId ?? "(missing)");
+        }
+        // `item` est nécessairement défini ici — `plan` n'est jamais résolu sans lui (même
+        // `priceId`) — cette garde ne fait que le prouver au typechecker, jamais une seconde règle
+        // métier.
+        if (!item) {
+          throw new StripeUnrecognizedPriceError("(missing subscription item)");
         }
         const status = mapStripeSubscriptionStatus(subscription.status);
         const trialEndsAt = subscription.trial_end ? new Date(subscription.trial_end * 1000) : undefined;
@@ -156,8 +175,8 @@ export class HandleStripeWebhookUseCase {
           source: PlanSource.Stripe,
           stripeCustomerId: subscription.customer,
           stripeSubscriptionId: subscription.id,
-          currentPeriodStart: new Date(subscription.current_period_start * 1000),
-          currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+          currentPeriodStart: new Date(item.current_period_start * 1000),
+          currentPeriodEnd: new Date(item.current_period_end * 1000),
           status,
           trialEndsAt,
           actorId: "stripe-webhook",
@@ -188,14 +207,15 @@ export class HandleStripeWebhookUseCase {
 
       case "invoice.paid": {
         const invoice = data as StripeInvoicePayload;
-        if (!invoice.subscription) {
+        const invoiceSubscriptionId = invoice.parent?.subscription_details?.subscription ?? null;
+        if (!invoiceSubscriptionId) {
           // Facture hors abonnement (ex. Pass déjà traité via checkout.session.completed) — rien à
           // faire ici, jamais un second crédit.
           return;
         }
-        const subscription = await this.subscriptionRepository.findByStripeSubscriptionId(invoice.subscription);
+        const subscription = await this.subscriptionRepository.findByStripeSubscriptionId(invoiceSubscriptionId);
         if (!subscription) {
-          this.logger.warn(`invoice.paid references an unknown subscription (subscription=${invoice.subscription}).`);
+          this.logger.warn(`invoice.paid references an unknown subscription (subscription=${invoiceSubscriptionId}).`);
           return;
         }
         // Mission §17 — le grant reste mensuel même en facturation annuelle (jamais tout d'un
@@ -215,12 +235,13 @@ export class HandleStripeWebhookUseCase {
         // Correctif (étape 22E) — jamais traité jusqu'ici malgré la mission §54 "paiement échoué" :
         // aucune bascule PAST_DUE ne se déclenchait réellement (voir `MarkSubscriptionPastDueUseCase`).
         const invoice = data as StripeInvoicePayload;
-        if (!invoice.subscription) {
+        const invoiceSubscriptionId = invoice.parent?.subscription_details?.subscription ?? null;
+        if (!invoiceSubscriptionId) {
           return;
         }
-        const subscription = await this.subscriptionRepository.findByStripeSubscriptionId(invoice.subscription);
+        const subscription = await this.subscriptionRepository.findByStripeSubscriptionId(invoiceSubscriptionId);
         if (!subscription) {
-          this.logger.warn(`invoice.payment_failed references an unknown subscription (subscription=${invoice.subscription}).`);
+          this.logger.warn(`invoice.payment_failed references an unknown subscription (subscription=${invoiceSubscriptionId}).`);
           return;
         }
         await this.markSubscriptionPastDueUseCase.execute({ organizationId: subscription.organizationId, occurredAt });

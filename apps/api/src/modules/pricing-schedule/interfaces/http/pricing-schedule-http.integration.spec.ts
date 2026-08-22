@@ -114,6 +114,19 @@ describe("Chiffrage (pricing-schedule) — real HTTP + PostgreSQL (NestJS)", () 
         { id: orgBId, name: "Chiffrage Org B HTTP", slug: `chiffrage-org-b-http-${orgBId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
       ],
     });
+    // Checkpoint TENDEROS-2.1-P2.3-E1.4, mission §15 (dette secondaire) — Pricing Schedule est
+    // désormais entitlement-gated (mission §1/§2, P1 Codex) : sans ceci, le fixture `importBpuDocument`
+    // (qui passe par le VRAI endpoint DCE, lui-même gaté depuis E1.1) échouerait en 402 avant même
+    // d'atteindre le scénario réellement testé par ce fichier. Même motif déjà établi dans
+    // dce-http.integration.spec.ts/analysis-http.integration.spec.ts/response-package-http.integration.spec.ts
+    // — ENTERPRISE (illimité) pour ne jamais faire porter à ces tests un souci de quota/AO credits
+    // qui n'est pas leur sujet.
+    await prisma.organizationSubscription.createMany({
+      data: [
+        { id: randomUUID(), organizationId: orgAId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+        { id: randomUUID(), organizationId: orgBId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+      ],
+    });
 
     const ownerA = await registerAndLogin(`chiffrage-owner-a-${randomUUID()}@smoke.test`);
     const ownerB = await registerAndLogin(`chiffrage-owner-b-${randomUUID()}@smoke.test`);
@@ -146,6 +159,7 @@ describe("Chiffrage (pricing-schedule) — real HTTP + PostgreSQL (NestJS)", () 
     await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: [orgAId, orgBId] } } } });
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
@@ -480,5 +494,99 @@ describe("Chiffrage (pricing-schedule) — real HTTP + PostgreSQL (NestJS)", () 
       body: JSON.stringify({ sourceDocumentId: bpu.documentId }),
     });
     expect(createRes.status).toBe(403);
+  });
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E1.4, mission §4 (CAS PRODUIT OBLIGATOIRE) — un DCE historique n'est jamais une preuve d'entitlement actuel", () => {
+    // Réutilise délibérément orgB (déjà enregistrée dans le `beforeAll` racine, ENTERPRISE ACTIF)
+    // plutôt qu'un nouveau `registerAndLogin` — ce fichier en effectue déjà plusieurs (main flow,
+    // mass-assignment, cross-client, access-revoked, viewer-tier...), et `AuthThrottlerGuard`
+    // partage un seul bucket 10/60s register+login (leçon déjà documentée cette session : au-delà
+    // d'un certain nombre d'inscriptions dans le MÊME fichier, un enregistrement supplémentaire peut
+    // essuyer un vrai 429, jamais une régression réelle). Ce describe block est le DERNIER du
+    // fichier (ordre d'exécution vitest = ordre de déclaration au sein d'un fichier, jamais
+    // parallèle) : aucun autre test n'utilise plus orgB après celui-ci, donc faire passer son
+    // abonnement en PAST_DUE ici est sans risque pour le reste de la suite.
+
+    it("T0 entitled -> T1 DCE imported -> T2 entitlement disappears -> T3 direct Pricing Schedule calls all refuse 402, no mutation ever persisted", async () => {
+      // `createClientAndTender` n'appelle que `prisma` directement (jamais HTTP) — `userId` n'est
+      // que la valeur `createdBy` des lignes créées, réutilise `ownerAUserId` déjà enregistré (le
+      // Tender appartient à orgB, mais `createdBy` reste une simple référence informative, jamais
+      // vérifiée pour l'appartenance organisationnelle) : ZÉRO `registerAndLogin` supplémentaire.
+      const { tenderId } = await createClientAndTender({ organizationId: orgBId, userId: ownerAUserId });
+
+      // T1 — DCE importé avec succès pendant que l'organisation est ENCORE entitled (abonnement
+      // ENTERPRISE actif, déjà en place depuis le `beforeAll` racine) — gate DCE (E1.1) satisfait
+      // via la branche abonnement, jamais un Pass.
+      const bpu = await importBpuDocument({ tenderId, token: tokenOwnerB, organizationId: orgBId });
+
+      // Toujours entitled : crée un chiffrage, extrait une version, fixe un prix — sert de PREUVE
+      // que "un DCE existe déjà" n'est PAS pourquoi ces mutations réussissent ici (l'abonnement est
+      // ENCORE actif à cet instant précis, réévalué à chaque appel).
+      const createWhileEntitledRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/pricing-schedules`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerB, orgBId),
+        body: JSON.stringify({ sourceDocumentId: bpu.documentId }),
+      });
+      expect(createWhileEntitledRes.status).toBe(201);
+      const schedule = (await createWhileEntitledRes.json()) as { id: string };
+
+      const extractWhileEntitledRes = await fetch(`${baseUrl}/api/v1/pricing-schedules/${schedule.id}/extract`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerB, orgBId),
+        body: JSON.stringify({ sourceDocumentVersionId: bpu.currentVersionId }),
+      });
+      expect(extractWhileEntitledRes.status).toBe(201);
+      const extracted = (await extractWhileEntitledRes.json()) as { version: { id: string }; lines: { id: string; kind: string }[] };
+      const priceableLine = extracted.lines.find((l) => l.kind === "PRICE_ITEM")!;
+
+      const priceCountBefore = await prisma.pricingScheduleLine.count({ where: { organizationId: orgBId, proposedUnitPrice: { not: null } } });
+      const scheduleCountBefore = await prisma.pricingSchedule.count({ where: { organizationId: orgBId } });
+      const finalFileCountBefore = await prisma.pricingScheduleFinalFile.count({ where: { organizationId: orgBId } });
+
+      // T2 — l'entitlement disparaît (abonnement passe PAST_DUE, plus aucune couverture — jamais un
+      // Pass non plus, cette organisation n'en a jamais eu).
+      await prisma.organizationSubscription.update({ where: { organizationId: orgBId }, data: { status: "PAST_DUE" } });
+
+      // T3 — appels HTTP directs, chacun DOIT refuser 402 TENDER_OPERATION_NOT_ENTITLED, sans AUCUNE
+      // mutation persistée — jamais "un DCE existe déjà" traité comme une preuve d'entitlement actuel.
+      const createAfterLapseRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/pricing-schedules`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerB, orgBId),
+        body: JSON.stringify({ sourceDocumentId: bpu.documentId, financialDocumentTypeOverride: "DQE" }),
+      });
+      expect(createAfterLapseRes.status).toBe(402);
+      const createAfterLapseBody = (await createAfterLapseRes.json()) as { error: { code: string } };
+      expect(createAfterLapseBody.error.code).toBe("TENDER_OPERATION_NOT_ENTITLED");
+
+      const editAfterLapseRes = await fetch(`${baseUrl}/api/v1/pricing-schedules/${schedule.id}/lines/${priceableLine.id}/price`, {
+        method: "PATCH",
+        headers: authHeaders(tokenOwnerB, orgBId),
+        body: JSON.stringify({ unitPrice: "999.99" }),
+      });
+      expect(editAfterLapseRes.status).toBe(402);
+
+      const validateAfterLapseRes = await fetch(`${baseUrl}/api/v1/pricing-schedules/${schedule.id}/versions/${extracted.version.id}/validate`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerB, orgBId),
+        body: JSON.stringify({}),
+      });
+      expect(validateAfterLapseRes.status).toBe(402);
+
+      const generateAfterLapseRes = await fetch(`${baseUrl}/api/v1/pricing-schedules/${schedule.id}/versions/${extracted.version.id}/generate`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerB, orgBId),
+        body: JSON.stringify({}),
+      });
+      expect(generateAfterLapseRes.status).toBe(402);
+
+      // Preuve DB directe — AUCUNE des 4 tentatives n'a laissé la moindre trace.
+      expect(await prisma.pricingSchedule.count({ where: { organizationId: orgBId } })).toBe(scheduleCountBefore);
+      expect(await prisma.pricingScheduleLine.count({ where: { organizationId: orgBId, proposedUnitPrice: { not: null } } })).toBe(priceCountBefore);
+      const untouchedLine = await prisma.pricingScheduleLine.findUniqueOrThrow({ where: { id: priceableLine.id } });
+      expect(untouchedLine.proposedUnitPrice?.toString()).not.toBe("999.99");
+      const untouchedVersion = await prisma.pricingScheduleVersion.findUniqueOrThrow({ where: { id: extracted.version.id } });
+      expect(untouchedVersion.status).not.toBe("VALIDATED");
+      expect(await prisma.pricingScheduleFinalFile.count({ where: { organizationId: orgBId } })).toBe(finalFileCountBefore);
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { AdministrativeDossier } from "../../domain/administrative-dossier.aggregate";
 import { AdministrativeDossierSummary, toAdministrativeDossierSummary } from "../dtos";
@@ -26,6 +27,7 @@ export class EnsureAdministrativeDossierUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: EnsureAdministrativeDossierCommand): Promise<AdministrativeDossierSummary> {
@@ -37,6 +39,19 @@ export class EnsureAdministrativeDossierUseCase {
       permission: ClientPermission.ReadAdministrativeDossier,
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3, mission §20 (ENTITLEMENT COVERAGE) — correctif du bypass
+    // Codex : ce use case (et `CreateAdministrativeRequirementUseCase`) sont les VRAIS points
+    // d'entrée du module `administrative-dossier` (aucune autre mutation n'y requiert un dossier ou
+    // une exigence préexistants) — peuvent donc être la PREMIÈRE mutation "cœur AO" sur un Tender
+    // fraîchement créé. Allocation du Pass (si nécessaire) avec compensation automatique si
+    // l'opération échoue ensuite (mission §2/§3/§4).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command, clientAccountId),
+    );
+  }
+
+  private async executeEntitled(command: EnsureAdministrativeDossierCommand, clientAccountId: string): Promise<AdministrativeDossierSummary> {
     const existing = await this.repository.findByTenderId({ organizationId: command.organizationId, tenderId: command.tenderId });
     if (existing) {
       return toAdministrativeDossierSummary(existing);

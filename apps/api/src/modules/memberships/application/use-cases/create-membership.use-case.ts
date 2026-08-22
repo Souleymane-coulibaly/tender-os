@@ -1,11 +1,11 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { GetCurrentUserUseCase } from "../../../identity";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
-import { MembershipAlreadyExistsError, OwnershipRequiresTransferError } from "../../domain/errors";
+import { MembershipAlreadyExistsError, OwnershipRequiresTransferError, SeatLimitExceededError } from "../../domain/errors";
 import { MembershipId } from "../../domain/membership-id.value-object";
 import { OrganizationMembership } from "../../domain/organization-membership.aggregate";
 import { OrganizationPermission } from "../../domain/organization-permission";
@@ -13,6 +13,7 @@ import { OrganizationRole, parseOrganizationRole } from "../../domain/organizati
 import { toMembershipSummary, type MembershipSummary } from "../dtos";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { MEMBERSHIP_REPOSITORY, type MembershipRepository } from "../ports/membership.repository";
+import { SEAT_LIMIT_PROVIDER, type SeatLimitProvider } from "../ports/seat-limit-provider";
 import { assertHasPermission } from "../policies/membership-authorization.policy";
 
 export type CreateMembershipCommand = Readonly<{
@@ -41,6 +42,7 @@ export class CreateMembershipUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
+    @Optional() @Inject(SEAT_LIMIT_PROVIDER) private readonly seatLimitProvider?: SeatLimitProvider,
   ) {}
 
   async execute(command: CreateMembershipCommand): Promise<CreateMembershipResult> {
@@ -79,7 +81,21 @@ export class CreateMembershipUseCase {
       occurredAt,
     });
 
-    await this.membershipRepository.save(membership);
+    // Checkpoint TENDEROS-2.1-P2.3-E1/E1.1, mission §15 — "le backend doit refuser une invitation
+    // dépassant la limite, pas seulement le frontend", désormais ATOMIQUE sous concurrence
+    // (FINDING 3 : compter puis sauvegarder séparément laissait une fenêtre de course réelle —
+    // voir `saveWithSeatLimit`, verrou consultatif Postgres + comptage + écriture en une seule
+    // transaction). `seatLimitProvider` absent (pont non câblé) laisse ce contrôle inactif plutôt
+    // que de bloquer toute création — même discipline `@Optional()` que les autres ponts inter-
+    // modules déjà en place (mission "aucune régression par omission", mais le pont DOIT être câblé
+    // en production, voir `app.module.ts`).
+    const seatLimit = this.seatLimitProvider ? await this.seatLimitProvider.getSeatLimit(command.organizationId) : "UNLIMITED";
+    const { applied, activeCount } = await this.membershipRepository.saveWithSeatLimit({ organizationId: command.organizationId, membership, seatLimit });
+    // `applied: false` ne peut se produire que si `seatLimit` est un nombre fini (voir
+    // `saveWithSeatLimit` : "UNLIMITED" n'y refuse jamais) — narrowing explicite pour le typage.
+    if (!applied && seatLimit !== "UNLIMITED") {
+      throw new SeatLimitExceededError({ used: activeCount, limit: seatLimit });
+    }
 
     await this.auditLogWriter.record({
       organizationId: command.organizationId,

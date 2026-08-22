@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { EntitlementService } from "../../../billing";
 import { EnsureDc1DeclarationUseCase, GetDc1DeclarationUseCase, UpdateDc1DeclarationUseCase } from "./dc1-declaration.use-cases";
 import type { Dc1DeclarationRepository } from "../ports/dc1-declaration.repository";
 import type { AdministrativeDossierAccessService } from "../services/administrative-dossier-access.service";
@@ -18,6 +19,12 @@ function fakeIdGenerator() {
 function fakeAccessService(): AdministrativeDossierAccessService {
   return { assertTenderAccess: vi.fn(async () => "client-1") } as unknown as AdministrativeDossierAccessService;
 }
+function fakeEntitlementService(): EntitlementService {
+  return {
+    canOperateOnTender: vi.fn(async () => true),
+    runTenderOperationEntitled: vi.fn(async (_input: unknown, operation: () => Promise<unknown>) => operation()),
+  } as unknown as EntitlementService;
+}
 
 function inMemoryRepository(seed: readonly Dc1Declaration[] = []): Dc1DeclarationRepository {
   const rows = new Map<string, Dc1Declaration>(seed.map((d) => [d.id, d]));
@@ -31,14 +38,14 @@ function inMemoryRepository(seed: readonly Dc1Declaration[] = []): Dc1Declaratio
 
 describe("EnsureDc1DeclarationUseCase — mission §10 'une lettre de candidature par Tender'", () => {
   it("creates a DC1 declaration defaulting to INDIVIDUAL", async () => {
-    const useCase = new EnsureDc1DeclarationUseCase(fakeAccessService(), inMemoryRepository(), fakeClock(), fakeIdGenerator());
+    const useCase = new EnsureDc1DeclarationUseCase(fakeAccessService(), inMemoryRepository(), fakeClock(), fakeIdGenerator(), fakeEntitlementService());
     const summary = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
     expect(summary.candidateType).toBe("INDIVIDUAL");
   });
 
   it("is idempotent", async () => {
     const repository = inMemoryRepository();
-    const useCase = new EnsureDc1DeclarationUseCase(fakeAccessService(), repository, fakeClock(), fakeIdGenerator());
+    const useCase = new EnsureDc1DeclarationUseCase(fakeAccessService(), repository, fakeClock(), fakeIdGenerator(), fakeEntitlementService());
     const first = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
     const second = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
     expect(second.id).toBe(first.id);

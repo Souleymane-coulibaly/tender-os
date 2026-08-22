@@ -73,6 +73,13 @@ describe("Administrative Dossier — real HTTP + PostgreSQL (NestJS)", () => {
 
     await prisma.organization.create({ data: { id: orgId, name: "Administrative Dossier Org", slug: `administrative-dossier-org-${orgId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" } });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — EnsureAdministrativeDossierUseCase gate désormais
+    // canOperateOnTender : ENTERPRISE (illimité) évite tout effet de bord de quota/AO credits,
+    // même motif déjà établi dans dce-http.integration.spec.ts/analysis-http.integration.spec.ts.
+    await prisma.organizationSubscription.create({
+      data: { id: randomUUID(), organizationId: orgId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+    });
+
     const owner = await registerAndLogin(`administrative-dossier-owner-${randomUUID()}@smoke.test`);
     userIds.push(owner.userId);
     tokenOwner = owner.token;
@@ -103,6 +110,7 @@ describe("Administrative Dossier — real HTTP + PostgreSQL (NestJS)", () => {
     // Checkpoint 2.1-A4 (correctif hygiène de test) — voir le commentaire identique dans
     // administrative-dossier-generation-http.integration.spec.ts.
     await prisma.outboxEvent.deleteMany({ where: { organizationId: orgId } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: orgId } });
     await prisma.organization.deleteMany({ where: { id: orgId } });
     await app.close();
   });
@@ -251,5 +259,25 @@ describe("Administrative Dossier — real HTTP + PostgreSQL (NestJS)", () => {
       body: JSON.stringify({ documentId: randomUUID() }),
     });
     expect(attachRes.status).toBe(404);
+  });
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E1.5, mission §8 (HTTP 402 — DETTE DE PREUVE)", () => {
+    // Dernier describe block du fichier (vitest exécute `it`/`describe` d'un même fichier en ordre
+    // de déclaration, jamais en parallèle) — bascule l'abonnement ENTERPRISE de `orgId` en PAST_DUE,
+    // même motif déjà établi dans `pricing-schedule-http.integration.spec.ts`. Un second Tender frais
+    // garde l'assertion "aucune mutation persistée" propre (le premier Tender porte déjà un dossier).
+    it("POST .../administrative-dossier without entitlement (subscription PAST_DUE, no Pass) refuses with 402 TENDER_OPERATION_NOT_ENTITLED — no AdministrativeDossier row persisted", async () => {
+      const noEntitlementTenderId = randomUUID();
+      await prisma.tender.create({ data: { id: noEntitlementTenderId, organizationId: orgId, clientAccountId, title: "Marché dossier administratif — no entitlement", status: "DRAFT", tags: [], createdBy: userIds[0]! } });
+      await prisma.organizationSubscription.update({ where: { organizationId: orgId }, data: { status: "PAST_DUE" } });
+
+      const res = await fetch(`${baseUrl}/api/v1/tenders/${noEntitlementTenderId}/administrative-dossier`, { method: "POST", headers: authHeaders(tokenOwner) });
+      expect(res.status).toBe(402);
+      const body = (await res.json()) as { error: { code: string } };
+      expect(body.error.code).toBe("TENDER_OPERATION_NOT_ENTITLED");
+
+      const persisted = await prisma.administrativeDossier.findFirst({ where: { organizationId: orgId, tenderId: noEntitlementTenderId } });
+      expect(persisted).toBeNull();
+    });
   });
 });

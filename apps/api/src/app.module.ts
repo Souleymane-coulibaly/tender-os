@@ -33,6 +33,7 @@ import { KnowledgeBaseModule } from "./modules/knowledge-base/knowledge-base.mod
 import { MarketingModule } from "./modules/marketing";
 import { MarketWatchModule } from "./modules/market-watch";
 import { MembershipsModule } from "./modules/memberships/memberships.module";
+import { MembershipSeatLimitBridgeModule } from "./modules/membership-seat-limit-bridge/membership-seat-limit-bridge.module";
 import { NotificationEventConsumersModule, NotificationsModule, NOTIFICATION_OUTBOX_HANDLERS } from "./modules/notifications";
 import { OpportunityModule } from "./modules/opportunity";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
@@ -123,6 +124,7 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     MarketWatchModule,
     ConnectorsModule,
     BillingModule,
+    MembershipSeatLimitBridgeModule,
     SubscriptionUsageModule,
     MarketingModule,
   ],

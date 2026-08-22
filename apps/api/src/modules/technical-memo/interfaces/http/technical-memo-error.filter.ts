@@ -16,6 +16,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   // (analyse/mémoire pas encore actualisé) empêche l'action, jamais une erreur de validation.
   TECHNICAL_MEMO_ANALYSIS_NOT_CURRENT: HttpStatus.CONFLICT,
   TECHNICAL_MEMO_STALE_EXPORT_BLOCKED: HttpStatus.CONFLICT,
+  // Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 1 — jetée par `assertTenderOperationEntitled`
+  // (module `billing`), même statut que INSUFFICIENT_AO_CREDITS/SEAT_LIMIT_EXCEEDED ailleurs.
+  TENDER_OPERATION_NOT_ENTITLED: HttpStatus.PAYMENT_REQUIRED,
 
   // Erreurs cross-module réelles — jamais révéler l'existence d'une ressource inaccessible, même
   // 404 anti-énumération (même convention que Chat/Workspace/Knowledge Base/document-generation).

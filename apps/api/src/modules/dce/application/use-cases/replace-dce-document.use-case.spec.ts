@@ -69,6 +69,8 @@ describe("ReplaceDceDocumentUseCase", () => {
       auditLogWriter,
       fakeGetTenderUseCase(),
       addDocumentVersionUseCase,
+      { canOperateOnTender: vi.fn(async () => true), runTenderOperationEntitled: vi.fn(async (_input: unknown, operation: () => Promise<unknown>) => operation()) } as never,
+      { now: () => new Date("2026-08-13T09:00:00Z") } as never,
     );
   }
 
@@ -126,6 +128,8 @@ describe("ReplaceDceDocumentUseCase", () => {
       auditLogWriter,
       fakeGetTenderUseCase(),
       failingAdd,
+      { canOperateOnTender: vi.fn(async () => true), runTenderOperationEntitled: vi.fn(async (_i: unknown, op: () => Promise<unknown>) => op()) } as never,
+      { now: () => new Date("2026-08-13T09:00:00Z") } as never,
     );
 
     await expect(useCase.execute(baseCommand())).rejects.toThrow("simulated storage failure");
@@ -167,6 +171,8 @@ describe("ReplaceDceDocumentUseCase", () => {
       auditLogWriter,
       fakeGetTenderUseCase(),
       addDocumentVersionUseCase,
+      { canOperateOnTender: vi.fn(async () => true), runTenderOperationEntitled: vi.fn(async (_i: unknown, op: () => Promise<unknown>) => op()) } as never,
+      { now: () => new Date("2026-08-13T09:00:00Z") } as never,
     );
 
     await expect(useCase.execute(baseCommand())).rejects.toThrow(DceNotFoundError);

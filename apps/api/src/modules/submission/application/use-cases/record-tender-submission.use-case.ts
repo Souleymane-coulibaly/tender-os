@@ -1,7 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { ConsumeAoCreditUseCase } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
+import { TENDER_REPOSITORY, TenderStatus, type TenderRepository } from "../../../tenders";
 import { TenderSubmission } from "../../domain/tender-submission.aggregate";
 import {
   ActiveTenderSubmissionAlreadyExistsError,
@@ -9,6 +11,7 @@ import {
   ResponsePackageArtifactMissingError,
   SubmissionDeadlinePassedError,
   SubmissionPackageVersionMismatchError,
+  TenderArchivedForSubmissionError,
   TenderNotReadyForSubmissionError,
 } from "../../domain/errors";
 import { SubmissionReadinessAction, SubmissionReadinessReasonCode, SubmissionReadinessReasonSeverity, SubmissionReadinessReasonSource } from "../../domain/submission-readiness-reason";
@@ -17,6 +20,7 @@ import { requiresCustomPlatformName, type SubmissionPlatform } from "../../domai
 import type { SubmissionResponsePackageProvenance } from "../../domain/submission-response-package-provenance";
 import { TenderSubmissionStatus } from "../../domain/tender-submission-status";
 import { toTenderSubmissionSummary, type TenderSubmissionSummary } from "../dtos";
+import { ATOMIC_TRANSACTION_RUNNER, type AtomicTransactionRunner } from "../ports/atomic-transaction-runner";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { TENDER_SUBMISSION_REPOSITORY, type TenderSubmissionRepository, type SubmissionResponsePackageProvenanceInput } from "../ports/tender-submission.repository";
 import { GetTenderSubmissionReadinessUseCase } from "./get-tender-submission-readiness.use-case";
@@ -43,6 +47,18 @@ export type RecordTenderSubmissionCommand = Readonly<{
  * directement à SUBMITTED (mission "un dépôt manuel peut être enregistré" en une fois). Refuse
  * silencieusement jamais un dépôt hors délai (mission §28 "ne pas l'accepter silencieusement").
  *
+ * Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 4 — point de consommation du crédit AO/Pass
+ * relocalisé depuis `CreateTenderUseCase` (mission "1 Tender traité = maximum 1 crédit AO", jamais à
+ * la création). Les DEUX branches ci-dessous (création directe et finalisation depuis
+ * `SUBMISSION_IN_PROGRESS`) représentent chacune un dépôt réel réussi et appellent donc
+ * `ConsumeAoCreditUseCase`, ENVELOPPÉ dans la MÊME transaction Postgres que l'écriture de la
+ * Submission (`AtomicTransactionRunner`, même motif que l'ancien point d'insertion) — jamais une
+ * Submission enregistrée sans consommation requise, ni une consommation sans Submission
+ * correspondante. Idempotent PAR CONSTRUCTION côté `ConsumeAoCreditUseCase`/ledger (clé logique
+ * `organizationId + tenderId + CONSUMPTION`) : ce use case n'a donc pas besoin de distinguer
+ * lui-même "premier dépôt" d'une resoumission après retrait — un appel répété pour le même Tender ne
+ * décrémente jamais deux fois.
+ *
  * Checkpoint 2.1-P2.1-FIX-F.1 (ferme le P1 identifié par l'audit Codex FIX-F : la Submission
  * Readiness V2 était calculée mais jamais consommée par CETTE action) — le guard readiness est
  * ADDITIF aux guards legacy déjà en place ci-dessous (deadline, package `submission-package` via
@@ -65,7 +81,25 @@ export class RecordTenderSubmissionUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(ATOMIC_TRANSACTION_RUNNER) private readonly atomicTransactionRunner: AtomicTransactionRunner,
+    @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
+    private readonly consumeAoCreditUseCase: ConsumeAoCreditUseCase,
   ) {}
+
+  /**
+   * Checkpoint TENDEROS-2.1-P2.3-E1.5, mission §2/§3 — relecture FRAÎCHE du statut Tender, exécutée
+   * en PREMIER dans la transaction Postgres qui consomme le crédit AO et écrit la Submission (jamais
+   * le snapshot lu au tout début de `execute()`, sujet au TOCTOU classique de la mission — un abandon
+   * concurrent peut committer entre les deux). Utilise `TenderRepository.findById`, qui rejoint la
+   * même transaction ambiante via `PrismaService.currentClient()` — aucune seconde autorité de
+   * lecture inventée, la SOT Tender existante (mission §3 "guard backend minimal").
+   */
+  private async assertTenderStillOpenForSubmission(organizationId: string, tenderId: string): Promise<void> {
+    const freshTender = await this.tenderRepository.findById({ organizationId, tenderId });
+    if (!freshTender || freshTender.status === TenderStatus.Archived) {
+      throw new TenderArchivedForSubmissionError();
+    }
+  }
 
   /**
    * Checkpoint TENDEROS-2.1-P2.2-F2.1/F2.3 (ferme le gap identifié par l'audit F2 : SEUL le flux
@@ -126,6 +160,14 @@ export class RecordTenderSubmissionUseCase {
   async execute(command: RecordTenderSubmissionCommand): Promise<TenderSubmissionSummary> {
     const tender = await this.accessService.assertTenderAccess({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: command.tenderId, permission: ClientPermission.ManageSubmission });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.5, mission §3 — retour rapide, non race-safe par construction
+    // (snapshot lu ci-dessus) : la relecture DÉTERMINANTE est celle DANS la transaction plus bas
+    // (`assertTenderStillOpenForSubmission`). Ce guard précoce évite seulement le travail inutile
+    // (résolution readiness/package) pour le cas non concurrent, largement majoritaire.
+    if (tender.status === TenderStatus.Archived) {
+      throw new TenderArchivedForSubmissionError();
+    }
+
     if (requiresCustomPlatformName(command.platform) && !command.customPlatformName?.trim()) {
       throw new CustomPlatformNameRequiredError();
     }
@@ -174,8 +216,19 @@ export class RecordTenderSubmissionUseCase {
         occurredAt,
       });
       const inProgressProvenanceRows = inProgressProvenance.mode === "LOT" ? this.toProvenanceInputs(inProgressProvenance.entries) : [];
-      await this.submissionRepository.save(active, inProgressProvenanceRows);
-      await this.auditLogWriter.record({ organizationId: command.organizationId, actorType: "USER", actorId: command.actorId, action: "TENDER_SUBMISSION_RECORDED", resourceType: "TENDER_SUBMISSION", resourceId: active.id });
+
+      // Checkpoint P2.3-E1.1, FINDING 4 — consommation + écriture de la Submission dans UNE SEULE
+      // transaction (voir docstring de classe) : jamais l'une sans l'autre.
+      await this.atomicTransactionRunner.run(async () => {
+        // Mission P2.3-E1.5 §2/§3 — relecture DANS la transaction, au plus tard possible avant toute
+        // mutation : ferme la fenêtre TOCTOU d'un abandon concurrent qui archiverait le Tender entre
+        // le début de cette action et cet instant précis.
+        await this.assertTenderStillOpenForSubmission(command.organizationId, command.tenderId);
+        await this.consumeAoCreditUseCase.execute({ organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt });
+        await this.submissionRepository.save(active, inProgressProvenanceRows);
+        await this.auditLogWriter.record({ organizationId: command.organizationId, actorType: "USER", actorId: command.actorId, action: "TENDER_SUBMISSION_RECORDED", resourceType: "TENDER_SUBMISSION", resourceId: active.id });
+      });
+
       const inProgressProvenanceDtos = inProgressProvenance.mode === "LOT" ? this.toProvenanceDtos(active.id, occurredAt, inProgressProvenance.entries) : [];
       return toTenderSubmissionSummary(active, [], inProgressProvenanceDtos);
     }
@@ -216,9 +269,17 @@ export class RecordTenderSubmissionUseCase {
       occurredAt,
     });
     const provenanceRows = provenance.mode === "LOT" ? this.toProvenanceInputs(provenance.entries) : [];
-    await this.submissionRepository.create(submission, provenanceRows);
 
-    await this.auditLogWriter.record({ organizationId: command.organizationId, actorType: "USER", actorId: command.actorId, action: "TENDER_SUBMISSION_RECORDED", resourceType: "TENDER_SUBMISSION", resourceId: submission.id });
+    // Checkpoint P2.3-E1.1, FINDING 4 — consommation + écriture de la Submission dans UNE SEULE
+    // transaction (voir docstring de classe) : jamais l'une sans l'autre.
+    await this.atomicTransactionRunner.run(async () => {
+      // Mission P2.3-E1.5 §2/§3 — voir la branche `SUBMISSION_IN_PROGRESS` ci-dessus pour la
+      // justification complète.
+      await this.assertTenderStillOpenForSubmission(command.organizationId, command.tenderId);
+      await this.consumeAoCreditUseCase.execute({ organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt });
+      await this.submissionRepository.create(submission, provenanceRows);
+      await this.auditLogWriter.record({ organizationId: command.organizationId, actorType: "USER", actorId: command.actorId, action: "TENDER_SUBMISSION_RECORDED", resourceType: "TENDER_SUBMISSION", resourceId: submission.id });
+    });
 
     const provenanceDtos = provenance.mode === "LOT" ? this.toProvenanceDtos(submission.id, occurredAt, provenance.entries) : [];
     return toTenderSubmissionSummary(submission, [], provenanceDtos);

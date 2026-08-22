@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { EntitlementService } from "../../../billing";
 import { CreateDumeDeclarationVersionUseCase, EnsureDumeDeclarationUseCase, GetDumeDeclarationUseCase } from "./dume-declaration.use-cases";
 import type { DumeDeclarationRepository, DumeDeclarationVersionRepository } from "../ports/dume-declaration.repository";
 import type { AdministrativeDossierAccessService } from "../services/administrative-dossier-access.service";
@@ -18,6 +19,12 @@ function fakeIdGenerator() {
 }
 function fakeAccessService(): AdministrativeDossierAccessService {
   return { assertTenderAccess: vi.fn(async () => "client-1") } as unknown as AdministrativeDossierAccessService;
+}
+function fakeEntitlementService(): EntitlementService {
+  return {
+    canOperateOnTender: vi.fn(async () => true),
+    runTenderOperationEntitled: vi.fn(async (_input: unknown, operation: () => Promise<unknown>) => operation()),
+  } as unknown as EntitlementService;
 }
 
 function inMemoryDeclarationRepository(seed: readonly DumeDeclaration[] = []): DumeDeclarationRepository {
@@ -41,7 +48,7 @@ function inMemoryVersionRepository(): DumeDeclarationVersionRepository {
 
 describe("EnsureDumeDeclarationUseCase — mission §13", () => {
   it("creates a declaration starting at version 0", async () => {
-    const useCase = new EnsureDumeDeclarationUseCase(fakeAccessService(), inMemoryDeclarationRepository(), fakeClock(), fakeIdGenerator());
+    const useCase = new EnsureDumeDeclarationUseCase(fakeAccessService(), inMemoryDeclarationRepository(), fakeClock(), fakeIdGenerator(), fakeEntitlementService());
     const summary = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
     expect(summary.currentVersionNumber).toBe(0);
   });

@@ -25,6 +25,15 @@ function stripeEventBuffer(id: string, type: string, object: unknown): Buffer {
   return Buffer.from(JSON.stringify({ id, type, data: { object } }));
 }
 
+/** Correctif audit P2.3-E1 (P0) — forme RÉELLE de l'objet Stripe `Invoice` (API 2025-03-31+, SDK
+ *  `stripe@22.5.0` installé) : l'identifiant de l'abonnement vit sous
+ *  `parent.subscription_details.subscription`, jamais `invoice.subscription` (racine, retiré). Un
+ *  fixture à la racine masquait silencieusement le bug réel (`invoice.paid`/`invoice.payment_failed`
+ *  no-op à 100 % en production). */
+function invoicePayload(subscriptionId: string | null, periodStart: number): unknown {
+  return { parent: subscriptionId ? { subscription_details: { subscription: subscriptionId } } : null, period_start: periodStart };
+}
+
 describe("HandleStripeWebhookUseCase", () => {
   let stripeClient: FakeStripeClient;
   let processedEvents: InMemoryStripeProcessedEventRepository;
@@ -109,9 +118,11 @@ describe("HandleStripeWebhookUseCase", () => {
       id: "sub_1",
       customer: "cus_1",
       status: "active",
-      items: { data: [{ price: { id: "price_starter_monthly" } }] },
-      current_period_start: Math.floor(FIXED_NOW.getTime() / 1000),
-      current_period_end: Math.floor(FIXED_NOW.getTime() / 1000) + 2_592_000,
+      // Correctif audit P2.3-E1 (P0) — forme RÉELLE de l'objet Stripe `Subscription` (API
+      // 2025-03-31+, SDK `stripe@22.5.0` installé) : `current_period_start`/`current_period_end`
+      // vivent sur CHAQUE item, jamais à la racine. Un fixture à la racine masquait silencieusement
+      // le bug réel (`RangeError` sur `new Date(undefined * 1000)` en production).
+      items: { data: [{ price: { id: "price_starter_monthly" }, current_period_start: Math.floor(FIXED_NOW.getTime() / 1000), current_period_end: Math.floor(FIXED_NOW.getTime() / 1000) + 2_592_000 }] },
       metadata: { organizationId: "org-a" },
     });
 
@@ -120,6 +131,11 @@ describe("HandleStripeWebhookUseCase", () => {
     expect(assignSubscriptionUseCase.execute).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "org-a", planTier: "STARTER", stripeCustomerId: "cus_1", stripeSubscriptionId: "sub_1" }),
     );
+    // Correctif audit P2.3-E1 (P0) — preuve directe que les dates de période sont lues depuis
+    // `items.data[0]`, jamais `Invalid Date` (le bug réel avant correction).
+    const call = assignSubscriptionUseCase.execute.mock.calls[0]![0] as { currentPeriodStart: Date; currentPeriodEnd: Date };
+    expect(Number.isNaN(call.currentPeriodStart.getTime())).toBe(false);
+    expect(Number.isNaN(call.currentPeriodEnd.getTime())).toBe(false);
   });
 
   it("V2 Sprint 25 (Trial Starter) — customer.subscription.created with status=trialing maps to TRIALING and grants the 1 Trial AO credit", async () => {
@@ -129,9 +145,7 @@ describe("HandleStripeWebhookUseCase", () => {
       customer: "cus_1",
       status: "trialing",
       trial_end: trialEnd,
-      items: { data: [{ price: { id: "price_starter_monthly" } }] },
-      current_period_start: Math.floor(FIXED_NOW.getTime() / 1000),
-      current_period_end: Math.floor(FIXED_NOW.getTime() / 1000) + 2_592_000,
+      items: { data: [{ price: { id: "price_starter_monthly" }, current_period_start: Math.floor(FIXED_NOW.getTime() / 1000), current_period_end: Math.floor(FIXED_NOW.getTime() / 1000) + 2_592_000 }] },
       metadata: { organizationId: "org-a" },
     });
 
@@ -149,9 +163,7 @@ describe("HandleStripeWebhookUseCase", () => {
       customer: "cus_1",
       status: "active",
       trial_end: null,
-      items: { data: [{ price: { id: "price_starter_monthly" } }] },
-      current_period_start: Math.floor(FIXED_NOW.getTime() / 1000),
-      current_period_end: Math.floor(FIXED_NOW.getTime() / 1000) + 2_592_000,
+      items: { data: [{ price: { id: "price_starter_monthly" }, current_period_start: Math.floor(FIXED_NOW.getTime() / 1000), current_period_end: Math.floor(FIXED_NOW.getTime() / 1000) + 2_592_000 }] },
       metadata: { organizationId: "org-a" },
     });
 
@@ -167,9 +179,7 @@ describe("HandleStripeWebhookUseCase", () => {
       customer: "cus_1",
       status: "unpaid",
       trial_end: null,
-      items: { data: [{ price: { id: "price_starter_monthly" } }] },
-      current_period_start: 0,
-      current_period_end: 0,
+      items: { data: [{ price: { id: "price_starter_monthly" }, current_period_start: 0, current_period_end: 0 }] },
       metadata: { organizationId: "org-a" },
     });
 
@@ -184,9 +194,7 @@ describe("HandleStripeWebhookUseCase", () => {
       id: "sub_1",
       customer: "cus_1",
       status: "active",
-      items: { data: [{ price: { id: "price_unknown" } }] },
-      current_period_start: 0,
-      current_period_end: 0,
+      items: { data: [{ price: { id: "price_unknown" }, current_period_start: 0, current_period_end: 0 }] },
       metadata: { organizationId: "org-a" },
     });
 
@@ -204,9 +212,7 @@ describe("HandleStripeWebhookUseCase", () => {
       id: "sub_1",
       customer: "cus_1",
       status: "active",
-      items: { data: [{ price: { id: "price_unknown" } }] },
-      current_period_start: 0,
-      current_period_end: 0,
+      items: { data: [{ price: { id: "price_unknown" }, current_period_start: 0, current_period_end: 0 }] },
       metadata: { organizationId: "org-a" },
     });
 
@@ -225,8 +231,6 @@ describe("HandleStripeWebhookUseCase", () => {
       customer: "cus_1",
       status: "canceled",
       items: { data: [] },
-      current_period_start: 0,
-      current_period_end: 0,
       metadata: { organizationId: "org-a" },
     });
 
@@ -248,7 +252,7 @@ describe("HandleStripeWebhookUseCase", () => {
       }),
     );
     const periodStart = Date.UTC(2026, 7, 1) / 1000; // 2026-08-01
-    const rawBody = stripeEventBuffer("evt_4", "invoice.paid", { subscription: "sub_1", period_start: periodStart });
+    const rawBody = stripeEventBuffer("evt_4", "invoice.paid", invoicePayload("sub_1", periodStart));
 
     await useCase.execute({ rawBody, signatureHeader: "valid" });
 
@@ -256,7 +260,7 @@ describe("HandleStripeWebhookUseCase", () => {
   });
 
   it("invoice.paid without a subscription (one-time invoice) never grants credits", async () => {
-    const rawBody = stripeEventBuffer("evt_5", "invoice.paid", { subscription: null, period_start: 0 });
+    const rawBody = stripeEventBuffer("evt_5", "invoice.paid", invoicePayload(null, 0));
 
     await useCase.execute({ rawBody, signatureHeader: "valid" });
 
@@ -275,7 +279,7 @@ describe("HandleStripeWebhookUseCase", () => {
         occurredAt: FIXED_NOW,
       }),
     );
-    const rawBody = stripeEventBuffer("evt_7", "invoice.payment_failed", { subscription: "sub_1", period_start: 0 });
+    const rawBody = stripeEventBuffer("evt_7", "invoice.payment_failed", invoicePayload("sub_1", 0));
 
     await useCase.execute({ rawBody, signatureHeader: "valid" });
 
@@ -283,7 +287,7 @@ describe("HandleStripeWebhookUseCase", () => {
   });
 
   it("invoice.payment_failed for an unknown subscription is journaled, never fatal", async () => {
-    const rawBody = stripeEventBuffer("evt_8", "invoice.payment_failed", { subscription: "sub_unknown", period_start: 0 });
+    const rawBody = stripeEventBuffer("evt_8", "invoice.payment_failed", invoicePayload("sub_unknown", 0));
 
     await expect(useCase.execute({ rawBody, signatureHeader: "valid" })).resolves.toBeUndefined();
     expect(markSubscriptionPastDueUseCase.execute).not.toHaveBeenCalled();

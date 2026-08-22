@@ -107,6 +107,24 @@ export class InMemoryMembershipRepository implements MembershipRepository {
     return input.fn(context);
   }
 
+  /** Ne simule aucun verrou réel (mono-thread, même limite documentée que
+   *  `runExclusiveForOrganization` ci-dessus) — comptage puis écriture restent néanmoins
+   *  effectués comme UNE SEULE opération synchrone ici, jamais entrecoupés par un `await`
+   *  intermédiaire, pour rester fidèle au contrat "jamais de fenêtre entre le comptage et
+   *  l'écriture" même en mémoire. */
+  async saveWithSeatLimit(input: {
+    organizationId: string;
+    membership: OrganizationMembership;
+    seatLimit: number | "UNLIMITED";
+  }): Promise<{ applied: boolean; activeCount: number }> {
+    const activeCount = await this.countActiveByOrganization(input.organizationId);
+    if (input.seatLimit !== "UNLIMITED" && activeCount >= input.seatLimit) {
+      return { applied: false, activeCount };
+    }
+    this.records.set(input.membership.id.value, input.membership);
+    return { applied: true, activeCount: activeCount + 1 };
+  }
+
   async seed(membership: OrganizationMembership): Promise<void> {
     await this.save(membership);
   }

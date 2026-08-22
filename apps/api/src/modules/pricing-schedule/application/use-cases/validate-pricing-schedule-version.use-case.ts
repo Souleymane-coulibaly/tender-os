@@ -1,8 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { computePricingControls } from "../../domain/services/compute-pricing-controls";
 import { PricingScheduleValidationBlockedError, PricingScheduleVersionNotFoundError } from "../../domain/errors";
+import type { PricingSchedule } from "../../domain/pricing-schedule.aggregate";
 import type { PricingScheduleVersion } from "../../domain/pricing-schedule-version.entity";
 import { assertPricingScheduleAccess } from "../policies/pricing-schedule-access.policy";
 import { PricingScheduleAccessService } from "../services/pricing-schedule-access.service";
@@ -42,6 +44,7 @@ export class ValidatePricingScheduleVersionUseCase {
     @Inject(ATOMIC_TRANSACTION_RUNNER) private readonly atomicTransactionRunner: AtomicTransactionRunner,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly accessService: PricingScheduleAccessService,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: ValidatePricingScheduleVersionCommand): Promise<PricingScheduleVersion> {
@@ -54,6 +57,14 @@ export class ValidatePricingScheduleVersionUseCase {
       requireUseOrgPermission: true,
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.4, mission §2/§3 (P1 Codex).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: schedule.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command, schedule),
+    );
+  }
+
+  private async executeEntitled(command: ValidatePricingScheduleVersionCommand, schedule: PricingSchedule): Promise<PricingScheduleVersion> {
     const version = await this.versionRepository.findById({ organizationId: command.organizationId, pricingScheduleVersionId: command.pricingScheduleVersionId });
     if (!version || version.pricingScheduleId !== schedule.id) {
       throw new PricingScheduleVersionNotFoundError();

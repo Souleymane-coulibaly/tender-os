@@ -70,8 +70,11 @@ describe("ConsumeAoCreditUseCase", () => {
     expect(page.items).toHaveLength(0);
   });
 
-  it("delegates to Pass consumption when there is no active subscription but an available Pass exists", async () => {
+  it("delegates to Pass consumption when there is no active subscription and a Pass is RESERVED for this tender (Checkpoint P2.3-E1.2, mission TEST 5)", async () => {
     const pass = PassPurchase.create({ id: "pass-1", organizationId: ORG_A, externalReference: "cs_test_1", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+    // Reflète le flux réel : le Pass est RÉSERVÉ pour ce Tender lors d'une opération cœur AO
+    // antérieure (EntitlementService.canOperateOnTender), jamais consommé directement ici.
+    pass.reserveForTender(TENDER_1, FIXED_NOW);
     await passes.create(pass);
 
     await useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW });
@@ -79,6 +82,14 @@ describe("ConsumeAoCreditUseCase", () => {
     const consumed = await passes.findById(ORG_A, "pass-1");
     expect(consumed?.status).toBe(PassPurchaseStatus.Consumed);
     expect(consumed?.consumedTenderId).toBe(TENDER_1);
+  });
+
+  it("Checkpoint P2.3-E1.2 — refuses when a Pass exists but was never RESERVED for this tender (never picks an arbitrary AVAILABLE pass)", async () => {
+    const pass = PassPurchase.create({ id: "pass-1", organizationId: ORG_A, externalReference: "cs_test_1", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+    await passes.create(pass); // reste AVAILABLE, jamais réservé pour TENDER_1
+
+    await expect(useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW })).rejects.toBeInstanceOf(InsufficientAoCreditsError);
+    expect((await passes.findById(ORG_A, "pass-1"))?.status).toBe(PassPurchaseStatus.Available);
   });
 
   it("refuses when there is no active subscription and no available Pass (mission — no free tier exists)", async () => {
@@ -136,5 +147,76 @@ describe("ConsumeAoCreditUseCase", () => {
     await useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW });
 
     expect(outbox.events).toHaveLength(0);
+  });
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 4 — relocalisé au premier TenderSubmission, idempotence renforcée", () => {
+    it("mission TEST 16 — a second call for the SAME tenderId (retry/resubmission after withdrawal) never consumes a second credit (ledger branch)", async () => {
+      await subscriptions.save(
+        OrganizationSubscription.create({ id: "sub-1", organizationId: ORG_A, planTier: PlanTier.Starter, billingInterval: BillingInterval.Monthly, source: PlanSource.Stripe, occurredAt: FIXED_NOW }),
+      );
+      await ledger.grant({ organizationId: ORG_A, period: "2026-08", nominalAmount: 2, rolloverCap: 6, occurredAt: FIXED_NOW });
+
+      await useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW });
+      expect(await ledger.getBalance(ORG_A)).toBe(1);
+
+      // Resoumission (withdrawal -> nouveau dépôt) : le MÊME tenderId, jamais un second décompte.
+      await useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW });
+      expect(await ledger.getBalance(ORG_A)).toBe(1);
+    });
+
+    it("mission TEST 16/19 — a second call for the SAME tenderId never consumes a second Pass (Pass branch)", async () => {
+      const pass = PassPurchase.create({ id: "pass-1", organizationId: ORG_A, externalReference: "cs_test_1", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      pass.reserveForTender(TENDER_1, FIXED_NOW);
+      const secondPass = PassPurchase.create({ id: "pass-2", organizationId: ORG_A, externalReference: "cs_test_2", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      await passes.create(pass);
+      await passes.create(secondPass);
+
+      await useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW });
+      await useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW });
+
+      // Le second appel n'a JAMAIS consommé le second Pass disponible — pass-1 (RÉSERVÉ pour ce
+      // Tender) reste le seul consommé, pass-2 jamais touché (mission "1 Pass AO = 1 Tender / 1 AO").
+      expect((await passes.findById(ORG_A, "pass-1"))?.status).toBe(PassPurchaseStatus.Consumed);
+      expect((await passes.findById(ORG_A, "pass-2"))?.status).toBe(PassPurchaseStatus.Available);
+    });
+
+    it("Checkpoint TENDEROS-2.1-P2.3-E1.3, mission §6 (PASS + SUBSCRIPTION) — a Pass RESERVED for Tender A BEFORE the organization subscribes still gets consumed at Tender A's FIRST deposit, never the new subscription's ledger, never a double consumption", async () => {
+      const pass = PassPurchase.create({ id: "pass-1", organizationId: ORG_A, externalReference: "cs_test_1", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      pass.reserveForTender(TENDER_1, FIXED_NOW); // réservation AVANT tout abonnement (ex. via runTenderOperationEntitled lors d'un DCE/analyse en préparation)
+      await passes.create(pass);
+
+      // L'organisation souscrit ENSUITE Starter, AVANT le premier dépôt réel de A.
+      await subscriptions.save(
+        OrganizationSubscription.create({ id: "sub-1", organizationId: ORG_A, planTier: PlanTier.Starter, billingInterval: BillingInterval.Monthly, source: PlanSource.Stripe, occurredAt: FIXED_NOW }),
+      );
+      await ledger.grant({ organizationId: ORG_A, period: "2026-08", nominalAmount: 2, rolloverCap: 6, occurredAt: FIXED_NOW });
+
+      // Premier dépôt RÉEL de A (jamais un retry) — doit consommer le Pass déjà réservé, JAMAIS le
+      // ledger d'abonnement flambant neuf, et ne jamais brûler les deux à la fois.
+      await useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW });
+
+      expect((await passes.findById(ORG_A, "pass-1"))?.status).toBe(PassPurchaseStatus.Consumed);
+      expect((await passes.findById(ORG_A, "pass-1"))?.consumedTenderId).toBe(TENDER_1);
+      expect(await ledger.getBalance(ORG_A)).toBe(2); // intact — jamais décrémenté pour ce Tender
+    });
+
+    it("cross-mechanism idempotence: consumed via Pass, then the organization subscribes to Starter — a retry for the SAME tenderId never ALSO decrements the new subscription's ledger", async () => {
+      const pass = PassPurchase.create({ id: "pass-1", organizationId: ORG_A, externalReference: "cs_test_1", priceCents: 9900, currency: "EUR", occurredAt: FIXED_NOW });
+      pass.reserveForTender(TENDER_1, FIXED_NOW);
+      await passes.create(pass);
+      await useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW });
+      expect((await passes.findById(ORG_A, "pass-1"))?.status).toBe(PassPurchaseStatus.Consumed);
+
+      // L'organisation souscrit ENSUITE Starter (ex. après le premier dépôt Pass) — un retry pour
+      // CE MÊME Tender ne doit jamais décrémenter le nouveau ledger d'abonnement.
+      await subscriptions.save(
+        OrganizationSubscription.create({ id: "sub-1", organizationId: ORG_A, planTier: PlanTier.Starter, billingInterval: BillingInterval.Monthly, source: PlanSource.Stripe, occurredAt: FIXED_NOW }),
+      );
+      await ledger.grant({ organizationId: ORG_A, period: "2026-08", nominalAmount: 2, rolloverCap: 6, occurredAt: FIXED_NOW });
+
+      await useCase.execute({ organizationId: ORG_A, tenderId: TENDER_1, actorId: "user-1", occurredAt: FIXED_NOW });
+
+      expect(await ledger.getBalance(ORG_A)).toBe(2);
+    });
   });
 });

@@ -170,6 +170,36 @@ export class PrismaMembershipRepository implements MembershipRepository {
     }, OWNERSHIP_TRANSFER_TX_OPTIONS);
   }
 
+  async saveWithSeatLimit(input: {
+    organizationId: string;
+    membership: OrganizationMembership;
+    seatLimit: number | "UNLIMITED";
+  }): Promise<{ applied: boolean; activeCount: number }> {
+    return this.prisma.$transaction(async (tx) => {
+      // Verrou consultatif Postgres scopé à l'organisation (BR-ORG-004) — même motif exact que
+      // `runExclusiveForOrganization` : sérialise tout ajout de membre concurrent pour CETTE
+      // organisation uniquement, jamais les autres. Le comptage ci-dessous, sous ce verrou, est donc
+      // la lecture RÉELLE (jamais une lecture antérieure à son acquisition).
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.organizationId}))`;
+
+      const activeCount = await tx.organizationMembership.count({
+        where: { organizationId: input.organizationId, status: MembershipStatus.Active },
+      });
+
+      if (input.seatLimit !== "UNLIMITED" && activeCount >= input.seatLimit) {
+        return { applied: false, activeCount };
+      }
+
+      const data = this.mapper.toPersistence(input.membership);
+      const role = await tx.role.findUniqueOrThrow({ where: { code: input.membership.role } });
+      await tx.organizationMembership.upsert({ where: { id: data.id }, create: data, update: data });
+      await tx.membershipRole.deleteMany({ where: { membershipId: data.id } });
+      await tx.membershipRole.create({ data: { membershipId: data.id, roleId: role.id } });
+
+      return { applied: true, activeCount: activeCount + 1 };
+    });
+  }
+
   private toPage(records: MembershipRecordWithRole[], limit: number): MembershipPage {
     const hasNextPage = records.length > limit;
     const page = hasNextPage ? records.slice(0, limit) : records;

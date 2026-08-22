@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { assertLotBelongsToTender, TENDER_LOT_REPOSITORY, type TenderLotRepository } from "../../../tenders";
 import { DuplicateResponsePackageError } from "../../domain/errors";
@@ -48,6 +49,7 @@ export class CreateResponsePackageUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly accessService: ResponsePackageAccessService,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: CreateResponsePackageCommand): Promise<ResponsePackage> {
@@ -60,6 +62,19 @@ export class CreateResponsePackageUseCase {
       requireUseOrgPermission: true,
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3, mission §20 (ENTITLEMENT COVERAGE) — correctif du bypass
+    // Codex : `CreateResponsePackageUseCase` peut être la PREMIÈRE mutation "cœur AO" sur un Tender
+    // fraîchement créé (aucune dépendance sur DCE/Analyse/Mémoire technique, contrairement au reste
+    // du module qui hérite de cette protection en aval). Allocation du Pass (si nécessaire) avec
+    // compensation automatique si l'opération échoue ensuite (mission §2/§3/§4) — même politique
+    // centrale que DCE/Analyse/Mémoire technique/SubmissionPackage/Submission.
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command, clientAccountId),
+    );
+  }
+
+  private async executeEntitled(command: CreateResponsePackageCommand, clientAccountId: string): Promise<ResponsePackage> {
     await assertLotBelongsToTender(this.tenderLotRepository, { organizationId: command.organizationId, tenderId: command.tenderId, lotId: command.lotId });
 
     const existing = await this.responsePackageRepository.findByScope({

@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AdministrativeDossierModule } from "../administrative-dossier";
+import { BillingModule } from "../billing";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { DocumentsModule } from "../documents";
 import { IdentityModule } from "../identity";
@@ -60,7 +61,7 @@ import { TenderResponsePackagesController } from "./interfaces/http/tender-respo
  * `DOCUMENT_VERSION_REPOSITORY` pour l'assemblage ZIP réel.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, DocumentsModule, AdministrativeDossierModule, TechnicalMemoModule, PricingScheduleModule, OutboxWriterModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, DocumentsModule, AdministrativeDossierModule, TechnicalMemoModule, PricingScheduleModule, OutboxWriterModule, BillingModule],
   controllers: [TenderResponsePackagesController, ResponsePackagesController, PackageArtifactsController],
   providers: [
     CreateResponsePackageUseCase,

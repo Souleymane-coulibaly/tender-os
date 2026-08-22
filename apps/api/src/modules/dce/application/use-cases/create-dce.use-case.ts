@@ -3,6 +3,7 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { GetTenderUseCase } from "../../../tenders";
 import { Dce } from "../../domain/dce.aggregate";
 import { DceId } from "../../domain/dce-id.value-object";
@@ -37,6 +38,7 @@ export class CreateDceUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly getTenderUseCase: GetTenderUseCase,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: CreateDceCommand): Promise<DceSummary> {
@@ -50,34 +52,44 @@ export class CreateDceUseCase {
     });
     assertTenderNotArchivedForDceMutation(tender);
 
-    const existing = await this.dceRepository.findByTenderId({
-      organizationId: command.organizationId,
-      tenderId: command.tenderId,
-    });
-    if (existing) {
-      return toDceSummary(existing);
-    }
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — opération "cœur AO" : allocation du Pass (si nécessaire)
+    // au moment de CETTE mutation réelle, avec compensation automatique (libération) si elle échoue
+    // ensuite (mission §2/§3/§4, voir `EntitlementService.runTenderOperationEntitled`) — remplace
+    // `assertTenderOperationEntitled` (devenu réservé aux checks purs, ex. preflight) à ce point
+    // d'entrée mutant.
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => {
+        const existing = await this.dceRepository.findByTenderId({
+          organizationId: command.organizationId,
+          tenderId: command.tenderId,
+        });
+        if (existing) {
+          return toDceSummary(existing);
+        }
 
-    const dce = Dce.create({
-      id: DceId.from(this.idGenerator.generate()),
-      organizationId: command.organizationId,
-      tenderId: command.tenderId,
-      createdByUserId: command.actorId,
-      occurredAt: this.clock.now(),
-    });
+        const dce = Dce.create({
+          id: DceId.from(this.idGenerator.generate()),
+          organizationId: command.organizationId,
+          tenderId: command.tenderId,
+          createdByUserId: command.actorId,
+          occurredAt: this.clock.now(),
+        });
 
-    const created = await this.dceRepository.create(dce);
+        const created = await this.dceRepository.create(dce);
 
-    await this.auditLogWriter.record({
-      organizationId: command.organizationId,
-      actorId: command.actorId,
-      action: "dce.created",
-      resourceType: "dce",
-      resourceId: created.id.value,
-      requestId: command.requestId,
-      metadata: { tenderId: command.tenderId },
-    });
+        await this.auditLogWriter.record({
+          organizationId: command.organizationId,
+          actorId: command.actorId,
+          action: "dce.created",
+          resourceType: "dce",
+          resourceId: created.id.value,
+          requestId: command.requestId,
+          metadata: { tenderId: command.tenderId },
+        });
 
-    return toDceSummary(created);
+        return toDceSummary(created);
+      },
+    );
   }
 }

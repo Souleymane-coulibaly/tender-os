@@ -6,6 +6,9 @@ import type { RequestWithId } from "../../../../shared-kernel/request-id.middlew
 const STATUS_BY_CODE: Record<string, number> = {
   TENDER_NOT_FOUND: HttpStatus.NOT_FOUND,
   CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
+  // Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 1 — jetée par `assertTenderOperationEntitled`
+  // (module `billing`), même statut que INSUFFICIENT_AO_CREDITS/SEAT_LIMIT_EXCEEDED ailleurs.
+  TENDER_OPERATION_NOT_ENTITLED: HttpStatus.PAYMENT_REQUIRED,
   EXPORT_JOB_NOT_FOUND: HttpStatus.NOT_FOUND,
   EXPORT_ARTIFACT_NOT_FOUND: HttpStatus.NOT_FOUND,
 

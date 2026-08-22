@@ -78,6 +78,11 @@ describe("DCE — isolation HTTP inter-client au sein d'une même organisation (
     await prisma.organization.create({
       data: { id: orgId, name: "Org DCE Client Isolation HTTP", slug: `org-dce-client-isolation-http-${orgId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
     });
+    // Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 1 — les use cases DCE gatent désormais
+    // canOperateOnTender : ENTERPRISE (illimité) évite tout effet de bord de quota/AO credits.
+    await prisma.organizationSubscription.create({
+      data: { id: randomUUID(), organizationId: orgId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+    });
 
     const owner = await registerAndLogin(`dce-client-iso-owner-${randomUUID()}@smoke.test`);
     const member = await registerAndLogin(`dce-client-iso-member-${randomUUID()}@smoke.test`);
@@ -137,6 +142,7 @@ describe("DCE — isolation HTTP inter-client au sein d'une même organisation (
     await prisma.organizationMembership.deleteMany({ where: { organizationId: orgId } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: orgId } });
     await prisma.organization.deleteMany({ where: { id: orgId } });
     await app.close();
   }, 30000);

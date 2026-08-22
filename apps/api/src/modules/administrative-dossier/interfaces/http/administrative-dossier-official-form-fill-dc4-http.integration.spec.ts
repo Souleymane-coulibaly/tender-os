@@ -117,6 +117,14 @@ describe("Administrative Dossier — V2 Sprint 11 DC4 real official form fill (r
 
     await prisma.organization.create({ data: { id: orgId, name: "DC4 Fill Org", slug: `dc4-fill-org-${orgId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" } });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — EnsureAdministrativeDossierUseCase/CreateAdministrativeRequirementUseCase
+    // gatent désormais canOperateOnTender : ENTERPRISE (illimité) évite tout effet de bord de
+    // quota/AO credits, même motif déjà établi dans
+    // dce-http.integration.spec.ts/analysis-http.integration.spec.ts.
+    await prisma.organizationSubscription.create({
+      data: { id: randomUUID(), organizationId: orgId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+    });
+
     const owner = await registerAndLogin(`dc4-fill-owner-${randomUUID()}@smoke.test`);
     userIds.push(owner.userId);
     tokenOwner = owner.token;
@@ -148,6 +156,7 @@ describe("Administrative Dossier — V2 Sprint 11 DC4 real official form fill (r
     await prisma.outboxEvent.deleteMany({ where: { organizationId: orgId } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: orgId } });
     await prisma.organization.deleteMany({ where: { id: orgId } });
     await app.close();
     await prisma.$disconnect();

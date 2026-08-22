@@ -11,16 +11,20 @@ export type { PlanCatalogEntry } from "./domain/plan-catalog";
 export { SubscriptionStatus } from "./domain/subscription-status";
 export { PlanSource } from "./domain/plan-source";
 export { PassPurchaseStatus } from "./domain/pass-purchase-status";
-export { EntitlementFeatureNotAvailableError, InsufficientAoCreditsError } from "./domain/errors";
+export { EntitlementFeatureNotAvailableError, InsufficientAoCreditsError, TenderOperationNotEntitledError } from "./domain/errors";
 export { AoCreditMovementType } from "./domain/ao-credit-movement-type";
 export type { AoCreditLedgerEntry } from "./domain/ao-credit-ledger-entry";
 
-export { ENTITLEMENT_SERVICE } from "./application/services/entitlement.service";
-export type { EntitlementService, EntitlementContext } from "./application/services/entitlement.service";
+export { ENTITLEMENT_SERVICE, DefaultEntitlementService } from "./application/services/entitlement.service";
+export type { EntitlementService, EntitlementContext, TenderOperationEntitlementInput } from "./application/services/entitlement.service";
 // V2 Sprint 22 (billing, étape 22A, correctif audit Codex P1-01) — réexporté pour que les modules
 // différenciants (integrations, workspace, connectors...) gatent leurs points d'entrée sans
 // dupliquer le "if (!allowed) throw" à chaque site d'appel.
 export { assertEntitlementFeature } from "./application/policies/assert-entitlement-feature";
+// Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 1 — même motif, pour les opérations "cœur AO"
+// (DCE/Analyse/Mémoire technique/SubmissionPackage/Submission) : mécanisme UNIQUE réutilisé par ces
+// cinq modules, jamais un `if (plan === ...)` local dupliqué à chaque point d'entrée.
+export { assertTenderOperationEntitled } from "./application/policies/assert-tender-operation-entitled";
 export { AssignSubscriptionUseCase } from "./application/use-cases/assign-subscription.use-case";
 export type { AssignSubscriptionCommand } from "./application/use-cases/assign-subscription.use-case";
 export { CancelSubscriptionUseCase } from "./application/use-cases/cancel-subscription.use-case";
@@ -28,12 +32,22 @@ export { RecordPassPurchaseUseCase } from "./application/use-cases/record-pass-p
 export type { RecordPassPurchaseCommand } from "./application/use-cases/record-pass-purchase.use-case";
 export { ConsumePassForTenderUseCase } from "./application/use-cases/consume-pass-for-tender.use-case";
 export type { ConsumePassForTenderCommand } from "./application/use-cases/consume-pass-for-tender.use-case";
+// Checkpoint TENDEROS-2.1-P2.3-E1.4 — réexporté pour `tenders` (`AbandonTenderUseCase`), mission
+// §7/§8 "réutiliser ReleasePassForTenderUseCase, ne pas créer un second moteur".
+export { ReleasePassForTenderUseCase } from "./application/use-cases/release-pass-for-tender.use-case";
+export type { ReleasePassForTenderCommand, ReleasePassForTenderReason } from "./application/use-cases/release-pass-for-tender.use-case";
+// Checkpoint TENDEROS-2.1-P2.3-E1.4 — réexporté pour les tests unitaires d'autres modules qui
+// prouvent la réservation/compensation Pass RÉELLE (jamais un mock simulé) contre leur propre gate
+// `runTenderOperationEntitled`, même motif que `entitlement.service.spec.ts`.
+export { ReservePassForTenderUseCase } from "./application/use-cases/reserve-pass-for-tender.use-case";
+export type { ReservePassForTenderCommand } from "./application/use-cases/reserve-pass-for-tender.use-case";
 export { ListPassPurchasesUseCase } from "./application/use-cases/list-pass-purchases.use-case";
 export { GetOrganizationEntitlementsUseCase } from "./application/use-cases/get-organization-entitlements.use-case";
 export type { OrganizationEntitlementsSnapshot } from "./application/use-cases/get-organization-entitlements.use-case";
-// V2 Sprint 22 (billing, étape 22B) — réexporté UNIQUEMENT pour `tenders` : point de choc unique
-// de consommation "AO traité" identifié en `CreateTenderUseCase` (voir le rapport 22B), jamais un
-// second point de consommation.
+// V2 Sprint 22 (billing, étape 22B) ; relocalisé Checkpoint P2.3-E1.1 FINDING 4 — réexporté pour
+// `submission` (`RecordTenderSubmissionUseCase`) : point de choc unique de consommation "AO traité",
+// désormais le premier `TenderSubmission` réussi (jamais `CreateTenderUseCase`, voir son commentaire
+// de classe), jamais un second point de consommation.
 export { ConsumeAoCreditUseCase } from "./application/use-cases/consume-ao-credit.use-case";
 export type { ConsumeAoCreditCommand } from "./application/use-cases/consume-ao-credit.use-case";
 export { GrantMonthlyAoCreditsUseCase } from "./application/use-cases/grant-monthly-ao-credits.use-case";

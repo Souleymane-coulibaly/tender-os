@@ -78,6 +78,15 @@ describe("Administrative Dossier — isolation inter-tenant et inter-client (2 o
         { id: orgBId, name: "AD Isolation Org B", slug: `ad-isolation-org-b-${orgBId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
       ],
     });
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — EnsureAdministrativeDossierUseCase gate désormais
+    // canOperateOnTender : ENTERPRISE (illimité) évite tout effet de bord de quota/AO credits,
+    // même motif déjà établi dans dce-http.integration.spec.ts/analysis-http.integration.spec.ts.
+    await prisma.organizationSubscription.createMany({
+      data: [
+        { id: randomUUID(), organizationId: orgAId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+        { id: randomUUID(), organizationId: orgBId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+      ],
+    });
 
     const ownerA = await registerAndLogin(`ad-isolation-owner-a-${randomUUID()}@smoke.test`);
     const ownerB = await registerAndLogin(`ad-isolation-owner-b-${randomUUID()}@smoke.test`);
@@ -133,6 +142,7 @@ describe("Administrative Dossier — isolation inter-tenant et inter-client (2 o
     // Checkpoint 2.1-A4 (correctif hygiène de test) — voir le commentaire identique dans
     // administrative-dossier-generation-http.integration.spec.ts.
     await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
     await app.close();
   });

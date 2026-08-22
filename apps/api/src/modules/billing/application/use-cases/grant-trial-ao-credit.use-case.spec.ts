@@ -41,4 +41,16 @@ describe("GrantTrialAoCreditUseCase", () => {
     expect(await ledger.getBalance("org-1")).toBe(1);
     expect(await ledger.getBalance("org-2")).toBe(1);
   });
+
+  it("mission TEST 18 — a returning organization (canceled, later re-enters TRIALING via Stripe) never receives a second, abusive trial credit — idempotence is per-organization, never per-subscription-cycle or per-date", async () => {
+    const firstTrialEnrollment = new Date("2026-01-10T09:00:00Z");
+    const laterReturnToTrialing = new Date("2026-11-02T09:00:00Z"); // des mois plus tard, un statut Stripe trialing différent
+    await useCase.execute({ organizationId: "org-1", actorId: "stripe-webhook", occurredAt: firstTrialEnrollment });
+
+    const secondAttempt = await useCase.execute({ organizationId: "org-1", actorId: "stripe-webhook", occurredAt: laterReturnToTrialing });
+
+    expect(await ledger.getBalance("org-1")).toBe(1); // jamais 2
+    expect(secondAttempt.amount).toBe(1); // l'entrée GAGNANTE d'origine, jamais un second mouvement
+    expect(auditLogWriter.entries).toHaveLength(1);
+  });
 });

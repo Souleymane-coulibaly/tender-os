@@ -3,7 +3,6 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
-import { ConsumeAoCreditUseCase } from "../../../billing";
 import { AssertClientAccessUseCase, ClientAccountArchivedError, ClientPermission, GetClientAccountUseCase } from "../../../client-portfolio";
 import { CandidateCompanyArchivedError, GetCandidateCompanyUseCase } from "../../../candidate-company";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
@@ -85,7 +84,6 @@ export class CreateTenderUseCase {
     @Inject(ATOMIC_TRANSACTION_RUNNER) private readonly atomicTransactionRunner: AtomicTransactionRunner,
     private readonly getClientAccountUseCase: GetClientAccountUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
-    private readonly consumeAoCreditUseCase: ConsumeAoCreditUseCase,
     private readonly getCandidateCompanyUseCase: GetCandidateCompanyUseCase,
   ) {}
 
@@ -187,14 +185,13 @@ export class CreateTenderUseCase {
       occurredAt,
     });
 
-    // V2 Sprint 22B (billing) — mission §19 : point de choc unique de consommation "AO traité"
-    // (voir le rapport 22B). La consommation du crédit AO et la création du Tender doivent réussir
-    // ou échouer ENSEMBLE (une seule transaction Postgres, `AtomicTransactionRunner`) — jamais un
-    // Tender créé sans crédit consommé, ni un crédit consommé sans Tender créé. La consommation
-    // s'exécute EN PREMIER dans la transaction : si le solde est insuffisant, rien n'est écrit.
+    // Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 4 — la consommation du crédit AO/Pass n'a plus
+    // lieu ICI (mission "1 Tender traité = maximum 1 crédit AO", jamais à la création : un Tender
+    // créé puis jamais déposé ne doit plus jamais coûter de crédit). Relocalisée vers le premier
+    // `TenderSubmission` réellement enregistré (`RecordTenderSubmissionUseCase`), voir
+    // `ConsumeAoCreditUseCase`. La transaction ci-dessous reste utile pour Tender + audit + outbox
+    // (jamais un Tender créé sans sa trace d'audit), sans lien avec la facturation.
     await this.atomicTransactionRunner.run(async () => {
-      await this.consumeAoCreditUseCase.execute({ organizationId: command.organizationId, tenderId: tender.id.value, actorId: command.actorId, occurredAt });
-
       await this.tenderRepository.save(tender);
 
       await this.auditLogWriter.record({

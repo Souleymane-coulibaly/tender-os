@@ -68,6 +68,16 @@ export class PassPurchaseAlreadyConsumedError extends DomainError {
   }
 }
 
+/** Checkpoint TENDEROS-2.1-P2.3-E1.2 — même motif que `PassPurchaseAlreadyConsumedError`, pour la
+ *  réservation : un Pass déjà RESERVED pour un Tender ne peut jamais être réaffecté à un AUTRE
+ *  Tender directement (mission "1 Pass AO = 1 Tender / 1 AO"). */
+export class PassPurchaseAlreadyReservedError extends DomainError {
+  readonly code = "PASS_PURCHASE_ALREADY_RESERVED";
+  constructor(id: string, reservedTenderId: string) {
+    super(`Pass purchase ${id} is already reserved for tender ${reservedTenderId}`);
+  }
+}
+
 export class PassPurchaseNotAvailableError extends DomainError {
   readonly code = "PASS_PURCHASE_NOT_AVAILABLE";
   constructor(id: string) {
@@ -83,6 +93,21 @@ export class EntitlementFeatureNotAvailableError extends DomainError {
   readonly code = "ENTITLEMENT_FEATURE_NOT_AVAILABLE";
   constructor(feature: string) {
     super(`This organization's plan does not include the "${feature}" feature.`);
+  }
+}
+
+/**
+ * Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 1 — jetée par `assertTenderOperationEntitled`
+ * (application/policies) à chaque point d'entrée "cœur AO" (DCE/Analyse/Mémoire technique/
+ * SubmissionPackage/Submission) quand l'organisation n'a NI abonnement/essai actif NI Pass
+ * applicable à ce Tender précis (mission "Règle Pass AO" : un Pass consommé pour le Tender A
+ * n'autorise jamais une opération sur le Tender B). Jamais un simple masquage frontend — le backend
+ * doit refuser, quel que soit le client HTTP.
+ */
+export class TenderOperationNotEntitledError extends DomainError {
+  readonly code = "TENDER_OPERATION_NOT_ENTITLED";
+  constructor(organizationId: string, tenderId: string) {
+    super(`Organization ${organizationId} has no active entitlement (subscription, trial, or applicable Pass) to operate on tender ${tenderId}`);
   }
 }
 

@@ -1,5 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-import type { ConsumeAoCreditUseCase } from "../../../billing";
+import { describe, expect, it } from "vitest";
 import { GetCandidateCompanyUseCase } from "../../../candidate-company";
 import { InMemoryCandidateCompanyRepository } from "../../../candidate-company/test-support/fakes";
 import { ClientAccountNotFoundError } from "../../../client-portfolio";
@@ -21,7 +20,6 @@ async function buildHarness() {
   const clock = new FixedClock();
   const clientPortfolio = await createClientPortfolioTestFixture(ORG);
 
-  const consumeAoCreditUseCase = { execute: vi.fn(async () => {}) } as unknown as ConsumeAoCreditUseCase;
   const createTenderUseCase = new CreateTenderUseCase(
     tenderRepository,
     buyerRepository,
@@ -32,7 +30,6 @@ async function buildHarness() {
     new FakeAtomicTransactionRunner(),
     clientPortfolio.getClientAccountUseCase,
     clientPortfolio.assertClientAccessUseCase,
-    consumeAoCreditUseCase,
     new GetCandidateCompanyUseCase(new InMemoryCandidateCompanyRepository()),
   );
   const getTenderUseCase = new GetTenderUseCase(tenderRepository, clientPortfolio.assertClientAccessUseCase);

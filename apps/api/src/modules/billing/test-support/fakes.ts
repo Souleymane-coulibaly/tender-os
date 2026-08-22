@@ -1,5 +1,6 @@
 import type { Clock } from "../../../shared-kernel/clock";
 import { AoCreditMovementType } from "../domain/ao-credit-movement-type";
+import { BillingInterval } from "../domain/billing-interval";
 import { createAoCreditLedgerEntry, type AoCreditLedgerEntry } from "../domain/ao-credit-ledger-entry";
 import type { EntitlementFeature } from "../domain/entitlement-feature";
 import { EntitlementOverride } from "../domain/entitlement-override.aggregate";
@@ -145,6 +146,12 @@ export class InMemoryOrganizationSubscriptionRepository implements OrganizationS
   async listTrialing(): Promise<OrganizationSubscription[]> {
     return Array.from(this.byOrganizationId.values()).filter((s) => s.status === SubscriptionStatus.Trialing);
   }
+
+  async listActiveOrTrialingYearly(): Promise<OrganizationSubscription[]> {
+    return Array.from(this.byOrganizationId.values()).filter(
+      (s) => s.billingInterval === BillingInterval.Yearly && (s.status === SubscriptionStatus.Active || s.status === SubscriptionStatus.Trialing),
+    );
+  }
 }
 
 /** Même sémantique de compare-and-set que `PrismaPassPurchaseRepository.consumeForTender`
@@ -172,6 +179,15 @@ export class InMemoryPassPurchaseRepository implements PassPurchaseRepository {
       if (purchase.organizationId === organizationId && purchase.consumedTenderId === tenderId) {
         return purchase;
       }
+    }
+    return null;
+  }
+
+  async findAssignedToTender(organizationId: string, tenderId: string): Promise<PassPurchase | null> {
+    for (const purchase of this.byId.values()) {
+      if (purchase.organizationId !== organizationId) continue;
+      if (purchase.status === PassPurchaseStatus.Reserved && purchase.reservedTenderId === tenderId) return purchase;
+      if (purchase.status === PassPurchaseStatus.Consumed && purchase.consumedTenderId === tenderId) return purchase;
     }
     return null;
   }
@@ -238,7 +254,10 @@ export class InMemoryPassPurchaseRepository implements PassPurchaseRepository {
     }
 
     const props = current.toProps();
-    const eligible = props.status === PassPurchaseStatus.Available || (props.status === PassPurchaseStatus.Consumed && props.consumedTenderId === input.tenderId);
+    const eligible =
+      props.status === PassPurchaseStatus.Available ||
+      (props.status === PassPurchaseStatus.Reserved && props.reservedTenderId === input.tenderId) ||
+      (props.status === PassPurchaseStatus.Consumed && props.consumedTenderId === input.tenderId);
     if (!eligible) {
       return { applied: false, purchase: current };
     }
@@ -248,6 +267,67 @@ export class InMemoryPassPurchaseRepository implements PassPurchaseRepository {
       status: PassPurchaseStatus.Consumed,
       consumedTenderId: input.tenderId,
       consumedAt: input.occurredAt,
+      updatedAt: input.occurredAt,
+    });
+    this.byId.set(updated.id, updated);
+    return { applied: true, purchase: updated };
+  }
+
+  async reserveForTender(input: { organizationId: string; tenderId: string; now: Date }): Promise<{ applied: boolean; purchase: PassPurchase | null }> {
+    // Synchrone de bout en bout (aucun `await` avant `this.byId.set`) — même discipline que
+    // `consumeForTender` ci-dessus, reproduit l'atomicité du compare-and-set réel.
+    const alreadyAssigned = await this.findAssignedToTender(input.organizationId, input.tenderId);
+    if (alreadyAssigned) {
+      return { applied: true, purchase: alreadyAssigned };
+    }
+
+    const candidates = Array.from(this.byId.values())
+      .filter((p) => p.organizationId === input.organizationId && p.status === PassPurchaseStatus.Available)
+      .filter((p) => {
+        const expiresAt = p.expiresAt;
+        return expiresAt === undefined || expiresAt.getTime() > input.now.getTime();
+      })
+      .sort((a, b) => a.toProps().purchasedAt.getTime() - b.toProps().purchasedAt.getTime());
+
+    const candidate = candidates[0];
+    if (!candidate) {
+      // Checkpoint TENDEROS-2.1-P2.3-E1.3, mission §10 TEST 2 — reproduit fidèlement le même
+      // garde-fou que `PrismaPassPurchaseRepository` : plus aucun candidat AVAILABLE, mais un appel
+      // réellement concurrent pour CE MÊME tenderId a pu déjà gagner la course entre le premier
+      // `await` de cette fonction et cette relecture (le seul point de tissage possible dans ce
+      // fake synchrone) — reconnaître ce succès plutôt que refuser à tort un Tender déjà couvert.
+      const resolvedByConcurrentSibling = await this.findAssignedToTender(input.organizationId, input.tenderId);
+      return { applied: resolvedByConcurrentSibling !== null, purchase: resolvedByConcurrentSibling };
+    }
+
+    const updated = PassPurchase.reconstitute({
+      ...candidate.toProps(),
+      status: PassPurchaseStatus.Reserved,
+      reservedTenderId: input.tenderId,
+      reservedAt: input.now,
+      updatedAt: input.now,
+    });
+    this.byId.set(updated.id, updated);
+    return { applied: true, purchase: updated };
+  }
+
+  async releaseReservation(input: { organizationId: string; passPurchaseId: string; tenderId: string; occurredAt: Date }): Promise<{ applied: boolean; purchase: PassPurchase | null }> {
+    // Synchrone de bout en bout — même discipline que `consumeForTender`/`reserveForTender` :
+    // reproduit la clause WHERE SQL réelle (`status = 'RESERVED' AND reserved_tender_id = tenderId`),
+    // qu'un Pass CONSUMED ne peut structurellement jamais satisfaire.
+    const current = this.byId.get(input.passPurchaseId);
+    if (!current || current.organizationId !== input.organizationId) {
+      return { applied: false, purchase: null };
+    }
+    const props = current.toProps();
+    if (props.status !== PassPurchaseStatus.Reserved || props.reservedTenderId !== input.tenderId) {
+      return { applied: false, purchase: current };
+    }
+    const updated = PassPurchase.reconstitute({
+      ...props,
+      status: PassPurchaseStatus.Available,
+      reservedTenderId: undefined,
+      reservedAt: undefined,
       updatedAt: input.occurredAt,
     });
     this.byId.set(updated.id, updated);
@@ -396,6 +476,14 @@ export class InMemoryAoCreditLedgerRepository implements AoCreditLedgerRepositor
 
   async findGrantByPeriod(organizationId: string, period: string): Promise<AoCreditLedgerEntry | null> {
     return this.entries.find((e) => e.organizationId === organizationId && e.type === AoCreditMovementType.Grant && e.period === period) ?? null;
+  }
+
+  async findLatestGrantPeriod(organizationId: string): Promise<string | null> {
+    const periods = this.entries
+      .filter((e) => e.organizationId === organizationId && e.type === AoCreditMovementType.Grant && e.period !== undefined)
+      .map((e) => e.period as string)
+      .sort();
+    return periods.length > 0 ? periods[periods.length - 1]! : null;
   }
 
   async list(organizationId: string, options: { cursor?: string | undefined; limit: number }): Promise<AoCreditLedgerPage> {

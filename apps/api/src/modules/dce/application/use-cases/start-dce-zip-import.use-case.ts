@@ -3,6 +3,7 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { GetTenderUseCase } from "../../../tenders";
 import { DceImportJob } from "../../domain/dce-import-job.aggregate";
 import { DcePermission } from "../../domain/dce-permission";
@@ -40,6 +41,7 @@ export class StartDceZipImportUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly getTenderUseCase: GetTenderUseCase,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: StartDceZipImportCommand, zipBuffer: Buffer): Promise<DceImportJobSummary> {
@@ -53,6 +55,18 @@ export class StartDceZipImportUseCase {
     });
     assertTenderNotArchivedForDceMutation(tender);
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — allocation du Pass (si nécessaire) AVANT même de créer/
+    // enfiler le job asynchrone, avec compensation automatique si la création du job échoue ensuite
+    // (mission §2/§3/§4) ; ImportDceFilesUseCase applique aussi ce garde-fou, en défense en
+    // profondeur, au moment réel du traitement fichier-par-fichier (reconnaît alors le Pass déjà
+    // affecté ICI, jamais une seconde réservation).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command, zipBuffer),
+    );
+  }
+
+  private async executeEntitled(command: StartDceZipImportCommand, zipBuffer: Buffer): Promise<DceImportJobSummary> {
     const occurredAt = this.clock.now();
     const job = DceImportJob.create({
       id: this.idGenerator.generate(),

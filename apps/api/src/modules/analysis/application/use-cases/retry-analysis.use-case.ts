@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { GetTenderUseCase } from "../../../tenders";
 import { AnalysisPermission } from "../../domain/analysis-permission";
 import { AnalysisNotFoundError } from "../../domain/errors";
@@ -41,6 +42,7 @@ export class RetryAnalysisUseCase {
     @Inject(ANALYSIS_CONFIG) private readonly config: AnalysisConfig,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly getTenderUseCase: GetTenderUseCase,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: RetryAnalysisCommand): Promise<AnalysisJobSummary> {
@@ -57,6 +59,17 @@ export class RetryAnalysisUseCase {
       actorId: command.actorId,
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — opération "cœur AO" (relance) : allocation du Pass (si
+    // nécessaire) au moment de CETTE mutation réelle, avec compensation automatique si elle échoue
+    // ensuite (mission §2/§3/§4). `tenderId` dérivé du job existant (le command ne le porte pas,
+    // voir docstring).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: existingJob.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command),
+    );
+  }
+
+  private async executeEntitled(command: RetryAnalysisCommand): Promise<AnalysisJobSummary> {
     const job = await this.jobRepository.runExclusiveForJob({
       organizationId: command.organizationId,
       jobId: command.jobId,

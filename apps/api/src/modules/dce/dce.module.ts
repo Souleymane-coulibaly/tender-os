@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { BillingModule } from "../billing";
 import { DocumentsModule } from "../documents";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
@@ -38,7 +39,7 @@ import { YauzlArchiveInspector } from "./infrastructure/yauzl-archive-inspector"
 import { DceController } from "./interfaces/http/dce.controller";
 
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, DocumentsModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, DocumentsModule, BillingModule],
   controllers: [DceController],
   providers: [
     CreateDceUseCase,

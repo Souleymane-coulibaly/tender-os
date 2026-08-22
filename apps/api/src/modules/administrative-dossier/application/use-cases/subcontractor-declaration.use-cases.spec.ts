@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { EntitlementService } from "../../../billing";
 import { CreateSubcontractorDeclarationUseCase, ListSubcontractorDeclarationsUseCase, UpdateSubcontractorDeclarationUseCase } from "./subcontractor-declaration.use-cases";
 import type { EngagementActRepository } from "../ports/engagement-act.repository";
 import type { SubcontractorDeclarationRepository } from "../ports/subcontractor-declaration.repository";
@@ -20,6 +21,12 @@ function fakeIdGenerator() {
 }
 function fakeAccessService(): AdministrativeDossierAccessService {
   return { assertTenderAccess: vi.fn(async () => "client-1") } as unknown as AdministrativeDossierAccessService;
+}
+function fakeEntitlementService(): EntitlementService {
+  return {
+    canOperateOnTender: vi.fn(async () => true),
+    runTenderOperationEntitled: vi.fn(async (_input: unknown, operation: () => Promise<unknown>) => operation()),
+  } as unknown as EntitlementService;
 }
 
 function inMemorySubcontractorRepository(seed: readonly SubcontractorDeclaration[] = []): SubcontractorDeclarationRepository {
@@ -44,7 +51,7 @@ function fakeEngagementActRepository(act: EngagementAct | null): EngagementActRe
 describe("CreateSubcontractorDeclarationUseCase — mission §12 'plusieurs DC4 possibles'", () => {
   it("creates a declaration when no engagement act pricing is frozen yet", async () => {
     const repository = inMemorySubcontractorRepository();
-    const useCase = new CreateSubcontractorDeclarationUseCase(fakeAccessService(), repository, fakeEngagementActRepository(null), fakeClock(), fakeIdGenerator());
+    const useCase = new CreateSubcontractorDeclarationUseCase(fakeAccessService(), repository, fakeEngagementActRepository(null), fakeClock(), fakeIdGenerator(), fakeEntitlementService());
 
     const summary = await useCase.execute({
       organizationId: ORGANIZATION_ID,
@@ -63,7 +70,7 @@ describe("CreateSubcontractorDeclarationUseCase — mission §12 'plusieurs DC4 
 
   it("allows several DC4 declarations for the same tender", async () => {
     const repository = inMemorySubcontractorRepository();
-    const useCase = new CreateSubcontractorDeclarationUseCase(fakeAccessService(), repository, fakeEngagementActRepository(null), fakeClock(), fakeIdGenerator());
+    const useCase = new CreateSubcontractorDeclarationUseCase(fakeAccessService(), repository, fakeEngagementActRepository(null), fakeClock(), fakeIdGenerator(), fakeEntitlementService());
     const list = new ListSubcontractorDeclarationsUseCase(fakeAccessService(), repository);
 
     await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, subcontractorName: "A", servicesDescription: "x", amountValue: 100, amountCurrency: "EUR" });
@@ -77,7 +84,7 @@ describe("CreateSubcontractorDeclarationUseCase — mission §12 'plusieurs DC4 
     const act = EngagementAct.create({ id: "act-1", organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, createdBy: "user-1", occurredAt: NOW });
     act.freezePricing({ pricingEstimateId: "estimate-1", pricingEstimateVersionNumber: 1, amountValue: 100000, amountCurrency: "EUR", frozenBy: "user-1", occurredAt: NOW });
     const repository = inMemorySubcontractorRepository();
-    const useCase = new CreateSubcontractorDeclarationUseCase(fakeAccessService(), repository, fakeEngagementActRepository(act), fakeClock(), fakeIdGenerator());
+    const useCase = new CreateSubcontractorDeclarationUseCase(fakeAccessService(), repository, fakeEngagementActRepository(act), fakeClock(), fakeIdGenerator(), fakeEntitlementService());
 
     await expect(
       useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, subcontractorName: "A", servicesDescription: "x", amountValue: 5000, amountCurrency: "EUR", percentageOfTotal: 50 }),
@@ -88,7 +95,7 @@ describe("CreateSubcontractorDeclarationUseCase — mission §12 'plusieurs DC4 
     const act = EngagementAct.create({ id: "act-1", organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, createdBy: "user-1", occurredAt: NOW });
     act.freezePricing({ pricingEstimateId: "estimate-1", pricingEstimateVersionNumber: 1, amountValue: 100000, amountCurrency: "EUR", frozenBy: "user-1", occurredAt: NOW });
     const repository = inMemorySubcontractorRepository();
-    const useCase = new CreateSubcontractorDeclarationUseCase(fakeAccessService(), repository, fakeEngagementActRepository(act), fakeClock(), fakeIdGenerator());
+    const useCase = new CreateSubcontractorDeclarationUseCase(fakeAccessService(), repository, fakeEngagementActRepository(act), fakeClock(), fakeIdGenerator(), fakeEntitlementService());
 
     const summary = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, subcontractorName: "A", servicesDescription: "x", amountValue: 50000, amountCurrency: "EUR", percentageOfTotal: 50 });
     expect(summary.amountValue).toBe(50000);

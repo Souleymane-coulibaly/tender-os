@@ -1,4 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { AddDocumentVersionUseCase } from "../../../documents";
 import { GetTenderUseCase } from "../../../tenders";
 import { isSignatureCompatibleWithExtension } from "../../domain/allowed-file-types";
@@ -41,6 +43,8 @@ export class ReplaceDceDocumentUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly addDocumentVersionUseCase: AddDocumentVersionUseCase,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
+    @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   async execute(command: ReplaceDceDocumentCommand): Promise<DceDocumentSummary> {
@@ -54,6 +58,16 @@ export class ReplaceDceDocumentUseCase {
     });
     assertTenderNotArchivedForDceMutation(tender);
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — opération "cœur AO" : allocation du Pass (si nécessaire)
+    // au moment de CETTE mutation réelle, avec compensation automatique si elle échoue ensuite
+    // (mission §2/§3/§4).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command),
+    );
+  }
+
+  private async executeEntitled(command: ReplaceDceDocumentCommand): Promise<DceDocumentSummary> {
     const dce = await this.dceRepository.findByTenderId({
       organizationId: command.organizationId,
       tenderId: command.tenderId,

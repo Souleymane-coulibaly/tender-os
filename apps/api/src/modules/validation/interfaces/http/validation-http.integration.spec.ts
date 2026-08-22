@@ -110,6 +110,13 @@ describe("Validation — real HTTP + PostgreSQL, and the tenders/:id/readiness r
 
     await prisma.organization.create({ data: { id: orgId, name: "Validation Org HTTP", slug: `validation-org-http-${orgId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" } });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — RunFinalValidationUseCase gate désormais
+    // canOperateOnTender : ENTERPRISE (illimité) évite tout effet de bord de quota/AO credits,
+    // même motif déjà établi dans dce-http.integration.spec.ts/analysis-http.integration.spec.ts.
+    await prisma.organizationSubscription.create({
+      data: { id: randomUUID(), organizationId: orgId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+    });
+
     const owner = await registerAndLogin(`validation-owner-${randomUUID()}@smoke.test`);
     userIds.push(owner.userId);
     tokenOwner = owner.token;
@@ -137,6 +144,7 @@ describe("Validation — real HTTP + PostgreSQL, and the tenders/:id/readiness r
     await prisma.organizationMembership.deleteMany({ where: { organizationId: orgId } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: orgId } });
     await prisma.organization.deleteMany({ where: { id: orgId } });
     await app.close();
   }, 30000);
@@ -306,4 +314,45 @@ describe("Validation — real HTTP + PostgreSQL, and the tenders/:id/readiness r
     const historicalV1 = await prisma.finalApproval.findUnique({ where: { id: approvalV1.id } });
     expect(historicalV1).toBeTruthy();
   }, 30000);
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E1.5, mission §8 (HTTP 402 — DETTE DE PREUVE)", () => {
+    // Dernier describe block du fichier (vitest exécute `it`/`describe` d'un même fichier en ordre
+    // de déclaration, jamais en parallèle) — bascule l'abonnement ENTERPRISE de `orgId` en PAST_DUE,
+    // même motif déjà établi dans `pricing-schedule-http.integration.spec.ts`. Un second Tender frais
+    // (jamais touché par les tests précédents) garde l'assertion "aucune mutation persistée" propre.
+    it("POST .../validation/run without entitlement (subscription PAST_DUE, no Pass) refuses with 402 TENDER_OPERATION_NOT_ENTITLED — no ValidationRun row persisted", async () => {
+      const noEntitlementTenderId = randomUUID();
+      await prisma.tender.create({ data: { id: noEntitlementTenderId, organizationId: orgId, clientAccountId: clientId, title: "Tender Validation HTTP — no entitlement", status: "DRAFT", tags: [], createdBy: userIds[0]! } });
+
+      // Le brouillon d'export (`ExportJob`) que `RunFinalValidationUseCase` résout AVANT le gate
+      // entitlement (mission — l'existence de l'ExportJob n'est pas elle-même une preuve
+      // d'entitlement, seul `runTenderOperationEntitled` fait autorité) : seedé pendant que
+      // l'organisation est ENCORE entitled (ENTERPRISE ACTIVE), pour isoler précisément le refus sur
+      // l'appel `/validation/run` lui-même.
+      const createTemplateRes = await fetch(`${baseUrl}/api/v1/exports/templates`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ documentType: "TECHNICAL_MEMO", name: `Validation HTTP tpl no-entitlement ${randomUUID()}`, format: "DOCX", config: { sections: [{ id: "SUMMARY", label: "Résumé exécutif", mandatory: true, order: 0 }] } }),
+      });
+      const template = (await createTemplateRes.json()) as { id: string; versions: { id: string }[] };
+      await fetch(`${baseUrl}/api/v1/exports/templates/${template.id}/versions/${template.versions[0]!.id}/activate`, { method: "POST", headers: authHeaders() });
+      const previewRes = await fetch(`${baseUrl}/api/v1/tenders/${noEntitlementTenderId}/exports/preview`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ exportTemplateId: template.id, sections: [{ sectionId: "SUMMARY", sourceType: "MANUAL", manualContent: "Contenu suffisant." }] }),
+      });
+      expect(previewRes.status).toBe(201);
+      const previewJob = (await previewRes.json()) as { id: string };
+
+      await prisma.organizationSubscription.update({ where: { organizationId: orgId }, data: { status: "PAST_DUE" } });
+
+      const runRes = await fetch(`${baseUrl}/api/v1/tenders/${noEntitlementTenderId}/validation/run`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ exportJobId: previewJob.id }) });
+      expect(runRes.status).toBe(402);
+      const body = (await runRes.json()) as { error: { code: string } };
+      expect(body.error.code).toBe("TENDER_OPERATION_NOT_ENTITLED");
+
+      const persisted = await prisma.validationRun.findFirst({ where: { organizationId: orgId, tenderId: noEntitlementTenderId } });
+      expect(persisted).toBeNull();
+    });
+  });
 });

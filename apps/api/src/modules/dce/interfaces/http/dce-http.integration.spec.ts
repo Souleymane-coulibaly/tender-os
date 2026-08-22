@@ -180,6 +180,14 @@ describe("DCE — real HTTP + PostgreSQL (NestJS)", () => {
         status: "TRIAL",
       },
     });
+    // Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 1 — les use cases DCE gatent désormais
+    // canOperateOnTender : ENTERPRISE (illimité) évite tout effet de bord de quota/AO credits.
+    await prisma.organizationSubscription.createMany({
+      data: [
+        { id: randomUUID(), organizationId: orgAId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+        { id: randomUUID(), organizationId: orgBId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+      ],
+    });
 
     const adminA = await registerAndLogin(`dce-admin-a-${randomUUID()}@smoke.test`);
     const readOnlyA = await registerAndLogin(`dce-readonly-a-${randomUUID()}@smoke.test`);
@@ -291,6 +299,7 @@ describe("DCE — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
     await app.close();
   }, 30000);

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { Dc1CandidateType, Dc1Declaration } from "../../domain/dc1-declaration.aggregate";
 import { Dc1DeclarationNotFoundError } from "../../domain/errors";
@@ -19,17 +20,24 @@ export class EnsureDc1DeclarationUseCase {
     @Inject(DC1_DECLARATION_REPOSITORY) private readonly repository: Dc1DeclarationRepository,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: EnsureDc1DeclarationCommand): Promise<Dc1DeclarationSummary> {
     await this.accessService.assertTenderAccess({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: command.tenderId, permission: ClientPermission.ManageAdministrativeDossier });
 
-    const existing = await this.repository.findByTenderId({ organizationId: command.organizationId, tenderId: command.tenderId });
-    if (existing) return toDc1DeclarationSummary(existing);
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3, mission §20 — point d'entrée INDÉPENDANT.
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => {
+        const existing = await this.repository.findByTenderId({ organizationId: command.organizationId, tenderId: command.tenderId });
+        if (existing) return toDc1DeclarationSummary(existing);
 
-    const dc1 = Dc1Declaration.create({ id: this.idGenerator.generate(), organizationId: command.organizationId, tenderId: command.tenderId, candidateType: Dc1CandidateType.Individual, createdBy: command.actorId, occurredAt: this.clock.now() });
-    await this.repository.create(dc1);
-    return toDc1DeclarationSummary(dc1);
+        const dc1 = Dc1Declaration.create({ id: this.idGenerator.generate(), organizationId: command.organizationId, tenderId: command.tenderId, candidateType: Dc1CandidateType.Individual, createdBy: command.actorId, occurredAt: this.clock.now() });
+        await this.repository.create(dc1);
+        return toDc1DeclarationSummary(dc1);
+      },
+    );
   }
 }
 

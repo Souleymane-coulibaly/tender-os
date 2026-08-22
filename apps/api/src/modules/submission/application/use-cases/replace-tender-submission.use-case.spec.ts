@@ -99,6 +99,7 @@ function buildUseCase(input: {
   repository: TenderSubmissionRepository;
   submittableResponsePackageVersionUseCase?: GetSubmittableResponsePackageVersionUseCase;
   idGenerator?: { generate: () => string };
+  entitlementService?: ReturnType<typeof fakeEntitlementService>;
 }): ReplaceTenderSubmissionUseCase {
   return new ReplaceTenderSubmissionUseCase(
     input.accessService ?? fakeAccessService(),
@@ -109,7 +110,20 @@ function buildUseCase(input: {
     fakeAuditLogWriter(),
     fakeClock(),
     input.idGenerator ?? { generate: () => "sub-2" },
+    (input.entitlementService ?? fakeEntitlementService()) as never,
   );
+}
+
+function fakeEntitlementService(allowed = true) {
+  return {
+    canOperateOnTender: vi.fn(async () => allowed),
+    runTenderOperationEntitled: vi.fn(async (_input: unknown, operation: () => Promise<unknown>) => {
+      if (!allowed) {
+        throw Object.assign(new Error("not entitled"), { code: "TENDER_OPERATION_NOT_ENTITLED" });
+      }
+      return operation();
+    }),
+  };
 }
 
 describe("ReplaceTenderSubmissionUseCase", () => {
@@ -264,6 +278,31 @@ describe("ReplaceTenderSubmissionUseCase", () => {
         useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", submissionId: "sub-1", packageId: "pkg-2", platform: SubmissionPlatform.Place, submittedAt: LATER }),
       ).rejects.toBeInstanceOf(ResponsePackageArtifactMissingError);
       expect(repository.replaceActive).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E1.2 — entitlement gate (mission TEST 9/10)", () => {
+    it("mission TEST 9 — refuses (no mutation, history untouched) when the organization has no entitlement to operate on this tender", async () => {
+      const entitlementService = fakeEntitlementService(false);
+      const repository = repositoryWith(original());
+      const useCase = buildUseCase({ resolver: resolverWith([completedPackage()]), repository, entitlementService });
+
+      await expect(
+        useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", submissionId: "sub-1", packageId: "pkg-2", platform: SubmissionPlatform.Place, submittedAt: LATER }),
+      ).rejects.toMatchObject({ code: "TENDER_OPERATION_NOT_ENTITLED" });
+
+      expect(entitlementService.runTenderOperationEntitled).toHaveBeenCalledWith(expect.objectContaining({ organizationId: ORGANIZATION_ID, tenderId: TENDER_ID }), expect.any(Function));
+      expect(repository.replaceActive).not.toHaveBeenCalled();
+    });
+
+    it("mission TEST 10 — succeeds when entitled, and never consumes an additional AO credit (ConsumeAoCreditUseCase is never wired into this use case)", async () => {
+      const entitlementService = fakeEntitlementService(true);
+      const useCase = buildUseCase({ resolver: resolverWith([completedPackage()]), repository: repositoryWith(original()), entitlementService });
+
+      const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", submissionId: "sub-1", packageId: "pkg-2", platform: SubmissionPlatform.Place, submittedAt: LATER });
+
+      expect(result.status).toBe(TenderSubmissionStatus.Submitted);
+      expect(entitlementService.runTenderOperationEntitled).toHaveBeenCalledWith(expect.objectContaining({ organizationId: ORGANIZATION_ID, tenderId: TENDER_ID }), expect.any(Function));
     });
   });
 });

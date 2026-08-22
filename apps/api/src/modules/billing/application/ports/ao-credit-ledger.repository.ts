@@ -44,6 +44,11 @@ export interface AoCreditLedgerRepository {
 
   findConsumptionByTenderId(organizationId: string, tenderId: string): Promise<AoCreditLedgerEntry | null>;
   findGrantByPeriod(organizationId: string, period: string): Promise<AoCreditLedgerEntry | null>;
+  /** Checkpoint TENDEROS-2.1-P2.3-E1.2, ANNUAL CATCHUP — "YYYY-MM" le plus récent déjà GRANT pour
+   *  cette organisation, `null` si aucun grant n'a jamais eu lieu (ancre alors le rattrapage sur le
+   *  début de la période d'abonnement, jamais avant). Comparaison lexicographique valide (format
+   *  zero-paddé), aucun calcul de date nécessaire côté appelant. */
+  findLatestGrantPeriod(organizationId: string): Promise<string | null>;
 
   list(organizationId: string, options: { cursor?: string | undefined; limit: number }): Promise<AoCreditLedgerPage>;
 }

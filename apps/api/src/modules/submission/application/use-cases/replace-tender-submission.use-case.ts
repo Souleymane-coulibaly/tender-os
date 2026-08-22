@@ -1,7 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
+import type { TenderSummary } from "../../../tenders";
 import { TenderSubmission } from "../../domain/tender-submission.aggregate";
 import {
   CustomPlatformNameRequiredError,
@@ -60,6 +62,7 @@ export class ReplaceTenderSubmissionUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: ReplaceTenderSubmissionCommand): Promise<TenderSubmissionSummary> {
@@ -69,6 +72,18 @@ export class ReplaceTenderSubmissionUseCase {
     }
     const tender = await this.accessService.assertTenderAccess({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: previous.tenderId, permission: ClientPermission.ManageSubmission });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — ferme le second finding Codex "Submission.replace non
+    // gaté" : AVANT toute mutation (mission §4), allocation du Pass (si nécessaire) avec
+    // compensation automatique si l'opération échoue ensuite (mission §2). `replace()` ne consomme
+    // TOUJOURS PAS de nouveau crédit AO (voir ConsumeAoCreditUseCase, jamais appelé ici) — seul
+    // l'accès reste conditionné à l'entitlement, jamais une seconde facturation.
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: previous.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command, previous, tender),
+    );
+  }
+
+  private async executeEntitled(command: ReplaceTenderSubmissionCommand, previous: TenderSubmission, tender: TenderSummary): Promise<TenderSubmissionSummary> {
     if (previous.status === TenderSubmissionStatus.Replaced) {
       throw new TenderSubmissionAlreadyReplacedError();
     }

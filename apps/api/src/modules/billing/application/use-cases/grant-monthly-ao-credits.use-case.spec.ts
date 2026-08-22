@@ -37,14 +37,14 @@ describe("GrantMonthlyAoCreditsUseCase", () => {
     await withSubscription(subscriptions, PlanTier.Starter);
 
     const m1 = await useCase.execute({ organizationId: ORG_A, period: month(0), actorId: "system", occurredAt: FIXED_NOW });
-    expect(m1.balanceAfter).toBe(2);
+    expect(m1.entry.balanceAfter).toBe(2);
     const m2 = await useCase.execute({ organizationId: ORG_A, period: month(1), actorId: "system", occurredAt: FIXED_NOW });
-    expect(m2.balanceAfter).toBe(4);
+    expect(m2.entry.balanceAfter).toBe(4);
     const m3 = await useCase.execute({ organizationId: ORG_A, period: month(2), actorId: "system", occurredAt: FIXED_NOW });
-    expect(m3.balanceAfter).toBe(6);
+    expect(m3.entry.balanceAfter).toBe(6);
     const m4 = await useCase.execute({ organizationId: ORG_A, period: month(3), actorId: "system", occurredAt: FIXED_NOW });
-    expect(m4.balanceAfter).toBe(6);
-    expect(m4.amount).toBe(0);
+    expect(m4.entry.balanceAfter).toBe(6);
+    expect(m4.entry.amount).toBe(0);
   });
 
   it("mission — Business rollover math: 10,20,30,40,50,60,60 (caps at 60)", async () => {
@@ -52,7 +52,7 @@ describe("GrantMonthlyAoCreditsUseCase", () => {
 
     const expected = [10, 20, 30, 40, 50, 60, 60];
     for (let i = 0; i < expected.length; i++) {
-      const entry = await useCase.execute({ organizationId: ORG_A, period: month(i), actorId: "system", occurredAt: FIXED_NOW });
+      const { entry } = await useCase.execute({ organizationId: ORG_A, period: month(i), actorId: "system", occurredAt: FIXED_NOW });
       expect(entry.balanceAfter).toBe(expected[i]);
     }
   });
@@ -68,16 +68,16 @@ describe("GrantMonthlyAoCreditsUseCase", () => {
     expect(await ledger.getBalance(ORG_A)).toBe(53);
 
     const nextGrant = await useCase.execute({ organizationId: ORG_A, period: month(6), actorId: "system", occurredAt: FIXED_NOW });
-    expect(nextGrant.amount).toBe(7);
-    expect(nextGrant.balanceAfter).toBe(60);
+    expect(nextGrant.entry.amount).toBe(7);
+    expect(nextGrant.entry.balanceAfter).toBe(60);
   });
 
   it("mission §17 — annual billing: credits are still granted ONE MONTH AT A TIME, never all upfront", async () => {
     await withSubscription(subscriptions, PlanTier.Business, "sub-annual");
 
     const m1 = await useCase.execute({ organizationId: ORG_A, period: month(0), actorId: "system", occurredAt: FIXED_NOW });
-    expect(m1.amount).toBe(10);
-    expect(m1.balanceAfter).toBe(10);
+    expect(m1.entry.amount).toBe(10);
+    expect(m1.entry.balanceAfter).toBe(10);
     // Jamais +120 upfront (10 * 12) même pour un abonnement annuel — un seul grant existe pour M1.
     expect(await ledger.getBalance(ORG_A)).toBe(10);
   });
@@ -88,7 +88,9 @@ describe("GrantMonthlyAoCreditsUseCase", () => {
     const first = await useCase.execute({ organizationId: ORG_A, period: month(0), actorId: "system", occurredAt: FIXED_NOW });
     const second = await useCase.execute({ organizationId: ORG_A, period: month(0), actorId: "system", occurredAt: FIXED_NOW });
 
-    expect(second.id).toBe(first.id);
+    expect(first.alreadyApplied).toBe(false);
+    expect(second.alreadyApplied).toBe(true);
+    expect(second.entry.id).toBe(first.entry.id);
     expect(await ledger.getBalance(ORG_A)).toBe(2);
     expect(auditLog.entries.filter((e) => e.action === "AoCreditsGranted")).toHaveLength(1);
   });

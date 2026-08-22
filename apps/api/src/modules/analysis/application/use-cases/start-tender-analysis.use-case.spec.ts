@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GetTenderUseCase } from "../../../tenders";
+import { AnalysisScope } from "../../domain/analysis-scope";
 import {
   FakeOutboxWriter,
   FixedClock,
@@ -18,7 +19,19 @@ describe("StartTenderAnalysisUseCase", () => {
   let dispatcher: RecordingAnalysisDispatcher;
   let getTenderUseCase: { execute: ReturnType<typeof vi.fn> };
 
-  function buildUseCase(): StartTenderAnalysisUseCase {
+  function fakeEntitlementService(allowed = true) {
+    return {
+      canOperateOnTender: vi.fn(async () => allowed),
+      runTenderOperationEntitled: vi.fn(async (_input: unknown, operation: () => Promise<unknown>) => {
+        if (!allowed) {
+          throw Object.assign(new Error("not entitled"), { code: "TENDER_OPERATION_NOT_ENTITLED" });
+        }
+        return operation();
+      }),
+    };
+  }
+
+  function buildUseCase(entitlementService?: ReturnType<typeof fakeEntitlementService>): StartTenderAnalysisUseCase {
     return new StartTenderAnalysisUseCase(
       jobRepository,
       new InMemoryAuditLogWriter(),
@@ -26,6 +39,7 @@ describe("StartTenderAnalysisUseCase", () => {
       new FakeOutboxWriter(),
       new FixedClock(NOW),
       getTenderUseCase as unknown as GetTenderUseCase,
+      (entitlementService ?? fakeEntitlementService()) as never,
     );
   }
 
@@ -62,5 +76,19 @@ describe("StartTenderAnalysisUseCase", () => {
     await expect(useCase.execute({ organizationId: ORG, tenderId: TENDER, actorId: "u", actorRole: "BID_MANAGER" })).rejects.toMatchObject({
       code: "ANALYSIS_ALREADY_RUNNING",
     });
+  });
+
+  it("Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 1, mission TEST 2 — refuses (never creates a job) when the organization has no entitlement to operate on this tender", async () => {
+    const entitlementService = fakeEntitlementService(false);
+    const useCase = buildUseCase(entitlementService);
+
+    await expect(useCase.execute({ organizationId: ORG, tenderId: TENDER, actorId: "u", actorRole: "BID_MANAGER" })).rejects.toMatchObject({
+      code: "TENDER_OPERATION_NOT_ENTITLED",
+    });
+
+    expect(entitlementService.runTenderOperationEntitled).toHaveBeenCalledWith(expect.objectContaining({ organizationId: ORG, tenderId: TENDER }), expect.any(Function));
+    expect(dispatcher.dispatched).toHaveLength(0);
+    const jobs = await jobRepository.listByTarget({ organizationId: ORG, scope: AnalysisScope.Tender, targetId: TENDER, limit: 10, offset: 0 });
+    expect(jobs.total).toBe(0);
   });
 });

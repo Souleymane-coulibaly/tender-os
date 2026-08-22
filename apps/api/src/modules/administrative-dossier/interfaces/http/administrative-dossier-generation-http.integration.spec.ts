@@ -70,6 +70,13 @@ describe("Administrative Dossier — Phase 3 PDF/XML generation (real HTTP + Pos
 
     await prisma.organization.create({ data: { id: orgId, name: "Administrative Dossier Generation Org", slug: `administrative-dossier-generation-org-${orgId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" } });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — EnsureAdministrativeDossierUseCase gate désormais
+    // canOperateOnTender : ENTERPRISE (illimité) évite tout effet de bord de quota/AO credits,
+    // même motif déjà établi dans dce-http.integration.spec.ts/analysis-http.integration.spec.ts.
+    await prisma.organizationSubscription.create({
+      data: { id: randomUUID(), organizationId: orgId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+    });
+
     const owner = await registerAndLogin(`administrative-dossier-generation-owner-${randomUUID()}@smoke.test`);
     userIds.push(owner.userId);
     tokenOwner = owner.token;
@@ -114,6 +121,7 @@ describe("Administrative Dossier — Phase 3 PDF/XML generation (real HTTP + Pos
     // pré-existant, jamais déclenché tant qu'un bug de démarrage bloquait ce fichier avant même
     // d'atteindre `afterAll`).
     await prisma.outboxEvent.deleteMany({ where: { organizationId: orgId } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: orgId } });
     await prisma.organization.deleteMany({ where: { id: orgId } });
     await app.close();
   });

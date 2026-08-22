@@ -48,11 +48,17 @@ export class PrismaTenderSubmissionRepository implements TenderSubmissionReposit
       // Checkpoint TENDEROS-2.1-P2.2-F2.3, mission §19/§20 — transaction UNIQUE dès qu'une
       // provenance multi-lot doit être écrite : jamais une Submission SUCCESS avec une provenance
       // partielle si l'écriture des lignes enfant échoue à mi-chemin.
+      //
+      // Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 4 — `currentClient()` (jamais `this.prisma` brut)
+      // partout dans ce repository : rejoint la transaction ambiante ouverte par
+      // `RecordTenderSubmissionUseCase` (consommation AO + écriture de la Submission désormais
+      // atomiques ensemble, même motif que `PrismaTenderRepository`), sans changer le comportement
+      // hors contexte transactionnel (retombe sur le client Prisma normal).
       if (responsePackageProvenance.length === 0) {
-        await this.prisma.tenderSubmission.create({ data: toTenderSubmissionRow(submission) });
+        await this.prisma.currentClient().tenderSubmission.create({ data: toTenderSubmissionRow(submission) });
         return;
       }
-      await this.prisma.$transaction(async (tx) => {
+      await this.prisma.withTransaction(async (tx) => {
         await tx.tenderSubmission.create({ data: toTenderSubmissionRow(submission) });
         await tx.submissionResponsePackage.createMany({ data: responsePackageProvenance.map((p) => toProvenanceRow(submission.organizationId, submission.id, p)) });
       });
@@ -65,19 +71,19 @@ export class PrismaTenderSubmissionRepository implements TenderSubmissionReposit
   }
 
   async findById(input: { organizationId: string; submissionId: string }): Promise<TenderSubmission | null> {
-    const record = await this.prisma.tenderSubmission.findFirst({ where: { id: input.submissionId, organizationId: input.organizationId } });
+    const record = await this.prisma.currentClient().tenderSubmission.findFirst({ where: { id: input.submissionId, organizationId: input.organizationId } });
     return record ? toDomainTenderSubmission(record) : null;
   }
 
   async findActiveForTender(input: { organizationId: string; tenderId: string }): Promise<TenderSubmission | null> {
-    const record = await this.prisma.tenderSubmission.findFirst({
+    const record = await this.prisma.currentClient().tenderSubmission.findFirst({
       where: { organizationId: input.organizationId, tenderId: input.tenderId, status: { in: IN_FLIGHT_STATUSES } },
     });
     return record ? toDomainTenderSubmission(record) : null;
   }
 
   async listByTender(input: { organizationId: string; tenderId: string }): Promise<readonly TenderSubmission[]> {
-    const records = await this.prisma.tenderSubmission.findMany({
+    const records = await this.prisma.currentClient().tenderSubmission.findMany({
       where: { organizationId: input.organizationId, tenderId: input.tenderId },
       orderBy: { createdAt: "asc" },
     });
@@ -86,10 +92,10 @@ export class PrismaTenderSubmissionRepository implements TenderSubmissionReposit
 
   async save(submission: TenderSubmission, responsePackageProvenance: readonly SubmissionResponsePackageProvenanceInput[] = []): Promise<void> {
     if (responsePackageProvenance.length === 0) {
-      await this.prisma.tenderSubmission.update({ where: { id: submission.id }, data: toTenderSubmissionRow(submission) });
+      await this.prisma.currentClient().tenderSubmission.update({ where: { id: submission.id }, data: toTenderSubmissionRow(submission) });
       return;
     }
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.withTransaction(async (tx) => {
       await tx.tenderSubmission.update({ where: { id: submission.id }, data: toTenderSubmissionRow(submission) });
       await tx.submissionResponsePackage.createMany({ data: responsePackageProvenance.map((p) => toProvenanceRow(submission.organizationId, submission.id, p)) });
     });
@@ -97,7 +103,7 @@ export class PrismaTenderSubmissionRepository implements TenderSubmissionReposit
 
   async replaceActive(input: { previous: TenderSubmission; next: TenderSubmission; nextResponsePackageProvenance?: readonly SubmissionResponsePackageProvenanceInput[] }): Promise<void> {
     try {
-      await this.prisma.$transaction(async (tx) => {
+      await this.prisma.withTransaction(async (tx) => {
         await tx.tenderSubmission.update({ where: { id: input.previous.id }, data: toTenderSubmissionRow(input.previous) });
         await tx.tenderSubmission.create({ data: toTenderSubmissionRow(input.next) });
         if (input.nextResponsePackageProvenance && input.nextResponsePackageProvenance.length > 0) {
@@ -113,7 +119,7 @@ export class PrismaTenderSubmissionRepository implements TenderSubmissionReposit
   }
 
   async listResponsePackageProvenance(input: { organizationId: string; submissionId: string }): Promise<readonly SubmissionResponsePackageProvenance[]> {
-    const records = await this.prisma.submissionResponsePackage.findMany({
+    const records = await this.prisma.currentClient().submissionResponsePackage.findMany({
       where: { organizationId: input.organizationId, submissionId: input.submissionId },
       orderBy: { createdAt: "asc" },
     });

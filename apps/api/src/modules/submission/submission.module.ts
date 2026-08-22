@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AnalysisModule } from "../analysis";
+import { BillingModule } from "../billing";
 import { ChecklistIntelligenceModule } from "../checklist-intelligence";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { DocumentsModule } from "../documents";
@@ -12,6 +13,7 @@ import { TechnicalMemoModule } from "../technical-memo";
 import { TendersModule } from "../tenders";
 import { ValidationModule } from "../validation";
 
+import { ATOMIC_TRANSACTION_RUNNER } from "./application/ports/atomic-transaction-runner";
 import { AUDIT_LOG_WRITER } from "./application/ports/audit-log-writer";
 import { SUBMISSION_PROOF_REPOSITORY } from "./application/ports/submission-proof.repository";
 import { TENDER_SUBMISSION_REPOSITORY } from "./application/ports/tender-submission.repository";
@@ -32,6 +34,7 @@ import { WithdrawTenderSubmissionUseCase } from "./application/use-cases/withdra
 import { SubmissionAccessService } from "./application/services/submission-access.service";
 import { SubmissionPackageResolverService } from "./application/services/submission-package-resolver.service";
 
+import { PrismaAtomicTransactionRunner } from "./infrastructure/prisma-atomic-transaction-runner";
 import { PrismaAuditLogWriter } from "./infrastructure/prisma-audit-log.writer";
 import { PrismaSubmissionProofRepository } from "./infrastructure/prisma-submission-proof.repository";
 import { PrismaTenderSubmissionRepository } from "./infrastructure/prisma-tender-submission.repository";
@@ -71,6 +74,7 @@ import { SubmissionController } from "./interfaces/http/submission.controller";
     OpportunityModule,
     TechnicalMemoModule,
     ResponsePackageModule,
+    BillingModule,
   ],
   controllers: [SubmissionController],
   providers: [
@@ -93,6 +97,7 @@ import { SubmissionController } from "./interfaces/http/submission.controller";
     { provide: TENDER_SUBMISSION_REPOSITORY, useClass: PrismaTenderSubmissionRepository },
     { provide: SUBMISSION_PROOF_REPOSITORY, useClass: PrismaSubmissionProofRepository },
     { provide: AUDIT_LOG_WRITER, useClass: PrismaAuditLogWriter },
+    { provide: ATOMIC_TRANSACTION_RUNNER, useClass: PrismaAtomicTransactionRunner },
   ],
   exports: [GetTenderSubmissionReadinessUseCase, ListTenderSubmissionsUseCase],
 })

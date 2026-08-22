@@ -21,6 +21,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   // accès à un client ne doit jamais pouvoir distinguer "n'existe pas" de "accès refusé".
   CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,
   CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
+  // Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 1 — jetée par `assertTenderOperationEntitled`
+  // (module `billing`), même statut que INSUFFICIENT_AO_CREDITS/SEAT_LIMIT_EXCEEDED ailleurs.
+  TENDER_OPERATION_NOT_ENTITLED: HttpStatus.PAYMENT_REQUIRED,
 
   DCE_NOT_FOUND: HttpStatus.NOT_FOUND,
   DCE_ALREADY_EXISTS: HttpStatus.CONFLICT,

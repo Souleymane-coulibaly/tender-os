@@ -36,6 +36,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
     label: "Paramètres",
     items: [
       { href: "/app/subscription", label: "Abonnement & utilisation", tourTarget: "subscription" },
+      { href: "/app/members", label: "Membres" },
       { href: "/app/integrations/api-keys", label: "Intégrations", tourTarget: "integrations" },
       { href: "/app/ai-configuration/models", label: "Configuration IA" },
       { href: "/app/pricing", label: "Pricing organisation" },

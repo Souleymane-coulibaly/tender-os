@@ -139,6 +139,16 @@ describe("Submission — real HTTP + PostgreSQL (NestJS)", () => {
         { id: orgBId, name: "Submission Org B HTTP", slug: `submission-org-b-http-${orgBId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
       ],
     });
+    // Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 4 — RecordTenderSubmissionUseCase consomme
+    // désormais un crédit AO au premier dépôt : ENTERPRISE (illimité, jamais de ledger numérique,
+    // voir ConsumeAoCreditUseCase) évite tout effet de bord sur les nombreux dépôts de cette suite,
+    // qui ne porte pas sur la facturation.
+    await prisma.organizationSubscription.createMany({
+      data: [
+        { id: randomUUID(), organizationId: orgAId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+        { id: randomUUID(), organizationId: orgBId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+      ],
+    });
 
     const ownerA = await registerAndLogin(`submission-owner-a-${randomUUID()}@smoke.test`);
     const ownerB = await registerAndLogin(`submission-owner-b-${randomUUID()}@smoke.test`);
@@ -195,6 +205,7 @@ describe("Submission — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
     await app.close();
   });

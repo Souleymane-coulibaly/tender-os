@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import { readStreamToBuffer } from "../../../../shared-kernel/read-stream-to-buffer";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import {
   AttachDocumentToTenderUseCase,
@@ -17,6 +18,7 @@ import { injectNumericCellValues, type XlsxCellInjectionTarget } from "../../inf
 import { FinancialFileNotReadyError, PricingScheduleVersionNotFoundError, UnsupportedXlsxStructureError } from "../../domain/errors";
 import { PricingScheduleLineKind } from "../../domain/enums";
 import { PricingScheduleFinalFile } from "../../domain/pricing-schedule-final-file.value-object";
+import type { PricingSchedule } from "../../domain/pricing-schedule.aggregate";
 import { assertPricingScheduleAccess } from "../policies/pricing-schedule-access.policy";
 import { PricingScheduleAccessService } from "../services/pricing-schedule-access.service";
 import { ATOMIC_TRANSACTION_RUNNER, type AtomicTransactionRunner } from "../ports/atomic-transaction-runner";
@@ -64,6 +66,7 @@ export class GeneratePricingScheduleFinalFileUseCase {
     private readonly accessService: PricingScheduleAccessService,
     private readonly createDocumentWithFirstVersionUseCase: CreateDocumentWithFirstVersionUseCase,
     private readonly attachDocumentToTenderUseCase: AttachDocumentToTenderUseCase,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: GeneratePricingScheduleFinalFileCommand): Promise<GeneratePricingScheduleFinalFileResult> {
@@ -76,6 +79,14 @@ export class GeneratePricingScheduleFinalFileUseCase {
       requireUseOrgPermission: true,
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.4, mission §2/§3 (P1 Codex).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: schedule.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command, schedule),
+    );
+  }
+
+  private async executeEntitled(command: GeneratePricingScheduleFinalFileCommand, schedule: PricingSchedule): Promise<GeneratePricingScheduleFinalFileResult> {
     const version = await this.versionRepository.findById({ organizationId: command.organizationId, pricingScheduleVersionId: command.pricingScheduleVersionId });
     if (!version || version.pricingScheduleId !== schedule.id) {
       throw new PricingScheduleVersionNotFoundError();

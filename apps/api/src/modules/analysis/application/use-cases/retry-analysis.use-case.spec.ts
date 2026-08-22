@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AssertClientAccessUseCase } from "../../../client-portfolio";
 import { ClientAssignment } from "../../../client-portfolio/domain/client-assignment.entity";
 import { ClientRole } from "../../../client-portfolio/domain/client-role";
@@ -71,7 +71,15 @@ describe("RetryAnalysisUseCase", () => {
 
   function buildUseCase(config: AnalysisConfig = CONFIG): RetryAnalysisUseCase {
     const getTenderUseCase = new GetTenderUseCase(tenderRepository, new AssertClientAccessUseCase(clientAssignmentRepository));
-    return new RetryAnalysisUseCase(jobRepository, new InMemoryAuditLogWriter(), dispatcher, config, new FixedClock(NOW), getTenderUseCase);
+    return new RetryAnalysisUseCase(
+      jobRepository,
+      new InMemoryAuditLogWriter(),
+      dispatcher,
+      config,
+      new FixedClock(NOW),
+      getTenderUseCase,
+      { canOperateOnTender: vi.fn(async () => true), runTenderOperationEntitled: vi.fn(async (_i: unknown, op: () => Promise<unknown>) => op()) } as never,
+    );
   }
 
   it("resets a FAILED job to QUEUED, keeping the same id/version, and dispatches it", async () => {

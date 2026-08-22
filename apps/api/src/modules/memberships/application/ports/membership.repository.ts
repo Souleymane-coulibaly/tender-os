@@ -66,6 +66,22 @@ export interface MembershipRepository {
     organizationId: string;
     fn: (context: OwnershipTransferContext) => Promise<T>;
   }): Promise<T>;
+  /**
+   * Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 3 — corrige la course "compter les membres actifs
+   * PUIS sauvegarder", identifiée sans verrou ni transaction dans `CreateMembershipUseCase` : deux
+   * requêtes concurrentes pouvaient chacune lire le même compte AVANT que l'une des deux n'insère,
+   * dépassant `seatLimit`. Même mécanisme que `runExclusiveForOrganization` ci-dessus
+   * (`pg_advisory_xact_lock` scopé à `organizationId`, BR-ORG-004) : comptage ET insertion dans UNE
+   * SEULE transaction protégée par le même verrou — jamais un mutex en mémoire (ne survivrait pas à
+   * plusieurs instances API), jamais un flag frontend, jamais un double-check non transactionnel.
+   * Retourne `applied: false` (aucune écriture) si `activeCount >= seatLimit` au moment du verrou,
+   * jamais après une insertion optimiste suivie d'un rollback applicatif.
+   */
+  saveWithSeatLimit(input: {
+    organizationId: string;
+    membership: OrganizationMembership;
+    seatLimit: number | "UNLIMITED";
+  }): Promise<{ applied: boolean; activeCount: number }>;
 }
 
 export const MEMBERSHIP_REPOSITORY = Symbol("MEMBERSHIP_REPOSITORY");

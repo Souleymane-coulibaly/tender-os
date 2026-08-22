@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { EntitlementService } from "../../../billing";
 import { CreateSigningPowerUseCase, ListSigningPowersUseCase, UpdateSigningPowerUseCase, VerifySigningPowerUseCase } from "./signing-power.use-cases";
 import type { SigningPowerRepository } from "../ports/signing-power.repository";
 import type { AdministrativeDossierAccessService } from "../services/administrative-dossier-access.service";
@@ -19,6 +20,12 @@ function fakeIdGenerator() {
 function fakeAccessService(): AdministrativeDossierAccessService {
   return { assertTenderAccess: vi.fn(async () => "client-1") } as unknown as AdministrativeDossierAccessService;
 }
+function fakeEntitlementService(): EntitlementService {
+  return {
+    canOperateOnTender: vi.fn(async () => true),
+    runTenderOperationEntitled: vi.fn(async (_input: unknown, operation: () => Promise<unknown>) => operation()),
+  } as unknown as EntitlementService;
+}
 
 function inMemoryRepository(seed: readonly SigningPower[] = []): SigningPowerRepository {
   const rows = new Map<string, SigningPower>(seed.map((p) => [p.id, p]));
@@ -32,7 +39,7 @@ function inMemoryRepository(seed: readonly SigningPower[] = []): SigningPowerRep
 
 describe("CreateSigningPowerUseCase — mission §17 'plusieurs pouvoirs possibles par Tender'", () => {
   it("creates a signing power with an UNVERIFIED status", async () => {
-    const useCase = new CreateSigningPowerUseCase(fakeAccessService(), inMemoryRepository(), fakeClock(), fakeIdGenerator());
+    const useCase = new CreateSigningPowerUseCase(fakeAccessService(), inMemoryRepository(), fakeClock(), fakeIdGenerator(), fakeEntitlementService());
     const summary = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, holderName: "Jean Dupont", representedEntityDescription: "SAS Acme", scope: "Signature de l'acte d'engagement" });
     expect(summary.status).toBe("UNVERIFIED");
   });

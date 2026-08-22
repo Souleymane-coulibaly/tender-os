@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { SigningPowerNotFoundError } from "../../domain/errors";
 import { SigningPower } from "../../domain/signing-power.aggregate";
@@ -29,27 +30,34 @@ export class CreateSigningPowerUseCase {
     @Inject(SIGNING_POWER_REPOSITORY) private readonly repository: SigningPowerRepository,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: CreateSigningPowerCommand): Promise<SigningPowerSummary> {
     await this.accessService.assertTenderAccess({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: command.tenderId, permission: ClientPermission.ManageAdministrativeDossier });
 
-    const occurredAt = this.clock.now();
-    const power = SigningPower.create({
-      id: this.idGenerator.generate(),
-      organizationId: command.organizationId,
-      tenderId: command.tenderId,
-      holderName: command.holderName,
-      representedEntityDescription: command.representedEntityDescription,
-      validFrom: command.validFrom,
-      expiresAt: command.expiresAt,
-      scope: command.scope,
-      limitations: command.limitations,
-      createdBy: command.actorId,
-      occurredAt,
-    });
-    await this.repository.create(power);
-    return toSigningPowerSummary(power, occurredAt);
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3, mission §20 — point d'entrée INDÉPENDANT.
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => {
+        const occurredAt = this.clock.now();
+        const power = SigningPower.create({
+          id: this.idGenerator.generate(),
+          organizationId: command.organizationId,
+          tenderId: command.tenderId,
+          holderName: command.holderName,
+          representedEntityDescription: command.representedEntityDescription,
+          validFrom: command.validFrom,
+          expiresAt: command.expiresAt,
+          scope: command.scope,
+          limitations: command.limitations,
+          createdBy: command.actorId,
+          occurredAt,
+        });
+        await this.repository.create(power);
+        return toSigningPowerSummary(power, occurredAt);
+      },
+    );
   }
 }
 

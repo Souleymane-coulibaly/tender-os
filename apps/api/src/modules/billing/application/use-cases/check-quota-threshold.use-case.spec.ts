@@ -19,6 +19,9 @@ class FakeEntitlementService implements EntitlementService {
   async canOperateOnTender(): Promise<boolean> {
     return true;
   }
+  async runTenderOperationEntitled<T>(_input: unknown, operation: () => Promise<T>): Promise<T> {
+    return operation();
+  }
   async canUseFeature(_organizationId: string, _feature: EntitlementFeature, _context?: EntitlementContext): Promise<boolean> {
     return true;
   }

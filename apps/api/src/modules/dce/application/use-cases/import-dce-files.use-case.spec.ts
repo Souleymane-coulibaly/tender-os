@@ -98,6 +98,7 @@ describe("ImportDceFilesUseCase", () => {
       getTenderUseCase,
       createDocumentUseCase,
       internalDocumentCleanupService,
+      { canOperateOnTender: vi.fn(async () => true), runTenderOperationEntitled: vi.fn(async (_i: unknown, op: () => Promise<unknown>) => op()) } as never,
     );
   }
 
@@ -191,6 +192,7 @@ describe("ImportDceFilesUseCase", () => {
       fakeGetTenderUseCase(),
       failingCreate,
       internalDocumentCleanupService,
+      { canOperateOnTender: vi.fn(async () => true), runTenderOperationEntitled: vi.fn(async (_i: unknown, op: () => Promise<unknown>) => op()) } as never,
     );
 
     await expect(
@@ -354,6 +356,7 @@ describe("ImportDceFilesUseCase", () => {
       fakeGetTenderUseCase(),
       createDocumentUseCase,
       internalDocumentCleanupService,
+      { canOperateOnTender: vi.fn(async () => true), runTenderOperationEntitled: vi.fn(async (_i: unknown, op: () => Promise<unknown>) => op()) } as never,
     );
 
     const result = await useCase.execute(
@@ -387,6 +390,7 @@ describe("ImportDceFilesUseCase", () => {
       fakeGetTenderUseCase(),
       createDocumentUseCase,
       internalDocumentCleanupService,
+      { canOperateOnTender: vi.fn(async () => true), runTenderOperationEntitled: vi.fn(async (_i: unknown, op: () => Promise<unknown>) => op()) } as never,
     );
 
     await expect(

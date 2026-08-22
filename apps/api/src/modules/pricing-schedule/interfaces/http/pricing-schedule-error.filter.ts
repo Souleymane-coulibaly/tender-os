@@ -26,6 +26,10 @@ const STATUS_BY_CODE: Record<string, number> = {
   CLIENT_ACCOUNT_ARCHIVED: HttpStatus.CONFLICT,
   CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
   DCE_NOT_FOUND: HttpStatus.NOT_FOUND,
+  // Checkpoint TENDEROS-2.1-P2.3-E1.4 (P1 Codex) — Pricing Schedule est désormais entitlement-gated
+  // (`runTenderOperationEntitled`), même motif/même code que DCE/Analyse/Mémoire technique/
+  // SubmissionPackage/Submission.
+  TENDER_OPERATION_NOT_ENTITLED: HttpStatus.PAYMENT_REQUIRED,
 };
 
 @Catch(DomainError)

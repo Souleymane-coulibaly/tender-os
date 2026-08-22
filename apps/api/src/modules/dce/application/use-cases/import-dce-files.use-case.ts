@@ -3,6 +3,7 @@ import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { CreateDocumentWithFirstVersionUseCase, DocumentDomain, DocumentOrigin, InternalDocumentCleanupService } from "../../../documents";
 import { GetTenderUseCase } from "../../../tenders";
 import { classifyDceDocument } from "../../domain/dce-document-classifier";
@@ -78,6 +79,7 @@ export class ImportDceFilesUseCase {
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly createDocumentWithFirstVersionUseCase: CreateDocumentWithFirstVersionUseCase,
     private readonly internalDocumentCleanupService: InternalDocumentCleanupService,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
     @Optional()
     @Inject(DCE_DOCUMENT_EXTRACTION_TRIGGER)
     private readonly extractionTrigger?: DceDocumentExtractionTrigger,
@@ -98,6 +100,17 @@ export class ImportDceFilesUseCase {
     });
     assertTenderNotArchivedForDceMutation(tender);
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — opération "cœur AO" : allocation du Pass (si nécessaire) au
+    // moment de CETTE mutation réelle, avec compensation automatique si elle échoue ensuite (mission
+    // §2/§3/§4). Couvre à la fois l'import HTTP direct et le flux ZIP asynchrone
+    // (ProcessDceZipImportUseCase délègue ICI, jamais un second point d'import).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command),
+    );
+  }
+
+  private async executeEntitled(command: ImportDceFilesCommand): Promise<ImportDceFilesResult> {
     const dce = await this.dceRepository.findByTenderId({
       organizationId: command.organizationId,
       tenderId: command.tenderId,

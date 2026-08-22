@@ -58,6 +58,7 @@ describe("StartDocumentAnalysisUseCase", () => {
       new FakeOutboxWriter(),
       clock,
       getDocumentAnalysisInputUseCase as unknown as GetDocumentAnalysisInputUseCase,
+      { canOperateOnTender: vi.fn(async () => true), runTenderOperationEntitled: vi.fn(async (_i: unknown, op: () => Promise<unknown>) => op()) } as never,
     );
   }
 

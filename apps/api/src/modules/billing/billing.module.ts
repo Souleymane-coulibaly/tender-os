@@ -27,6 +27,7 @@ import { GetOrganizationEntitlementsUseCase } from "./application/use-cases/get-
 import { GetOrganizationSubscriptionUseCase } from "./application/use-cases/get-organization-subscription.use-case";
 import { GetPublicPlanCatalogUseCase } from "./application/use-cases/get-public-plan-catalog.use-case";
 import { GrantMonthlyAoCreditsUseCase } from "./application/use-cases/grant-monthly-ao-credits.use-case";
+import { GrantMonthlyAoCreditsForYearlySubscriptionsUseCase } from "./application/use-cases/grant-monthly-ao-credits-for-yearly-subscriptions.use-case";
 import { GrantTrialAoCreditUseCase } from "./application/use-cases/grant-trial-ao-credit.use-case";
 import { HandleStripeWebhookUseCase } from "./application/use-cases/handle-stripe-webhook.use-case";
 import { ListAoCreditLedgerUseCase } from "./application/use-cases/list-ao-credit-ledger.use-case";
@@ -34,6 +35,8 @@ import { ListEntitlementOverridesUseCase } from "./application/use-cases/list-en
 import { ListPassPurchasesUseCase } from "./application/use-cases/list-pass-purchases.use-case";
 import { MarkSubscriptionPastDueUseCase } from "./application/use-cases/mark-subscription-past-due.use-case";
 import { RecordPassPurchaseUseCase } from "./application/use-cases/record-pass-purchase.use-case";
+import { ReleasePassForTenderUseCase } from "./application/use-cases/release-pass-for-tender.use-case";
+import { ReservePassForTenderUseCase } from "./application/use-cases/reserve-pass-for-tender.use-case";
 import { ReverseAoCreditConsumptionUseCase } from "./application/use-cases/reverse-ao-credit-consumption.use-case";
 import { RevokeEntitlementOverrideUseCase } from "./application/use-cases/revoke-entitlement-override.use-case";
 import { SendTrialRemindersUseCase } from "./application/use-cases/send-trial-reminders.use-case";
@@ -47,6 +50,7 @@ import { PrismaStripeProcessedEventRepository } from "./infrastructure/prisma-st
 import { PrismaTrialReminderRepository } from "./infrastructure/prisma-trial-reminder.repository";
 import { StripeSdkClient } from "./infrastructure/stripe-sdk.client";
 import { TrialReminderWorker } from "./infrastructure/trial-reminder.worker";
+import { MonthlyAoCreditGrantWorker } from "./infrastructure/monthly-ao-credit-grant.worker";
 import { AoCreditLedgerController } from "./interfaces/http/ao-credit-ledger.controller";
 import { CheckoutController } from "./interfaces/http/checkout.controller";
 import { EntitlementOverridesController } from "./interfaces/http/entitlement-overrides.controller";
@@ -81,6 +85,8 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
     GetPublicPlanCatalogUseCase,
     RecordPassPurchaseUseCase,
     ConsumePassForTenderUseCase,
+    ReservePassForTenderUseCase,
+    ReleasePassForTenderUseCase,
     ListPassPurchasesUseCase,
     GetOrganizationEntitlementsUseCase,
     GetOrganizationSubscriptionUseCase,
@@ -99,6 +105,8 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
     HandleStripeWebhookUseCase,
     SendTrialRemindersUseCase,
     TrialReminderWorker,
+    GrantMonthlyAoCreditsForYearlySubscriptionsUseCase,
+    MonthlyAoCreditGrantWorker,
 
     { provide: ORGANIZATION_SUBSCRIPTION_REPOSITORY, useClass: PrismaOrganizationSubscriptionRepository },
     { provide: PASS_PURCHASE_REPOSITORY, useClass: PrismaPassPurchaseRepository },
@@ -125,6 +133,10 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
     ConsumeAoCreditUseCase,
     GrantMonthlyAoCreditsUseCase,
     GetAoCreditBalanceUseCase,
+    // Checkpoint TENDEROS-2.1-P2.3-E1.4 — réexporté pour `tenders` (`AbandonTenderUseCase`, mission
+    // §7/§8 "action explicite d'abandon", réutilise ce SEUL mécanisme de libération, jamais un
+    // second moteur).
+    ReleasePassForTenderUseCase,
     // V2 Sprint 22E (correctif audit Codex P1-02, round 3) — réexporté pour que `memberships`/
     // `chat`/`documents` déclenchent la vérification de seuil depuis leur propre point d'écriture
     // réel (jamais depuis une lecture) : ces trois modules dépendent déjà de `billing`, jamais

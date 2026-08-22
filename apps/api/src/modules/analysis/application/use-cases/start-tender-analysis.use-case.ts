@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { GetTenderUseCase } from "../../../tenders";
 import { AnalysisJob } from "../../domain/analysis-job.aggregate";
@@ -39,6 +40,7 @@ export class StartTenderAnalysisUseCase {
     @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly getTenderUseCase: GetTenderUseCase,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: StartTenderAnalysisCommand): Promise<AnalysisJobSummary> {
@@ -51,6 +53,16 @@ export class StartTenderAnalysisUseCase {
       actorRole: command.actorRole,
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — opération "cœur AO" : allocation du Pass (si nécessaire)
+    // au moment de CETTE mutation réelle, avec compensation automatique si elle échoue ensuite
+    // (mission §2/§3/§4).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command),
+    );
+  }
+
+  private async executeEntitled(command: StartTenderAnalysisCommand): Promise<AnalysisJobSummary> {
     const job = await this.jobRepository.runExclusiveForTarget({
       organizationId: command.organizationId,
       scope: AnalysisScope.Tender,

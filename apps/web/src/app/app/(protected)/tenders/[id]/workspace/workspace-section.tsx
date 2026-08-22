@@ -15,6 +15,7 @@ import {
   requestApprovalAction,
   requestApprovalChangesAction,
 } from "../../../../workspace-actions";
+import { EntitlementUpgradeNotice } from "../../../entitlement-upgrade-notice";
 import {
   APPROVAL_ENTITY_TYPE_LABELS,
   APPROVAL_STATUS_LABELS,
@@ -405,6 +406,7 @@ function ApprovalsPanel({
   participants,
   actorId,
   canValidate,
+  hasApprovalWorkflowsEntitlement,
   getName,
 }: {
   tenderId: string;
@@ -413,6 +415,9 @@ function ApprovalsPanel({
   participants: TenderParticipant[];
   actorId: string | undefined;
   canValidate: boolean;
+  /** Checkpoint TENDEROS-2.1-P2.3-E1 — `EntitlementFeature.ApprovalWorkflows` (backend gate réel,
+   *  `RequestApprovalUseCase`) : jamais dupliqué ici, uniquement affiché. */
+  hasApprovalWorkflowsEntitlement: boolean;
   getName: (id: string | undefined) => string;
 }) {
   const router = useRouter();
@@ -518,7 +523,11 @@ function ApprovalsPanel({
           ))}
         </ul>
       )}
-      <RequestApprovalForm tenderId={tenderId} tasks={tasks} participants={participants} getName={getName} onError={setError} setPending={setIsPending} isPending={isPending} />
+      {hasApprovalWorkflowsEntitlement ? (
+        <RequestApprovalForm tenderId={tenderId} tasks={tasks} participants={participants} getName={getName} onError={setError} setPending={setIsPending} isPending={isPending} />
+      ) : (
+        <EntitlementUpgradeNotice featureLabel="Les workflows de validation" />
+      )}
     </section>
   );
 }
@@ -611,6 +620,7 @@ export function WorkspaceSection({
   members,
   actorRole,
   actorId,
+  hasApprovalWorkflowsEntitlement,
 }: {
   tenderId: string;
   initialParticipants: TenderParticipant[];
@@ -620,6 +630,9 @@ export function WorkspaceSection({
   members: Member[];
   actorRole: string | undefined;
   actorId: string | undefined;
+  /** Checkpoint TENDEROS-2.1-P2.3-E1 — `EntitlementFeature.ApprovalWorkflows` (backend gate réel,
+   *  `RequestApprovalUseCase`) : jamais dupliqué ici, uniquement affiché. */
+  hasApprovalWorkflowsEntitlement: boolean;
 }) {
   const getName = useMemberNames(members);
   const canManage = canManageWorkspace(actorRole);
@@ -630,7 +643,16 @@ export function WorkspaceSection({
       <SummaryHeader participants={initialParticipants} tasks={initialTasks} approvals={initialApprovals} />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <ParticipantsPanel tenderId={tenderId} participants={initialParticipants} members={members} canManage={canManage} getName={getName} />
-        <ApprovalsPanel tenderId={tenderId} approvals={initialApprovals} tasks={initialTasks} participants={initialParticipants} actorId={actorId} canValidate={canValidate} getName={getName} />
+        <ApprovalsPanel
+          tenderId={tenderId}
+          approvals={initialApprovals}
+          tasks={initialTasks}
+          participants={initialParticipants}
+          actorId={actorId}
+          canValidate={canValidate}
+          hasApprovalWorkflowsEntitlement={hasApprovalWorkflowsEntitlement}
+          getName={getName}
+        />
       </div>
       <TasksPanel tenderId={tenderId} tasks={initialTasks} participants={initialParticipants} canManage={canManage} getName={getName} />
       <ActivityPanel activity={initialActivity} getName={getName} />

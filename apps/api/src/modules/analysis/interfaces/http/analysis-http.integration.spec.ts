@@ -169,6 +169,15 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.organization.create({
       data: { id: orgBId, name: "Analysis Org B HTTP", slug: `analysis-org-b-http-${orgBId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
     });
+    // Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 1 — StartTenderAnalysisUseCase/StartDocumentAnalysisUseCase/
+    // RetryAnalysisUseCase gatent désormais canOperateOnTender : ENTERPRISE (illimité) évite tout
+    // effet de bord sur les quotas/AO credits pour ces tests, qui ne portent pas sur la facturation.
+    await prisma.organizationSubscription.createMany({
+      data: [
+        { id: randomUUID(), organizationId: orgAId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+        { id: randomUUID(), organizationId: orgBId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+      ],
+    });
 
     const adminA = await registerAndLogin(`analysis-admin-a-${randomUUID()}@smoke.test`);
     const readOnlyA = await registerAndLogin(`analysis-readonly-a-${randomUUID()}@smoke.test`);
@@ -283,6 +292,7 @@ describe("Analysis — real HTTP + PostgreSQL (NestJS)", () => {
     // asynchrone, observé en pratique comme source de la même classe de race).
     await prisma.routingDecision.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
     await app.close();
   }, 30000);

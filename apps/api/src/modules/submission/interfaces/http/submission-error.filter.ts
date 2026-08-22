@@ -14,6 +14,16 @@ const STATUS_BY_CODE: Record<string, number> = {
   CLIENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
   DOCUMENT_NOT_FOUND: HttpStatus.NOT_FOUND,
   SUBMISSION_PACKAGE_NOT_FOUND: HttpStatus.NOT_FOUND,
+  // Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 1/FINDING 4 — jetées par `assertTenderOperationEntitled`
+  // et `ConsumeAoCreditUseCase` (module `billing`, désormais appelé depuis `RecordTenderSubmissionUseCase`),
+  // mêmes statuts que leurs propres error filters (billing/dce/analysis/...).
+  TENDER_OPERATION_NOT_ENTITLED: HttpStatus.PAYMENT_REQUIRED,
+  INSUFFICIENT_AO_CREDITS: HttpStatus.PAYMENT_REQUIRED,
+  // Checkpoint TENDEROS-2.1-P2.3-E1.5, mission §2 — désormais atteignables depuis
+  // `RecordTenderSubmissionUseCase` (via `ConsumePassForTenderUseCase`, mission §2 race
+  // abandon/submission) : mêmes statuts que leur propre error filter (billing).
+  PASS_PURCHASE_ALREADY_CONSUMED: HttpStatus.CONFLICT,
+  PASS_PURCHASE_NOT_AVAILABLE: HttpStatus.CONFLICT,
 
   // Sprint 9
   TENDER_SUBMISSION_NOT_FOUND: HttpStatus.NOT_FOUND,
@@ -23,6 +33,8 @@ const STATUS_BY_CODE: Record<string, number> = {
   SUBMISSION_PACKAGE_OUTDATED: HttpStatus.UNPROCESSABLE_ENTITY,
   SUBMISSION_PACKAGE_VERSION_MISMATCH: HttpStatus.UNPROCESSABLE_ENTITY,
   SUBMISSION_DEADLINE_PASSED: HttpStatus.UNPROCESSABLE_ENTITY,
+  // Checkpoint TENDEROS-2.1-P2.3-E1.5, mission §3 (GUARD STATUS DU DÉPÔT).
+  TENDER_ARCHIVED_FOR_SUBMISSION: HttpStatus.CONFLICT,
   SUBMISSION_PROOF_CROSS_ORGANIZATION: HttpStatus.NOT_FOUND,
   TENDER_SUBMISSION_ALREADY_REPLACED: HttpStatus.CONFLICT,
   INVALID_TENDER_SUBMISSION_STATUS_TRANSITION: HttpStatus.CONFLICT,

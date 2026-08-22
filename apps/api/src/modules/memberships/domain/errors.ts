@@ -101,3 +101,18 @@ export class CannotTransferOwnershipToSelfError extends DomainError {
     super("Cannot transfer ownership to the current OWNER.");
   }
 }
+
+/**
+ * Checkpoint TENDEROS-2.1-P2.3-E1, mission §15 — "le backend doit refuser une invitation dépassant
+ * la limite, pas seulement le frontend". `USERS_MAX` (billing) n'était vérifié qu'après coup, en
+ * notification seule (`CheckQuotaThresholdUseCase`, jamais bloquant) — ce code ferme ce gap pour la
+ * création elle-même, jamais un second moteur de quota (le nombre de membres actifs et la limite
+ * viennent tous deux des autorités déjà existantes : `CountActiveMembersUseCase`/`EntitlementService`).
+ */
+export class SeatLimitExceededError extends DomainError {
+  readonly code = "SEAT_LIMIT_EXCEEDED";
+
+  constructor(input: { used: number; limit: number }) {
+    super(`This organization has reached its plan's user seat limit (${input.used}/${input.limit}).`);
+  }
+}

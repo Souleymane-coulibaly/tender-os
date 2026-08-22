@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { EntitlementService } from "../../../billing";
 import { FinancialDocumentType, PricingScheduleLineKind, PricingScheduleStatus, PricingScheduleVersionStatus } from "../../domain/enums";
 import { PricingScheduleValidationBlockedError, PricingScheduleVersionValidatedError } from "../../domain/errors";
 import { PricingScheduleLine } from "../../domain/pricing-schedule-line.entity";
@@ -41,6 +42,13 @@ describe("ValidatePricingScheduleVersionUseCase", () => {
     updatedAt: OCCURRED_AT,
   });
 
+  function fakeEntitlementService(): EntitlementService {
+    return {
+      canOperateOnTender: vi.fn(async () => true),
+      runTenderOperationEntitled: vi.fn(async (_input: unknown, operation: () => Promise<unknown>) => operation()),
+    } as unknown as EntitlementService;
+  }
+
   function buildUseCase(): ValidatePricingScheduleVersionUseCase {
     return new ValidatePricingScheduleVersionUseCase(
       scheduleRepository,
@@ -50,6 +58,7 @@ describe("ValidatePricingScheduleVersionUseCase", () => {
       new FakeAtomicTransactionRunner(),
       clock,
       accessService as unknown as PricingScheduleAccessService,
+      fakeEntitlementService(),
     );
   }
 

@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AnalysisModule } from "../analysis";
+import { BillingModule } from "../billing";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { ExportModule } from "../export";
 import { IdentityModule } from "../identity";
@@ -32,7 +33,7 @@ import { ValidationController } from "./interfaces/http/validation.controller";
  * pratiquée par `submission-package` (Sprint 8A bis), jamais un second calcul divergent.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, ExportModule, SignatureModule, AnalysisModule, TechnicalMemoModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, ExportModule, SignatureModule, AnalysisModule, TechnicalMemoModule, BillingModule],
   controllers: [ValidationController],
   providers: [
     RunFinalValidationUseCase,

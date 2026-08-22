@@ -10,6 +10,7 @@ import { PlanSource } from "../domain/plan-source";
 import { PlanTier } from "../domain/plan-tier";
 import { QuotaType, UNLIMITED } from "../domain/quota-type";
 import { PrismaAoCreditLedgerRepository } from "./prisma-ao-credit-ledger.repository";
+import { PrismaAuditLogWriter } from "./prisma-audit-log.writer";
 import { PrismaEntitlementOverrideRepository } from "./prisma-entitlement-override.repository";
 import { PrismaOrganizationSubscriptionRepository } from "./prisma-organization-subscription.repository";
 import { PrismaPassPurchaseRepository } from "./prisma-pass-purchase.repository";
@@ -29,6 +30,7 @@ describe("billing module — invariantes critiques (PostgreSQL réel)", () => {
   const overrideRepository = new PrismaEntitlementOverrideRepository(prisma);
   const ledgerRepository = new PrismaAoCreditLedgerRepository(prisma);
   const stripeProcessedEventRepository = new PrismaStripeProcessedEventRepository(prisma);
+  const auditLogWriter = new PrismaAuditLogWriter(prisma);
 
   const organizationId = randomUUID();
   const now = new Date("2026-08-13T10:00:00Z");
@@ -41,6 +43,7 @@ describe("billing module — invariantes critiques (PostgreSQL réel)", () => {
   });
 
   afterAll(async () => {
+    await prisma.auditLog.deleteMany({ where: { organizationId } });
     await prisma.aoCreditLedgerEntry.deleteMany({ where: { organizationId } });
     await prisma.organizationAoCreditBalance.deleteMany({ where: { organizationId } });
     await prisma.entitlementOverride.deleteMany({ where: { organizationId } });
@@ -265,6 +268,28 @@ describe("billing module — invariantes critiques (PostgreSQL réel)", () => {
 
       const retryCount = [resultA, resultB].filter((r) => r.outcome === "RETRY").length;
       expect(retryCount).toBe(1);
+    });
+  });
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E1.2 — PrismaAuditLogWriter SYSTEM actor fix", () => {
+    it("BLOQUANT (P0 découvert par ce Checkpoint) — a non-UUID actorId (e.g. 'stripe-webhook', a real webhook-triggered actor) is written as SYSTEM/null, never crashes against the real UUID-typed column", async () => {
+      const resourceId = randomUUID();
+      await auditLogWriter.record({ organizationId, actorId: "stripe-webhook", action: "PlanAssigned", resourceType: "OrganizationSubscription", resourceId, metadata: { planTier: "STARTER" } });
+
+      const row = await prisma.auditLog.findFirst({ where: { organizationId, resourceId, action: "PlanAssigned" } });
+      expect(row?.actorType).toBe("SYSTEM");
+      expect(row?.actorId).toBeNull();
+      expect((row?.metadata as Record<string, unknown>)?.systemActor).toBe("stripe-webhook");
+    });
+
+    it("a real user actorId (valid UUID) is still written as USER, unaffected by the SYSTEM-actor fix", async () => {
+      const resourceId = randomUUID();
+      const userId = randomUUID();
+      await auditLogWriter.record({ organizationId, actorId: userId, action: "PlanAssigned", resourceType: "OrganizationSubscription", resourceId });
+
+      const row = await prisma.auditLog.findFirst({ where: { organizationId, resourceId, action: "PlanAssigned" } });
+      expect(row?.actorType).toBe("USER");
+      expect(row?.actorId).toBe(userId);
     });
   });
 });

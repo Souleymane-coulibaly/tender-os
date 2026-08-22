@@ -74,6 +74,7 @@ function renderSection(overrides: Partial<Parameters<typeof WorkspaceSection>[0]
       members={MEMBERS}
       actorRole="BID_MANAGER"
       actorId="alice"
+      hasApprovalWorkflowsEntitlement={true}
       {...overrides}
     />,
   );
@@ -137,6 +138,19 @@ describe("WorkspaceSection", () => {
 
     expect(screen.queryByRole("button", { name: "Valider" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Demander des modifications" })).not.toBeInTheDocument();
+  });
+
+  it("Checkpoint TENDEROS-2.1-P2.3-E1 (mission §13, TEST 12) — hides the request-approval form and shows an upgrade notice when the org lacks the ApprovalWorkflows entitlement, never a form that would only fail at submit time", () => {
+    renderSection({ hasApprovalWorkflowsEntitlement: false });
+
+    expect(screen.queryByRole("button", { name: "Demander une validation" })).not.toBeInTheDocument();
+    expect(screen.getByText(/n'est pas inclus dans votre offre actuelle/i)).toBeInTheDocument();
+  });
+
+  it("Checkpoint TENDEROS-2.1-P2.3-E1 — shows the request-approval form when the org holds the ApprovalWorkflows entitlement", () => {
+    renderSection({ hasApprovalWorkflowsEntitlement: true });
+
+    expect(screen.getByRole("button", { name: "Demander une validation" })).toBeInTheDocument();
   });
 
   it("never presents an approval as a legal/electronic signature (mission §56)", () => {

@@ -109,6 +109,7 @@ describe("ProcessDceZipImportUseCase", () => {
       fakeGetTenderUseCase(),
       fakeCreateDocumentUseCase(dceDocumentRepository),
       internalDocumentCleanupService,
+      { canOperateOnTender: vi.fn(async () => true), runTenderOperationEntitled: vi.fn(async (_i: unknown, op: () => Promise<unknown>) => op()) } as never,
     );
     return new ProcessDceZipImportUseCase(
       jobRepository,

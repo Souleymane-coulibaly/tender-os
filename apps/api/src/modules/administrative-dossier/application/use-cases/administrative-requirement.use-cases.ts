@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import type { AdministrativeDocumentType } from "../../domain/administrative-document-type";
 import { AdministrativeRequirement } from "../../domain/administrative-requirement.aggregate";
@@ -40,6 +41,7 @@ export class CreateAdministrativeRequirementUseCase {
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: CreateAdministrativeRequirementCommand): Promise<AdministrativeRequirementSummary> {
@@ -51,6 +53,15 @@ export class CreateAdministrativeRequirementUseCase {
       permission: ClientPermission.ManageAdministrativeDossier,
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3, mission §20 — voir `EnsureAdministrativeDossierUseCase`
+    // (même justification : point d'entrée indépendant, aucun dossier préexistant requis).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command),
+    );
+  }
+
+  private async executeEntitled(command: CreateAdministrativeRequirementCommand): Promise<AdministrativeRequirementSummary> {
     const occurredAt = this.clock.now();
     const requirement = AdministrativeRequirement.create({
       id: this.idGenerator.generate(),

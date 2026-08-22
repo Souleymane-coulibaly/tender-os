@@ -21,6 +21,7 @@ import { TENDER_LOT_REPOSITORY } from "./application/ports/tender-lot.repository
 import { TENDER_STATUS_HISTORY_REPOSITORY } from "./application/ports/tender-status-history.repository";
 import { TENDER_REPOSITORY } from "./application/ports/tender.repository";
 
+import { AbandonTenderUseCase } from "./application/use-cases/abandon-tender.use-case";
 import { ArchiveTenderUseCase } from "./application/use-cases/archive-tender.use-case";
 import { RestoreTenderUseCase } from "./application/use-cases/restore-tender.use-case";
 import { ChangeTenderStatusUseCase } from "./application/use-cases/change-tender-status.use-case";
@@ -136,6 +137,7 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     ChangeTenderClientAccountUseCase,
     ChangeTenderCandidateCompanyUseCase,
     ArchiveTenderUseCase,
+    AbandonTenderUseCase,
     RestoreTenderUseCase,
     ListTenderStatusHistoryUseCase,
     GetTenderReadinessUseCase,

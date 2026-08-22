@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
-import { PassPurchaseAlreadyConsumedError, PassPurchaseNotFoundError } from "../../domain/errors";
+import { PassPurchaseAlreadyConsumedError, PassPurchaseNotAvailableError, PassPurchaseNotFoundError } from "../../domain/errors";
 import { PassPurchaseStatus } from "../../domain/pass-purchase-status";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { PASS_PURCHASE_REPOSITORY, type PassPurchaseRepository } from "../ports/pass-purchase.repository";
@@ -48,13 +48,28 @@ export class ConsumePassForTenderUseCase {
     });
 
     if (!applied) {
-      // Course perdue face à une autre requête concurrente (compare-and-set côté SQL) : jamais une
-      // régression, la ligne réelle en base fait foi.
+      // Course perdue face à une autre requête concurrente (compare-and-set côté SQL) — la ligne
+      // réelle en base fait foi, jamais une régression. Checkpoint TENDEROS-2.1-P2.3-E1.5, mission §2
+      // (RACE PRODUIT ABANDON/SUBMISSION) — correctif d'un P0 réel prouvé contre PostgreSQL : seul le
+      // cas "déjà CONSUMED pour CE MÊME Tender" (rejeu idempotent authentique — même dépôt rejoué,
+      // même transaction gagnante déjà appliquée) est un no-op sûr. TOUT autre état observé après une
+      // course perdue — la ligne est redevenue AVAILABLE (ex. un abandon explicite concurrent a
+      // libéré la réservation entre le SELECT et l'UPDATE, voir `AbandonTenderUseCase`), ou est
+      // RESERVED/CONSUMED pour un AUTRE Tender — signifie que CETTE consommation n'a RÉELLEMENT PAS
+      // eu lieu : avant ce correctif, `return` silencieux ici laissait `ConsumeAoCreditUseCase`
+      // rendre la main comme si le crédit avait été consommé, et `RecordTenderSubmissionUseCase`
+      // persistait alors la Submission quand même — l'état interdit exact de la mission ("Submission
+      // enregistrée + Pass AVAILABLE"). Désormais : échec propre, qui fait avorter intégralement la
+      // transaction Postgres englobante (`AtomicTransactionRunner`) — aucune Submission ne peut être
+      // enregistrée sans consommation réelle correspondante (mission §17).
       const current = purchase ?? (await this.passPurchaseRepository.findById(command.organizationId, command.passPurchaseId));
-      if (current?.status === PassPurchaseStatus.Consumed && current.consumedTenderId !== command.tenderId) {
+      if (current?.status === PassPurchaseStatus.Consumed && current.consumedTenderId === command.tenderId) {
+        return;
+      }
+      if (current?.status === PassPurchaseStatus.Consumed) {
         throw new PassPurchaseAlreadyConsumedError(current.id, current.consumedTenderId ?? "unknown");
       }
-      return;
+      throw new PassPurchaseNotAvailableError(command.passPurchaseId);
     }
 
     await this.auditLogWriter.record({

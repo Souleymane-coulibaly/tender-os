@@ -23,6 +23,7 @@ import {
   type ConnectorProvider,
   type ExternalConnectionSummary,
 } from "../../../../../lib/connectors-types";
+import { EntitlementUpgradeNotice } from "../../entitlement-upgrade-notice";
 
 function BrowsePanel({ connectionId, tenders, documents }: { connectionId: string; tenders: TenderPickerOption[]; documents: DocumentPickerOption[] }) {
   const [containerId, setContainerId] = useState<string | undefined>();
@@ -239,6 +240,7 @@ export function ConnectorProviderCard({
   connection,
   canManage,
   canUse,
+  hasEntitlement,
   tenders,
   documents,
 }: {
@@ -246,6 +248,9 @@ export function ConnectorProviderCard({
   connection: ExternalConnectionSummary | undefined;
   canManage: boolean;
   canUse: boolean;
+  /** Checkpoint TENDEROS-2.1-P2.3-E1 — `EntitlementFeature.AutomationConnectors` (backend gate
+   *  réel, `InitiateOAuthConnectionUseCase`) : jamais dupliqué ici, uniquement affiché. */
+  hasEntitlement: boolean;
   tenders: TenderPickerOption[];
   documents: DocumentPickerOption[];
 }) {
@@ -309,9 +314,13 @@ export function ConnectorProviderCard({
 
       {!connection ? (
         canManage ? (
-          <button type="button" disabled={isPending} onClick={() => handleConnect(false)} className="self-start rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50">
-            Connecter
-          </button>
+          hasEntitlement ? (
+            <button type="button" disabled={isPending} onClick={() => handleConnect(false)} className="self-start rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50">
+              Connecter
+            </button>
+          ) : (
+            <EntitlementUpgradeNotice featureLabel="Les connecteurs (Microsoft 365 / Google Workspace)" />
+          )
         ) : (
           <p className="text-xs text-neutral-500">Réservé Propriétaire/Administrateur.</p>
         )

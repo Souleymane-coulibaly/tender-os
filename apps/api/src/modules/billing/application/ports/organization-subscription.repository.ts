@@ -17,6 +17,11 @@ export interface OrganizationSubscriptionRepository {
    *  organisations actuellement en essai, jamais un filtrage par date fait ici (le calcul de
    *  jours restants reste dans le domaine/use case, cette méthode ne fait que lister le statut). */
   listTrialing(): Promise<OrganizationSubscription[]>;
+  /** Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 2 — pour `GrantMonthlyAoCreditsForYearlySubscriptionsUseCase`
+   *  (worker) : les abonnements annuels ACTIVE/TRIALING sont les seuls concernés par ce mécanisme
+   *  (Stripe ne produit normalement PAS 12 `invoice.paid` mensuels pour un abonnement annuel — voir
+   *  le rapport d'audit). Même discipline que `listTrialing` : aucun filtrage supplémentaire ici. */
+  listActiveOrTrialingYearly(): Promise<OrganizationSubscription[]>;
 }
 
 export const ORGANIZATION_SUBSCRIPTION_REPOSITORY = Symbol("ORGANIZATION_SUBSCRIPTION_REPOSITORY");

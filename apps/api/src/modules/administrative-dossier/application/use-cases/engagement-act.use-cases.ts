@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { GetPricingEstimateUseCase } from "../../../pricing";
 import { EngagementAct } from "../../domain/engagement-act.aggregate";
@@ -19,16 +20,24 @@ export class EnsureEngagementActUseCase {
     @Inject(ENGAGEMENT_ACT_REPOSITORY) private readonly repository: EngagementActRepository,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: EnsureEngagementActCommand): Promise<EngagementActSummary> {
     await this.accessService.assertTenderAccess({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, tenderId: command.tenderId, permission: ClientPermission.ManageAdministrativeDossier });
-    const existing = await this.repository.findByTenderId({ organizationId: command.organizationId, tenderId: command.tenderId });
-    if (existing) return toEngagementActSummary(existing);
 
-    const act = EngagementAct.create({ id: this.idGenerator.generate(), organizationId: command.organizationId, tenderId: command.tenderId, createdBy: command.actorId, occurredAt: this.clock.now() });
-    await this.repository.create(act);
-    return toEngagementActSummary(act);
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3, mission §20 — point d'entrée INDÉPENDANT.
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => {
+        const existing = await this.repository.findByTenderId({ organizationId: command.organizationId, tenderId: command.tenderId });
+        if (existing) return toEngagementActSummary(existing);
+
+        const act = EngagementAct.create({ id: this.idGenerator.generate(), organizationId: command.organizationId, tenderId: command.tenderId, createdBy: command.actorId, occurredAt: this.clock.now() });
+        await this.repository.create(act);
+        return toEngagementActSummary(act);
+      },
+    );
   }
 }
 

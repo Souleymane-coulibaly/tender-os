@@ -47,10 +47,23 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
     updatedAt: OCCURRED_AT,
   });
 
+  function fakeEntitlementService(allowed = true) {
+    return {
+      canOperateOnTender: vi.fn(async () => allowed),
+      runTenderOperationEntitled: vi.fn(async (_input: unknown, operation: () => Promise<unknown>) => {
+        if (!allowed) {
+          throw Object.assign(new Error("not entitled"), { code: "TENDER_OPERATION_NOT_ENTITLED" });
+        }
+        return operation();
+      }),
+    };
+  }
+
   function buildUseCase(
     provider: FakeAIProvider,
     routingPolicyResolver?: FakeRoutingPolicyResolver,
     routingDecisionWriter?: RecordingRoutingDecisionWriter | ThrowingRoutingDecisionWriter,
+    entitlementService?: ReturnType<typeof fakeEntitlementService>,
   ): GenerateTechnicalMemoSectionUseCase {
     return new GenerateTechnicalMemoSectionUseCase(
       sectionRepository,
@@ -67,6 +80,7 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
       getEffectiveTenderAnalysisSummaryUseCase as never,
       routingPolicyResolver as never,
       routingDecisionWriter as never,
+      (entitlementService ?? fakeEntitlementService()) as never,
     );
   }
 
@@ -359,6 +373,25 @@ describe("GenerateTechnicalMemoSectionUseCase", () => {
       const revision = await useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" });
 
       expect(revision.content).toBe("Texte généré.");
+    });
+  });
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 1 — entitlement gate", () => {
+    it("refuses generation (and never mutates the section) when the organization is not entitled to operate on this tender", async () => {
+      const provider = new FakeAIProvider([{ kind: "success", result: fakeSectionAIProviderResult({ content: JSON.stringify({ content: "Texte généré.", citations: [], missingDataNotes: [] }) }) }]);
+      const entitlementService = fakeEntitlementService(false);
+      const useCase = buildUseCase(provider, undefined, undefined, entitlementService);
+
+      await expect(useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", technicalMemoId: "memo-1", technicalMemoSectionId: "section-1" })).rejects.toMatchObject({
+        code: "TENDER_OPERATION_NOT_ENTITLED",
+      });
+
+      expect(entitlementService.runTenderOperationEntitled).toHaveBeenCalledWith(expect.objectContaining({ organizationId: "org-1", tenderId: "tender-1" }), expect.any(Function));
+      // Le gate d'entitlement s'exécute AVANT `beginGeneration` (markGenerating) : la section reste
+      // à son état initial, jamais un passage GENERATING suivi d'un échec.
+      const section = sectionRepository.sections.find((s) => s.id === "section-1")!;
+      expect(section.status).toBe(TechnicalMemoSectionStatus.Empty);
+      expect(revisionRepository.revisions).toHaveLength(0);
     });
   });
 });

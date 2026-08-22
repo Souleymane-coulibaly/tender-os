@@ -1,5 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConsumeAoCreditUseCase } from "../../../billing";
+import { beforeEach, describe, expect, it } from "vitest";
 import { CandidateCompanyArchivedError, GetCandidateCompanyUseCase } from "../../../candidate-company";
 import { CreateCandidateCompanyUseCase } from "../../../candidate-company/application/use-cases/create-candidate-company.use-case";
 import {
@@ -32,7 +31,6 @@ describe("CreateTenderUseCase", () => {
   let tenderRepository: InMemoryTenderRepository;
   let auditLogWriter: InMemoryAuditLogWriter;
   let outboxWriter: FakeOutboxWriter;
-  let consumeAoCreditUseCase: { execute: ReturnType<typeof vi.fn> };
   let candidateCompanyRepository: InMemoryCandidateCompanyRepository;
   let createCandidateCompanyUseCase: CreateCandidateCompanyUseCase;
   let useCase: CreateTenderUseCase;
@@ -41,7 +39,6 @@ describe("CreateTenderUseCase", () => {
     tenderRepository = new InMemoryTenderRepository();
     auditLogWriter = new InMemoryAuditLogWriter();
     outboxWriter = new FakeOutboxWriter();
-    consumeAoCreditUseCase = { execute: vi.fn(async () => {}) };
     candidateCompanyRepository = new InMemoryCandidateCompanyRepository();
     createCandidateCompanyUseCase = new CreateCandidateCompanyUseCase(
       candidateCompanyRepository,
@@ -60,7 +57,6 @@ describe("CreateTenderUseCase", () => {
       new FakeAtomicTransactionRunner(),
       clientPortfolio.getClientAccountUseCase,
       clientPortfolio.assertClientAccessUseCase,
-      consumeAoCreditUseCase as unknown as ConsumeAoCreditUseCase,
       new GetCandidateCompanyUseCase(candidateCompanyRepository),
     );
   });
@@ -262,7 +258,7 @@ describe("CreateTenderUseCase", () => {
     ).rejects.toThrow(InvalidTenderLanguageError);
   });
 
-  it("V2 Sprint 22B (billing) — consumes exactly one AO credit for the newly created tenderId", async () => {
+  it("Checkpoint P2.3-E1.1, FINDING 4 — creating a Tender never consumes an AO credit anymore (moved to first TenderSubmission)", async () => {
     const result = await useCase.execute({
       organizationId: "org-1",
       actorId: "user-1",
@@ -271,24 +267,9 @@ describe("CreateTenderUseCase", () => {
       title: "Marche de nettoyage",
     });
 
-    expect(consumeAoCreditUseCase.execute).toHaveBeenCalledTimes(1);
-    expect(consumeAoCreditUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ organizationId: "org-1", tenderId: result.id, actorId: "user-1" }));
-  });
-
-  it("V2 Sprint 22B (billing) — insufficient AO credit blocks Tender creation entirely: no Tender saved, no audit log, no outbox event", async () => {
-    class InsufficientCreditError extends Error {}
-    consumeAoCreditUseCase.execute = vi.fn(async () => {
-      throw new InsufficientCreditError("no credit left");
-    });
-
-    await expect(
-      useCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "BID_MANAGER", clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID, title: "Marche de nettoyage" }),
-    ).rejects.toBeInstanceOf(InsufficientCreditError);
-
-    expect(auditLogWriter.entries).toHaveLength(0);
-    expect(outboxWriter.writes).toHaveLength(0);
-    const page = await tenderRepository.list({ organizationId: "org-1", limit: 10 });
-    expect(page.items).toHaveLength(0);
+    expect(result.status).toBe("DRAFT");
+    expect(auditLogWriter.entries).toHaveLength(1);
+    expect(outboxWriter.writes).toHaveLength(1);
   });
 
   it("rejects an unknown source", async () => {

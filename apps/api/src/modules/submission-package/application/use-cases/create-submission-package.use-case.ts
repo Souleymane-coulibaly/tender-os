@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
 import { EXPORT_JOB_REPOSITORY, ExportArtifactNotFoundError, type ExportJobRepository } from "../../../export";
 import {
@@ -59,6 +60,7 @@ export class CreateSubmissionPackageUseCase {
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: CreateSubmissionPackageCommand): Promise<SubmissionPackageSummary> {
@@ -71,6 +73,16 @@ export class CreateSubmissionPackageUseCase {
       permission: ClientPermission.ApproveExport,
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3 — opération "cœur AO" (création ET reconstruction, un seul
+    // use case pour les deux) : allocation du Pass (si nécessaire) au moment de CETTE mutation
+    // réelle, avec compensation automatique si elle échoue ensuite (mission §2/§3/§4).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command, tender),
+    );
+  }
+
+  private async executeEntitled(command: CreateSubmissionPackageCommand, tender: Awaited<ReturnType<GetTenderUseCase["execute"]>>): Promise<SubmissionPackageSummary> {
     const approval = await this.finalApprovalRepository.findActiveForTender({ organizationId: command.organizationId, tenderId: command.tenderId });
     if (!approval || !approval.isActive) {
       throw new PackageNotReadyError("no active final approval for this tender — approve the final export first");

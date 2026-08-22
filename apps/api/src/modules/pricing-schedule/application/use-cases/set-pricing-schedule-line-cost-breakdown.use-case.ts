@@ -1,5 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import type { PricingScheduleLine, PricingScheduleLineCostBreakdown } from "../../domain/pricing-schedule-line.entity";
 import { assertPricingScheduleAccess } from "../policies/pricing-schedule-access.policy";
@@ -33,10 +34,11 @@ export class SetPricingScheduleLineCostBreakdownUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly accessService: PricingScheduleAccessService,
     private readonly editGuard: PricingScheduleLineEditGuard,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: SetPricingScheduleLineCostBreakdownCommand): Promise<PricingScheduleLine> {
-    await assertPricingScheduleAccess(this.accessService, {
+    const schedule = await assertPricingScheduleAccess(this.accessService, {
       organizationId: command.organizationId,
       pricingScheduleId: command.pricingScheduleId,
       actorId: command.actorId,
@@ -45,6 +47,14 @@ export class SetPricingScheduleLineCostBreakdownUseCase {
       requireUseOrgPermission: true,
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.4, mission §2/§3 (P1 Codex).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: schedule.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command),
+    );
+  }
+
+  private async executeEntitled(command: SetPricingScheduleLineCostBreakdownCommand): Promise<PricingScheduleLine> {
     const { line } = await this.editGuard.loadEditableLine({
       organizationId: command.organizationId,
       pricingScheduleId: command.pricingScheduleId,

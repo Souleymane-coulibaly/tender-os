@@ -19,6 +19,10 @@ const STATUS_BY_CODE: Record<string, number> = {
   FINAL_APPROVAL_NOT_FOUND: HttpStatus.NOT_FOUND,
   APPROVAL_ALREADY_INVALIDATED: HttpStatus.CONFLICT,
   MANIFEST_MISMATCH: HttpStatus.CONFLICT,
+
+  // Checkpoint TENDEROS-2.1-P2.3-E1.3/E1.4 (correctif — mapping manquant depuis l'ajout du gate
+  // entitlement E1.3, découvert pendant l'audit Pricing Schedule E1.4).
+  TENDER_OPERATION_NOT_ENTITLED: HttpStatus.PAYMENT_REQUIRED,
 };
 
 @Catch(DomainError)

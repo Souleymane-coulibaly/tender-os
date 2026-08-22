@@ -3,6 +3,7 @@ import { AuthenticatedGuard, CurrentActor, type AuthenticatedActor } from "../..
 import { CurrentMembershipContext, OrganizationMembershipGuard, type MembershipContext } from "../../../memberships";
 import type { RequestWithId } from "../../../../shared-kernel/request-id.middleware";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
+import { AbandonTenderUseCase } from "../../application/use-cases/abandon-tender.use-case";
 import { ArchiveTenderUseCase } from "../../application/use-cases/archive-tender.use-case";
 import { RestoreTenderUseCase } from "../../application/use-cases/restore-tender.use-case";
 import { ChangeTenderStatusUseCase } from "../../application/use-cases/change-tender-status.use-case";
@@ -146,6 +147,7 @@ export class TendersController {
     private readonly changeTenderClientAccountUseCase: ChangeTenderClientAccountUseCase,
     private readonly changeTenderCandidateCompanyUseCase: ChangeTenderCandidateCompanyUseCase,
     private readonly archiveTenderUseCase: ArchiveTenderUseCase,
+    private readonly abandonTenderUseCase: AbandonTenderUseCase,
     private readonly restoreTenderUseCase: RestoreTenderUseCase,
     private readonly listTenderStatusHistoryUseCase: ListTenderStatusHistoryUseCase,
     private readonly getTenderReadinessUseCase: GetTenderReadinessUseCase,
@@ -326,6 +328,30 @@ export class TendersController {
       requestId: request.id,
     });
     return presentTender(result);
+  }
+
+  /** Checkpoint TENDEROS-2.1-P2.3-E1.4, mission §7/§8 — action EXPLICITE et VOLONTAIRE "Abandonner
+   *  l'appel d'offres" : réutilise le schéma de corps d'Archive (même forme, `reason` optionnel),
+   *  jamais un déclenchement automatique. Libère le Pass RESERVED (le cas échéant) sans jamais
+   *  toucher un Pass déjà CONSUMED — voir `AbandonTenderUseCase`. */
+  @Post(":tenderId/abandon")
+  @HttpCode(HttpStatus.OK)
+  async abandon(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+    @Body(new ZodValidationPipe(ArchiveTenderBodySchema)) body: ArchiveTenderBody,
+    @Req() request: RequestWithId,
+  ) {
+    const result = await this.abandonTenderUseCase.execute({
+      organizationId: membership.organizationId,
+      tenderId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      reason: body.reason,
+      requestId: request.id,
+    });
+    return { tender: presentTender(result.tender), passReleaseOutcome: result.passReleaseOutcome };
   }
 
   @Post(":tenderId/restore")

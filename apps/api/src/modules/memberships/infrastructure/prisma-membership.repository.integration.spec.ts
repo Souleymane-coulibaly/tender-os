@@ -145,4 +145,60 @@ describe("PrismaMembershipRepository (PostgreSQL)", () => {
     // Jamais les CONTRIBUTOR — filtre par rôle réel, pas seulement "tous les membres".
     expect(found.every((m) => m.role === OrganizationRole.OrganizationAdmin || m.role === OrganizationRole.Owner)).toBe(true);
   });
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E1.1, FINDING 3 — saveWithSeatLimit under REAL concurrency", () => {
+    const seatLimitOrgId = randomUUID();
+    const seatLimitUserIds: string[] = [];
+    const seatLimitMembershipIds: string[] = [];
+
+    beforeAll(async () => {
+      await prisma.organization.create({
+        data: { id: seatLimitOrgId, name: "Seat Limit Concurrency Org", slug: `seat-limit-concurrency-${seatLimitOrgId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
+      });
+    });
+
+    afterAll(async () => {
+      if (seatLimitMembershipIds.length > 0) {
+        await prisma.membershipRole.deleteMany({ where: { membershipId: { in: seatLimitMembershipIds } } });
+        await prisma.organizationMembership.deleteMany({ where: { id: { in: seatLimitMembershipIds } } });
+      }
+      if (seatLimitUserIds.length > 0) {
+        await prisma.user.deleteMany({ where: { id: { in: seatLimitUserIds } } });
+      }
+      await prisma.organization.delete({ where: { id: seatLimitOrgId } });
+    });
+
+    async function seedSeatLimitUser(): Promise<string> {
+      const userId = randomUUID();
+      seatLimitUserIds.push(userId);
+      await prisma.user.create({ data: { id: userId, email: `seat-${userId}@example.com`, displayName: "Seat Limit Test User", status: "ACTIVE", passwordHash: "hashed:whatever" } });
+      return userId;
+    }
+
+    function buildSeatLimitMembership(userId: string): OrganizationMembership {
+      const id = MembershipId.from(randomUUID());
+      seatLimitMembershipIds.push(id.value);
+      return OrganizationMembership.create({ id, organizationId: seatLimitOrgId, userId, role: OrganizationRole.Contributor, occurredAt: new Date() });
+    }
+
+    it("mission TEST 12 — STARTER with exactly 1 seat remaining (limit=2, 1 already active): 2 truly concurrent creations yield exactly 1 success and 1 SEAT_LIMIT_EXCEEDED, final count exactly at the limit", async () => {
+      const existingUserId = await seedSeatLimitUser();
+      await repository.save(buildSeatLimitMembership(existingUserId));
+
+      const userA = await seedSeatLimitUser();
+      const userB = await seedSeatLimitUser();
+
+      const [resultA, resultB] = await Promise.all([
+        repository.saveWithSeatLimit({ organizationId: seatLimitOrgId, membership: buildSeatLimitMembership(userA), seatLimit: 2 }),
+        repository.saveWithSeatLimit({ organizationId: seatLimitOrgId, membership: buildSeatLimitMembership(userB), seatLimit: 2 }),
+      ]);
+
+      const applied = [resultA.applied, resultB.applied];
+      expect(applied.filter(Boolean)).toHaveLength(1);
+      expect(applied.filter((a) => !a)).toHaveLength(1);
+
+      const finalCount = await repository.countActiveByOrganization(seatLimitOrgId);
+      expect(finalCount).toBe(2);
+    });
+  });
 });

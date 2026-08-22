@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { EntitlementService } from "../../../billing";
 import { EnsureConsortiumUseCase, GetConsortiumUseCase, UpdateConsortiumUseCase } from "./consortium.use-cases";
 import type { ConsortiumRepository } from "../ports/consortium.repository";
 import type { AdministrativeDossierAccessService } from "../services/administrative-dossier-access.service";
@@ -18,6 +19,12 @@ function fakeIdGenerator() {
 function fakeAccessService(): AdministrativeDossierAccessService {
   return { assertTenderAccess: vi.fn(async () => "client-1") } as unknown as AdministrativeDossierAccessService;
 }
+function fakeEntitlementService(): EntitlementService {
+  return {
+    canOperateOnTender: vi.fn(async () => true),
+    runTenderOperationEntitled: vi.fn(async (_input: unknown, operation: () => Promise<unknown>) => operation()),
+  } as unknown as EntitlementService;
+}
 
 function inMemoryRepository(seed: readonly Consortium[] = []): ConsortiumRepository {
   const rows = new Map<string, Consortium>(seed.map((c) => [c.id, c]));
@@ -32,7 +39,7 @@ function inMemoryRepository(seed: readonly Consortium[] = []): ConsortiumReposit
 describe("EnsureConsortiumUseCase — mission §15 'un groupement par Tender'", () => {
   it("creates a consortium when none exists yet", async () => {
     const repository = inMemoryRepository();
-    const useCase = new EnsureConsortiumUseCase(fakeAccessService(), repository, fakeClock(), fakeIdGenerator());
+    const useCase = new EnsureConsortiumUseCase(fakeAccessService(), repository, fakeClock(), fakeIdGenerator(), fakeEntitlementService());
 
     const summary = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, type: ConsortiumType.Joint });
 
@@ -42,7 +49,7 @@ describe("EnsureConsortiumUseCase — mission §15 'un groupement par Tender'", 
 
   it("is idempotent: a second call returns the same consortium", async () => {
     const repository = inMemoryRepository();
-    const useCase = new EnsureConsortiumUseCase(fakeAccessService(), repository, fakeClock(), fakeIdGenerator());
+    const useCase = new EnsureConsortiumUseCase(fakeAccessService(), repository, fakeClock(), fakeIdGenerator(), fakeEntitlementService());
 
     const first = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, type: ConsortiumType.Joint });
     const second = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, type: ConsortiumType.Solidarity });

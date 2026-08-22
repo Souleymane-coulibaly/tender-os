@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { EntitlementService } from "../../../billing";
 import { EnsureEngagementActUseCase, FreezeEngagementActPricingUseCase, GetEngagementActUseCase, UnfreezeEngagementActPricingUseCase, UpdateEngagementActUseCase } from "./engagement-act.use-cases";
 import type { EngagementActRepository } from "../ports/engagement-act.repository";
 import type { AdministrativeDossierAccessService } from "../services/administrative-dossier-access.service";
@@ -19,6 +20,12 @@ function fakeIdGenerator() {
 function fakeAccessService(): AdministrativeDossierAccessService {
   return { assertTenderAccess: vi.fn(async () => "client-1") } as unknown as AdministrativeDossierAccessService;
 }
+function fakeEntitlementService(): EntitlementService {
+  return {
+    canOperateOnTender: vi.fn(async () => true),
+    runTenderOperationEntitled: vi.fn(async (_input: unknown, operation: () => Promise<unknown>) => operation()),
+  } as unknown as EntitlementService;
+}
 
 function inMemoryRepository(seed: readonly EngagementAct[] = []): EngagementActRepository {
   const rows = new Map<string, EngagementAct>(seed.map((a) => [a.id, a]));
@@ -32,7 +39,7 @@ function inMemoryRepository(seed: readonly EngagementAct[] = []): EngagementActR
 
 describe("EnsureEngagementActUseCase — mission §14 'un Acte d'engagement par Tender'", () => {
   it("creates an engagement act with no frozen pricing yet", async () => {
-    const useCase = new EnsureEngagementActUseCase(fakeAccessService(), inMemoryRepository(), fakeClock(), fakeIdGenerator());
+    const useCase = new EnsureEngagementActUseCase(fakeAccessService(), inMemoryRepository(), fakeClock(), fakeIdGenerator(), fakeEntitlementService());
     const summary = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
     expect(summary.frozenAmountValue).toBeUndefined();
   });

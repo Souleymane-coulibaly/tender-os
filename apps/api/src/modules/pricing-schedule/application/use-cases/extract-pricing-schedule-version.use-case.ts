@@ -2,12 +2,14 @@ import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import { readStreamToBuffer } from "../../../../shared-kernel/read-stream-to-buffer";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { DOCUMENT_VERSION_REPOSITORY, STORAGE_PROVIDER, type DocumentVersionRepository, type StorageProvider } from "../../../documents";
 import { extractPricingLinesFromSheet } from "../../infrastructure/pricing-line-extractor";
 import { detectPricingTableColumnMapping } from "../../infrastructure/pricing-table-column-mapper";
 import { readXlsxWorkbook } from "../../infrastructure/ooxml/xlsx-workbook-reader";
 import { UnsupportedXlsxStructureError } from "../../domain/errors";
+import type { PricingSchedule } from "../../domain/pricing-schedule.aggregate";
 import { PricingScheduleLine } from "../../domain/pricing-schedule-line.entity";
 import { PricingScheduleVersion } from "../../domain/pricing-schedule-version.entity";
 import { assertPricingScheduleAccess } from "../policies/pricing-schedule-access.policy";
@@ -56,6 +58,7 @@ export class ExtractPricingScheduleVersionUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     private readonly accessService: PricingScheduleAccessService,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: ExtractPricingScheduleVersionCommand): Promise<ExtractPricingScheduleVersionResult> {
@@ -68,6 +71,15 @@ export class ExtractPricingScheduleVersionUseCase {
       requireUseOrgPermission: true,
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.4, mission §2/§3 (P1 Codex) — réévalué à CHAQUE mutation,
+    // jamais présumé depuis un DCE historique.
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: schedule.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command, schedule),
+    );
+  }
+
+  private async executeEntitled(command: ExtractPricingScheduleVersionCommand, schedule: PricingSchedule): Promise<ExtractPricingScheduleVersionResult> {
     const documentVersion = await this.documentVersionRepository.findById({
       organizationId: command.organizationId,
       documentId: schedule.sourceDocumentId,

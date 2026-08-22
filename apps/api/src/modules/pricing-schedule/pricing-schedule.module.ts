@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { BillingModule } from "../billing";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { DceModule } from "../dce";
 import { DocumentsModule } from "../documents";
@@ -46,7 +47,7 @@ import { TenderPricingSchedulesController } from "./interfaces/http/tender-prici
  * `TendersModule`/`ClientPortfolioModule` (dual-tier, même motif que Chat/Mémoire technique).
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, DocumentsModule, DceModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, DocumentsModule, DceModule, BillingModule],
   controllers: [TenderPricingSchedulesController, PricingSchedulesController],
   providers: [
     CreatePricingScheduleUseCase,

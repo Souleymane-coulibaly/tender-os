@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AdministrativeDossierModule } from "../administrative-dossier";
+import { BillingModule } from "../billing";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { DocumentsModule } from "../documents";
 import { ExportModule } from "../export";
@@ -27,7 +28,7 @@ import { SubmissionPackageController } from "./interfaces/http/submission-packag
  * leurs tables) : aucun de ces modules n'importe jamais Package en retour.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, ExportModule, ValidationModule, SignatureModule, DocumentsModule, AdministrativeDossierModule, ResponsePackageModule],
+  imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, ExportModule, ValidationModule, SignatureModule, DocumentsModule, AdministrativeDossierModule, ResponsePackageModule, BillingModule],
   controllers: [SubmissionPackageController],
   providers: [
     CreateSubmissionPackageUseCase,

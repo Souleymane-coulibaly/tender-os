@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
-import { EXPORT_JOB_REPOSITORY, EXPORT_TEMPLATE_REPOSITORY, ExportJobNotFoundError, type ExportJobRepository, type ExportTemplateRepository } from "../../../export";
+import { EXPORT_JOB_REPOSITORY, EXPORT_TEMPLATE_REPOSITORY, ExportJobNotFoundError, type ExportJobRepository, type ExportJobWithArtifact, type ExportTemplateRepository } from "../../../export";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ValidationIssue } from "../../domain/validation-issue";
@@ -33,6 +34,7 @@ export class RunFinalValidationUseCase {
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
+    @Inject(ENTITLEMENT_SERVICE) private readonly entitlementService: EntitlementService,
   ) {}
 
   async execute(command: RunFinalValidationCommand): Promise<ValidationRunSummary> {
@@ -50,6 +52,19 @@ export class RunFinalValidationUseCase {
       permission: ClientPermission.ManageExport,
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E1.3, mission §20 (ENTITLEMENT COVERAGE) — correctif du bypass
+    // Codex : `RunFinalValidationUseCase`/`ApproveFinalVersionUseCase` (aval) permettent d'atteindre
+    // "prêt à déposer" sans jamais dépendre d'un DCE/Analyse/Mémoire technique réel (l'ExportJob dont
+    // ce run dépend est lui-même ungated). Point d'entrée gaté ICI (le premier des deux, ferme la
+    // chaîne pour les deux) — allocation du Pass (si nécessaire) avec compensation automatique si
+    // l'opération échoue ensuite (mission §2/§3/§4).
+    return this.entitlementService.runTenderOperationEntitled(
+      { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, occurredAt: this.clock.now() },
+      async () => this.executeEntitled(command, job),
+    );
+  }
+
+  private async executeEntitled(command: RunFinalValidationCommand, job: ExportJobWithArtifact["job"]): Promise<ValidationRunSummary> {
     const templateVersion = await this.exportTemplateRepository.findVersionById({ organizationId: command.organizationId, versionId: job.exportTemplateVersionId });
     const templateSections = templateVersion?.config.sections ?? [];
     const selectedIds = new Set(job.sections.map((s) => s.sectionId));

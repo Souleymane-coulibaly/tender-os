@@ -15,3 +15,12 @@ const WORKSPACE_MANAGE_ROLES = ["OWNER", "ORGANIZATION_ADMIN", "BID_MANAGER", "C
 export function canManageWorkspace(role: string | undefined): boolean {
   return role !== undefined && WORKSPACE_MANAGE_ROLES.includes(role);
 }
+
+/** Checkpoint TENDEROS-2.1-P2.3-E1 (mission §14, problème E) — mirroir exact de
+ *  `OrganizationPermission.MemberInvite`/`MemberSuspend`/`MemberRemove`/`RoleAssign`
+ *  (apps/api/.../memberships/domain/organization-permission.ts, `ROLE_PERMISSIONS`) : seuls
+ *  OWNER/ORGANIZATION_ADMIN les détiennent, jamais un autre rôle. */
+const MEMBER_MANAGE_ROLES = ["OWNER", "ORGANIZATION_ADMIN"];
+export function canManageMembers(role: string | undefined): boolean {
+  return role !== undefined && MEMBER_MANAGE_ROLES.includes(role);
+}

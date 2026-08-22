@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getCurrentMembershipRole, getCurrentUserId } from "../../../../../../lib/app-api-client";
 import { fetchActivity, fetchApprovals, fetchParticipants, fetchTasks, fetchWorkspaceMembers } from "../../../../workspace-actions";
+import { fetchEntitlements } from "../../../../billing-actions";
 import type { ApprovalRequest, Task, TenderActivityPage, TenderParticipant } from "../../../../../../lib/workspace-types";
 import { PageHeader } from "../../../../../../components/ui/page-header";
 import { TabsNav } from "../../../../../../components/ui/tabs-nav";
@@ -20,8 +21,9 @@ export default async function TenderWorkspacePage({ params }: { params: Promise<
   let members: { userId: string; email: string; displayName: string }[];
   let actorRole: string | undefined;
   let actorId: string | undefined;
+  let hasApprovalWorkflowsEntitlement = false;
   try {
-    [participants, tasks, approvals, activity, members, actorRole, actorId] = await Promise.all([
+    const [participantsResult, tasksResult, approvalsResult, activityResult, membersResult, actorRoleResult, actorIdResult, entitlements] = await Promise.all([
       fetchParticipants(tenderId),
       fetchTasks(tenderId),
       fetchApprovals(tenderId),
@@ -29,7 +31,16 @@ export default async function TenderWorkspacePage({ params }: { params: Promise<
       fetchWorkspaceMembers(tenderId),
       getCurrentMembershipRole(),
       getCurrentUserId(),
+      fetchEntitlements(),
     ]);
+    participants = participantsResult;
+    tasks = tasksResult;
+    approvals = approvalsResult;
+    activity = activityResult;
+    members = membersResult;
+    actorRole = actorRoleResult;
+    actorId = actorIdResult;
+    hasApprovalWorkflowsEntitlement = entitlements.entitlements.includes("APPROVAL_WORKFLOWS");
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
@@ -51,6 +62,7 @@ export default async function TenderWorkspacePage({ params }: { params: Promise<
         members={members}
         actorRole={actorRole}
         actorId={actorId}
+        hasApprovalWorkflowsEntitlement={hasApprovalWorkflowsEntitlement}
       />
     </div>
   );
