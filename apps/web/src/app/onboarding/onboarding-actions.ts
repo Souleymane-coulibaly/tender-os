@@ -103,17 +103,13 @@ export type OrganizationStepState = { error?: string };
  *  tel quel, jamais un second mécanisme de création). Région fixée à la France (mission : hors
  *  périmètre "onboarding multi-pays") — devise/fuseau déduits, jamais redemandés à l'utilisateur.
  *
- * Idempotence sur double soumission (audit Codex P2-001) — un double clic (ou un retry réseau)
- * peut déclencher deux appels concurrents à cette action ; comme `POST /organizations` génère un
- * slug aléatoire à chaque appel, rien côté backend n'empêche par nature deux organisations d'être
- * créées pour le même utilisateur. Le bouton est déjà désactivé pendant `isPending` côté client
- * (couvre le double-clic), et cette action revérifie en plus l'absence de Membership existante
- * juste avant d'écrire : si une organisation existe déjà (créée par un appel précédent), celle-ci
- * est réutilisée telle quelle, jamais une seconde création. Fenêtre de course résiduelle entre la
- * lecture et l'écriture non éliminée par ce garde applicatif seul — accepté comme risque résiduel
- * volontairement non couvert par une contrainte d'unicité au niveau domaine (un utilisateur peut
- * légitimement posséder plusieurs organisations hors de ce wizard), pour rester dans le périmètre
- * additif demandé (pas de refonte du modèle Organizations). */
+ * Idempotence sur double soumission (audit Codex — correctif du P1 identifié : l'ancienne version
+ * de cette action faisait un "lire côté frontend PUIS écrire" en DEUX appels HTTP séparés, une
+ * fenêtre de course RÉELLE entre les deux — un double-clic/retry réseau concurrent pouvait créer
+ * deux organisations). `reuseExistingIfPresent: true` déplace la totalité de cette décision côté
+ * backend, dans UNE SEULE requête, protégée par un verrou consultatif Postgres scopé à l'acteur
+ * (`CreateOrganizationWithOwnerUseCase.bootstrapUnderLock`, voir ce use case) — jamais un second
+ * mécanisme d'idempotence inventé ici, uniquement un flag explicite sur l'appel déjà existant. */
 export async function createOrganizationAction(_prevState: OrganizationStepState, formData: FormData): Promise<OrganizationStepState> {
   const name = formData.get("name");
   const legalName = formData.get("legalName");
@@ -126,23 +122,19 @@ export async function createOrganizationAction(_prevState: OrganizationStepState
 
   let organization: { id: string };
   try {
-    const existingMemberships = await appApiFetch<{ items: { organization: { id: string } }[] }>("/api/v1/organization-memberships/me?limit=1");
-    const existingOrganizationId = existingMemberships.items[0]?.organization.id;
-
-    organization = existingOrganizationId
-      ? { id: existingOrganizationId }
-      : await appApiFetch<{ id: string }>("/api/v1/organizations", {
-          method: "POST",
-          body: JSON.stringify({
-            name: name.trim(),
-            slug: slugifyOrganizationName(name.trim()),
-            legalName: typeof legalName === "string" && legalName.trim() ? legalName.trim() : undefined,
-            registrationNumber: typeof registrationNumber === "string" && registrationNumber.trim() ? registrationNumber.trim() : undefined,
-            countryCode: "FR",
-            defaultCurrency: "EUR",
-            defaultTimezone: "Europe/Paris",
-          }),
-        });
+    organization = await appApiFetch<{ id: string }>("/api/v1/organizations", {
+      method: "POST",
+      body: JSON.stringify({
+        name: name.trim(),
+        slug: slugifyOrganizationName(name.trim()),
+        legalName: typeof legalName === "string" && legalName.trim() ? legalName.trim() : undefined,
+        registrationNumber: typeof registrationNumber === "string" && registrationNumber.trim() ? registrationNumber.trim() : undefined,
+        countryCode: "FR",
+        defaultCurrency: "EUR",
+        defaultTimezone: "Europe/Paris",
+        reuseExistingIfPresent: true,
+      }),
+    });
   } catch (error) {
     if (error instanceof AppApiError && error.status === 401) {
       redirect(`/onboarding/compte${onboardingQueryString(query)}`);

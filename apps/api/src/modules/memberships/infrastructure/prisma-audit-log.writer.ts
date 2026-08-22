@@ -14,7 +14,15 @@ export class PrismaAuditLogWriter implements AuditLogWriter {
   constructor(private readonly prisma: PrismaService) {}
 
   async record(entry: AuditLogEntry): Promise<void> {
-    await this.prisma.auditLog.create({
+    // Checkpoint TENDEROS-2.1-P2.3-E2 (audit Codex — correctif atomicité bootstrap Organization) —
+    // `currentClient()` (au lieu de `this.prisma` brut) : rejoint la transaction ambiante ouverte
+    // par `MembershipRepository.runExclusiveForActor` (voir `CreateOrganizationWithOwnerUseCase`).
+    // Sans ce correctif, cette écriture visait une connexion SÉPARÉE de celle qui vient de créer
+    // l'Organization dans la même opération (encore non committée, donc invisible sous READ
+    // COMMITTED) — violation de contrainte de clé étrangère réelle, trouvée par
+    // `organization-bootstrap-concurrency-http.integration.spec.ts`. Comportement inchangé hors de
+    // ce contexte.
+    await this.prisma.currentClient().auditLog.create({
       data: {
         id: randomUUID(),
         organizationId: entry.organizationId,

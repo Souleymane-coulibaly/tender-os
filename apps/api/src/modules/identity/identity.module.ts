@@ -9,6 +9,7 @@ import { SESSION_REPOSITORY } from "./application/ports/session.repository";
 import { USER_REPOSITORY } from "./application/ports/user.repository";
 import { AuthenticateUserUseCase } from "./application/use-cases/authenticate-user.use-case";
 import { CountUsersByStatusUseCase } from "./application/use-cases/count-users-by-status.use-case";
+import { FindUserByEmailUseCase } from "./application/use-cases/find-user-by-email.use-case";
 import { GetCurrentUserUseCase } from "./application/use-cases/get-current-user.use-case";
 import { ListUsersUseCase } from "./application/use-cases/list-users.use-case";
 import { LogoutUserUseCase } from "./application/use-cases/logout-user.use-case";
@@ -44,6 +45,7 @@ import { AuthThrottlerGuard } from "./interfaces/http/auth-throttler.guard";
     GetCurrentUserUseCase,
     ListUsersUseCase,
     CountUsersByStatusUseCase,
+    FindUserByEmailUseCase,
     RequestPasswordResetUseCase,
     ResetPasswordUseCase,
     UpdateTourStateUseCase,
@@ -63,6 +65,7 @@ import { AuthThrottlerGuard } from "./interfaces/http/auth-throttler.guard";
     GetCurrentUserUseCase,
     ListUsersUseCase,
     CountUsersByStatusUseCase,
+    FindUserByEmailUseCase,
     AuthenticatedGuard,
     ACCESS_TOKEN_SERVICE,
     SESSION_REPOSITORY,

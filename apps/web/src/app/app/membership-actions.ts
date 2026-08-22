@@ -7,9 +7,13 @@ import type { OrganizationMemberResponse, PageResponse } from "../../lib/members
 /**
  * Checkpoint TENDEROS-2.1-P2.3-E1 (mission §14, problème E) — le backend (`memberships` module,
  * `OrganizationMembershipsController`) existait déjà en entier (list/create/role-change/suspend/
- * remove) ; seul le frontend manquait totalement. Ne couvre PAS l'invitation par email — le backend
- * lui-même documente ce parcours comme un module distinct hors périmètre (WF-021, voir
- * `create-membership.use-case.ts`) : ajouter un membre exige qu'il possède déjà un compte TenderOS.
+ * remove) ; seul le frontend manquait totalement.
+ *
+ * Checkpoint TENDEROS-2.1-P2.3-E2 (Onboarding V2, mission §14) — `inviteMemberByEmailAction` ajouté
+ * (route backend `POST /organization-memberships/invite-by-email`, résout l'email vers un compte
+ * TenderOS existant puis délègue à `CreateMembershipUseCase` tel quel, jamais un second moteur
+ * d'invitation). Le cas honnête "personne n'a encore de compte avec cet email" (404 USER_NOT_FOUND)
+ * est traduit ci-dessous en message clair, jamais un envoi d'email/pré-inscription inventés.
  */
 function describeMembershipActionError(error: unknown): string {
   if (error instanceof AppApiError) {
@@ -23,7 +27,7 @@ function describeMembershipActionError(error: unknown): string {
       case 403:
         return "Cette action est réservée au Propriétaire ou à l'Administrateur de l'organisation.";
       case 404:
-        if (error.code === "USER_NOT_FOUND") return "Aucun utilisateur TenderOS ne correspond à cet identifiant.";
+        if (error.code === "USER_NOT_FOUND") return "Aucun compte TenderOS n'existe avec cette adresse email. Cette personne doit d'abord créer un compte, puis vous pourrez l'inviter.";
         return "Introuvable ou accès refusé.";
       case 409:
         if (error.code === "MEMBERSHIP_ALREADY_EXISTS") return "Cette personne est déjà membre de l'organisation.";
@@ -53,6 +57,21 @@ export async function addMemberAction(input: { userId: string; role: string }): 
     return { error: describeMembershipActionError(error) };
   }
   revalidatePath("/app/members");
+  return {};
+}
+
+/** Checkpoint TENDEROS-2.1-P2.3-E2 (Onboarding V2, mission §14) — invitation par email, réutilisée
+ *  identiquement par `/app/members` et l'étape onboarding `/onboarding/equipe`. `revalidatePath` sur
+ *  les deux surfaces : un appel depuis l'une doit rafraîchir l'autre si l'utilisateur navigue entre
+ *  les deux dans la même session. */
+export async function inviteMemberByEmailAction(input: { email: string; role: string }): Promise<{ error?: string }> {
+  try {
+    await appApiFetch("/api/v1/organization-memberships/invite-by-email", { method: "POST", body: JSON.stringify({ email: input.email, role: input.role }) });
+  } catch (error) {
+    return { error: describeMembershipActionError(error) };
+  }
+  revalidatePath("/app/members");
+  revalidatePath("/onboarding/equipe");
   return {};
 }
 

@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
+import { TransactionalContext } from "../../../shared-kernel/transactional-context";
 import type {
   MembershipPage,
   MembershipRepository,
@@ -105,8 +106,24 @@ export class PrismaMembershipRepository implements MembershipRepository {
 
   async save(membership: OrganizationMembership): Promise<void> {
     const data = this.mapper.toPersistence(membership);
-    const role = await this.prisma.role.findUniqueOrThrow({ where: { code: membership.role } });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E2 (audit Codex — correctif atomicité bootstrap Organization) —
+    // rejoint la transaction ambiante quand elle existe (ex. `runExclusiveForActor`, appelé par
+    // `CreateOrganizationWithOwnerUseCase`), jamais une transaction imbriquée (Prisma ne le permet
+    // pas) : séquence d'awaits sur le MÊME client `tx`, atomique par construction (même motif que
+    // `runExclusiveForOrganization.save` ci-dessus). Comportement STRICTEMENT INCHANGÉ pour tout
+    // appelant sans contexte ambiant (l'immense majorité) : `$transaction([...])` dédiée, identique
+    // à avant.
+    const ambient = TransactionalContext.current();
+    if (ambient) {
+      const role = await ambient.role.findUniqueOrThrow({ where: { code: membership.role } });
+      await ambient.organizationMembership.upsert({ where: { id: data.id }, create: data, update: data });
+      await ambient.membershipRole.deleteMany({ where: { membershipId: data.id } });
+      await ambient.membershipRole.create({ data: { membershipId: data.id, roleId: role.id } });
+      return;
+    }
+
+    const role = await this.prisma.role.findUniqueOrThrow({ where: { code: membership.role } });
     await this.prisma.$transaction([
       this.prisma.organizationMembership.upsert({
         where: { id: data.id },
@@ -198,6 +215,17 @@ export class PrismaMembershipRepository implements MembershipRepository {
 
       return { applied: true, activeCount: activeCount + 1 };
     });
+  }
+
+  /** Voir le port pour la justification complète. */
+  async runExclusiveForActor<T>(input: { actorId: string; fn: () => Promise<T> }): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      // Verrou consultatif Postgres scopé à l'ACTEUR (jamais une organisation, qui n'existe pas
+      // encore au moment du bootstrap) — même mécanisme que `runExclusiveForOrganization`/
+      // `saveWithSeatLimit` (BR-ORG-004, `pg_advisory_xact_lock`).
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.actorId}))`;
+      return TransactionalContext.run(tx, input.fn);
+    }, OWNERSHIP_TRANSFER_TX_OPTIONS);
   }
 
   private toPage(records: MembershipRecordWithRole[], limit: number): MembershipPage {

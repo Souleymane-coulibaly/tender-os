@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CreateOrganizationUseCase, DeleteOrganizationUseCase, OrganizationSummary } from "../../../organizations";
+import type { CreateOrganizationUseCase, DeleteOrganizationUseCase, GetOrganizationUseCase, OrganizationSummary } from "../../../organizations";
+import { MembershipId } from "../../domain/membership-id.value-object";
 import { MembershipStatus } from "../../domain/membership-status";
+import { OrganizationMembership } from "../../domain/organization-membership.aggregate";
 import { OrganizationRole } from "../../domain/organization-role";
 import { InMemoryMembershipRepository } from "../../test-support/in-memory-membership.repository";
 import { FixedClock, InMemoryAuditLogWriter, SequentialIdGenerator } from "../../test-support/fakes";
@@ -23,6 +25,7 @@ describe("CreateOrganizationWithOwnerUseCase", () => {
   let auditLogWriter: InMemoryAuditLogWriter;
   let createOrganizationUseCase: CreateOrganizationUseCase;
   let deleteOrganizationUseCase: DeleteOrganizationUseCase;
+  let getOrganizationUseCase: GetOrganizationUseCase;
   let useCase: CreateOrganizationWithOwnerUseCase;
 
   beforeEach(() => {
@@ -34,9 +37,13 @@ describe("CreateOrganizationWithOwnerUseCase", () => {
     deleteOrganizationUseCase = {
       execute: vi.fn().mockResolvedValue(undefined),
     } as unknown as DeleteOrganizationUseCase;
+    getOrganizationUseCase = {
+      execute: vi.fn().mockResolvedValue(ORGANIZATION_SUMMARY),
+    } as unknown as GetOrganizationUseCase;
     useCase = new CreateOrganizationWithOwnerUseCase(
       createOrganizationUseCase,
       deleteOrganizationUseCase,
+      getOrganizationUseCase,
       membershipRepository,
       auditLogWriter,
       new FixedClock(),
@@ -95,5 +102,46 @@ describe("CreateOrganizationWithOwnerUseCase", () => {
         actorId: "user-1",
       }),
     ).rejects.toThrow(failure);
+  });
+
+  describe("Checkpoint TENDEROS-2.1-P2.3-E2, audit Codex (correctif P1 — bootstrap idempotent)", () => {
+    it("without reuseExistingIfPresent (default/historical behavior) — always creates a new organization, even if the actor already has one", async () => {
+      await membershipRepository.seed(
+        OrganizationMembership.create({ id: MembershipId.from("membership-existing"), organizationId: "org-existing", userId: "user-1", role: OrganizationRole.Owner, occurredAt: new Date() }),
+      );
+
+      const result = await useCase.execute({ name: "Acme Corp", slug: "acme-corp", defaultTimezone: "Europe/Paris", actorId: "user-1" });
+
+      expect(createOrganizationUseCase.execute).toHaveBeenCalledOnce();
+      expect(result).toEqual(ORGANIZATION_SUMMARY);
+    });
+
+    it("reuseExistingIfPresent: true — reuses the actor's existing organization instead of creating a second one", async () => {
+      await membershipRepository.seed(
+        OrganizationMembership.create({ id: MembershipId.from("membership-existing"), organizationId: "org-existing", userId: "user-1", role: OrganizationRole.Owner, occurredAt: new Date() }),
+      );
+      vi.mocked(getOrganizationUseCase.execute).mockResolvedValueOnce({ ...ORGANIZATION_SUMMARY, id: "org-existing" });
+
+      const result = await useCase.execute({ name: "Acme Corp", slug: "acme-corp", defaultTimezone: "Europe/Paris", actorId: "user-1", reuseExistingIfPresent: true });
+
+      expect(createOrganizationUseCase.execute).not.toHaveBeenCalled();
+      expect(getOrganizationUseCase.execute).toHaveBeenCalledWith({ id: "org-existing" });
+      expect(result.id).toBe("org-existing");
+    });
+
+    it("reuseExistingIfPresent: true — creates normally when the actor has no organization yet (genuine bootstrap)", async () => {
+      const result = await useCase.execute({ name: "Acme Corp", slug: "acme-corp", defaultTimezone: "Europe/Paris", actorId: "user-1", reuseExistingIfPresent: true });
+
+      expect(createOrganizationUseCase.execute).toHaveBeenCalledOnce();
+      expect(result).toEqual(ORGANIZATION_SUMMARY);
+    });
+
+    it("reuseExistingIfPresent: true — the bootstrap sequence runs entirely under runExclusiveForActor, never outside it", async () => {
+      const runExclusiveSpy = vi.spyOn(membershipRepository, "runExclusiveForActor");
+
+      await useCase.execute({ name: "Acme Corp", slug: "acme-corp", defaultTimezone: "Europe/Paris", actorId: "user-1", reuseExistingIfPresent: true });
+
+      expect(runExclusiveSpy).toHaveBeenCalledWith(expect.objectContaining({ actorId: "user-1" }));
+    });
   });
 });

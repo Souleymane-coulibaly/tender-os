@@ -6,6 +6,7 @@ import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import {
   CreateOrganizationUseCase,
   DeleteOrganizationUseCase,
+  GetOrganizationUseCase,
   type CreateOrganizationCommand,
   type OrganizationSummary,
 } from "../../../organizations";
@@ -16,7 +17,24 @@ import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer
 import { MEMBERSHIP_REPOSITORY, type MembershipRepository } from "../ports/membership.repository";
 
 export type CreateOrganizationWithOwnerCommand = CreateOrganizationCommand &
-  Readonly<{ actorId: string; requestId?: string | undefined }>;
+  Readonly<{
+    actorId: string;
+    requestId?: string | undefined;
+    /**
+     * Checkpoint TENDEROS-2.1-P2.3-E2 (Onboarding V2, audit Codex — correctif P1) — opt-in
+     * EXPLICITE, jamais un comportement par défaut : si `true`, ce bootstrap devient idempotent
+     * sous concurrence réelle pour CET acteur (deux appels concurrents ne créent jamais deux
+     * organisations — le second réutilise l'organisation créée par le premier). Réservé au
+     * parcours onboarding (`createOrganizationAction`, mission §7 "onboarding doit être
+     * idempotent"), qui est aujourd'hui l'UNIQUE appelant de cette route. Volontairement absent par
+     * défaut (`undefined`/`false` -> comportement HISTORIQUE inchangé, toujours créer) : un
+     * utilisateur peut légitimement posséder plusieurs organisations (mission "ne pas refondre
+     * Organizations") — ce flag ne doit jamais empêcher une création VOLONTAIRE d'une organisation
+     * supplémentaire par un acteur qui en possède déjà une, seulement fermer la fenêtre de course du
+     * bootstrap initial.
+     */
+    reuseExistingIfPresent?: boolean | undefined;
+  }>;
 
 /**
  * Compose Organizations (CreateOrganizationUseCase) et Memberships pour que le créateur d'une
@@ -40,6 +58,7 @@ export class CreateOrganizationWithOwnerUseCase {
   constructor(
     private readonly createOrganizationUseCase: CreateOrganizationUseCase,
     private readonly deleteOrganizationUseCase: DeleteOrganizationUseCase,
+    private readonly getOrganizationUseCase: GetOrganizationUseCase,
     @Inject(MEMBERSHIP_REPOSITORY) private readonly membershipRepository: MembershipRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -47,7 +66,39 @@ export class CreateOrganizationWithOwnerUseCase {
   ) {}
 
   async execute(command: CreateOrganizationWithOwnerCommand): Promise<OrganizationSummary> {
-    const { actorId, requestId, ...createCommand } = command;
+    if (command.reuseExistingIfPresent) {
+      // Checkpoint TENDEROS-2.1-P2.3-E2, audit Codex (correctif P1) — l'INTÉGRALITÉ de la
+      // séquence "vérifier si l'acteur a déjà une organisation, sinon en créer une" se déroule
+      // désormais DANS une seule transaction Postgres protégée par un verrou consultatif scopé à
+      // `actorId` (`runExclusiveForActor`) — jamais un "lire côté frontend PUIS écrire" (l'ancienne
+      // fenêtre de course, documentée et acceptée à tort dans `onboarding-actions.ts`). Un second
+      // appel concurrent pour le MÊME acteur attend la fin du premier (verrou), puis relit un état
+      // qui reflète FORCÉMENT le résultat déjà committé du premier — jamais une double création.
+      return this.membershipRepository.runExclusiveForActor({
+        actorId: command.actorId,
+        fn: () => this.bootstrapUnderLock(command),
+      });
+    }
+
+    return this.createNew(command);
+  }
+
+  private async bootstrapUnderLock(command: CreateOrganizationWithOwnerCommand): Promise<OrganizationSummary> {
+    // Relecture PROTÉGÉE par le verrou (jamais un état lu avant son acquisition, mission — même
+    // discipline que `runExclusiveForOrganization`) : si l'acteur a DÉJÀ une organisation au moment
+    // où ce verrou est acquis (que ce soit d'un appel antérieur légitime, ou d'un concurrent qui a
+    // gagné la course et déjà committé), on la réutilise telle quelle, jamais une seconde création.
+    const existing = await this.membershipRepository.listByUser({ userId: command.actorId, limit: 1 });
+    const existingOrganizationId = existing.items[0]?.organizationId;
+    if (existingOrganizationId) {
+      return this.getOrganizationUseCase.execute({ id: existingOrganizationId });
+    }
+
+    return this.createNew(command);
+  }
+
+  private async createNew(command: CreateOrganizationWithOwnerCommand): Promise<OrganizationSummary> {
+    const { actorId, requestId, reuseExistingIfPresent: _reuseExistingIfPresent, ...createCommand } = command;
 
     const organization = await this.createOrganizationUseCase.execute(createCommand);
     const occurredAt = this.clock.now();

@@ -2,14 +2,21 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { addMemberAction, changeMemberRoleAction, removeMemberAction, suspendMemberAction } from "../../membership-actions";
+import { changeMemberRoleAction, inviteMemberByEmailAction, removeMemberAction, suspendMemberAction } from "../../membership-actions";
 import { ASSIGNABLE_ROLES, MEMBERSHIP_STATUS_LABELS, ORGANIZATION_ROLE_LABELS, membershipStatusBadgeClass, type OrganizationMemberResponse } from "../../../../lib/membership-types";
+import { formatSeatUsage, type SeatUsage } from "../../../../lib/seat-usage";
 
-function AddMemberForm() {
+/** Checkpoint TENDEROS-2.1-P2.3-E2 (Onboarding V2, mission §14/§15/§23/§24) — invite par EMAIL
+ *  (résolution serveur vers un compte existant, voir `inviteMemberByEmailAction`), jamais un
+ *  identifiant technique. `seatUsage` reste une lecture d'affichage (mission §15 "le backend reste
+ *  autoritaire") : le formulaire est désactivé quand `atLimit`, mais le VRAI refus, si contourné,
+ *  reste `SEAT_LIMIT_EXCEEDED` (402) côté backend — jamais recalculé ici. */
+function InviteMemberForm({ seatUsage }: { seatUsage: SeatUsage | undefined }) {
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [success, setSuccess] = useState(false);
+  const atLimit = seatUsage?.atLimit ?? false;
 
   return (
     <form
@@ -20,7 +27,7 @@ function AddMemberForm() {
         setError(undefined);
         setSuccess(false);
         const formData = new FormData(event.currentTarget);
-        const result = await addMemberAction({ userId: String(formData.get("userId")).trim(), role: String(formData.get("role")) });
+        const result = await inviteMemberByEmailAction({ email: String(formData.get("email")).trim(), role: String(formData.get("role")) });
         setIsPending(false);
         if (result.error) {
           setError(result.error);
@@ -32,22 +39,24 @@ function AddMemberForm() {
       }}
     >
       <div className="flex flex-col gap-1">
-        <label htmlFor="member-user-id" className="text-xs font-medium text-neutral-600">
-          Identifiant utilisateur TenderOS
+        <label htmlFor="member-email" className="text-xs font-medium text-neutral-600">
+          Email de la personne à inviter
         </label>
         <input
-          id="member-user-id"
-          name="userId"
+          id="member-email"
+          name="email"
+          type="email"
           required
-          placeholder="uuid de l'utilisateur"
-          className="w-72 rounded border border-neutral-300 px-2 py-1.5 text-sm"
+          disabled={atLimit}
+          placeholder="prenom.nom@entreprise.fr"
+          className="w-72 rounded border border-neutral-300 px-2 py-1.5 text-sm disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
         />
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="member-role" className="text-xs font-medium text-neutral-600">
           Rôle
         </label>
-        <select id="member-role" name="role" defaultValue="CONTRIBUTOR" className="rounded border border-neutral-300 px-2 py-1.5 text-sm">
+        <select id="member-role" name="role" defaultValue="CONTRIBUTOR" disabled={atLimit} className="rounded border border-neutral-300 px-2 py-1.5 text-sm disabled:cursor-not-allowed disabled:bg-neutral-100">
           {ASSIGNABLE_ROLES.map((role) => (
             <option key={role} value={role}>
               {ORGANIZATION_ROLE_LABELS[role]}
@@ -55,9 +64,28 @@ function AddMemberForm() {
           ))}
         </select>
       </div>
-      <button type="submit" disabled={isPending} className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50">
-        {isPending ? "Ajout..." : "Ajouter"}
+      <button
+        type="submit"
+        disabled={isPending || atLimit}
+        title={atLimit ? "Limite d'utilisateurs de votre offre atteinte — changez d'offre pour inviter davantage de membres." : undefined}
+        className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {isPending ? "Invitation..." : "Inviter"}
       </button>
+      {seatUsage ? (
+        <span className="w-full text-xs text-neutral-500">
+          {formatSeatUsage(seatUsage)}
+          {atLimit ? (
+            <>
+              {" — "}
+              <a href="/app/subscription" className="text-amber-700 underline hover:no-underline">
+                changer d&apos;offre
+              </a>{" "}
+              pour inviter davantage de membres.
+            </>
+          ) : null}
+        </span>
+      ) : null}
       {error ? (
         <p role="alert" className="w-full text-xs text-red-600">
           {error}
@@ -65,12 +93,10 @@ function AddMemberForm() {
       ) : null}
       {success ? (
         <p role="status" className="w-full text-xs text-green-700">
-          Membre ajouté.
+          Invitation envoyée.
         </p>
       ) : null}
-      <p className="w-full text-xs text-neutral-500">
-        La personne doit déjà posséder un compte TenderOS. L&apos;invitation par email n&apos;est pas encore disponible.
-      </p>
+      <p className="w-full text-xs text-neutral-500">La personne doit déjà posséder un compte TenderOS avec cette adresse email pour être invitée immédiatement.</p>
     </form>
   );
 }
@@ -161,10 +187,20 @@ function MemberRow({ member, currentUserId }: { member: OrganizationMemberRespon
   );
 }
 
-export function MembersSection({ members, canManage, currentUserId }: { members: OrganizationMemberResponse[]; canManage: boolean; currentUserId: string | undefined }) {
+export function MembersSection({
+  members,
+  canManage,
+  currentUserId,
+  seatUsage,
+}: {
+  members: OrganizationMemberResponse[];
+  canManage: boolean;
+  currentUserId: string | undefined;
+  seatUsage: SeatUsage | undefined;
+}) {
   return (
     <div className="flex flex-col gap-4">
-      {canManage ? <AddMemberForm /> : null}
+      {canManage ? <InviteMemberForm seatUsage={seatUsage} /> : null}
 
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">

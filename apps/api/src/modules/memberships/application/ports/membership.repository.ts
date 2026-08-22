@@ -82,6 +82,20 @@ export interface MembershipRepository {
     membership: OrganizationMembership;
     seatLimit: number | "UNLIMITED";
   }): Promise<{ applied: boolean; activeCount: number }>;
+  /**
+   * Checkpoint TENDEROS-2.1-P2.3-E2 (Onboarding V2, audit Codex — correctif du P1 "création
+   * Organization non atomique/non idempotente sous concurrence réelle") — même mécanisme
+   * (`pg_advisory_xact_lock`, BR-ORG-004) que `runExclusiveForOrganization`/`saveWithSeatLimit`,
+   * mais scopé à `actorId` plutôt qu'à `organizationId` : au moment du bootstrap "créer mon
+   * organisation", AUCUNE organisation n'existe encore sur laquelle verrouiller — le verrou doit
+   * porter sur l'ACTEUR pour sérialiser deux appels concurrents du MÊME utilisateur (double
+   * submit/retry réseau), jamais les autres utilisateurs. `fn` s'exécute sous
+   * `TransactionalContext` (voir `PrismaAtomicTransactionRunner`) : tout repository qui lit via
+   * `PrismaService.currentClient()` (dans N'IMPORTE QUEL module, ex. `PrismaOrganizationRepository`)
+   * rejoint automatiquement cette même transaction, sans faire fuiter `tx` à travers la frontière
+   * de module.
+   */
+  runExclusiveForActor<T>(input: { actorId: string; fn: () => Promise<T> }): Promise<T>;
 }
 
 export const MEMBERSHIP_REPOSITORY = Symbol("MEMBERSHIP_REPOSITORY");

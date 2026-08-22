@@ -128,6 +128,12 @@ export class InMemoryMembershipRepository implements MembershipRepository {
   async seed(membership: OrganizationMembership): Promise<void> {
     await this.save(membership);
   }
+
+  /** Ne simule aucun verrou réel (même limite documentée que `runExclusiveForOrganization`
+   *  ci-dessus) — appelle `fn` directement, suffisant pour les tests unitaires de logique métier. */
+  async runExclusiveForActor<T>(input: { actorId: string; fn: () => Promise<T> }): Promise<T> {
+    return input.fn();
+  }
 }
 
 function paginate(all: OrganizationMembership[], cursor: string | undefined, limit: number): MembershipPage {

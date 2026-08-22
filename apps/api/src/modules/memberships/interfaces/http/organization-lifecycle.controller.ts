@@ -56,6 +56,9 @@ const CreateOrganizationBodySchema = z
       .optional(),
     defaultTimezone: z.string().trim().min(1).max(80),
     settings: settingsSchema.optional(),
+    // Checkpoint TENDEROS-2.1-P2.3-E2 (Onboarding V2, audit Codex — correctif P1) — voir
+    // `CreateOrganizationWithOwnerCommand.reuseExistingIfPresent` pour la justification complète.
+    reuseExistingIfPresent: z.boolean().optional(),
   })
   .strict();
 

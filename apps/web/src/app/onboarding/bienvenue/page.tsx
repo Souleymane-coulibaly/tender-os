@@ -40,12 +40,16 @@ export default async function OnboardingBienvenuePage() {
         Votre organisation est configurée avec l&apos;offre <strong className="text-tenderos-navy">{planLabel}</strong>. Vous êtes prêt(e) à détecter et répondre à vos premiers
         appels d&apos;offres.
       </p>
-      <Link
-        href="/app"
-        className="rounded-lg bg-tenderos-navy px-6 py-3 text-sm font-semibold text-white transition hover:bg-tenderos-navy/90"
-      >
-        Accéder à TenderOS
-      </Link>
+      {/* Checkpoint TENDEROS-2.1-P2.3-E2 (Onboarding V2, mission §17) — CTA principal orienté vers la
+          première action produit réelle, jamais seulement un renvoi générique au tableau de bord. */}
+      <div className="flex w-full max-w-xs flex-col gap-2">
+        <Link href="/app/tenders/new" className="rounded-lg bg-tenderos-navy px-6 py-3 text-center text-sm font-semibold text-white transition hover:bg-tenderos-navy/90">
+          Créer mon premier appel d&apos;offres
+        </Link>
+        <Link href="/app" className="rounded-lg border border-tenderos-navy/15 px-6 py-3 text-center text-sm font-semibold text-tenderos-navy transition hover:bg-tenderos-light">
+          Accéder au tableau de bord
+        </Link>
+      </div>
     </div>
   );
 }

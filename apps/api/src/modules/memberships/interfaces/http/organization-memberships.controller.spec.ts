@@ -3,6 +3,7 @@ import type { AuthenticatedActor } from "../../../identity";
 import type { MembershipSummary } from "../../application/dtos";
 import type { ChangeMembershipRoleUseCase } from "../../application/use-cases/change-membership-role.use-case";
 import type { CreateMembershipUseCase } from "../../application/use-cases/create-membership.use-case";
+import type { InviteMemberByEmailUseCase } from "../../application/use-cases/invite-member-by-email.use-case";
 import type { GetMembershipUseCase } from "../../application/use-cases/get-membership.use-case";
 import type { ListMyMembershipsUseCase } from "../../application/use-cases/list-my-memberships.use-case";
 import type { ListOrganizationMembersUseCase } from "../../application/use-cases/list-organization-members.use-case";
@@ -35,6 +36,7 @@ const REQUEST = { id: "request-1" } as unknown as RequestWithId;
 
 function createController(overrides?: {
   createMembershipUseCase?: Partial<CreateMembershipUseCase>;
+  inviteMemberByEmailUseCase?: Partial<InviteMemberByEmailUseCase>;
   getMembershipUseCase?: Partial<GetMembershipUseCase>;
   listOrganizationMembersUseCase?: Partial<ListOrganizationMembersUseCase>;
   listMyMembershipsUseCase?: Partial<ListMyMembershipsUseCase>;
@@ -47,6 +49,11 @@ function createController(overrides?: {
     execute: vi.fn().mockResolvedValue(MEMBERSHIP_SUMMARY),
     ...overrides?.createMembershipUseCase,
   } as unknown as CreateMembershipUseCase;
+
+  const inviteMemberByEmailUseCase = {
+    execute: vi.fn().mockResolvedValue(MEMBERSHIP_SUMMARY),
+    ...overrides?.inviteMemberByEmailUseCase,
+  } as unknown as InviteMemberByEmailUseCase;
 
   const getMembershipUseCase = {
     execute: vi.fn().mockResolvedValue(MEMBERSHIP_SUMMARY),
@@ -88,6 +95,7 @@ function createController(overrides?: {
 
   const controller = new OrganizationMembershipsController(
     createMembershipUseCase,
+    inviteMemberByEmailUseCase,
     getMembershipUseCase,
     listOrganizationMembersUseCase,
     listMyMembershipsUseCase,
@@ -100,6 +108,7 @@ function createController(overrides?: {
   return {
     controller,
     createMembershipUseCase,
+    inviteMemberByEmailUseCase,
     getMembershipUseCase,
     listOrganizationMembersUseCase,
     listMyMembershipsUseCase,
@@ -126,6 +135,28 @@ describe("OrganizationMembershipsController", () => {
       actorId: "user-1",
       actorRole: OrganizationRole.OrganizationAdmin,
       userId: "user-2",
+      role: "CONTRIBUTOR",
+      expiresAt: undefined,
+      requestId: "request-1",
+    });
+    expect(result).toEqual(MEMBERSHIP_SUMMARY);
+  });
+
+  it("Checkpoint TENDEROS-2.1-P2.3-E2 — inviteByEmail delegates to InviteMemberByEmailUseCase using the resolved membership context", async () => {
+    const { controller, inviteMemberByEmailUseCase } = createController();
+
+    const result = await controller.inviteByEmail(
+      ACTOR,
+      MEMBERSHIP_CONTEXT,
+      { email: "bob@example.com", role: "CONTRIBUTOR" },
+      REQUEST,
+    );
+
+    expect(inviteMemberByEmailUseCase.execute).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      actorId: "user-1",
+      actorRole: OrganizationRole.OrganizationAdmin,
+      email: "bob@example.com",
       role: "CONTRIBUTOR",
       expiresAt: undefined,
       requestId: "request-1",

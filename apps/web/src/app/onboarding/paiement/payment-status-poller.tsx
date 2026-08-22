@@ -36,7 +36,10 @@ export function PaymentStatusPoller() {
         if (status.subscriptionStatus === "TRIALING") {
           trackEvent(GA_EVENTS.StarterTrialStarted);
         }
-        router.push("/onboarding/configuration");
+        // Checkpoint TENDEROS-2.1-P2.3-E2 (Onboarding V2, mission §14) — l'étape Équipe s'insère ici,
+        // entre le paiement confirmé et la configuration/bienvenue (mission §16 : facultative, jamais
+        // un gate de reprise — voir la docstring de `/onboarding/equipe`).
+        router.push("/onboarding/equipe");
         return;
       }
 

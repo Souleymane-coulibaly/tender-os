@@ -14,6 +14,18 @@ export const CreateMembershipBodySchema = z
 
 export type CreateMembershipBody = z.infer<typeof CreateMembershipBodySchema>;
 
+/** Checkpoint TENDEROS-2.1-P2.3-E2 (Onboarding V2) — même forme que `CreateMembershipBodySchema`,
+ *  `userId` remplacé par `email` (résolu côté serveur, voir `InviteMemberByEmailUseCase`). */
+export const InviteMemberByEmailBodySchema = z
+  .object({
+    email: z.string().trim().min(1).max(320),
+    role: z.string().trim().min(1).max(100),
+    expiresAt: z.string().datetime().optional(),
+  })
+  .strict();
+
+export type InviteMemberByEmailBody = z.infer<typeof InviteMemberByEmailBodySchema>;
+
 export const ChangeMembershipRoleBodySchema = z
   .object({
     role: z.string().trim().min(1).max(100),

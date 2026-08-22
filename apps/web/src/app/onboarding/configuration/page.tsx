@@ -21,7 +21,7 @@ export default async function OnboardingConfigurationPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col items-center gap-8 px-4 py-12 sm:px-6 sm:py-16">
       <div className="flex flex-col items-center gap-2 text-center">
-        <p className="text-xs font-semibold uppercase tracking-wide text-tenderos-slate">Étape 5 sur 5</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-tenderos-slate">Étape 6 sur 6</p>
         <h1 className="font-tenderos-display text-3xl font-bold text-tenderos-navy">Configuration initiale</h1>
         <p className="max-w-md text-sm text-tenderos-slate">Facultatif — ces préférences nous aident à personnaliser votre expérience. Modifiable à tout moment.</p>
       </div>

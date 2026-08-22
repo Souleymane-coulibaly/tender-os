@@ -18,6 +18,7 @@ import type { RequestWithId } from "../../../../shared-kernel/request-id.middlew
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
 import { ChangeMembershipRoleUseCase } from "../../application/use-cases/change-membership-role.use-case";
 import { CreateMembershipUseCase } from "../../application/use-cases/create-membership.use-case";
+import { InviteMemberByEmailUseCase } from "../../application/use-cases/invite-member-by-email.use-case";
 import { GetMembershipUseCase } from "../../application/use-cases/get-membership.use-case";
 import { ListMyMembershipsUseCase } from "../../application/use-cases/list-my-memberships.use-case";
 import { ListOrganizationMembersUseCase } from "../../application/use-cases/list-organization-members.use-case";
@@ -42,11 +43,13 @@ import {
 import {
   ChangeMembershipRoleBodySchema,
   CreateMembershipBodySchema,
+  InviteMemberByEmailBodySchema,
   ListMembershipsQuerySchema,
   MembershipIdParamSchema,
   TransferOwnershipBodySchema,
   type ChangeMembershipRoleBody,
   type CreateMembershipBody,
+  type InviteMemberByEmailBody,
   type ListMembershipsQuery,
   type TransferOwnershipBody,
 } from "./schemas";
@@ -57,6 +60,7 @@ import {
 export class OrganizationMembershipsController {
   constructor(
     private readonly createMembershipUseCase: CreateMembershipUseCase,
+    private readonly inviteMemberByEmailUseCase: InviteMemberByEmailUseCase,
     private readonly getMembershipUseCase: GetMembershipUseCase,
     private readonly listOrganizationMembersUseCase: ListOrganizationMembersUseCase,
     private readonly listMyMembershipsUseCase: ListMyMembershipsUseCase,
@@ -95,6 +99,33 @@ export class OrganizationMembershipsController {
       actorId: actor.userId,
       actorRole: membershipContext.role,
       userId: body.userId,
+      role: body.role,
+      expiresAt: body.expiresAt,
+      requestId: request.id,
+    });
+
+    return presentMembership(result);
+  }
+
+  /** Checkpoint TENDEROS-2.1-P2.3-E2 (Onboarding V2, mission §14) — "inviter par email", jamais un
+   *  second moteur : délègue entièrement à `InviteMemberByEmailUseCase` (résolution email -> compte
+   *  existant, puis `CreateMembershipUseCase` tel quel — même permission, même seat-limit atomique,
+   *  même audit). Route distincte de `POST /organization-memberships` (jamais un body à deux formes
+   *  mutuellement exclusives sur une route déjà testée). */
+  @Post("invite-by-email")
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(OrganizationMembershipGuard)
+  async inviteByEmail(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membershipContext: MembershipContext,
+    @Body(new ZodValidationPipe(InviteMemberByEmailBodySchema)) body: InviteMemberByEmailBody,
+    @Req() request: RequestWithId,
+  ): Promise<MembershipResponse> {
+    const result = await this.inviteMemberByEmailUseCase.execute({
+      organizationId: membershipContext.organizationId,
+      actorId: actor.userId,
+      actorRole: membershipContext.role,
+      email: body.email,
       role: body.role,
       expiresAt: body.expiresAt,
       requestId: request.id,

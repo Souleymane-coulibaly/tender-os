@@ -20,6 +20,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   CANNOT_TRANSFER_OWNERSHIP_TO_SELF: HttpStatus.UNPROCESSABLE_ENTITY,
   PERMISSION_MISSING: HttpStatus.FORBIDDEN,
   USER_NOT_FOUND: HttpStatus.NOT_FOUND,
+  // Checkpoint TENDEROS-2.1-P2.3-E2 (Onboarding V2) — jetée par `InviteMemberByEmailUseCase`
+  // (module identity, `EmailAddress.create`), même statut que le propre filtre d'identity.
+  INVALID_EMAIL_ADDRESS: HttpStatus.UNPROCESSABLE_ENTITY,
   ORGANIZATION_NOT_FOUND: HttpStatus.NOT_FOUND,
   ORGANIZATION_SLUG_ALREADY_TAKEN: HttpStatus.CONFLICT,
   // Checkpoint TENDEROS-2.1-P2.3-E1 — même statut que `INSUFFICIENT_AO_CREDITS` (billing) : une

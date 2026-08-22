@@ -83,6 +83,8 @@ export const GA_EVENTS = {
   OnboardingOrganizationCompleted: "onboarding_organization_completed",
   OnboardingPlanSelected: "onboarding_plan_selected",
   CheckoutStarted: "checkout_started",
+  // Checkpoint TENDEROS-2.1-P2.3-E2 (Onboarding V2, mission §14 "Étape 6 — Équipe").
+  OnboardingTeamStepViewed: "onboarding_team_step_viewed",
   OnboardingCompleted: "onboarding_completed",
   // V2 Sprint 25 (mission §25.92 "GA4 / PRODUCT EVENTS") — après consentement uniquement (même
   // moteur, `trackEvent` ci-dessous), aucune PII.

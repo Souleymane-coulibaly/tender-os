@@ -27,7 +27,7 @@ export default async function OnboardingPaiementPage({ searchParams }: { searchP
     redirect(`/onboarding/entreprise${qs}`);
   }
   if (state.hasPlan && checkoutStatus !== "success") {
-    redirect("/onboarding/configuration");
+    redirect("/onboarding/equipe");
   }
 
   if (checkoutStatus === "success") {
@@ -50,7 +50,7 @@ export default async function OnboardingPaiementPage({ searchParams }: { searchP
     <div className="mx-auto flex max-w-md flex-col items-center gap-8 px-4 py-12 sm:px-6 sm:py-16">
       <OnboardingTracker event={GA_EVENTS.OnboardingPlanSelected} />
       <div className="flex flex-col items-center gap-2 text-center">
-        <p className="text-xs font-semibold uppercase tracking-wide text-tenderos-slate">Étape 4 sur 5</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-tenderos-slate">Étape 4 sur 6</p>
         <h1 className="font-tenderos-display text-3xl font-bold text-tenderos-navy">Paiement sécurisé</h1>
         <p className="max-w-sm text-sm text-tenderos-slate">Vous allez être redirigé(e) vers Stripe, notre prestataire de paiement, pour finaliser votre offre.</p>
       </div>

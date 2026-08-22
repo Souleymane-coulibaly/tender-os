@@ -15,7 +15,7 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(id: OrganizationId): Promise<Organization | null> {
-    const record = await this.prisma.organization.findFirst({
+    const record = await this.prisma.currentClient().organization.findFirst({
       where: { id: id.value, deletedAt: null },
     });
 
@@ -23,7 +23,7 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
   }
 
   async findBySlug(slug: OrganizationSlug): Promise<Organization | null> {
-    const record = await this.prisma.organization.findFirst({
+    const record = await this.prisma.currentClient().organization.findFirst({
       where: { slug: slug.value, deletedAt: null },
     });
 
@@ -35,7 +35,7 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
     limit: number;
     status?: OrganizationStatus | undefined;
   }): Promise<OrganizationPage> {
-    const records = await this.prisma.organization.findMany({
+    const records = await this.prisma.currentClient().organization.findMany({
       where: { deletedAt: null, ...(input.status ? { status: input.status } : {}) },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: input.limit + 1,
@@ -52,7 +52,7 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
   }
 
   async countByStatus(): Promise<Record<OrganizationStatus, number>> {
-    const rows = await this.prisma.organization.groupBy({
+    const rows = await this.prisma.currentClient().organization.groupBy({
       by: ["status"],
       where: { deletedAt: null },
       _count: { _all: true },
@@ -72,10 +72,18 @@ export class PrismaOrganizationRepository implements OrganizationRepository {
     return counts;
   }
 
+  /**
+   * Checkpoint TENDEROS-2.1-P2.3-E2 (Onboarding V2, audit Codex) — `currentClient()` (au lieu de
+   * `this.prisma` brut) : rejoint la transaction ambiante ouverte par
+   * `MembershipRepository.runExclusiveForActor` (voir `CreateOrganizationWithOwnerUseCase`) quand
+   * elle existe, sans quoi la création de l'Organization et celle de sa Membership OWNER ne
+   * pourraient jamais être atomiques malgré le verrou consultatif — comportement inchangé hors de
+   * ce contexte (`currentClient()` retourne alors le client Prisma normal).
+   */
   async save(organization: Organization): Promise<void> {
     const data = this.mapper.toPersistence(organization);
 
-    await this.prisma.organization.upsert({
+    await this.prisma.currentClient().organization.upsert({
       where: { id: data.id },
       create: data,
       update: data,
