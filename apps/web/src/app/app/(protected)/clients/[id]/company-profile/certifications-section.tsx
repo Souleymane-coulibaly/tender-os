@@ -2,17 +2,10 @@
 
 import { useActionState } from "react";
 import { createCertificationAction, type FormActionState } from "../../../../company-profile-actions";
-import type { CompanyCertification, TemporalValidityStatus } from "../../../../../../lib/company-profile-types";
+import { TEMPORAL_VALIDITY_LABELS, temporalValidityTone, type CompanyCertification } from "../../../../../../lib/company-profile-types";
+import { Badge } from "../../../../../../components/ui";
 
 const INITIAL_STATE: FormActionState = {};
-
-const TEMPORAL_LABELS: Record<TemporalValidityStatus, string> = { VALID: "Valide", EXPIRING_SOON: "Bientôt expirée", EXPIRED: "Expirée", NO_EXPIRY: "Sans échéance" };
-const TEMPORAL_BADGE: Record<TemporalValidityStatus, string> = {
-  VALID: "bg-green-100 text-green-800",
-  EXPIRING_SOON: "bg-amber-100 text-amber-800",
-  EXPIRED: "bg-red-100 text-red-800",
-  NO_EXPIRY: "bg-neutral-200 text-neutral-700",
-};
 
 export function CertificationsSection({ clientId, certifications }: { clientId: string; certifications: CompanyCertification[] }) {
   const boundAction = createCertificationAction.bind(null, clientId);
@@ -41,9 +34,7 @@ export function CertificationsSection({ clientId, certifications }: { clientId: 
                   <td className="py-2 pr-4 text-neutral-600">{certification.expiresAt ? new Date(certification.expiresAt).toLocaleDateString("fr-FR") : "—"}</td>
                   <td className="py-2 pr-4">
                     {certification.temporalStatus ? (
-                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${TEMPORAL_BADGE[certification.temporalStatus]}`}>
-                        {TEMPORAL_LABELS[certification.temporalStatus]}
-                      </span>
+                      <Badge tone={temporalValidityTone(certification.temporalStatus)}>{TEMPORAL_VALIDITY_LABELS[certification.temporalStatus]}</Badge>
                     ) : null}
                   </td>
                 </tr>

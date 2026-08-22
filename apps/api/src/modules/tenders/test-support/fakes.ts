@@ -271,6 +271,18 @@ export class InMemoryTenderRepository implements TenderRepository {
     return counts;
   }
 
+  async listCreatedAtSince(input: { organizationId: string; restrictToClientAccountIds?: readonly string[] | undefined; since: Date; limit: number }): Promise<readonly Date[]> {
+    const allowedClients = input.restrictToClientAccountIds ? new Set(input.restrictToClientAccountIds) : undefined;
+    const dates: Date[] = [];
+    for (const tender of this.tenders.values()) {
+      if (tender.organizationId !== input.organizationId) continue;
+      if (allowedClients && !allowedClients.has(tender.clientAccountId)) continue;
+      if (tender.createdAt.getTime() < input.since.getTime()) continue;
+      dates.push(tender.createdAt);
+    }
+    return dates.slice(0, input.limit);
+  }
+
   async save(tender: Tender): Promise<void> {
     this.tenders.set(tender.id.value, tender);
   }

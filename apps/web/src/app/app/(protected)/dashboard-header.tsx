@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Button, PageHeader } from "../../../components/ui";
 import { PLAN_TIER_LABELS, daysRemainingInTrial, type OrganizationSubscriptionDto } from "../../../lib/billing-types";
 import { canCreateTender } from "./dashboard-permissions";
 import { canUseMarketWatch } from "../../../lib/market-watch-types";
@@ -33,40 +34,50 @@ function PlanBadge({ subscription }: { subscription: OrganizationSubscriptionDto
  * refondre arbitrairement toutes les pages", cette barre est partagée par TOUTE la surface `/app`,
  * pas seulement le Dashboard). Cette en-tête ajoute uniquement ce qui est propre à cette page :
  * salutation, statut plan/Trial, et les CTA d'activation.
+ *
+ * Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2) — migré vers `&lt;PageHeader&gt;`, dont le
+ * propre commentaire documente qu'il a été "généralisé depuis DashboardHeader" (Sprint 25F) : le
+ * balisage `rounded-2xl border border-tenderos-navy/10 bg-white p-5 shadow-sm sm:flex-row...` était
+ * DÉJÀ un doublon exact, jamais convergé jusqu'ici. `status` accueille `PlanBadge` (même position
+ * visuelle qu'avant), `actions` le CTA primaire ; les deux liens secondaires ("Importer un DCE"/
+ * "Explorer les opportunités") n'ont pas de slot dédié dans `PageHeader` — composés dans
+ * `description` (accepte un `ReactNode`, pas seulement une chaîne) pour préserver leur position
+ * exacte sous le titre, sans élargir l'API du composant partagé pour un seul appelant.
  */
 export function DashboardHeader({ firstName, subscription, actorRole }: { firstName: string; subscription: OrganizationSubscriptionDto | null; actorRole: string | undefined }) {
-  return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-tenderos-navy/10 bg-white p-5 shadow-sm sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h1 className="font-tenderos-display text-2xl font-extrabold text-tenderos-navy">Bonjour {firstName} 👋</h1>
-        <p className="mt-1 text-sm text-tenderos-slate">Voici ce qui nécessite votre attention aujourd&apos;hui.</p>
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-          {/* Correctif audit Codex Checkpoint 25C (P1) — "Importer un DCE" pointe vers
-              `/app/tenders/new` (aucune route d'import DCE indépendante n'existe, voir
-              quick-actions-panel.tsx), donc gated par la MÊME permission que "Créer un dossier"
-              (`TenderPermission.Create`, jamais `canManageWorkspace` qui inclut CONTRIBUTOR — une
-              cible qui exige Create ne peut jamais être montrée à un rôle qui ne l'a pas). */}
-          {canCreateTender(actorRole) ? (
-            <Link href="/app/tenders/new" className="font-medium text-tenderos-blue hover:underline">
-              Importer un DCE
-            </Link>
-          ) : null}
-          {canUseMarketWatch(actorRole) ? (
-            <Link href="/app/market-watch" className="font-medium text-tenderos-blue hover:underline">
-              Explorer les opportunités
-            </Link>
-          ) : null}
-        </div>
-      </div>
+  const showImportDce = canCreateTender(actorRole);
+  const showMarketWatch = canUseMarketWatch(actorRole);
 
-      <div className="flex shrink-0 flex-col items-end gap-3">
-        <PlanBadge subscription={subscription} />
-        {canCreateTender(actorRole) ? (
-          <Link href="/app/tenders/new" className="rounded-lg bg-tenderos-navy px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-tenderos-navy/90">
-            + Nouvel appel d&apos;offres
-          </Link>
-        ) : null}
-      </div>
-    </div>
+  return (
+    <PageHeader
+      title={`Bonjour ${firstName} 👋`}
+      status={<PlanBadge subscription={subscription} />}
+      description={
+        <>
+          <span>Voici ce qui nécessite votre attention aujourd&apos;hui.</span>
+          {showImportDce || showMarketWatch ? (
+            <span className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+              {/* Correctif audit Codex Checkpoint 25C (P1) — "Importer un DCE" pointe vers
+                  `/app/tenders/new` (aucune route d'import DCE indépendante n'existe, voir
+                  quick-actions-panel.tsx), donc gated par la MÊME permission que "Créer un
+                  dossier" (`TenderPermission.Create`, jamais `canManageWorkspace` qui inclut
+                  CONTRIBUTOR — une cible qui exige Create ne peut jamais être montrée à un rôle
+                  qui ne l'a pas). */}
+              {showImportDce ? (
+                <Link href="/app/tenders/new" className="font-medium text-tenderos-blue hover:underline">
+                  Importer un DCE
+                </Link>
+              ) : null}
+              {showMarketWatch ? (
+                <Link href="/app/market-watch" className="font-medium text-tenderos-blue hover:underline">
+                  Explorer les opportunités
+                </Link>
+              ) : null}
+            </span>
+          ) : null}
+        </>
+      }
+      actions={showImportDce ? <Button href="/app/tenders/new" variant="primary" size="lg">+ Nouvel appel d&apos;offres</Button> : undefined}
+    />
   );
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Card } from "../../../components/ui";
 import { UNLIMITED, formatQuotaLimit, formatStorageBytes, type OrganizationEntitlementsDto, type OrganizationSubscriptionDto, type OrganizationUsageDto } from "../../../lib/billing-types";
 
 function UsageBar({ icon, label, value, max, valueLabel }: { icon: React.ReactNode; label: string; value: number; max: number | null; valueLabel: string }) {
@@ -48,6 +49,9 @@ const USERS_ICON = (
  * V2 Sprint 25 (Dashboard Premium) — mission §25.61/§25.62 "Mon utilisation". Restylage premium de
  * `BillingSummaryWidget` (retiré de cette page, jamais un second calcul de quota/usage — mêmes
  * données `entitlements`/`usage`/`aoCreditBalance`, Sprint 22).
+ *
+ * Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2) — enveloppe `&lt;Card&gt;` (doublon exact du
+ * balisage local précédent).
  */
 export function UsageWidget({
   subscription,
@@ -64,9 +68,7 @@ export function UsageWidget({
   const isTrialing = subscription?.status === "TRIALING";
 
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-tenderos-navy/10 bg-white p-5 shadow-sm">
-      <h2 className="font-tenderos-display text-base font-bold text-tenderos-navy">Mon utilisation</h2>
-
+    <Card title="Mon utilisation">
       <div className="flex flex-col gap-4">
         {/* Mission §25.62 — pendant le Trial, jamais "X / N disponibles" avec le plafond de report
             Starter en denominateur (le grant mensuel n'a pas encore démarré) : uniquement le solde
@@ -101,9 +103,9 @@ export function UsageWidget({
         />
       </div>
 
-      <Link href="/app/subscription" className="text-sm font-medium text-tenderos-blue hover:underline">
+      <Link href="/app/subscription" className="mt-4 block text-sm font-medium text-tenderos-blue hover:underline">
         Voir tous les détails
       </Link>
-    </section>
+    </Card>
   );
 }

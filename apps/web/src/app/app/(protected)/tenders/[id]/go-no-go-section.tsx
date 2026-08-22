@@ -42,6 +42,21 @@ function decisionTone(value: GoNoGoDecisionValue | GoNoGoRecommendation): BadgeT
   }
 }
 
+/** Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2, audit hardcode) — le bouton de sélection
+ *  de décision (`bg-{color}-{shade} text-white` selon la valeur) dupliquait indépendamment le
+ *  mapping décision → couleur déjà porté par `decisionTone()` ci-dessus (un second switch, jamais
+ *  convergé). Un bouton "sélectionné" appelle un remplissage plein (contraste texte blanc), jamais
+ *  le même traitement clair qu'un `Badge` — donc ses propres classes, mais dérivées de LA seule
+ *  source de vérité sémantique (`decisionTone`), jamais un second choix de couleur indépendant. */
+const SELECTED_DECISION_BUTTON_CLASSES: Record<BadgeTone, string> = {
+  success: "bg-success-fg text-white",
+  warning: "bg-warning-fg text-white",
+  danger: "bg-danger-fg text-white",
+  info: "bg-info-fg text-white",
+  neutral: "bg-tenderos-navy text-white",
+  gold: "bg-tenderos-gold text-tenderos-navy",
+};
+
 /** Checkpoint 2.1-P2.1-FIX-C — même discipline que les badges Actualisation requise
  *  Analyse/Checklist (mission §38 "pas de faux vert"). */
 function freshnessTone(freshness: GoNoGoFreshness): BadgeTone {
@@ -282,11 +297,7 @@ export function GoNoGoSection({
                       aria-pressed={isSelected}
                       className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
                         isSelected
-                          ? choice.value === "GO"
-                            ? "bg-green-600 text-white"
-                            : choice.value === "GO_CONDITIONAL"
-                              ? "bg-amber-500 text-white"
-                              : "bg-red-600 text-white"
+                          ? SELECTED_DECISION_BUTTON_CLASSES[decisionTone(choice.value)]
                           : "border border-tenderos-navy/15 bg-white text-tenderos-navy hover:bg-tenderos-light"
                       }`}
                     >

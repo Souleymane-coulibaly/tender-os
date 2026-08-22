@@ -6,6 +6,7 @@ import { IdentityModule } from "../identity";
 import { MarketWatchModule } from "../market-watch";
 import { MembershipsModule } from "../memberships";
 import { OpportunityModule } from "../opportunity";
+import { OrganizationsModule } from "../organizations";
 import { ResponsePackageModule } from "../response-package";
 import { TendersModule } from "../tenders";
 import { WorkspaceModule } from "../workspace";
@@ -32,6 +33,7 @@ import { DashboardController } from "./interfaces/http/dashboard.controller";
     MarketWatchModule,
     CompanyProfileModule,
     AdministrativeDossierModule,
+    OrganizationsModule,
   ],
   controllers: [DashboardController],
   providers: [GetDashboardOverviewUseCase],

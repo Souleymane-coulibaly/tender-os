@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Card } from "../../../components/ui";
 import type { ActivationChecklistItemId, DashboardActivationChecklist } from "../../../lib/dashboard-types";
 
 // V2 Sprint 25 (Guide interactif) — mission §25.69 "checklist dynamique". Chaque lien mène à la
@@ -23,6 +24,9 @@ const OPEN_ICON = <svg width="16" height="16" viewBox="0 0 16 16" fill="none" ar
  * `completed` est dérivé de l'état réel côté backend (`GetDashboardOverviewUseCase`), jamais un
  * second état manuel côté frontend. Progression sobre ("N / 7 étapes terminées" + barre), jamais
  * de badges/confettis/points (mission "pas de gamification excessive").
+ *
+ * Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2) — enveloppe `&lt;Card&gt;` (doublon exact du
+ * balisage local précédent).
  */
 export function ActivationChecklistWidget({ checklist }: { checklist: DashboardActivationChecklist }) {
   if (checklist.completedCount === checklist.totalCount) return null;
@@ -30,15 +34,15 @@ export function ActivationChecklistWidget({ checklist }: { checklist: DashboardA
   const percent = checklist.totalCount > 0 ? Math.round((checklist.completedCount / checklist.totalCount) * 100) : 0;
 
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-tenderos-navy/10 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between">
-        <h2 className="font-tenderos-display text-base font-bold text-tenderos-navy">Votre checklist d&apos;activation</h2>
+    <Card
+      title="Votre checklist d'activation"
+      actions={
         <span className="text-sm font-medium text-tenderos-slate">
           {checklist.completedCount} / {checklist.totalCount} étapes terminées
         </span>
-      </div>
-
-      <span className="h-1.5 w-full overflow-hidden rounded-full bg-tenderos-light" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+      }
+    >
+      <span className="mb-4 block h-1.5 w-full overflow-hidden rounded-full bg-tenderos-light" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
         <span className="block h-full rounded-full bg-tenderos-blue transition-all" style={{ width: `${percent}%` }} />
       </span>
 
@@ -54,6 +58,6 @@ export function ActivationChecklistWidget({ checklist }: { checklist: DashboardA
           return <li key={item.id}>{href ? <Link href={href} className="rounded-md transition hover:bg-tenderos-light/60">{row}</Link> : row}</li>;
         })}
       </ul>
-    </section>
+    </Card>
   );
 }

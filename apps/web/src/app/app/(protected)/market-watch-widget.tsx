@@ -1,22 +1,26 @@
 import Link from "next/link";
+import { Card } from "../../../components/ui";
 import type { DashboardMarketWatch } from "../../../lib/dashboard-types";
 
 /**
  * V2 Sprint 25 (Dashboard Premium) — mission §25.63/§25.64 "Opportunités recommandées". Données
  * réelles issues du moteur de correspondance Market Watch (Sprint 17), jamais un score inventé.
+ *
+ * Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2) — enveloppe `&lt;Card&gt;` (doublon exact du
+ * balisage local précédent).
  */
 export function MarketWatchWidget({ marketWatch }: { marketWatch: DashboardMarketWatch }) {
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-tenderos-navy/10 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between">
-        <h2 className="font-tenderos-display text-base font-bold text-tenderos-navy">Opportunités recommandées</h2>
-        {marketWatch.hasSavedSearches ? (
+    <Card
+      title="Opportunités recommandées"
+      actions={
+        marketWatch.hasSavedSearches ? (
           <Link href="/app/market-watch" className="text-sm font-medium text-tenderos-blue hover:underline">
             Voir toutes
           </Link>
-        ) : null}
-      </div>
-
+        ) : undefined
+      }
+    >
       {!marketWatch.hasSavedSearches ? (
         <div className="flex flex-col items-start gap-2 py-2">
           <p className="text-sm text-tenderos-slate">Configurer votre veille pour recevoir des opportunités adaptées.</p>
@@ -53,6 +57,6 @@ export function MarketWatchWidget({ marketWatch }: { marketWatch: DashboardMarke
           ))}
         </ul>
       )}
-    </section>
+    </Card>
   );
 }

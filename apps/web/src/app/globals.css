@@ -44,6 +44,33 @@
   --danger-fg: #991b1b; /* Tailwind red-800 */
   --info-bg: rgb(20 114 255 / 0.1); /* == bg-tenderos-blue/10, motif "info" déjà utilisé par Badge */
   --info-fg: var(--tenderos-blue);
+
+  /* Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2, mission §4) — couche d'ALIAS sémantique
+     manquante, demandée explicitement par la mission ("background/surface/surface-elevated/
+     foreground/foreground-secondary/muted/border/primary/secondary/accent"). Mission §4 : "Éliminer
+     PROGRESSIVEMENT les valeurs arbitraires LORSQU'UN token sémantique existe" — ceci n'est PAS un
+     second jeu de couleurs (interdit par §3 "ne pas introduire un second design system") : chaque
+     alias pointe vers une variable `--tenderos-*` DÉJÀ existante (documentée ligne 9-21 ci-dessus
+     par Checkpoint A), zéro nouvelle valeur de couleur, zéro changement visuel. Objectif : donner
+     un nom conventionnel (reconnu Linear/Vercel/Stripe) aux rôles déjà établis, pour que le code
+     MIGRÉ PROGRESSIVEMENT (mission §30 "pas de big-bang") puisse écrire `bg-surface`/`text-foreground`
+     plutôt que redécouvrir `bg-white`/`text-tenderos-navy` à chaque fichier — jamais une contrainte
+     sur le code NON migré, qui continue de fonctionner à l'identique. */
+  --background: var(--tenderos-light);
+  --surface: var(--tenderos-white);
+  /* "Élevée" = card au-dessus d'un fond déjà `surface` (ex. ligne de tableau survolée, popover) —
+     mission §12 "card inside card inside card" : cette variable existe pour permettre UNE seule
+     élévation supplémentaire décidée consciemment, jamais une pile arbitraire. Même valeur que
+     `surface` aujourd'hui (aucun second blanc n'existe dans la palette actuelle) — distincte par le
+     NOM, pas par la valeur, pour rester prête si un besoin réel de distinction visuelle émerge. */
+  --surface-elevated: var(--tenderos-white);
+  --foreground: var(--tenderos-navy);
+  --foreground-secondary: var(--tenderos-slate);
+  --muted: var(--tenderos-slate);
+  --border: rgb(10 42 91 / 0.1); /* == border-tenderos-navy/10, déjà le bord dominant de /app */
+  --primary: var(--tenderos-navy);
+  --secondary: var(--tenderos-slate);
+  --accent: var(--tenderos-blue);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -125,6 +125,11 @@ export type { AuditLogWriter, TenderAuditLogEntry } from "./application/ports/au
 // acteur humain sur la vue Tenders.
 export { GetTenderStatisticsUseCase } from "./application/use-cases/get-tender-statistics.use-case";
 export type { GetTenderStatisticsQuery } from "./application/use-cases/get-tender-statistics.use-case";
+// Checkpoint TENDEROS-2.1-P2.3-E5 (Dashboard V2, Premium Analytics addendum §4/§26) — même
+// discipline que GetTenderStatisticsUseCase ci-dessus : lecture bornée, RBAC/ClientAccess-gated,
+// zéro décision métier, réexportée pour Dashboard uniquement.
+export { GetTenderActivityTrendUseCase } from "./application/use-cases/get-tender-activity-trend.use-case";
+export type { GetTenderActivityTrendQuery, TenderActivityTrendPointDto } from "./application/use-cases/get-tender-activity-trend.use-case";
 export { GetTenderListViewUseCase } from "./application/use-cases/get-tender-list-view.use-case";
 export type { GetTenderListViewQuery, GetTenderListViewResult } from "./application/use-cases/get-tender-list-view.use-case";
 export type { TenderStatisticsDto, TenderListItemDto, TenderBoardItemDto } from "./application/board-dtos";

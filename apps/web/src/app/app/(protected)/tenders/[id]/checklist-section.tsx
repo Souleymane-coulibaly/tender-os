@@ -226,11 +226,15 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
 
       <div className="flex flex-wrap items-center gap-2">
         {item.complianceStatus !== "VALIDATED" ? (
+          // Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2, audit hardcode) — remplace
+          // `border-green-200 bg-green-50 text-green-800` (couleur brute) par les jetons sémantiques
+          // `success` (Checkpoint A/B), les mêmes que `Badge tone="success"` — jamais un vert propre
+          // à cet écran.
           <button
             type="button"
             disabled={isPending}
             onClick={() => runAction(() => validateChecklistItemAction(tenderId, item.id))}
-            className="rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-800 hover:bg-green-100 disabled:opacity-50"
+            className="rounded-lg border border-success-fg/20 bg-success-bg px-2.5 py-1 text-xs font-medium text-success-fg hover:bg-success-fg/10 disabled:opacity-50"
           >
             Valider
           </button>

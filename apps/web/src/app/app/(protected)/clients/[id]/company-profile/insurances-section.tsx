@@ -2,17 +2,10 @@
 
 import { useActionState } from "react";
 import { createInsuranceAction, type FormActionState } from "../../../../company-profile-actions";
-import { INSURANCE_TYPES, INSURANCE_TYPE_LABELS, type CompanyInsurance, type TemporalValidityStatus } from "../../../../../../lib/company-profile-types";
+import { INSURANCE_TYPES, INSURANCE_TYPE_LABELS, TEMPORAL_VALIDITY_LABELS, temporalValidityTone, type CompanyInsurance } from "../../../../../../lib/company-profile-types";
+import { Badge } from "../../../../../../components/ui";
 
 const INITIAL_STATE: FormActionState = {};
-
-const TEMPORAL_LABELS: Record<TemporalValidityStatus, string> = { VALID: "Valide", EXPIRING_SOON: "Bientôt expirée", EXPIRED: "Expirée", NO_EXPIRY: "Sans échéance" };
-const TEMPORAL_BADGE: Record<TemporalValidityStatus, string> = {
-  VALID: "bg-green-100 text-green-800",
-  EXPIRING_SOON: "bg-amber-100 text-amber-800",
-  EXPIRED: "bg-red-100 text-red-800",
-  NO_EXPIRY: "bg-neutral-200 text-neutral-700",
-};
 
 export function InsurancesSection({ clientId, insurances }: { clientId: string; insurances: CompanyInsurance[] }) {
   const boundAction = createInsuranceAction.bind(null, clientId);
@@ -43,7 +36,7 @@ export function InsurancesSection({ clientId, insurances }: { clientId: string; 
                   <td className="py-2 pr-4 text-neutral-600">{insurance.expiresAt ? new Date(insurance.expiresAt).toLocaleDateString("fr-FR") : "—"}</td>
                   <td className="py-2 pr-4">
                     {insurance.temporalStatus ? (
-                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${TEMPORAL_BADGE[insurance.temporalStatus]}`}>{TEMPORAL_LABELS[insurance.temporalStatus]}</span>
+                      <Badge tone={temporalValidityTone(insurance.temporalStatus)}>{TEMPORAL_VALIDITY_LABELS[insurance.temporalStatus]}</Badge>
                     ) : null}
                   </td>
                 </tr>

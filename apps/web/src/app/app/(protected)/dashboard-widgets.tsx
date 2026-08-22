@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { DEADLINE_BUCKET_LABELS, deadlineBucketBadgeClass, type DashboardActivityItem, type DashboardDeadlineItem } from "../../../lib/dashboard-types";
+import { Badge, Card } from "../../../components/ui";
+import { DEADLINE_BUCKET_LABELS, deadlineBucketTone, type DashboardActivityItem, type DashboardDeadlineItem } from "../../../lib/dashboard-types";
 
 /**
  * V2 Sprint 25 (Dashboard Premium) — mission §25.54-§25.68 : `PipelineWidget`/`AttentionWidget`/
@@ -11,29 +12,23 @@ import { DEADLINE_BUCKET_LABELS, deadlineBucketBadgeClass, type DashboardActivit
  * réponse, GO/NO-GO → fiche Opportunité, Tâches → `/app/me/tasks`) — rien n'est supprimé côté
  * backend, seulement retiré de CETTE vue. `DeadlinesWidget`/`ActivityWidget` restent (même contrat
  * de données, uniquement restylés premium).
+ *
+ * Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2) — l'ancien `WidgetCard` local (retiré)
+ * dupliquait exactement le balisage de `&lt;Card&gt;` ; `action` migre vers le slot `actions` de
+ * `Card`. Le badge d'échéance utilise désormais `&lt;Badge tone={deadlineBucketTone(...)}&gt;` au lieu
+ * de classes Tailwind brutes (`deadlineBucketBadgeClass`, supprimée — un seul appelant, ici).
  */
-function WidgetCard({ id, title, subtitle, action, children }: { id?: string; title: string; subtitle?: string; action?: { href: string; label: string }; children: React.ReactNode }) {
-  return (
-    <section id={id} className="flex flex-col gap-4 rounded-2xl border border-tenderos-navy/10 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-tenderos-display text-base font-bold text-tenderos-navy">{title}</h2>
-          {subtitle ? <p className="text-xs text-tenderos-slate">{subtitle}</p> : null}
-        </div>
-        {action ? (
-          <Link href={action.href} className="text-sm font-medium text-tenderos-blue hover:underline">
-            {action.label}
-          </Link>
-        ) : null}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 export function DeadlinesWidget({ deadlines }: { deadlines: DashboardDeadlineItem[] }) {
   return (
-    <WidgetCard title="Prochaines échéances" action={{ href: "/app/tenders", label: "Voir le calendrier" }}>
+    <Card
+      title="Prochaines échéances"
+      actions={
+        <Link href="/app/tenders" className="text-sm font-medium text-tenderos-blue hover:underline">
+          Voir le calendrier
+        </Link>
+      }
+    >
       {deadlines.length === 0 ? (
         <p className="text-sm text-tenderos-slate">Aucune échéance à venir.</p>
       ) : (
@@ -47,20 +42,29 @@ export function DeadlinesWidget({ deadlines }: { deadlines: DashboardDeadlineIte
                   <span className="block truncate text-sm font-medium text-tenderos-navy">{item.title}</span>
                   <span className="block text-xs text-tenderos-slate">Remise des offres</span>
                 </div>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${deadlineBucketBadgeClass(item.bucket)}`}>{DEADLINE_BUCKET_LABELS[item.bucket]}</span>
+                <span className="shrink-0">
+                  <Badge tone={deadlineBucketTone(item.bucket)}>{DEADLINE_BUCKET_LABELS[item.bucket]}</Badge>
+                </span>
               </Link>
             </li>
           ))}
         </ol>
       )}
       {deadlines.length > 6 ? <p className="text-xs text-tenderos-slate">+{deadlines.length - 6} autre(s)</p> : null}
-    </WidgetCard>
+    </Card>
   );
 }
 
 export function ActivityWidget({ activity }: { activity: DashboardActivityItem[] }) {
   return (
-    <WidgetCard title="Activité récente" action={{ href: "/app/tenders", label: "Voir toute l'activité" }}>
+    <Card
+      title="Activité récente"
+      actions={
+        <Link href="/app/tenders" className="text-sm font-medium text-tenderos-blue hover:underline">
+          Voir toute l&apos;activité
+        </Link>
+      }
+    >
       {activity.length === 0 ? (
         <p className="text-sm text-tenderos-slate">Aucune activité récente sur vos dossiers.</p>
       ) : (
@@ -75,6 +79,6 @@ export function ActivityWidget({ activity }: { activity: DashboardActivityItem[]
           ))}
         </ul>
       )}
-    </WidgetCard>
+    </Card>
   );
 }

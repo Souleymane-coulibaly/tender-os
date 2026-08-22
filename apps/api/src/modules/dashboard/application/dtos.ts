@@ -1,6 +1,6 @@
 import type { TaskSummary } from "../../workspace";
 import type { TenderActivityType } from "../../workspace";
-import type { TenderStatus, TenderListItemDto } from "../../tenders";
+import type { TenderStatus, TenderListItemDto, ReadinessStatus, TenderActivityTrendPointDto } from "../../tenders";
 import type { ResponsePackageStatus } from "../../response-package";
 import type { GoNoGoDecisionValue } from "../../opportunity";
 import type { AttentionReason, DeadlineBucket } from "../domain/enums";
@@ -64,6 +64,39 @@ export type DashboardGoNoGoDto = Readonly<{
   countByDecision: Readonly<Record<GoNoGoDecisionValue, number>>;
   total: number;
   periodDays: number;
+}>;
+
+/**
+ * Checkpoint TENDEROS-2.1-P2.3-E5 (Dashboard V2, Premium Analytics addendum §26/§31/§32) — READ
+ * MODEL analytique pur : chaque champ est soit une réutilisation directe d'une donnée déjà résolue
+ * plus haut dans `GetDashboardOverviewUseCase` (readinessDistribution/deadlineBuckets/goRate —
+ * ZÉRO requête supplémentaire), soit UNE seule agrégation nouvelle et justifiée (activityTrend,
+ * via `GetTenderActivityTrendUseCase`, module Tenders). Aucune décision métier : jamais un score,
+ * jamais une readiness/GO-NO-GO recalculée — voir ANALYTICS_SOT_MATRIX du rapport final.
+ */
+export type DashboardReadinessDistributionDto = Readonly<{
+  countByStatus: Readonly<Record<ReadinessStatus, number>>;
+  total: number;
+}>;
+
+export type DashboardDeadlineBucketCountDto = Readonly<{ bucket: DeadlineBucket; count: number }>;
+
+export type DashboardAnalyticsDto = Readonly<{
+  periodDays: number;
+  /** Mission §4 addendum — UNE série fiable (AO créés/jour), day-bucketée dans le fuseau horaire de
+   *  l'organisation (mission §32), toujours `periodDays` points, jamais un jour silencieusement
+   *  omis (0 explicite). */
+  activityTrend: readonly TenderActivityTrendPointDto[];
+  /** Mission §8 addendum — tally de `activeTendersPage.items[].readinessStatus` (non-terminaux,
+   *  même périmètre que `attentionItems`/`deadlines`), jamais un second calcul de readiness. */
+  readinessDistribution: DashboardReadinessDistributionDto;
+  /** Mission §9 addendum — tally de `deadlines[].bucket` (déjà classifié par
+   *  `classifyDeadlineBucket`), jamais un second calcul de bucket. */
+  deadlineBuckets: readonly DashboardDeadlineBucketCountDto[];
+  /** Mission §7 addendum — formule EXACTE et documentée : (GO + GO_CONDITIONAL) / décisions
+   *  enregistrées sur la période (= `goNoGo.total`), JAMAIS / tous les Tenders. `null` si aucune
+   *  décision n'a été enregistrée sur la période (dénominateur nul — jamais un 0% trompeur). */
+  goRate: number | null;
 }>;
 
 export type DashboardMyTasksDto = Readonly<{
@@ -140,6 +173,7 @@ export type DashboardOverviewDto = Readonly<{
   marketWatch: DashboardMarketWatchDto;
   activationChecklist: DashboardActivationChecklistDto;
   averageReadinessScore: number;
+  analytics: DashboardAnalyticsDto;
 }>;
 
 const EMPTY_ACTIVATION_CHECKLIST: DashboardActivationChecklistDto = {
@@ -170,6 +204,13 @@ export const EMPTY_DASHBOARD_OVERVIEW: (generatedAt: string, scope: DashboardOve
   marketWatch: { hasSavedSearches: false, relevantOpportunitiesCount: 0, recommended: [] },
   activationChecklist: EMPTY_ACTIVATION_CHECKLIST,
   averageReadinessScore: 0,
+  analytics: {
+    periodDays,
+    activityTrend: [],
+    readinessDistribution: { countByStatus: {} as Record<ReadinessStatus, number>, total: 0 },
+    deadlineBuckets: [],
+    goRate: null,
+  },
 });
 
 export type { TenderListItemDto };

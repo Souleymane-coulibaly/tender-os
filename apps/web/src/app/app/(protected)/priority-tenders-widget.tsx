@@ -1,27 +1,9 @@
 import Link from "next/link";
-import type { TenderStatus } from "../../../lib/tenders-types";
-import { TENDER_STATUS_LABELS } from "../../../lib/tenders-types";
+import { Card } from "../../../components/ui";
 import { DEADLINE_BUCKET_LABELS, type DashboardAttentionItem, type DeadlineBucket } from "../../../lib/dashboard-types";
+import { TenderStatusBadge } from "./tenders/tender-status-badge";
 
 const DISPLAY_LIMIT = 5;
-
-function statusBadgeClass(status: TenderStatus): string {
-  switch (status) {
-    case "READY_TO_SUBMIT":
-    case "SUBMITTED":
-      return "bg-tenderos-gold/20 text-tenderos-navy";
-    case "IN_ANALYSIS":
-      return "bg-tenderos-blue/10 text-tenderos-blue";
-    case "IN_PREPARATION":
-      return "bg-purple-100 text-purple-700";
-    case "WON":
-      return "bg-green-100 text-green-700";
-    case "LOST":
-      return "bg-red-100 text-red-700";
-    default:
-      return "bg-tenderos-light text-tenderos-navy/70";
-  }
-}
 
 function daysRemainingLabel(submissionDeadline: string | undefined, bucket: DeadlineBucket | undefined): string {
   if (!submissionDeadline) return "—";
@@ -57,19 +39,25 @@ function AssigneeStack({ assignees }: { assignees: DashboardAttentionItem["assig
  * `AttentionWidget` (dashboard-widgets.tsx, retiré de cette page) pour la vue d'ensemble, même
  * source de données (`attentionItems`, déjà triée par urgence côté backend — mission §25.60 "KPI et
  * listes doivent utiliser les mêmes règles de filtrage"), jamais un second calcul de priorité.
+ *
+ * Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2) — enveloppe `&lt;Card&gt;` (doublon exact du
+ * balisage local précédent) ; la colonne "État" convergeait vers son propre `statusBadgeClass()` local
+ * (mapping de couleurs distinct du reste de l'app) au lieu de `&lt;TenderStatusBadge&gt;`, déjà le motif
+ * de référence partagé par la Liste et le Kanban — jamais convergé ici (audit E5.1).
  */
 export function PriorityTendersWidget({ items }: { items: DashboardAttentionItem[] }) {
   const visible = items.slice(0, DISPLAY_LIMIT);
 
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-tenderos-navy/10 bg-white p-5 shadow-sm lg:col-span-2">
-      <div className="flex items-center justify-between">
-        <h2 className="font-tenderos-display text-base font-bold text-tenderos-navy">Mes dossiers prioritaires</h2>
+    <Card
+      title="Mes dossiers prioritaires"
+      className="xl:col-span-2"
+      actions={
         <Link href="/app/tenders" className="text-sm font-medium text-tenderos-blue hover:underline">
           Voir tous
         </Link>
-      </div>
-
+      }
+    >
       {visible.length === 0 ? (
         <p className="py-6 text-center text-sm text-tenderos-slate">Aucun dossier ne nécessite votre attention pour le moment.</p>
       ) : (
@@ -107,7 +95,7 @@ export function PriorityTendersWidget({ items }: { items: DashboardAttentionItem
                     </Link>
                   </td>
                   <td className="py-3 pr-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadgeClass(item.status)}`}>{TENDER_STATUS_LABELS[item.status]}</span>
+                    <TenderStatusBadge status={item.status} />
                   </td>
                   <td className="py-3 pr-3 whitespace-nowrap text-tenderos-navy">
                     {item.submissionDeadline ? new Date(item.submissionDeadline).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : "—"}
@@ -130,6 +118,6 @@ export function PriorityTendersWidget({ items }: { items: DashboardAttentionItem
           </table>
         </div>
       )}
-    </section>
+    </Card>
   );
 }

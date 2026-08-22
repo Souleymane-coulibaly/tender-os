@@ -15,6 +15,13 @@ type DashboardOverviewResponse = {
   attentionItems: { tenderId: string; reasons: string[]; lotPackages: { lotId: string | null; status: string }[] }[];
   myTasks: { overdueCount: number; items: { id: string; title: string }[] };
   goNoGo: { countByDecision: Record<string, number>; total: number };
+  analytics: {
+    periodDays: number;
+    activityTrend: { date: string; count: number }[];
+    readinessDistribution: { countByStatus: Record<string, number>; total: number };
+    deadlineBuckets: { bucket: string; count: number }[];
+    goRate: number | null;
+  };
 };
 
 /**
@@ -331,6 +338,36 @@ describe("Dashboard (dashboard) — real HTTP + PostgreSQL (NestJS)", () => {
     expect(view.body.goNoGo.total).toBeGreaterThanOrEqual(1);
     expect(view.body.goNoGo.countByDecision.GO).toBeGreaterThanOrEqual(1);
     expect(view.body).not.toHaveProperty("winRate");
+    // Checkpoint TENDEROS-2.1-P2.3-E5.1 (closes E5-D3 — couverture HTTP des nouveaux analytics
+    // E5 Premium) — `analytics.goRate` doit refléter exactement le même dénominateur/numérateur que
+    // `goNoGo.countByDecision`/`goNoGo.total` (formule documentée : round((GO + GO_CONDITIONAL) /
+    // total * 100)), jamais un second calcul divergent côté analytics.
+    const expectedGoRate = Math.round((((view.body.goNoGo.countByDecision.GO ?? 0) + (view.body.goNoGo.countByDecision.GO_CONDITIONAL ?? 0)) / view.body.goNoGo.total) * 100);
+    expect(view.body.analytics.goRate).toBe(expectedGoRate);
+  });
+
+  it("BLOCKING — real HTTP+PostgreSQL, closes E5-D3: analytics.periodDays reflects the query param and activityTrend always has exactly that many points", async () => {
+    const view7 = await fetchDashboard(tokenOwnerA, orgAId, "periodDays=7");
+    expect(view7.body.analytics.periodDays).toBe(7);
+    expect(view7.body.analytics.activityTrend).toHaveLength(7);
+
+    const view90 = await fetchDashboard(tokenOwnerA, orgAId, "periodDays=90");
+    expect(view90.body.analytics.periodDays).toBe(90);
+    expect(view90.body.analytics.activityTrend).toHaveLength(90);
+  });
+
+  it("BLOCKING — real HTTP+PostgreSQL, closes E5-D3: analytics obeys the same ?clientId= tenant/client scope as kpis, never leaking another client's tenders into activityTrend", async () => {
+    const clientA = await createClient({ organizationId: orgAId, userId: ownerAUserId, name: `Client Analytics A ${randomUUID()}` });
+    const clientB = await createClient({ organizationId: orgAId, userId: ownerAUserId, name: `Client Analytics B ${randomUUID()}` });
+    await createTender({ organizationId: orgAId, clientAccountId: clientB, userId: ownerAUserId, title: `AnalyticsOnlyB ${randomUUID()}` });
+
+    const scopedToA = await fetchDashboard(tokenOwnerA, orgAId, `clientId=${clientA}&periodDays=7`);
+    const totalTrendA = scopedToA.body.analytics.activityTrend.reduce((sum, point) => sum + point.count, 0);
+    expect(totalTrendA).toBe(0);
+
+    const scopedToB = await fetchDashboard(tokenOwnerA, orgAId, `clientId=${clientB}&periodDays=7`);
+    const totalTrendB = scopedToB.body.analytics.activityTrend.reduce((sum, point) => sum + point.count, 0);
+    expect(totalTrendB).toBeGreaterThanOrEqual(1);
   });
 
   it("responds 401 without authentication", async () => {

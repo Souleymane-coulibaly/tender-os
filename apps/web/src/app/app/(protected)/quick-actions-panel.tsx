@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Card } from "../../../components/ui";
 import { canManageWorkspace, canCreateTender } from "./dashboard-permissions";
 import { canUseMarketWatch } from "../../../lib/market-watch-types";
 
@@ -9,10 +10,15 @@ const DOC_PLUS_ICON = <path d="M9 2h6l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0
 
 /**
  * V2 Sprint 25 (Dashboard Premium) — mission §25.66/§25.67 "Actions rapides... ne jamais afficher
- * une action inaccessible au user". "Inviter un membre" volontairement ABSENTE : aucune surface
- * d'invitation de membre n'existe encore dans le produit (recherche exhaustive, aucun résultat) —
- * la lister pointerait vers une route inexistante (mission §25.56 "uniquement routes réellement
- * disponibles"), jamais un lien mort ajouté pour remplir la mission.
+ * une action inaccessible au user". "Inviter un membre" volontairement ABSENTE d'ICI : la
+ * gestion d'équipe (`/app/members`, invitation par email incluse depuis Checkpoint P2.3-E2) vit
+ * déjà dans la navigation globale persistante (`NAV_SECTIONS`, section "Paramètres") — la
+ * dupliquer en Action Rapide violerait mission §6 "ne pas dupliquer le global navigation shell
+ * s'il existe déjà". Checkpoint TENDEROS-2.1-P2.3-E5 (addendum §22) : point d'entrée déjà
+ * satisfait par le shell global, aucun ajout nécessaire ici.
+ *
+ * Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2) — enveloppe Card (doublon exact du balisage
+ * local précédent).
  */
 type QuickAction = { href: string; label: string; icon: React.ReactNode };
 
@@ -31,8 +37,7 @@ export function QuickActionsPanel({ actorRole }: { actorRole: string | undefined
   if (actions.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-tenderos-navy/10 bg-white p-5 shadow-sm">
-      <h2 className="font-tenderos-display text-base font-bold text-tenderos-navy">Actions rapides</h2>
+    <Card title="Actions rapides">
       <div className="grid grid-cols-2 gap-3">
         {actions.map((action) => (
           <Link
@@ -47,6 +52,6 @@ export function QuickActionsPanel({ actorRole }: { actorRole: string | undefined
           </Link>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }

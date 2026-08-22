@@ -34,6 +34,7 @@ import { GetTenderBoardUseCase } from "./application/use-cases/get-tender-board.
 import { GetTenderListViewUseCase } from "./application/use-cases/get-tender-list-view.use-case";
 import { GetTenderReadinessUseCase } from "./application/use-cases/get-tender-readiness.use-case";
 import { GetTenderStatisticsUseCase } from "./application/use-cases/get-tender-statistics.use-case";
+import { GetTenderActivityTrendUseCase } from "./application/use-cases/get-tender-activity-trend.use-case";
 import { ListTendersUseCase } from "./application/use-cases/list-tenders.use-case";
 import { ListTendersForPublicApiUseCase } from "./application/use-cases/list-tenders-for-public-api.use-case";
 import { GetTenderForPublicApiUseCase } from "./application/use-cases/get-tender-for-public-api.use-case";
@@ -131,6 +132,7 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     GetTenderBoardUseCase,
     GetTenderListViewUseCase,
     GetTenderStatisticsUseCase,
+    GetTenderActivityTrendUseCase,
     ListTendersForPublicApiUseCase,
     GetTenderForPublicApiUseCase,
     ChangeTenderStatusUseCase,
@@ -259,6 +261,8 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     // V2 Sprint 15 — réexportés pour `dashboard` (voir index.ts).
     GetTenderStatisticsUseCase,
     GetTenderListViewUseCase,
+    // Checkpoint TENDEROS-2.1-P2.3-E5 — réexporté pour `dashboard` (Premium Analytics addendum).
+    GetTenderActivityTrendUseCase,
     // V2 Sprint 16 — réexportés pour `integrations` (voir index.ts).
     ListTendersForPublicApiUseCase,
     GetTenderForPublicApiUseCase,

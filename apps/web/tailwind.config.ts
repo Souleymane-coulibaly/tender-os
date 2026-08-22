@@ -30,6 +30,17 @@ const config: Config = {
         warning: { bg: "var(--warning-bg)", fg: "var(--warning-fg)" },
         danger: { bg: "var(--danger-bg)", fg: "var(--danger-fg)" },
         info: { bg: "var(--info-bg)", fg: "var(--info-fg)" },
+        // Checkpoint TENDEROS-2.1-P2.3-E5.1 (mission §4) — alias sémantiques, voir globals.css pour
+        // le mapping exact vers les jetons `tenderos-*` existants (zéro nouvelle couleur).
+        background: "var(--background)",
+        surface: "var(--surface)",
+        "surface-elevated": "var(--surface-elevated)",
+        foreground: { DEFAULT: "var(--foreground)", secondary: "var(--foreground-secondary)" },
+        muted: "var(--muted)",
+        border: "var(--border)",
+        primary: "var(--primary)",
+        secondary: "var(--secondary)",
+        accent: "var(--accent)",
       },
       // Jamais la clé `sans` par défaut (remplacerait le corps de police de TOUTE l'application,
       // y compris /app et /platform-admin — non-régression §72). Deux clés nommées, appliquées

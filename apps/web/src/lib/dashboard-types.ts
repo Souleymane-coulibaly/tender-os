@@ -1,5 +1,6 @@
 import type { TenderStatus } from "./tenders-types";
 import type { ResponsePackageStatus } from "./response-package-types";
+import type { BadgeTone } from "../components/ui/badge";
 
 export type DeadlineBucket = "OVERDUE" | "TODAY" | "TOMORROW" | "THIS_WEEK" | "LATER";
 export type AttentionReason = "DEADLINE_OVERDUE" | "DEADLINE_URGENT" | "CHECKLIST_INCOMPLETE" | "PACKAGE_NOT_READY" | "READINESS_AT_RISK";
@@ -111,6 +112,28 @@ export type DashboardActivationChecklist = {
   totalCount: number;
 };
 
+export type ReadinessStatus = "NOT_READY" | "IN_PROGRESS" | "READY_WITH_WARNINGS" | "READY";
+
+export type DashboardActivityTrendPoint = { date: string; count: number };
+
+export type DashboardReadinessDistribution = {
+  countByStatus: Partial<Record<ReadinessStatus, number>>;
+  total: number;
+};
+
+export type DashboardDeadlineBucketCount = { bucket: DeadlineBucket; count: number };
+
+/** Checkpoint TENDEROS-2.1-P2.3-E5 (Dashboard V2, Premium Analytics addendum) — READ MODEL pur,
+ *  chaque champ traçable à sa SOT (voir ANALYTICS_SOT_MATRIX du rapport final). `goRate` est déjà
+ *  calculé côté backend (GO + GO_CONDITIONAL / décisions de la période) — jamais recalculé ici. */
+export type DashboardAnalytics = {
+  periodDays: number;
+  activityTrend: DashboardActivityTrendPoint[];
+  readinessDistribution: DashboardReadinessDistribution;
+  deadlineBuckets: DashboardDeadlineBucketCount[];
+  goRate: number | null;
+};
+
 export type DashboardOverview = {
   generatedAt: string;
   scope: { allClients: boolean; clientAccountId?: string };
@@ -125,6 +148,14 @@ export type DashboardOverview = {
   marketWatch: DashboardMarketWatch;
   activationChecklist: DashboardActivationChecklist;
   averageReadinessScore: number;
+  analytics: DashboardAnalytics;
+};
+
+export const READINESS_STATUS_LABELS: Record<ReadinessStatus, string> = {
+  NOT_READY: "Non prêt",
+  IN_PROGRESS: "En cours",
+  READY_WITH_WARNINGS: "Prêt (avec réserves)",
+  READY: "Prêt",
 };
 
 export const DEADLINE_BUCKET_LABELS: Record<DeadlineBucket, string> = {
@@ -135,18 +166,22 @@ export const DEADLINE_BUCKET_LABELS: Record<DeadlineBucket, string> = {
   LATER: "Plus tard",
 };
 
-export function deadlineBucketBadgeClass(bucket: DeadlineBucket): string {
+/** Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2, mission §9 "centraliser business status →
+ *  visual variant") — remplace `deadlineBucketBadgeClass` (classes brutes, supprimée), même motif
+ *  que `tender-status-badge.tsx`/`go-no-go-section.tsx`. TOMORROW/THIS_WEEK convergent tous deux
+ *  vers `warning`/`info` (le système `Badge` ne porte que 6 tons, jamais une nuance ambre
+ *  supplémentaire inventée pour un seul appelant). */
+export function deadlineBucketTone(bucket: DeadlineBucket): BadgeTone {
   switch (bucket) {
     case "OVERDUE":
-      return "bg-red-100 text-red-800";
+      return "danger";
     case "TODAY":
-      return "bg-amber-100 text-amber-800";
     case "TOMORROW":
-      return "bg-amber-50 text-amber-700";
+      return "warning";
     case "THIS_WEEK":
-      return "bg-blue-50 text-blue-700";
+      return "info";
     default:
-      return "bg-neutral-100 text-neutral-600";
+      return "neutral";
   }
 }
 
@@ -164,13 +199,3 @@ export const GO_NO_GO_LABELS: Record<GoNoGoDecisionValue, string> = {
   NO_GO: "NO GO",
 };
 
-export function goNoGoBadgeClass(decision: GoNoGoDecisionValue): string {
-  switch (decision) {
-    case "GO":
-      return "bg-green-100 text-green-800";
-    case "GO_CONDITIONAL":
-      return "bg-amber-100 text-amber-800";
-    default:
-      return "bg-red-100 text-red-800";
-  }
-}

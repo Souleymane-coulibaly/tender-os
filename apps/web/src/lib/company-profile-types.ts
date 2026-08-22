@@ -4,6 +4,8 @@
  *  candidate-company-types.ts). Les champs nullable côté Prisma arrivent en JSON comme `null` —
  *  traités ici comme `T | null | undefined`, même convention que `ClientAccountSummary`. */
 
+import type { BadgeTone } from "../components/ui/badge";
+
 export type CompanyLegalIdentity = {
   id: string;
   clientAccountId: string;
@@ -135,6 +137,32 @@ export type DocumentClientAccountAssociation = {
 
 export type TemporalValidityStatus = "VALID" | "EXPIRING_SOON" | "EXPIRED" | "NO_EXPIRY";
 export type CompanyProfileCategoryStatus = "COMPLETE" | "PARTIAL" | "MISSING" | "EXPIRED" | "TO_VERIFY";
+
+/** Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2, audit hardcode) — `TEMPORAL_LABELS`/
+ *  `TEMPORAL_BADGE` étaient dupliqués à l'identique (octet pour octet) dans
+ *  `certifications-section.tsx` et `insurances-section.tsx`, jamais convergés vers une seule source
+ *  malgré le même type `TemporalValidityStatus` déjà importé des deux côtés. `temporalValidityTone`
+ *  remplace `TEMPORAL_BADGE` (classes brutes) par le même motif `BadgeTone` que `deadlineBucketTone`/
+ *  `toneFor` ailleurs dans l'app, consommé via `&lt;Badge tone={...}&gt;`. */
+export const TEMPORAL_VALIDITY_LABELS: Record<TemporalValidityStatus, string> = {
+  VALID: "Valide",
+  EXPIRING_SOON: "Bientôt expirée",
+  EXPIRED: "Expirée",
+  NO_EXPIRY: "Sans échéance",
+};
+
+export function temporalValidityTone(status: TemporalValidityStatus): BadgeTone {
+  switch (status) {
+    case "VALID":
+      return "success";
+    case "EXPIRING_SOON":
+      return "warning";
+    case "EXPIRED":
+      return "danger";
+    case "NO_EXPIRY":
+      return "neutral";
+  }
+}
 
 export const CATEGORY_STATUS_LABELS: Record<CompanyProfileCategoryStatus, string> = {
   COMPLETE: "Complet",

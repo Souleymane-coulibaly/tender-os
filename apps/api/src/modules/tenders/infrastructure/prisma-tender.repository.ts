@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import type { Prisma, Tender as TenderRecord } from "@prisma/client";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
-import type { TenderCountByStatusFilter, TenderListFilter, TenderPage, TenderRepository } from "../application/ports/tender.repository";
+import type { TenderCountByStatusFilter, TenderListCreatedAtFilter, TenderListFilter, TenderPage, TenderRepository } from "../application/ports/tender.repository";
 import { TenderConcurrentModificationError } from "../domain/errors";
 import { TenderStatus } from "../domain/tender-status";
 import type { Tender } from "../domain/tender.aggregate";
@@ -103,6 +103,21 @@ export class PrismaTenderRepository implements TenderRepository {
     });
 
     return Object.fromEntries(groups.map((group) => [group.status, group._count._all]));
+  }
+
+  /** Checkpoint E5 (Dashboard V2 Premium Analytics) — projection colonne unique, bornée par
+   *  `since`/`limit`, jamais un `findMany` complet de l'organisation. */
+  async listCreatedAtSince(input: TenderListCreatedAtFilter): Promise<readonly Date[]> {
+    const records = await this.prisma.currentClient().tender.findMany({
+      where: {
+        organizationId: input.organizationId,
+        createdAt: { gte: input.since },
+        ...(input.restrictToClientAccountIds ? { clientAccountId: { in: [...input.restrictToClientAccountIds] } } : {}),
+      },
+      select: { createdAt: true },
+      take: input.limit,
+    });
+    return records.map((record) => record.createdAt);
   }
 
   async save(tender: Tender): Promise<void> {

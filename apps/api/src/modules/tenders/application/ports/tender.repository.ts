@@ -28,6 +28,19 @@ export type TenderListFilter = Readonly<{
 
 export type TenderCountByStatusFilter = Readonly<{ organizationId: string; restrictToClientAccountIds?: readonly string[] | undefined }>;
 
+/** Checkpoint TENDEROS-2.1-P2.3-E5 (Dashboard V2, Premium Analytics addendum §4/§26) — alimente le
+ *  graphique d'activité (tendance de création d'AO). Projection à colonne unique (`createdAt`
+ *  seulement, jamais l'agrégat complet) sur une fenêtre bornée par date — l'organisation et le
+ *  scope Client sont TOUJOURS appliqués, mêmes garanties que `countByStatus`. Le bucketing par jour
+ *  (et le respect du fuseau horaire de l'organisation) reste la responsabilité du use case
+ *  appelant, jamais de ce port — ce port ne fait qu'agréger/projeter, jamais une décision métier. */
+export type TenderListCreatedAtFilter = Readonly<{
+  organizationId: string;
+  restrictToClientAccountIds?: readonly string[] | undefined;
+  since: Date;
+  limit: number;
+}>;
+
 export interface TenderRepository {
   findById(input: { organizationId: string; tenderId: string }): Promise<Tender | null>;
   list(
@@ -44,6 +57,10 @@ export interface TenderRepository {
   /** Une requête groupée (`GROUP BY status`) plutôt que 9 `count()` séquentiels — évite le
    *  N+1 pour la répartition par statut des statistiques (mission §8). */
   countByStatus(input: TenderCountByStatusFilter): Promise<Record<string, number>>;
+  /** Checkpoint E5 — voir `TenderListCreatedAtFilter`. Retourne les dates de création brutes,
+   *  triées de manière non garantie (le use case appelant trie/bucket) ; bornée par `since`+`limit`,
+   *  jamais un scan complet de l'organisation. */
+  listCreatedAtSince(input: TenderListCreatedAtFilter): Promise<readonly Date[]>;
   save(tender: Tender): Promise<void>;
 }
 

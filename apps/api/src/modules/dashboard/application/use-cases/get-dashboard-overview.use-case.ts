@@ -5,11 +5,12 @@ import { ListAccessibleClientsUseCase, ListClientAccountsUseCase } from "../../.
 import { CompanyProfileCategoryStatus, GetCompanyProfileUseCase } from "../../../company-profile";
 import { GetCurrentUserUseCase } from "../../../identity";
 import { CountActiveMembersUseCase } from "../../../memberships";
+import { GetOrganizationUseCase } from "../../../organizations";
 import { GetMyTasksUseCase, ListMyApprovalsUseCase, ListRecentActivityForDashboardUseCase, ListTenderParticipantsUseCase } from "../../../workspace";
 import { GetResponsePackagePortfolioSummaryForDashboardUseCase, ResponsePackageStatus } from "../../../response-package";
-import { GetGoNoGoSummaryForDashboardUseCase } from "../../../opportunity";
+import { GetGoNoGoSummaryForDashboardUseCase, GoNoGoDecisionValue } from "../../../opportunity";
 import { ListSavedSearchesUseCase, ListSavedSearchMatchesUseCase, SavedSearchMatchStatus, type SavedSearchMatchWithTender } from "../../../market-watch";
-import { GetTenderListViewUseCase, GetTenderStatisticsUseCase, TenderPermission, TenderStatus, assertHasTenderPermission } from "../../../tenders";
+import { GetTenderActivityTrendUseCase, GetTenderListViewUseCase, GetTenderStatisticsUseCase, ReadinessStatus, TenderPermission, TenderStatus, assertHasTenderPermission } from "../../../tenders";
 import { DeadlineBucket } from "../../domain/enums";
 import { classifyDeadlineBucket } from "../../domain/services/classify-deadline-bucket";
 import { deriveAttentionReasons } from "../../domain/services/derive-attention-reasons";
@@ -17,8 +18,10 @@ import {
   ActivationChecklistItemId,
   EMPTY_DASHBOARD_OVERVIEW,
   type DashboardActivationChecklistDto,
+  type DashboardAnalyticsDto,
   type DashboardAssigneeDto,
   type DashboardAttentionItemDto,
+  type DashboardDeadlineBucketCountDto,
   type DashboardDeadlineItemDto,
   type DashboardMarketWatchDto,
   type DashboardOverviewDto,
@@ -108,6 +111,11 @@ export class GetDashboardOverviewUseCase {
     private readonly listClientAccountsUseCase: ListClientAccountsUseCase,
     private readonly getCompanyProfileUseCase: GetCompanyProfileUseCase,
     private readonly hasAnyAdministrativeDocumentUseCase: HasAnyAdministrativeDocumentUseCase,
+    // Checkpoint TENDEROS-2.1-P2.3-E5 (Dashboard V2 Premium Analytics) — même discipline que le
+    // reste du constructeur : use cases publics déjà RBAC/ClientAccess-gated d'autres modules,
+    // jamais un second calcul métier local.
+    private readonly getTenderActivityTrendUseCase: GetTenderActivityTrendUseCase,
+    private readonly getOrganizationUseCase: GetOrganizationUseCase,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -144,7 +152,7 @@ export class GetDashboardOverviewUseCase {
       return EMPTY_DASHBOARD_OVERVIEW(now.toISOString(), scope, periodDays);
     }
 
-    const [tenderStats, activeTendersPage, myTasksOverdue, packageRowsAll, myPendingApprovals] = await Promise.all([
+    const [tenderStats, activeTendersPage, myTasksOverdue, packageRowsAll, myPendingApprovals, organization] = await Promise.all([
       this.getTenderStatisticsUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, clientAccountId: scopedClientAccountId }),
       this.getTenderListViewUseCase.execute({
         organizationId: query.organizationId,
@@ -160,15 +168,27 @@ export class GetDashboardOverviewUseCase {
       // V2 Sprint 18 (mission §66-68) — "Validations en attente : N", même discipline ClientAccess
       // que myTasksOverdue ci-dessus.
       this.listMyApprovalsUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, clientAccountId: scopedClientAccountId, status: "PENDING" }),
+      // Checkpoint E5 (Premium Analytics addendum §32) — fuseau horaire réel de l'organisation pour
+      // le bucketing par jour du graphique d'activité, jamais une hypothèse Europe/Paris/UTC.
+      this.getOrganizationUseCase.execute({ id: query.organizationId }),
     ]);
 
     const packageRows = scopedClientAccountId ? packageRowsAll.filter((row) => row.clientAccountId === scopedClientAccountId) : packageRowsAll;
 
     const tenderIds = activeTendersPage.items.map((tender) => tender.id);
-    const [goNoGo, myTasksItems, activity] = await Promise.all([
+    const [goNoGo, myTasksItems, activity, activityTrend] = await Promise.all([
       this.getGoNoGoSummaryForDashboardUseCase.execute({ organizationId: query.organizationId, tenderIds, since }),
       this.getMyTasksUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, clientAccountId: scopedClientAccountId }),
       this.listRecentActivityForDashboardUseCase.execute({ organizationId: query.organizationId, tenderIds, limit: ACTIVITY_LIMIT }),
+      this.getTenderActivityTrendUseCase.execute({
+        organizationId: query.organizationId,
+        actorId: query.actorId,
+        actorRole: query.actorRole,
+        clientAccountId: scopedClientAccountId,
+        periodDays,
+        timezone: organization.defaultTimezone,
+        now,
+      }),
     ]);
 
     const packagesByTender = new Map<string, { lotId: string | null; status: ResponsePackageStatus }[]>();
@@ -236,6 +256,35 @@ export class GetDashboardOverviewUseCase {
 
     const pipeline: DashboardPipelineStageDto[] = Object.entries(tenderStats.byStatus).map(([status, count]) => ({ status: status as TenderStatus, count }));
 
+    // Checkpoint E5 (Premium Analytics addendum §8) — tally de `readinessStatus` déjà résolu sur
+    // `nonTerminalTenders` (même périmètre que `attentionItems`/`deadlines`), ZÉRO requête
+    // supplémentaire, jamais un second calcul de readiness.
+    const readinessCountByStatus = {} as Record<ReadinessStatus, number>;
+    for (const tender of nonTerminalTenders) {
+      readinessCountByStatus[tender.readinessStatus] = (readinessCountByStatus[tender.readinessStatus] ?? 0) + 1;
+    }
+
+    // Checkpoint E5 (addendum §9) — tally de `deadlineItems[].bucket`, déjà classifié plus haut.
+    const deadlineBucketCounts = new Map<DeadlineBucket, number>();
+    for (const item of deadlineItems) {
+      deadlineBucketCounts.set(item.bucket, (deadlineBucketCounts.get(item.bucket) ?? 0) + 1);
+    }
+    const deadlineBuckets: DashboardDeadlineBucketCountDto[] = Object.values(DeadlineBucket).map((bucket) => ({ bucket, count: deadlineBucketCounts.get(bucket) ?? 0 }));
+
+    // Checkpoint E5 (addendum §7) — formule EXACTE et documentée : (GO + GO_CONDITIONAL) /
+    // décisions enregistrées sur la période, JAMAIS / tous les Tenders (dénominateur = goNoGo.total,
+    // lui-même déjà le compte réel des décisions period-scoped — voir GetGoNoGoSummaryForDashboardUseCase).
+    const goCount = (goNoGo.countByDecision[GoNoGoDecisionValue.Go] ?? 0) + (goNoGo.countByDecision[GoNoGoDecisionValue.GoConditional] ?? 0);
+    const goRate = goNoGo.total > 0 ? Math.round((goCount / goNoGo.total) * 100) : null;
+
+    const analytics: DashboardAnalyticsDto = {
+      periodDays,
+      activityTrend,
+      readinessDistribution: { countByStatus: readinessCountByStatus, total: nonTerminalTenders.length },
+      deadlineBuckets,
+      goRate,
+    };
+
     return {
       generatedAt: now.toISOString(),
       scope,
@@ -262,6 +311,7 @@ export class GetDashboardOverviewUseCase {
       marketWatch,
       activationChecklist,
       averageReadinessScore: tenderStats.averageReadinessScore,
+      analytics,
     };
   }
 
@@ -306,9 +356,24 @@ export class GetDashboardOverviewUseCase {
   /** V2 Sprint 25 (Dashboard Premium) — mission §25.63/§25.64. Scopé aux veilles de l'ACTEUR
    *  COURANT (même périmètre que `ListSavedSearchesUseCase`, jamais celles d'un autre membre de
    *  l'organisation), et jamais les correspondances déjà `IGNORED` par l'utilisateur (mission "des
-   *  opportunités RECOMMANDÉES", pas déjà écartées). */
+   *  opportunités RECOMMANDÉES", pas déjà écartées).
+   *
+   *  Correctif audit Checkpoint E5 (RBAC) — `EXTERNAL_CONSULTANT`/`READ_ONLY` n'ont AUCUNE
+   *  `MarketWatchPermission` (`ROLE_MARKET_WATCH_PERMISSIONS`, module Market Watch), alors que
+   *  `TenderPermission.Read` — la SEULE garde de `execute()` ci-dessus — leur est accordée : sans
+   *  ce `try/catch`, `ListSavedSearchesUseCase` lève `MarketWatchPermissionMissingError` et fait
+   *  échouer la totalité du Dashboard pour ces deux rôles, pas seulement ce widget (jamais
+   *  l'intention — mission §5 "distinguer ce que l'organisation possède de ce que l'utilisateur
+   *  courant peut voir" ne doit jamais dégénérer en page cassée). Même discipline "jamais
+   *  bloquant" que `fetchBillingSummary` côté frontend et `resolveAssignees` ci-dessus : un acteur
+   *  sans droit Market Watch voit simplement `hasSavedSearches: false`, jamais une erreur. */
   private async buildMarketWatchSummary(query: GetDashboardOverviewQuery): Promise<DashboardMarketWatchDto> {
-    const savedSearches = await this.listSavedSearchesUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole });
+    let savedSearches: Awaited<ReturnType<ListSavedSearchesUseCase["execute"]>>;
+    try {
+      savedSearches = await this.listSavedSearchesUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole });
+    } catch {
+      return { hasSavedSearches: false, relevantOpportunitiesCount: 0, recommended: [] };
+    }
     if (savedSearches.length === 0) {
       return { hasSavedSearches: false, relevantOpportunitiesCount: 0, recommended: [] };
     }
