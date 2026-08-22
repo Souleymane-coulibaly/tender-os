@@ -47,13 +47,25 @@ async function parseErrorBody(response: Response): Promise<never> {
   );
 }
 
-export async function appApiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const [token, organizationId] = await Promise.all([getAppSessionToken(), getAppOrganizationId()]);
+/**
+ * Checkpoint TENDEROS-2.1-P2.2.2 (Onboarding Organization runtime fix) — `requireOrganization`
+ * opt-out EXPLICITE, `true` par défaut partout (aucun appelant existant n'a besoin de changer).
+ * Root cause du bug runtime `/onboarding/entreprise` : `createOrganizationAction` (le tout premier
+ * appel qui CRÉE l'organisation d'un utilisateur neuf) passait déjà par ce garde-fou, qui exigeait
+ * `APP_ORGANIZATION_COOKIE` AVANT même de tenter la requête — cookie qui n'est écrit QUE par cet
+ * appel lui-même en cas de succès (deadlock structurel, jamais un problème de slug/transaction/DB
+ * comme initialement suspecté). `POST /organizations` n'est protégé que par `AuthenticatedGuard`
+ * (jamais `OrganizationMembershipGuard`, qui est le seul consommateur réel de `X-Organization-Id`
+ * côté backend pour cette route) — omettre le header ici n'affaiblit donc aucune autorisation.
+ */
+export async function appApiFetch<T>(path: string, init?: RequestInit, options?: { requireOrganization?: boolean }): Promise<T> {
+  const requireOrganization = options?.requireOrganization ?? true;
+  const [token, organizationId] = await Promise.all([getAppSessionToken(), requireOrganization ? getAppOrganizationId() : Promise.resolve(undefined)]);
 
   if (!token) {
     throw new AppApiError(401, "AUTHENTICATION_REQUIRED", "No session.");
   }
-  if (!organizationId) {
+  if (requireOrganization && !organizationId) {
     throw new AppApiError(400, "ORGANIZATION_ID_HEADER_REQUIRED", "No organization selected.");
   }
 
@@ -66,7 +78,7 @@ export async function appApiFetch<T>(path: string, init?: RequestInit): Promise<
     headers: {
       ...(init?.body && !isFormData ? { "Content-Type": "application/json" } : {}),
       Authorization: `Bearer ${token}`,
-      "X-Organization-Id": organizationId,
+      ...(organizationId ? { "X-Organization-Id": organizationId } : {}),
       ...init?.headers,
     },
     cache: "no-store",

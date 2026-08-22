@@ -122,19 +122,29 @@ export async function createOrganizationAction(_prevState: OrganizationStepState
 
   let organization: { id: string };
   try {
-    organization = await appApiFetch<{ id: string }>("/api/v1/organizations", {
-      method: "POST",
-      body: JSON.stringify({
-        name: name.trim(),
-        slug: slugifyOrganizationName(name.trim()),
-        legalName: typeof legalName === "string" && legalName.trim() ? legalName.trim() : undefined,
-        registrationNumber: typeof registrationNumber === "string" && registrationNumber.trim() ? registrationNumber.trim() : undefined,
-        countryCode: "FR",
-        defaultCurrency: "EUR",
-        defaultTimezone: "Europe/Paris",
-        reuseExistingIfPresent: true,
-      }),
-    });
+    // Checkpoint TENDEROS-2.1-P2.2.2 — root cause runtime prouvée : c'est CET appel qui crée
+    // l'organisation d'un utilisateur neuf, donc `APP_ORGANIZATION_COOKIE` n'existe structurellement
+    // pas encore à ce stade (il n'est écrit qu'après, ci-dessous, en cas de succès). `appApiFetch`
+    // exigeait ce cookie par défaut avant même de tenter la requête — un deadlock pour 100% des
+    // nouveaux utilisateurs. `requireOrganization: false` : `POST /organizations` n'est protégé que
+    // par `AuthenticatedGuard`, jamais `OrganizationMembershipGuard` (voir `app-api-client.ts`).
+    organization = await appApiFetch<{ id: string }>(
+      "/api/v1/organizations",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: name.trim(),
+          slug: slugifyOrganizationName(name.trim()),
+          legalName: typeof legalName === "string" && legalName.trim() ? legalName.trim() : undefined,
+          registrationNumber: typeof registrationNumber === "string" && registrationNumber.trim() ? registrationNumber.trim() : undefined,
+          countryCode: "FR",
+          defaultCurrency: "EUR",
+          defaultTimezone: "Europe/Paris",
+          reuseExistingIfPresent: true,
+        }),
+      },
+      { requireOrganization: false },
+    );
   } catch (error) {
     if (error instanceof AppApiError && error.status === 401) {
       redirect(`/onboarding/compte${onboardingQueryString(query)}`);
