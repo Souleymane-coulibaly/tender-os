@@ -13,6 +13,11 @@ export const ListPassPurchasesQuerySchema = z
 
 export type ListPassPurchasesQuery = z.infer<typeof ListPassPurchasesQuerySchema>;
 
+/** Checkpoint TENDEROS-2.1-P2.3-E9 — même pagination bornée, réservée à `GET /billing/ao-credits/ledger`. */
+export const ListAoCreditLedgerQuerySchema = ListPassPurchasesQuerySchema;
+
+export type ListAoCreditLedgerQuery = z.infer<typeof ListAoCreditLedgerQuerySchema>;
+
 /** Mission §49 — assignation Platform Admin d'un abonnement MANUAL/GRANTED (pilote/démo). `STRIPE`
  *  n'est JAMAIS un `source` acceptable ici : réservé exclusivement au webhook Stripe. `.strict()`
  *  — anti mass-assignment, même motif que le reste du module `billing`. */

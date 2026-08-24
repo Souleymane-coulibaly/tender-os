@@ -136,6 +136,23 @@ describe("Integration Hub (integrations) — real HTTP + PostgreSQL (NestJS)", (
     await prisma.$disconnect();
   }, 60000);
 
+  /** Checkpoint TENDEROS-2.1-P2.3-E6 (mission §29/§33/§48) — `IntegrationPermission.Read` est
+   *  restreint à OWNER/ORGANIZATION_ADMIN (`ROLE_INTEGRATION_PERMISSIONS`), contrairement à la
+   *  plupart des autres modules où la lecture reste ouverte à tout membre (Billing, AI models —
+   *  voir `ai-benchmark-http.integration.spec.ts` "READ_ONLY peut lire /ai-models"). Seule la
+   *  dénégation en ÉCRITURE (POST, ligne suivante) était prouvée en HTTP réel jusqu'ici — cette
+   *  preuve manquante est exactement ce qui a justifié de masquer "Intégrations" de la navigation
+   *  pour un CONTRIBUTOR (`nav-sections.ts`, `isVisible: isOrganizationAdmin`) : sans elle, ce
+   *  masquage de nav aurait été une supposition, jamais une preuve.
+   */
+  it("BLOQUANT — mission §29/§33 : un CONTRIBUTOR ne peut même pas LISTER les clés API de son organisation (lecture, pas seulement écriture, restreinte à OWNER/ADMIN)", async () => {
+    const forbiddenList = await fetch(`${baseUrl}/api/v1/integrations/api-keys`, { headers: authHeaders(tokenContributorA, orgAId) });
+    expect(forbiddenList.status).toBe(403);
+
+    const allowedList = await fetch(`${baseUrl}/api/v1/integrations/api-keys`, { headers: authHeaders(tokenOwnerA, orgAId) });
+    expect(allowedList.status).toBe(200);
+  });
+
   it("BLOQUANT — mission §60/§96/§97/§98 : seul OWNER/ADMIN peut créer une clé, la clé brute n'apparaît qu'à la création, jamais stockée en clair en base", async () => {
     const forbidden = await fetch(`${baseUrl}/api/v1/integrations/api-keys`, { method: "POST", headers: authHeaders(tokenContributorA, orgAId), body: JSON.stringify({ name: "x", scopes: ["tenders:read"] }) });
     expect(forbidden.status).toBe(403);

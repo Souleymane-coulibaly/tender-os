@@ -1,12 +1,15 @@
 "use server";
 
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
+import { publicApiFetch } from "../../lib/public-api-client";
 import type {
+  AoCreditLedgerPage,
   BillingInterval,
   OrganizationEntitlementsDto,
   OrganizationSubscriptionDto,
   OrganizationUsageDto,
   PassPurchasePage,
+  PublicPlanCatalogEntry,
   SubscriptionPlanTier,
 } from "../../lib/billing-types";
 
@@ -57,6 +60,26 @@ export async function fetchAoCreditBalance(): Promise<number> {
 
 export async function fetchUsage(): Promise<OrganizationUsageDto> {
   return appApiFetch<OrganizationUsageDto>("/api/v1/billing/usage");
+}
+
+/** Checkpoint TENDEROS-2.1-P2.3-E9 (mission §56) — historique des crédits AO self-service, distinct
+ *  de `fetchOrganizationAoCreditLedger` (Platform Admin, `platform-admin/billing-actions.ts`) : cette
+ *  route lit `GET /api/v1/billing/ao-credits/ledger`, bornée à l'organisation courante côté backend,
+ *  jamais un `organizationId` choisi par le frontend. */
+export async function fetchAoCreditLedger(cursor?: string): Promise<AoCreditLedgerPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  return appApiFetch<AoCreditLedgerPage>(`/api/v1/billing/ao-credits/ledger${query}`);
+}
+
+/** Checkpoint TENDEROS-2.1-P2.3-E8 (mission §4/§5, root cause de "l'utilisateur ne peut choisir
+ *  que Starter") — jusqu'ici `/app/subscription` n'appelait JAMAIS cet endpoint et affichait un
+ *  catalogue frontend figé (`PLAN_PRICES_CENTS`, prix seulement, jamais les entitlements/quotas
+ *  réels). Même route publique déjà utilisée par `/pricing` et `/onboarding/offre`
+ *  (`GET /api/v1/billing/plan-catalog`, non authentifiée — `GetPublicPlanCatalogUseCase`, SEULE
+ *  source de vérité commerciale) : jamais un second catalogue maintenu ici. */
+export async function fetchPlanCatalog(): Promise<PublicPlanCatalogEntry[]> {
+  const result = await publicApiFetch<{ items: PublicPlanCatalogEntry[] }>("/api/v1/billing/plan-catalog");
+  return result.items;
 }
 
 export type CheckoutTarget = { kind: "PASS" } | { kind: "SUBSCRIPTION"; planTier: SubscriptionPlanTier; billingInterval: BillingInterval };

@@ -4,13 +4,14 @@ import {
   GetAoCreditBalanceUseCase,
   GetOrganizationEntitlementsUseCase,
   GetOrganizationSubscriptionUseCase,
+  ListOrganizationAoCreditLedgerUseCase,
   ListPassPurchasesUseCase,
 } from "../../../billing";
 import { AuthenticatedGuard } from "../../../identity";
 import { CurrentMembershipContext, OrganizationMembershipGuard, type MembershipContext } from "../../../memberships";
 import { GetOrganizationUsageUseCase } from "../../application/use-cases/get-organization-usage.use-case";
 import { presentPassPurchase, presentSubscription } from "./presenters";
-import { ListPassPurchasesQuerySchema, type ListPassPurchasesQuery } from "./schemas";
+import { ListAoCreditLedgerQuerySchema, ListPassPurchasesQuerySchema, type ListAoCreditLedgerQuery, type ListPassPurchasesQuery } from "./schemas";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
 
 /**
@@ -34,6 +35,7 @@ export class SubscriptionUsageController {
     private readonly getOrganizationEntitlementsUseCase: GetOrganizationEntitlementsUseCase,
     private readonly listPassPurchasesUseCase: ListPassPurchasesUseCase,
     private readonly getAoCreditBalanceUseCase: GetAoCreditBalanceUseCase,
+    private readonly listOrganizationAoCreditLedgerUseCase: ListOrganizationAoCreditLedgerUseCase,
     private readonly getOrganizationUsageUseCase: GetOrganizationUsageUseCase,
   ) {}
 
@@ -66,6 +68,19 @@ export class SubscriptionUsageController {
   async getAoCreditBalance(@CurrentMembershipContext() membership: MembershipContext) {
     const balance = await this.getAoCreditBalanceUseCase.execute(membership.organizationId);
     return { balance };
+  }
+
+  // Checkpoint TENDEROS-2.1-P2.3-E9 (mission §56) — historique des crédits AO self-service, borné à
+  // l'organisation courante (`membership.organizationId`, jamais un `organizationId` de route), même
+  // motif que `listPassPurchases` ci-dessous. Distinct de `AoCreditLedgerController` (Platform Admin,
+  // toute organisation) : jamais le même contrôleur, jamais la même autorisation.
+  @Get("ao-credits/ledger")
+  async listAoCreditLedger(
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Query(new ZodValidationPipe(ListAoCreditLedgerQuerySchema)) query: ListAoCreditLedgerQuery,
+  ) {
+    const page = await this.listOrganizationAoCreditLedgerUseCase.execute({ organizationId: membership.organizationId, cursor: query.cursor, limit: query.limit });
+    return { items: page.items, nextCursor: page.nextCursor };
   }
 
   @Get("usage")

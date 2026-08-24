@@ -16,9 +16,14 @@ export function ApiErrorState({ error }: { error: unknown }) {
     }
 
     if (error.status === 403) {
+      // Checkpoint TENDEROS-2.1-P2.3-E7 (mission §43, bug trouvé en revue visuelle réelle sur
+      // /app/members) — `error.message` porte le message brut du domaine backend (ex.
+      // "Missing permission: organization:member:list.", `PermissionMissingError`), un identifiant
+      // technique destiné aux logs/développeurs, jamais à un utilisateur final. Message fixe,
+      // jamais le détail technique — contrairement à 404/401 où le message reste contextuel.
       return (
         <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
-          Accès refusé : {error.message}
+          Accès refusé : vous n&apos;avez pas la permission nécessaire pour accéder à cette page.
         </div>
       );
     }

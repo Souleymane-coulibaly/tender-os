@@ -1,3 +1,5 @@
+import type { BadgeTone } from "../components/ui/badge";
+
 export type PageResponse<T> = { items: readonly T[]; pageInfo: { hasNextPage: boolean; nextCursor: string | null } };
 
 /** Mirroir de `apps/api/.../memberships/domain/organization-role.ts` — jamais une seconde
@@ -29,14 +31,17 @@ export const MEMBERSHIP_STATUS_LABELS: Record<MembershipStatus, string> = {
   REMOVED: "Retiré",
 };
 
-export function membershipStatusBadgeClass(status: MembershipStatus): string {
+/** Checkpoint TENDEROS-2.1-P2.3-E7 (Team & Users V2) — remplace `membershipStatusBadgeClass`
+ *  (classes brutes, supprimée) par le motif `BadgeTone` déjà établi (`deadlineBucketTone`,
+ *  `temporalValidityTone`, `toneFor`) — consommé via `&lt;Badge tone={...}&gt;`. */
+export function membershipStatusTone(status: MembershipStatus): BadgeTone {
   switch (status) {
     case "ACTIVE":
-      return "bg-green-100 text-green-800";
+      return "success";
     case "SUSPENDED":
-      return "bg-amber-100 text-amber-800";
+      return "warning";
     case "REMOVED":
-      return "bg-neutral-200 text-neutral-600";
+      return "neutral";
   }
 }
 

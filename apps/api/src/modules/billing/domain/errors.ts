@@ -153,6 +153,27 @@ export class InsufficientAoCreditsError extends DomainError {
   }
 }
 
+/**
+ * Checkpoint TENDEROS-2.1-P2.3-E9 — correctif d'un P1 trouvé par un vrai test HTTP + PostgreSQL
+ * (deux dépôts concurrents pour le MÊME Tender) : `PrismaAoCreditLedgerRepository.grant()`/
+ * `grantTrial()`/`consume()` protègent leur idempotence par un index unique partiel réel, avec une
+ * "relecture de secours HORS transaction" en cas de violation — un motif correct quand ces méthodes
+ * ouvrent LEUR PROPRE transaction locale (`this.prisma.withTransaction`, aucune transaction ambiante),
+ * mais qui rejoue une erreur Postgres BRUTE ("current transaction is aborted") quand elles REJOIGNENT
+ * une transaction ambiante déjà ouverte par l'appelant (ex. `RecordTenderSubmissionUseCase`) : la
+ * "relecture de secours" s'exécute alors ENCORE DANS cette même transaction ambiante désormais avortée,
+ * qui refuse toute nouvelle requête. Dans ce cas précis, la transaction ambiante ENTIÈRE doit échouer
+ * (le perdant de la course ne doit JAMAIS croire avoir réussi et écrire un second Tender Submission
+ * dans la même transaction) — mais avec une erreur DOMAINE propre, jamais une exception Prisma interne
+ * qui fuit jusqu'au client HTTP.
+ */
+export class ConcurrentAoCreditLedgerWriteError extends DomainError {
+  readonly code = "CONCURRENT_AO_CREDIT_LEDGER_WRITE";
+  constructor(organizationId: string) {
+    super(`A concurrent AO credit ledger write for organization ${organizationId} was already in progress; please retry`);
+  }
+}
+
 export class InvalidAoCreditLedgerEntryError extends DomainError {
   readonly code = "INVALID_AO_CREDIT_LEDGER_ENTRY";
   constructor(reason: string) {

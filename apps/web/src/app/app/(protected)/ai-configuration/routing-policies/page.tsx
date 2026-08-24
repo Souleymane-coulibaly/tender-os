@@ -7,13 +7,13 @@ import {
   type AiModelSummary,
   type RoutingPolicySummary,
 } from "../../../../../lib/ai-configuration-types";
+import { isOrganizationAdmin } from "../../../../../lib/authorization";
 import { ApiErrorState } from "../../api-error-state";
 
 export const metadata: Metadata = { title: "Configuration IA — Routing — TenderOS" };
 
-function canManageAi(actorRole: string | undefined): boolean {
-  return actorRole === "OWNER" || actorRole === "ORGANIZATION_ADMIN";
-}
+// Checkpoint TENDEROS-2.1-P2.3-E6 — palier OWNER/ORGANIZATION_ADMIN converge vers lib/authorization.ts.
+const canManageAi = isOrganizationAdmin;
 
 function routingPolicyStatusBadgeClass(status: RoutingPolicySummary["status"]): string {
   switch (status) {

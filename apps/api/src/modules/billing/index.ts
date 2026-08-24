@@ -53,6 +53,11 @@ export type { ConsumeAoCreditCommand } from "./application/use-cases/consume-ao-
 export { GrantMonthlyAoCreditsUseCase } from "./application/use-cases/grant-monthly-ao-credits.use-case";
 export type { GrantMonthlyAoCreditsCommand } from "./application/use-cases/grant-monthly-ao-credits.use-case";
 export { GetAoCreditBalanceUseCase } from "./application/use-cases/get-ao-credit-balance.use-case";
+// Checkpoint TENDEROS-2.1-P2.3-E9 — réexporté pour `subscription-usage` (mission §56, historique
+// des crédits AO self-service), même motif que `GetOrganizationEntitlementsUseCase` ci-dessus.
+export { ListOrganizationAoCreditLedgerUseCase } from "./application/use-cases/list-organization-ao-credit-ledger.use-case";
+export type { ListOrganizationAoCreditLedgerQuery } from "./application/use-cases/list-organization-ao-credit-ledger.use-case";
+export type { AoCreditLedgerPage } from "./application/ports/ao-credit-ledger.repository";
 // V2 Sprint 22 (billing, étape 22D) — réexporté UNIQUEMENT pour `subscription-usage` (composition
 // cross-module Chat/Documents/Memberships qui ne peut pas vivre DANS `billing` sans créer un cycle
 // de modules Billing -> Chat -> Tenders -> Billing). Voir `subscription-usage.module.ts`.

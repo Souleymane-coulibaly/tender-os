@@ -6,13 +6,13 @@ import {
   PROMPT_KEY_LABELS,
   type BenchmarkSuiteSummary,
 } from "../../../../../lib/ai-configuration-types";
+import { isOrganizationAdmin } from "../../../../../lib/authorization";
 import { ApiErrorState } from "../../api-error-state";
 
 export const metadata: Metadata = { title: "Configuration IA — Benchmarks — TenderOS" };
 
-function canManageAi(actorRole: string | undefined): boolean {
-  return actorRole === "OWNER" || actorRole === "ORGANIZATION_ADMIN";
-}
+// Checkpoint TENDEROS-2.1-P2.3-E6 — palier OWNER/ORGANIZATION_ADMIN converge vers lib/authorization.ts.
+const canManageAi = isOrganizationAdmin;
 
 export default async function BenchmarkSuitesListPage() {
   let suites: BenchmarkSuiteSummary[];

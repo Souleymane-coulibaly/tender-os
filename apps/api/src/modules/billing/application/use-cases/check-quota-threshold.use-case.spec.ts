@@ -1,16 +1,20 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { EntitlementContext, EntitlementService } from "../services/entitlement.service";
 import type { EntitlementFeature } from "../../domain/entitlement-feature";
+import { getPlanQuotaLimit, planHasFeature } from "../../domain/plan-catalog";
 import { PlanTier } from "../../domain/plan-tier";
 import type { PlanTier as PlanTierType } from "../../domain/plan-tier";
 import type { QuotaLimit, QuotaType } from "../../domain/quota-type";
-import { UNLIMITED } from "../../domain/quota-type";
 import { FakeOutboxWriter, InMemoryQuotaAlertRepository } from "../../test-support/fakes";
 import { GetOrganizationEntitlementsUseCase } from "./get-organization-entitlements.use-case";
 import { CheckQuotaThresholdUseCase } from "./check-quota-threshold.use-case";
 
 /** Plan Pass (voir plan-catalog.ts `starterLikeQuotas`) — USERS_MAX=2, CHAT_AI_DAILY_MAX=10,
- *  STORAGE_GB_MAX=10 : des limites petites et rondes, pratiques pour tester les seuils 80/100%. */
+ *  STORAGE_GB_MAX=10 : des limites petites et rondes, pratiques pour tester les seuils 80/100%.
+ *  Correctif audit externe P2.3-E8 (P1) — `canUseFeature`/`getEffectiveLimit` résolvent désormais
+ *  fidèlement depuis le catalogue par palier (comme `DefaultEntitlementService` en l'absence
+ *  d'override), au lieu de valeurs fixes déconnectées du `planTier` : `GetOrganizationEntitlementsUseCase`
+ *  appelle désormais réellement ces deux méthodes (plus seulement `getEffectivePlanTier`). */
 class FakeEntitlementService implements EntitlementService {
   constructor(private readonly planTier: PlanTierType | null = PlanTier.Pass) {}
   async getEffectivePlanTier(): Promise<PlanTierType | null> {
@@ -22,11 +26,11 @@ class FakeEntitlementService implements EntitlementService {
   async runTenderOperationEntitled<T>(_input: unknown, operation: () => Promise<T>): Promise<T> {
     return operation();
   }
-  async canUseFeature(_organizationId: string, _feature: EntitlementFeature, _context?: EntitlementContext): Promise<boolean> {
-    return true;
+  async canUseFeature(_organizationId: string, feature: EntitlementFeature, _context?: EntitlementContext): Promise<boolean> {
+    return this.planTier !== null && planHasFeature(this.planTier, feature);
   }
-  async getEffectiveLimit(_organizationId: string, _quota: QuotaType, _context?: EntitlementContext): Promise<QuotaLimit> {
-    return UNLIMITED;
+  async getEffectiveLimit(_organizationId: string, quota: QuotaType, _context?: EntitlementContext): Promise<QuotaLimit> {
+    return this.planTier === null ? 0 : getPlanQuotaLimit(this.planTier, quota);
   }
 }
 

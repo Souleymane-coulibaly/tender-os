@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PageHeader } from "../../../../components/ui";
 import { getCurrentMembershipRole, getCurrentUserId } from "../../../../lib/app-api-client";
 import type { OrganizationMemberResponse } from "../../../../lib/membership-types";
 import { computeSeatUsage, type SeatUsage } from "../../../../lib/seat-usage";
@@ -6,7 +7,7 @@ import { fetchEntitlements, fetchUsage } from "../../billing-actions";
 import { fetchOrganizationMembers } from "../../membership-actions";
 import { canManageMembers } from "../dashboard-permissions";
 import { ApiErrorState } from "../api-error-state";
-import { MembersSection } from "./members-section";
+import { InviteMemberDialog, MembersSection } from "./members-section";
 
 export const metadata: Metadata = { title: "Membres — TenderOS" };
 
@@ -47,15 +48,20 @@ export default async function MembersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">Membres de l&apos;organisation</h1>
-      <p className="text-sm text-neutral-600">
-        Gérez qui a accès à votre organisation TenderOS et avec quel rôle. Le nombre de membres actifs est limité par votre offre — consultez{" "}
-        <a href="/app/subscription" className="underline hover:no-underline">
-          Abonnement &amp; utilisation
-        </a>{" "}
-        pour votre plafond actuel.
-      </p>
-      <MembersSection members={members} canManage={canManage} currentUserId={currentUserId} seatUsage={seatUsage} />
+      <PageHeader
+        title="Équipe"
+        description={
+          <>
+            Gérez les membres, leurs rôles et les accès à votre organisation. Le nombre de membres actifs est limité par votre offre — consultez{" "}
+            <a href="/app/subscription" className="font-medium text-tenderos-blue hover:underline">
+              Abonnement &amp; utilisation
+            </a>{" "}
+            pour votre plafond actuel.
+          </>
+        }
+        actions={canManage ? <InviteMemberDialog seatUsage={seatUsage} /> : undefined}
+      />
+      <MembersSection members={members} canManage={canManage} currentUserId={currentUserId} />
     </div>
   );
 }

@@ -31,6 +31,7 @@ import { GrantMonthlyAoCreditsForYearlySubscriptionsUseCase } from "./applicatio
 import { GrantTrialAoCreditUseCase } from "./application/use-cases/grant-trial-ao-credit.use-case";
 import { HandleStripeWebhookUseCase } from "./application/use-cases/handle-stripe-webhook.use-case";
 import { ListAoCreditLedgerUseCase } from "./application/use-cases/list-ao-credit-ledger.use-case";
+import { ListOrganizationAoCreditLedgerUseCase } from "./application/use-cases/list-organization-ao-credit-ledger.use-case";
 import { ListEntitlementOverridesUseCase } from "./application/use-cases/list-entitlement-overrides.use-case";
 import { ListPassPurchasesUseCase } from "./application/use-cases/list-pass-purchases.use-case";
 import { MarkSubscriptionPastDueUseCase } from "./application/use-cases/mark-subscription-past-due.use-case";
@@ -100,6 +101,7 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
     ReverseAoCreditConsumptionUseCase,
     GetAoCreditBalanceUseCase,
     ListAoCreditLedgerUseCase,
+    ListOrganizationAoCreditLedgerUseCase,
     CreateCheckoutSessionUseCase,
     CreateCustomerPortalSessionUseCase,
     HandleStripeWebhookUseCase,
@@ -133,6 +135,9 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
     ConsumeAoCreditUseCase,
     GrantMonthlyAoCreditsUseCase,
     GetAoCreditBalanceUseCase,
+    // Checkpoint TENDEROS-2.1-P2.3-E9 — réexporté pour `subscription-usage` (même motif que
+    // `GetOrganizationEntitlementsUseCase`/`ListPassPurchasesUseCase` ci-dessus).
+    ListOrganizationAoCreditLedgerUseCase,
     // Checkpoint TENDEROS-2.1-P2.3-E1.4 — réexporté pour `tenders` (`AbandonTenderUseCase`, mission
     // §7/§8 "action explicite d'abandon", réutilise ce SEUL mécanisme de libération, jamais un
     // second moteur).

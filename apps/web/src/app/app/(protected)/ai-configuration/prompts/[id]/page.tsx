@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
 import { GENERATION_TASK_TYPE_LABELS, type PromptTemplateSummary, type PromptVersionSummary } from "../../../../../../lib/generation-types";
+import { isOrganizationAdmin } from "../../../../../../lib/authorization";
 import { ApiErrorState } from "../../../api-error-state";
 import { ArchivePromptTemplateButton, CreatePromptVersionForm, PromptVersionActivateButton } from "./prompt-template-actions";
 
 export const metadata: Metadata = { title: "Template de prompt — TenderOS" };
 
-function canManageGeneration(actorRole: string | undefined): boolean {
-  return actorRole === "OWNER" || actorRole === "ORGANIZATION_ADMIN";
-}
+// Checkpoint TENDEROS-2.1-P2.3-E6 — palier OWNER/ORGANIZATION_ADMIN converge vers lib/authorization.ts.
+const canManageGeneration = isOrganizationAdmin;
 
 function versionStatusBadgeClass(status: string): string {
   if (status === "ACTIVE") return "bg-green-100 text-green-800";

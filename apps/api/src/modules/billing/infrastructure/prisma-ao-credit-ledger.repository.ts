@@ -3,9 +3,10 @@ import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import type { AoCreditLedgerEntry as PrismaAoCreditLedgerEntry } from "@prisma/client";
 import { PrismaService } from "../../../shared-kernel/prisma.service";
+import { TransactionalContext } from "../../../shared-kernel/transactional-context";
 import { AoCreditMovementType } from "../domain/ao-credit-movement-type";
 import { createAoCreditLedgerEntry, type AoCreditLedgerEntry } from "../domain/ao-credit-ledger-entry";
-import { AoCreditAdjustmentWouldGoNegativeError, AoCreditConsumptionAlreadyReversedError, AoCreditLedgerEntryNotFoundError } from "../domain/errors";
+import { AoCreditAdjustmentWouldGoNegativeError, AoCreditConsumptionAlreadyReversedError, AoCreditLedgerEntryNotFoundError, ConcurrentAoCreditLedgerWriteError } from "../domain/errors";
 import type { AoCreditLedgerPage, AoCreditLedgerRepository } from "../application/ports/ao-credit-ledger.repository";
 
 function isUniqueConstraintViolation(error: unknown): boolean {
@@ -62,6 +63,12 @@ export class PrismaAoCreditLedgerRepository implements AoCreditLedgerRepository 
     rolloverCap: number;
     occurredAt: Date;
   }): Promise<{ entry: AoCreditLedgerEntry; alreadyApplied: boolean }> {
+    // Checkpoint TENDEROS-2.1-P2.3-E9 (correctif P1, trouvé par un vrai test HTTP + PostgreSQL) —
+    // capturé AVANT `withTransaction` : si un appelant a déjà ouvert une transaction ambiante, une
+    // violation d'index unique ci-dessous la fait échouer ENTIÈREMENT (jamais une relecture de
+    // secours à l'intérieur d'une transaction avortée, voir le commentaire de classe de
+    // `ConcurrentAoCreditLedgerWriteError`).
+    const hadAmbientTransaction = TransactionalContext.current() !== undefined;
     try {
       return await this.prisma.withTransaction(async (tx) => {
         const existing = await tx.aoCreditLedgerEntry.findFirst({ where: { organizationId: input.organizationId, type: AoCreditMovementType.Grant, period: input.period } });
@@ -89,6 +96,9 @@ export class PrismaAoCreditLedgerRepository implements AoCreditLedgerRepository 
       });
     } catch (error) {
       if (isUniqueConstraintViolation(error)) {
+        if (hadAmbientTransaction) {
+          throw new ConcurrentAoCreditLedgerWriteError(input.organizationId);
+        }
         const winning = await this.prisma.currentClient().aoCreditLedgerEntry.findFirstOrThrow({ where: { organizationId: input.organizationId, type: AoCreditMovementType.Grant, period: input.period } });
         return { entry: toDomain(winning), alreadyApplied: true };
       }
@@ -97,6 +107,8 @@ export class PrismaAoCreditLedgerRepository implements AoCreditLedgerRepository 
   }
 
   async grantTrial(input: { organizationId: string; occurredAt: Date }): Promise<{ entry: AoCreditLedgerEntry; alreadyApplied: boolean }> {
+    // Voir le commentaire de `grant()` ci-dessus — même garde.
+    const hadAmbientTransaction = TransactionalContext.current() !== undefined;
     try {
       return await this.prisma.withTransaction(async (tx) => {
         const existing = await tx.aoCreditLedgerEntry.findFirst({ where: { organizationId: input.organizationId, type: AoCreditMovementType.TrialGrant } });
@@ -130,6 +142,9 @@ export class PrismaAoCreditLedgerRepository implements AoCreditLedgerRepository 
       // `try/catch` local) : la relecture de l'entrée gagnante se fait donc volontairement HORS de
       // cette transaction, une fois le rollback terminé.
       if (isUniqueConstraintViolation(error)) {
+        if (hadAmbientTransaction) {
+          throw new ConcurrentAoCreditLedgerWriteError(input.organizationId);
+        }
         const winning = await this.prisma.currentClient().aoCreditLedgerEntry.findFirstOrThrow({ where: { organizationId: input.organizationId, type: AoCreditMovementType.TrialGrant } });
         return { entry: toDomain(winning), alreadyApplied: true };
       }
@@ -155,6 +170,10 @@ export class PrismaAoCreditLedgerRepository implements AoCreditLedgerRepository 
    *      idempotent au lieu de laisser l'erreur brute remonter.
    */
   async consume(input: { organizationId: string; tenderId: string; amount: number; occurredAt: Date }): Promise<{ applied: boolean; entry: AoCreditLedgerEntry | null }> {
+    // Voir le commentaire de `grant()` — même garde. C'est LE chemin réellement exercé par
+    // `RecordTenderSubmissionUseCase` (transaction ambiante déjà ouverte), voir le test HTTP dédié
+    // "double-clic / retry" (`ao-credit-consumption-http.integration.spec.ts`).
+    const hadAmbientTransaction = TransactionalContext.current() !== undefined;
     try {
       return await this.prisma.withTransaction(async (tx) => {
         const existing = await tx.aoCreditLedgerEntry.findFirst({ where: { organizationId: input.organizationId, type: AoCreditMovementType.Consumption, tenderId: input.tenderId } });
@@ -190,6 +209,15 @@ export class PrismaAoCreditLedgerRepository implements AoCreditLedgerRepository 
       });
     } catch (error) {
       if (isUniqueConstraintViolation(error)) {
+        // Checkpoint TENDEROS-2.1-P2.3-E9 — jamais une relecture de secours "réussie" ici : le
+        // perdant croirait avoir consommé le même crédit que le gagnant et procéderait à écrire SA
+        // PROPRE ligne `TenderSubmission` dans la même transaction ambiante déjà vouée à l'échec
+        // (aucune contrainte unique ne protège `tender_submissions` contre un doublon par tenderId —
+        // seule cette garde empêche concrètement le double dépôt). Échec explicite et propre,
+        // jamais un succès fantôme.
+        if (hadAmbientTransaction) {
+          throw new ConcurrentAoCreditLedgerWriteError(input.organizationId);
+        }
         const winning = await this.prisma.currentClient().aoCreditLedgerEntry.findFirstOrThrow({ where: { organizationId: input.organizationId, type: AoCreditMovementType.Consumption, tenderId: input.tenderId } });
         return { applied: true, entry: toDomain(winning) };
       }

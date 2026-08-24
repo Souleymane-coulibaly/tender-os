@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Card } from "../../../components/ui";
 import { getCurrentUserId } from "../../../lib/app-api-client";
 import { GA_EVENTS } from "../../../lib/analytics";
 import { computeSeatUsage } from "../../../lib/seat-usage";
 import { fetchEntitlements, fetchUsage } from "../../app/billing-actions";
 import { fetchOrganizationMembers } from "../../app/membership-actions";
-import { MembersSection } from "../../app/(protected)/members/members-section";
+import { InviteMemberDialog, MembersSection } from "../../app/(protected)/members/members-section";
 import { resolveOnboardingResumeState } from "../onboarding-actions";
 import { OnboardingTracker } from "../onboarding-tracker";
 
@@ -57,9 +58,9 @@ export default async function OnboardingEquipePage() {
         </p>
       </div>
 
-      <div className="w-full rounded-2xl border border-tenderos-navy/10 bg-white p-6 shadow-sm">
-        <MembersSection members={members} canManage currentUserId={currentUserId} seatUsage={seatUsage} />
-      </div>
+      <Card className="w-full" actions={<InviteMemberDialog seatUsage={seatUsage} />}>
+        <MembersSection members={members} canManage currentUserId={currentUserId} />
+      </Card>
 
       <Link href="/onboarding/configuration" className="w-full max-w-md rounded-lg bg-tenderos-navy px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-tenderos-navy/90">
         Continuer

@@ -19,6 +19,10 @@ const STATUS_BY_CODE: Record<string, number> = {
   // mêmes statuts que leurs propres error filters (billing/dce/analysis/...).
   TENDER_OPERATION_NOT_ENTITLED: HttpStatus.PAYMENT_REQUIRED,
   INSUFFICIENT_AO_CREDITS: HttpStatus.PAYMENT_REQUIRED,
+  // Checkpoint TENDEROS-2.1-P2.3-E9 — perdant d'une course réelle sur l'index unique partiel du
+  // ledger AO (`ConsumeAoCreditUseCase`, rejoue la transaction ambiante de ce use case), même statut
+  // que son propre error filter (billing).
+  CONCURRENT_AO_CREDIT_LEDGER_WRITE: HttpStatus.CONFLICT,
   // Checkpoint TENDEROS-2.1-P2.3-E1.5, mission §2 — désormais atteignables depuis
   // `RecordTenderSubmissionUseCase` (via `ConsumePassForTenderUseCase`, mission §2 race
   // abandon/submission) : mêmes statuts que leur propre error filter (billing).

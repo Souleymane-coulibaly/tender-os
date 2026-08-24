@@ -187,4 +187,46 @@ describe("AssignSubscriptionUseCase", () => {
 
     expect(renewed.toProps().currentPeriodEnd).toEqual(renewedPeriodEnd);
   });
+
+  it("BLOQUANT (correctif P1 E9, réaudit externe) — a byte-identical webhook redelivery (nothing actually changed) is a true no-op: updatedAt never advances, never shrinking the annual catch-up window", async () => {
+    const first = await useCase.execute({
+      organizationId: ORG_A,
+      planTier: PlanTier.Business,
+      billingInterval: BillingInterval.Yearly,
+      source: PlanSource.Stripe,
+      stripeCustomerId: "cus_123",
+      stripeSubscriptionId: "sub_123",
+      currentPeriodStart: FIXED_NOW,
+      currentPeriodEnd: new Date(FIXED_NOW.getTime() + 365 * 24 * 60 * 60 * 1000),
+      status: SubscriptionStatus.Active,
+      actorId: "stripe-webhook",
+      occurredAt: FIXED_NOW,
+    });
+    expect(first.toProps().updatedAt).toEqual(FIXED_NOW);
+
+    // Simule un `customer.subscription.updated` Stripe SANS AUCUN changement réel (métadonnées,
+    // resynchronisation périodique...) — mêmes plan/intervalle/source/périodes/statut, un mois plus
+    // tard. `AssignSubscriptionUseCase` est le SEUL déclencheur historique de `updatedAt` sur cette
+    // ligne, jamais une écriture directe SQL — reproduit fidèlement le webhook réel.
+    const oneMonthLater = new Date(FIXED_NOW.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const resynced = await useCase.execute({
+      organizationId: ORG_A,
+      planTier: PlanTier.Business,
+      billingInterval: BillingInterval.Yearly,
+      source: PlanSource.Stripe,
+      stripeCustomerId: "cus_123",
+      stripeSubscriptionId: "sub_123",
+      currentPeriodStart: FIXED_NOW,
+      currentPeriodEnd: new Date(FIXED_NOW.getTime() + 365 * 24 * 60 * 60 * 1000),
+      status: SubscriptionStatus.Active,
+      actorId: "stripe-webhook",
+      occurredAt: oneMonthLater,
+    });
+
+    // Jamais `oneMonthLater` — un vrai no-op ne doit JAMAIS avancer `updatedAt`, la borne de
+    // certitude du rattrapage annuel (`GrantMonthlyAoCreditsForYearlySubscriptionsUseCase`).
+    expect(resynced.toProps().updatedAt).toEqual(FIXED_NOW);
+    expect(outbox.events).toHaveLength(0);
+    expect(auditLog.entries).toHaveLength(1); // seulement le PlanAssigned initial, jamais un second événement pour un no-op.
+  });
 });

@@ -100,9 +100,45 @@ export class AssignSubscriptionUseCase {
     const previousPlanTier = existing.planTier;
     const previousSource = existing.source;
     const previousStatus = existing.status;
+    const previousProps = existing.toProps();
     const planChanged = previousPlanTier !== command.planTier;
     const intervalChanged = existing.billingInterval !== command.billingInterval;
     const sourceChanged = previousSource !== command.source;
+
+    // Checkpoint TENDEROS-2.1-P2.3-E9 (correctif P1, trouvé par un réaudit externe puis vérifié
+    // dans le code réel) — Stripe redélivre `customer.subscription.updated` pour de nombreuses
+    // raisons SANS RAPPORT avec un changement d'entitlement réel (métadonnées, moyen de paiement,
+    // `latest_invoice`, resynchronisation périodique...). `reassign()`/`updateFromStripeStatus()`
+    // bumpaient jusqu'ici `updatedAt` INCONDITIONNELLEMENT, y compris pour un webhook qui ne change
+    // RIEN — or `updatedAt` sert de borne de certitude au rattrapage annuel
+    // (`GrantMonthlyAoCreditsForYearlySubscriptionsUseCase`, "le plan/statut courant n'est garanti en
+    // vigueur que DEPUIS cette date"). Un simple resync sans changement réel pouvait donc rétrécir
+    // silencieusement, voire fermer, la fenêtre de rattrapage d'un client annuel légitimement dû —
+    // sous-allocation permanente et invisible, jamais acceptable (mission "wrong plan allowance"
+    // jamais classée dette non bloquante). Correctif minimal, sans migration : un webhook qui ne
+    // change RIEN de ce que cette ligne suit devient un VRAI no-op (aucune écriture, `updatedAt`
+    // inchangé) — l'invariant du rattrapage redevient vrai par construction. Un renouvellement RÉEL
+    // (période/plan/statut qui change effectivement) continue d'écrire normalement, avançant à bon
+    // droit la borne de certitude.
+    const periodStartChanged = (previousProps.currentPeriodStart?.getTime() ?? null) !== (command.currentPeriodStart?.getTime() ?? null);
+    const periodEndChanged = (previousProps.currentPeriodEnd?.getTime() ?? null) !== (command.currentPeriodEnd?.getTime() ?? null);
+    const stripeCustomerIdChanged = previousProps.stripeCustomerId !== command.stripeCustomerId;
+    const stripeSubscriptionIdChanged = previousProps.stripeSubscriptionId !== command.stripeSubscriptionId;
+    const statusChanged = command.status !== undefined && command.status !== previousStatus;
+    const trialEndsAtChanged = command.status === SubscriptionStatus.Trialing && (previousProps.trialEndsAt?.getTime() ?? null) !== (command.trialEndsAt?.getTime() ?? null);
+    const nothingChanged =
+      !planChanged &&
+      !intervalChanged &&
+      !sourceChanged &&
+      !periodStartChanged &&
+      !periodEndChanged &&
+      !stripeCustomerIdChanged &&
+      !stripeSubscriptionIdChanged &&
+      !statusChanged &&
+      !trialEndsAtChanged;
+    if (nothingChanged) {
+      return existing;
+    }
 
     // Correctif audit Codex 22D (P1-01) — `reassign` remplace TOUJOURS source/métadonnées Stripe/
     // périodes, jamais un `changePlan` qui les aurait silencieusement conservées d'une précédente

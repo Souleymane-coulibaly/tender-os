@@ -98,7 +98,9 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 /** Même palier que `TenderPermission.ManageWorkspace` (backend) — gate d'affichage UNIQUEMENT,
- *  jamais une autorité : chaque mutation reste revalidée côté API (mission §41). */
+ *  jamais une autorité : chaque mutation reste revalidée côté API (mission §41). Checkpoint
+ *  TENDEROS-2.1-P2.3-E6 — source canonique ; `dashboard-permissions.ts` ré-exporte cette même
+ *  fonction (audit §12/§42 : deux définitions indépendantes et identiques trouvées). */
 const ROLES_ALLOWED_TO_MANAGE_WORKSPACE = ["OWNER", "ORGANIZATION_ADMIN", "BID_MANAGER", "CONTRIBUTOR"];
 export function canManageWorkspace(role: string | undefined): boolean {
   return role !== undefined && ROLES_ALLOWED_TO_MANAGE_WORKSPACE.includes(role);

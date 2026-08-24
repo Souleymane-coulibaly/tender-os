@@ -31,6 +31,10 @@ const STATUS_BY_CODE: Record<string, number> = {
   AO_CREDIT_CONSUMPTION_ALREADY_REVERSED: HttpStatus.CONFLICT,
   // Correctif audit Codex 22B (P1-02).
   AO_CREDIT_ADJUSTMENT_WOULD_GO_NEGATIVE: HttpStatus.UNPROCESSABLE_ENTITY,
+  // Checkpoint TENDEROS-2.1-P2.3-E9 — perdant d'une course réelle sur l'index unique partiel du
+  // ledger AO (grant/grantTrial/consume) alors qu'une transaction ambiante était déjà ouverte par
+  // l'appelant : conflit attendu, jamais un bug (voir le commentaire de classe de l'erreur).
+  CONCURRENT_AO_CREDIT_LEDGER_WRITE: HttpStatus.CONFLICT,
 
   // V2 Sprint 22 (billing, étape 22C).
   STRIPE_PRICE_NOT_CONFIGURED: HttpStatus.UNPROCESSABLE_ENTITY,

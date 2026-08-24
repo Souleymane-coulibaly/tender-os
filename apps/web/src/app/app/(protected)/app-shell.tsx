@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { NAV_SECTIONS } from "./nav-sections";
+import { getVisibleNavSections } from "./nav-sections";
 
 function isActiveHref(pathname: string, href: string): boolean {
   if (href === "/app") return pathname === "/app";
@@ -19,9 +19,10 @@ function isActiveHref(pathname: string, href: string): boolean {
  * (notifications, redémarrer la visite, déconnexion) reste rendu côté serveur par `layout.tsx` et
  * traverse la frontière client/serveur en tant que `ReactNode`, jamais réimplémenté ici.
  */
-export function AppShell({ headerActions, children }: { headerActions: ReactNode; children: ReactNode }) {
+export function AppShell({ headerActions, actorRole, children }: { headerActions: ReactNode; actorRole: string | undefined; children: ReactNode }) {
   const pathname = usePathname();
   const [isOpen, setOpen] = useState(false);
+  const navSections = getVisibleNavSections(actorRole);
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
@@ -61,7 +62,7 @@ export function AppShell({ headerActions, children }: { headerActions: ReactNode
           </button>
         </div>
         <nav aria-label="Navigation principale" className="flex-1 overflow-y-auto px-3 pb-4">
-          {NAV_SECTIONS.map((section) => (
+          {navSections.map((section) => (
             <div key={section.label} className="mb-5">
               <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-white/40">{section.label}</p>
               <ul className="flex flex-col gap-0.5">

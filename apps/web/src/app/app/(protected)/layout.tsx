@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { appApiFetch, getAppSessionToken } from "../../../lib/app-api-client";
+import { appApiFetch, getAppSessionToken, getCurrentMembershipRole } from "../../../lib/app-api-client";
 import { fetchEntitlements } from "../billing-actions";
 import { logoutAction } from "../actions";
 import { fetchNotifications, fetchUnreadNotificationCount } from "../notifications-actions";
@@ -50,6 +50,17 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }
   const tourSteps = resolveTourSteps(hasApiOrWebhooksEntitlement);
 
+  // Checkpoint TENDEROS-2.1-P2.3-E6 (mission §16 navigation capability-aware) — résolu ici, jamais
+  // dans `AppShell` (Client Component) : un rôle indisponible dégrade vers `undefined`, qui masque
+  // par défaut les items filtrés (`getVisibleNavSections`) — jamais un affichage optimiste en cas
+  // d'échec de résolution.
+  let actorRole: string | undefined;
+  try {
+    actorRole = await getCurrentMembershipRole();
+  } catch {
+    // Dégradation silencieuse — voir commentaire ci-dessus.
+  }
+
   return (
     // Design System Checkpoint C — câblage du `ToastProvider` (Checkpoint B, primitive déjà prête
     // mais volontairement non montée alors) au SEUL point d'entrée réel de la surface `/app` :
@@ -59,6 +70,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <TourProvider steps={tourSteps} hasEverInteractedWithTour={hasEverInteractedWithTour}>
         <AuthenticatedAnalyticsLoader />
         <AppShell
+          actorRole={actorRole}
           headerActions={
             <>
               <RestartTourButton hasEverInteractedWithTour={hasEverInteractedWithTour} />

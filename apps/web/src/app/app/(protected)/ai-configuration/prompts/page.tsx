@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import { GENERATION_TASK_TYPE_LABELS, type PromptTemplateSummary } from "../../../../../lib/generation-types";
+import { isOrganizationAdmin } from "../../../../../lib/authorization";
 import { ApiErrorState } from "../../api-error-state";
 
 export const metadata: Metadata = { title: "Configuration IA — Prompts — TenderOS" };
 
-function canManageGeneration(actorRole: string | undefined): boolean {
-  return actorRole === "OWNER" || actorRole === "ORGANIZATION_ADMIN";
-}
+// Checkpoint TENDEROS-2.1-P2.3-E6 — palier OWNER/ORGANIZATION_ADMIN converge vers lib/authorization.ts.
+const canManageGeneration = isOrganizationAdmin;
 
 export default async function PromptTemplatesListPage() {
   let templates: PromptTemplateSummary[];

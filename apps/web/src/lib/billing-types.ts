@@ -2,6 +2,8 @@
 // même motif que `integrations-types.ts` : chaque type reflète 1:1 la forme retournée par le
 // backend, jamais une seconde source de vérité métier.
 
+import type { BadgeTone } from "../components/ui/badge";
+
 export const PLAN_TIERS = ["PASS", "STARTER", "BUSINESS", "ENTERPRISE"] as const;
 export type PlanTier = (typeof PLAN_TIERS)[number];
 
@@ -47,6 +49,23 @@ export function subscriptionStatusBadgeClass(status: SubscriptionStatus): string
   }
 }
 
+/** Checkpoint TENDEROS-2.1-P2.3-E8 — équivalent `BadgeTone` de `subscriptionStatusBadgeClass`
+ *  (motif déjà établi ailleurs, `deadlineBucketTone`/`membershipStatusTone`), pour `/app/subscription`
+ *  (Design System E5.1, `&lt;Badge tone={...}&gt;`). `subscriptionStatusBadgeClass` reste inchangée —
+ *  encore utilisée par `platform-admin/organization-billing-section.tsx`, hors périmètre E8. */
+export function subscriptionStatusTone(status: SubscriptionStatus): BadgeTone {
+  switch (status) {
+    case "ACTIVE":
+      return "success";
+    case "TRIALING":
+      return "gold";
+    case "PAST_DUE":
+      return "warning";
+    case "CANCELED":
+      return "neutral";
+  }
+}
+
 export type PlanSource = "STRIPE" | "MANUAL" | "GRANTED";
 
 export const PLAN_SOURCE_LABELS: Record<PlanSource, string> = {
@@ -86,15 +105,6 @@ export type QuotaLimit = number | typeof UNLIMITED;
 export function formatQuotaLimit(limit: QuotaLimit): string {
   return limit === UNLIMITED ? "Illimité*" : String(limit);
 }
-
-/** Catalogue commercial — prix figés, mission §1 (jamais recalculés côté frontend, uniquement
- *  affichés ; toute tentative de paiement résout le prix RÉEL côté serveur, voir `billing-actions.ts`). */
-export const PLAN_PRICES_CENTS: Record<PlanTier, { monthly: number | null; yearly: number | null; oneTime: number | null }> = {
-  PASS: { monthly: null, yearly: null, oneTime: 9900 },
-  STARTER: { monthly: 19900, yearly: 19900 * 11, oneTime: null },
-  BUSINESS: { monthly: 59900, yearly: 59900 * 11, oneTime: null },
-  ENTERPRISE: { monthly: 109900, yearly: 109900 * 11, oneTime: null },
-};
 
 export function formatEurosFromCents(cents: number): string {
   return (cents / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -170,6 +180,20 @@ export const AO_CREDIT_MOVEMENT_TYPE_LABELS: Record<AoCreditMovementType, string
   REVERSAL: "Annulation",
 };
 
+/** Checkpoint TENDEROS-2.1-P2.3-E9 (mission §56, historique des crédits AO self-service). */
+export function aoCreditMovementTypeTone(type: AoCreditMovementType): BadgeTone {
+  switch (type) {
+    case "GRANT":
+      return "success";
+    case "CONSUMPTION":
+      return "info";
+    case "MANUAL_ADJUSTMENT":
+      return "gold";
+    case "REVERSAL":
+      return "warning";
+  }
+}
+
 export type AoCreditLedgerEntryDto = {
   id: string;
   organizationId: string;
@@ -202,8 +226,10 @@ export function canManageBilling(role: string | undefined): boolean {
 /**
  * V2 Sprint 23 (landing) — miroir de `GetPublicPlanCatalogUseCase` (API, module `billing`), SEULE
  * source de vérité Pricing (mission §17/§55) : jamais un second catalogue maintenu à la main ici.
- * `PLAN_PRICES_CENTS` ci-dessus reste utilisé par l'écran Abonnement authentifié (22D, inchangé) —
- * la Landing, elle, lit exclusivement `GET /api/v1/billing/plan-catalog`.
+ * Checkpoint TENDEROS-2.1-P2.3-E8 — `/app/subscription` (écran Abonnement authentifié) lit
+ * désormais ce même catalogue dynamique (`fetchPlanCatalog`, `billing-actions.ts`) : l'ancien
+ * `PLAN_PRICES_CENTS` figé (prix seulement, jamais les entitlements/quotas réels) était la cause
+ * racine du bug produit "l'utilisateur ne peut choisir que Starter" — supprimé, jamais recréé.
  */
 export type PublicPlanCatalogEntry = {
   tier: PlanTier;

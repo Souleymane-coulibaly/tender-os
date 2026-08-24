@@ -10,6 +10,7 @@ import {
 import type { PageResponse, TenderListItem } from "../../../../../lib/tenders-types";
 import type { KnowledgePage, KnowledgeEntrySummary } from "../../../../../lib/knowledge-types";
 import type { ClientCostSummary } from "../../../../../lib/pricing-types";
+import { isOrganizationAdmin } from "../../../../../lib/authorization";
 import { ApiErrorState } from "../../api-error-state";
 import { ClientAssignmentsSection } from "./client-assignments-section";
 import { ClientLifecycleActions } from "./client-lifecycle-actions";
@@ -26,10 +27,9 @@ type OrganizationMemberResponse = { userId: string; role: string; user: { id: st
  *  CLIENT_MANAGER affecté peut aussi gérer les affectations côté backend (policy centralisée),
  *  mais cette UI ne résout pas encore l'identité du membre courant pour l'afficher dans ce cas
  *  précis (limite connue, voir le rapport final). Jamais un blocage de sécurité : le backend
- *  revalide toujours l'action réellement soumise, quelle que soit l'UI affichée ici. */
-function canManageAssignments(actorRole: string | undefined): boolean {
-  return actorRole === "OWNER" || actorRole === "ORGANIZATION_ADMIN";
-}
+ *  revalide toujours l'action réellement soumise, quelle que soit l'UI affichée ici.
+ *  Checkpoint TENDEROS-2.1-P2.3-E6 — palier OWNER/ORGANIZATION_ADMIN converge vers lib/authorization.ts. */
+const canManageAssignments = isOrganizationAdmin;
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
