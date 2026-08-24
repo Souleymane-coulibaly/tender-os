@@ -120,6 +120,7 @@ export class InMemorySavedSearchRepository implements SavedSearchRepository {
 
 export class InMemoryMarketSourceSyncLeaseRepository implements MarketSourceSyncLeaseRepository {
   private readonly lockedUntilByKey = new Map<string, Date>();
+  readonly releaseCalls: { organizationId: string; source: string }[] = [];
 
   async tryClaim(input: { organizationId: string; source: string; now: Date; leaseDurationMs: number }): Promise<boolean> {
     const key = `${input.organizationId}::${input.source}`;
@@ -129,6 +130,17 @@ export class InMemoryMarketSourceSyncLeaseRepository implements MarketSourceSync
     }
     this.lockedUntilByKey.set(key, new Date(input.now.getTime() + input.leaseDurationMs));
     return true;
+  }
+
+  /** Miroir de `PrismaMarketSourceSyncLeaseRepository.release` (diagnostic runtime E10) — expire
+   *  immédiatement un bail encore détenu, no-op sinon. */
+  async release(input: { organizationId: string; source: string; now: Date }): Promise<void> {
+    this.releaseCalls.push({ organizationId: input.organizationId, source: input.source });
+    const key = `${input.organizationId}::${input.source}`;
+    const existing = this.lockedUntilByKey.get(key);
+    if (existing && existing > input.now) {
+      this.lockedUntilByKey.set(key, input.now);
+    }
   }
 }
 

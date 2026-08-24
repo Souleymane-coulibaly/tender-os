@@ -21,4 +21,17 @@ export class PrismaMarketSourceSyncLeaseRepository implements MarketSourceSyncLe
     `;
     return result > 0;
   }
+
+  /** Diagnostic runtime E10 (voir le port) — fait expirer immédiatement un bail encore détenu.
+   *  Garde `locked_until > now` : un bail déjà expiré (locked_until dans le passé) n'est jamais
+   *  ramené à `now` (ce qui le RALLONGERAIT), et l'absence de bail reste un no-op. */
+  async release(input: { organizationId: string; source: string; now: Date }): Promise<void> {
+    await this.prisma.$executeRaw`
+      UPDATE "market_source_sync_leases"
+      SET "locked_until" = ${input.now}
+      WHERE "organization_id" = ${input.organizationId}::uuid
+        AND "source" = ${input.source}
+        AND "locked_until" > ${input.now}
+    `;
+  }
 }

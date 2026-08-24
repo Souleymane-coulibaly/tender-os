@@ -107,6 +107,18 @@ export class SyncOrganizationMarketSourcesUseCase {
           notificationsCreated: 0,
           errorSummary: message.slice(0, 500),
         });
+      } finally {
+        // Diagnostic runtime E10 (correctif) — libère le bail dès la fin RÉELLE du sync (succès
+        // COMME échec, preuve PostgreSQL : un sync de ~11 s laissait le bail détenu 10 min pleines,
+        // bloquant "Tester la veille" avec "lease already held by another instance" alors qu'aucun
+        // travail n'était en cours). Le TTL de `tryClaim` ne reste que la borne de récupération
+        // après crash (process tué avant ce `finally`). Best-effort — un échec de libération
+        // retombe simplement sur l'expiration naturelle, jamais une erreur propagée.
+        try {
+          await this.leaseRepository.release({ organizationId: command.organizationId, source: connector.source, now: new Date() });
+        } catch (error) {
+          this.logger.warn(`Failed to release market source sync lease (source=${connector.source}, org=${command.organizationId}): ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
     }
 
