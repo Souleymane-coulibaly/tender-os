@@ -9,7 +9,15 @@ import type { PageResponse } from "../../lib/tenders-types";
 export type OpportunityActionState = { error?: string };
 export type OpportunityFormActionState = { error?: string };
 
-function describeOpportunityActionError(error: unknown): string {
+/** Checkpoint TENDEROS-2.1 (correctif UX, remonté en usage réel) — `INVALID_OPPORTUNITY_STATUS_TRANSITION`
+ *  n'avait aucune branche dédiée et retombait sur le message générique "conflit avec l'état actuel",
+ *  qui ne dit ni ce qui bloque ni quoi faire. Le backend ne transmet PAS le détail from/to
+ *  (`OpportunityErrorFilter` n'expose que code/message/requestId, et le message est en anglais donc
+ *  jamais affichable) : le contexte de l'action appelante est donc la seule source d'un message
+ *  réellement actionnable, jamais une supposition sur l'état courant. */
+type OpportunityActionContext = "decision" | "status";
+
+function describeOpportunityActionError(error: unknown, context?: OpportunityActionContext): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Opportunity action failed (${error.status} ${error.code}): ${error.message}`);
     switch (error.status) {
@@ -24,6 +32,14 @@ function describeOpportunityActionError(error: unknown): string {
         if (error.code === "OPPORTUNITY_PROMOTION_CONFLICT") return "Cette opportunité n'est plus dans un état permettant la promotion.";
         if (error.code === "TENDER_BUSINESS_ANALYSIS_NOT_FOUND") return "L'analyse IA du DCE doit d'abord réussir avant de générer un rapport GO/NO-GO.";
         if (error.code === "GO_NO_GO_ANALYSIS_NOT_CURRENT") return "Le DCE a changé depuis la dernière analyse : actualisez l'analyse avant de recalculer le GO/NO-GO.";
+        if (error.code === "OPPORTUNITY_ARCHIVED") return "Cette opportunité est archivée : restaurez-la avant de la modifier.";
+        if (error.code === "OPPORTUNITY_CONCURRENT_MODIFICATION") return "Cette opportunité a été modifiée entre-temps. Rechargez la page puis réessayez.";
+        if (error.code === "INVALID_OPPORTUNITY_STATUS_TRANSITION") {
+          if (context === "decision") {
+            return "Cette opportunité doit d'abord être qualifiée pour recevoir une décision GO/NO-GO. Passez son statut à « À qualifier », puis « Qualifiée », avant de réessayer.";
+          }
+          return "Ce changement de statut n'est pas autorisé depuis l'état actuel de l'opportunité (l'ordre attendu est Brouillon → À qualifier → Qualifiée → décision GO/NO-GO).";
+        }
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
         if (error.code === "GO_NO_GO_DECISION_JUSTIFICATION_REQUIRED") return "Une justification est obligatoire pour une décision NO GO.";
@@ -133,7 +149,7 @@ export async function changeOpportunityStatusAction(id: string, status: string):
   try {
     await appApiFetch(`/api/v1/opportunities/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
   } catch (error) {
-    return { error: describeOpportunityActionError(error) };
+    return { error: describeOpportunityActionError(error, "status") };
   }
   revalidatePath(`/app/opportunities/${id}`);
   return {};
@@ -183,7 +199,7 @@ export async function recordOpportunityDecisionAction(id: string, input: RecordD
   try {
     await appApiFetch(`/api/v1/opportunities/${id}/go-no-go-decisions`, { method: "POST", body: JSON.stringify(input) });
   } catch (error) {
-    return { error: describeOpportunityActionError(error) };
+    return { error: describeOpportunityActionError(error, "decision") };
   }
   revalidatePath(`/app/opportunities/${id}`);
   return {};

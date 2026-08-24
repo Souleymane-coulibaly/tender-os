@@ -51,6 +51,11 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 
   const canManage = canManageOpportunity(role);
   const canDecide = canRecordGoNoGoDecision(role);
+  // Checkpoint TENDEROS-2.1 (correctif UX) — miroir EXACT de `ALLOWED_OPPORTUNITY_TRANSITIONS`
+  // (backend, `opportunity-status.ts`) pour les seules cibles GO/GO_CONDITIONAL/NO_GO : autorisées
+  // depuis QUALIFIED, ou depuis une décision déjà prise (une nouvelle décision reste toujours
+  // possible). Confort UX uniquement — le backend reste l'autorité et revalide systématiquement.
+  const decisionAllowedFromStatus = ["QUALIFIED", "GO", "GO_CONDITIONAL", "NO_GO"].includes(opportunity.status);
   const canPromote = canPromoteOpportunity(role) && (opportunity.status === "GO" || opportunity.status === "GO_CONDITIONAL");
 
   return (
@@ -123,7 +128,13 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <OpportunityQuickScoreSection opportunityId={opportunity.id} initialScore={quickScore} canCompute={canManage} />
-        <OpportunityDecisionSection opportunityId={opportunity.id} initialDecisions={decisions} canDecide={canDecide} latestQuickScoreId={quickScore?.id} />
+        <OpportunityDecisionSection
+          opportunityId={opportunity.id}
+          initialDecisions={decisions}
+          canDecide={canDecide}
+          decisionAllowedFromStatus={decisionAllowedFromStatus}
+          latestQuickScoreId={quickScore?.id}
+        />
       </div>
 
       {canPromote ? (

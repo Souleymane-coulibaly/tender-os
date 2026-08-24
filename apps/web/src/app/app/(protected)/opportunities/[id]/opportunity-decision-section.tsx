@@ -21,11 +21,20 @@ export function OpportunityDecisionSection({
   opportunityId,
   initialDecisions,
   canDecide,
+  decisionAllowedFromStatus,
   latestQuickScoreId,
 }: {
   opportunityId: string;
   initialDecisions: GoNoGoDecision[];
   canDecide: boolean;
+  /** Checkpoint TENDEROS-2.1 (correctif UX, remonté en usage réel) — le formulaire s'affichait dès
+   *  que le RÔLE le permettait, sans jamais regarder le STATUT : sur une opportunité en
+   *  DRAFT/TO_QUALIFY (l'état de toute opportunité fraîchement créée ou promue depuis la Veille),
+   *  l'utilisateur pouvait choisir une décision et cliquer "Enregistrer" pour n'obtenir qu'un 409.
+   *  La table de transitions (`ALLOWED_OPPORTUNITY_TRANSITIONS`, backend) n'autorise GO/GO_CONDITIONAL/
+   *  NO_GO que depuis QUALIFIED (ou depuis une décision précédente). Même discipline que le bouton
+   *  "Promouvoir" de la page parente, qui teste déjà rôle ET statut — jamais un bouton mort. */
+  decisionAllowedFromStatus: boolean;
   latestQuickScoreId: string | undefined;
 }) {
   const router = useRouter();
@@ -73,7 +82,14 @@ export function OpportunityDecisionSection({
     <section className="flex flex-col gap-3 rounded border border-neutral-200 p-4">
       <h2 className="text-sm font-semibold text-neutral-700">Décision GO / NO-GO</h2>
 
-      {canDecide ? (
+      {canDecide && !decisionAllowedFromStatus ? (
+        <p className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Cette opportunité doit d&apos;abord être <strong>qualifiée</strong> pour recevoir une décision GO/NO-GO. Utilisez le statut ci-dessus : «&nbsp;À qualifier&nbsp;» puis
+          «&nbsp;Qualifiée&nbsp;».
+        </p>
+      ) : null}
+
+      {canDecide && decisionAllowedFromStatus ? (
         <div className="flex flex-col gap-2 rounded border border-neutral-100 bg-neutral-50 p-3">
           <div className="flex gap-2">
             {DECISION_CHOICES.map((choice) => (
