@@ -25,6 +25,8 @@ import { SendPendingEmailAlertsUseCase } from "./application/use-cases/send-pend
 import { SetMatchStatusUseCase } from "./application/use-cases/set-match-status.use-case";
 import { SetSavedSearchStatusUseCase } from "./application/use-cases/set-saved-search-status.use-case";
 import { SyncMarketSourceUseCase } from "./application/use-cases/sync-market-source.use-case";
+import { SyncOrganizationMarketSourcesUseCase } from "./application/use-cases/sync-organization-market-sources.use-case";
+import { RunSavedSearchNowUseCase } from "./application/use-cases/run-saved-search-now.use-case";
 import { UpdateSavedSearchUseCase } from "./application/use-cases/update-saved-search.use-case";
 import { BoampSourceConnector } from "./infrastructure/connectors/boamp-source-connector";
 import { TedSourceConnector } from "./infrastructure/connectors/ted-source-connector";
@@ -67,6 +69,8 @@ import { SavedSearchesController } from "./interfaces/http/saved-searches.contro
     GetExternalTenderUseCase,
     PromoteExternalTenderToOpportunityUseCase,
     SyncMarketSourceUseCase,
+    SyncOrganizationMarketSourcesUseCase,
+    RunSavedSearchNowUseCase,
     SendPendingEmailAlertsUseCase,
 
     MarketSourceSyncWorker,

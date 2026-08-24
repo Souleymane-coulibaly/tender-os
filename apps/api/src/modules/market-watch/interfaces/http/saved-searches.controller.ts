@@ -11,6 +11,7 @@ import { GetSavedSearchUseCase } from "../../application/use-cases/get-saved-sea
 import { ListSavedSearchesUseCase } from "../../application/use-cases/list-saved-searches.use-case";
 import { ListSavedSearchMatchesUseCase } from "../../application/use-cases/list-saved-search-matches.use-case";
 import { PromoteExternalTenderToOpportunityUseCase } from "../../application/use-cases/promote-external-tender-to-opportunity.use-case";
+import { RunSavedSearchNowUseCase } from "../../application/use-cases/run-saved-search-now.use-case";
 import { SetMatchStatusUseCase } from "../../application/use-cases/set-match-status.use-case";
 import { SetSavedSearchStatusUseCase } from "../../application/use-cases/set-saved-search-status.use-case";
 import { UpdateSavedSearchUseCase } from "../../application/use-cases/update-saved-search.use-case";
@@ -48,6 +49,7 @@ export class SavedSearchesController {
     private readonly listSavedSearchMatchesUseCase: ListSavedSearchMatchesUseCase,
     private readonly setMatchStatusUseCase: SetMatchStatusUseCase,
     private readonly promoteExternalTenderToOpportunityUseCase: PromoteExternalTenderToOpportunityUseCase,
+    private readonly runSavedSearchNowUseCase: RunSavedSearchNowUseCase,
     @Inject(SAVED_SEARCH_MATCH_REPOSITORY) private readonly savedSearchMatchRepository: SavedSearchMatchRepository,
   ) {}
 
@@ -131,6 +133,19 @@ export class SavedSearchesController {
   ) {
     await this.deleteSavedSearchUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, savedSearchId, requestId: request.id });
     return { deleted: true };
+  }
+
+  /** Checkpoint TENDEROS-2.1-P2.3-E10, mission §13.B "Tester la veille" — même use case que le
+   *  scheduler horaire, jamais un second pipeline. */
+  @Post(":id/run-now")
+  @HttpCode(HttpStatus.OK)
+  async runNow(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("id", new ZodValidationPipe(IdParamSchema)) savedSearchId: string,
+    @Req() request: RequestWithId,
+  ) {
+    return this.runSavedSearchNowUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, savedSearchId, requestId: request.id });
   }
 
   @Get(":id/matches")

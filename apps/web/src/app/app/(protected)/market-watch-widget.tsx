@@ -34,8 +34,13 @@ export function MarketWatchWidget({ marketWatch }: { marketWatch: DashboardMarke
         <ul className="flex flex-col gap-3">
           {marketWatch.recommended.map((opportunity) => (
             <li key={opportunity.externalTenderId}>
+              {/* Checkpoint TENDEROS-2.1-P2.3-E10 (correctif) — la route `/app/market-watch/:savedSearchId/matches`
+                  n'a jamais existé (seules `/app/market-watch?searchId=` et
+                  `/app/market-watch/:externalTenderId` existent) : ce lien du widget Dashboard était
+                  mort depuis sa création (Sprint 25). Corrigé vers la fiche du marché lui-même — le
+                  CTA le plus précis pour une recommandation individuelle (mission §33). */}
               <Link
-                href={`/app/market-watch/${opportunity.savedSearchId}/matches`}
+                href={`/app/market-watch/${opportunity.externalTenderId}`}
                 className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 transition hover:bg-tenderos-light/60"
               >
                 <div className="min-w-0">

@@ -63,6 +63,21 @@ export async function createSavedSearchAction(input: CreateSavedSearchInput): Pr
   }
 }
 
+/** Checkpoint TENDEROS-2.1-P2.3-E10, mission §13.B "Tester la veille" — appelle le MÊME use case
+ *  backend que le scheduler horaire (`RunSavedSearchNowUseCase`), jamais un pipeline dédié au
+ *  bouton. Revalide la page Veille pour que les nouveaux résultats apparaissent immédiatement
+ *  (mission §13.E), sans logout/hard refresh. */
+export async function runSavedSearchNowAction(savedSearchId: string): Promise<{ error?: string; matchesFound?: number }> {
+  try {
+    const result = await appApiFetch<{ matchesFound: number }>(`/api/v1/market-watch/saved-searches/${savedSearchId}/run-now`, { method: "POST" });
+    revalidatePath("/app/market-watch");
+    revalidatePath("/app");
+    return { matchesFound: result.matchesFound };
+  } catch (error) {
+    return { error: describeMarketWatchActionError(error) };
+  }
+}
+
 export async function setSavedSearchStatusAction(savedSearchId: string, enabled: boolean): Promise<{ error?: string }> {
   try {
     await appApiFetch(`/api/v1/market-watch/saved-searches/${savedSearchId}/status`, { method: "POST", body: JSON.stringify({ enabled }) });
