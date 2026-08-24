@@ -92,7 +92,14 @@ export class BoampSourceConnector implements MarketSourceConnector {
       dataset: "boamp",
       rows: String(criteria.limit),
       start: String(Number.isFinite(start) ? start : 0),
-      sort: "-dateparution",
+      // Diagnostic runtime E10 (correctif P0, prouvé contre l'API réelle) — l'API Opendatasoft v1
+      // de BOAMP INVERSE la convention habituelle : `sort=-dateparution` renvoie les avis les plus
+      // ANCIENS (2015-03-02), `sort=dateparution` les plus RÉCENTS (date du jour). Vérifié
+      // empiriquement sur les deux directions. Le préfixe `-` faisait donc ingérer en boucle les
+      // 100 mêmes avis de 2015 : `collected=100 created=0 unchanged=100 matches=0` à chaque cycle,
+      // et un backfill (fenêtre 30 jours) systématiquement vide — aucune veille ne pouvait jamais
+      // matcher quoi que ce soit, quels que soient ses critères.
+      sort: "dateparution",
     });
     if (criteria.query) {
       params.set("q", criteria.query);
