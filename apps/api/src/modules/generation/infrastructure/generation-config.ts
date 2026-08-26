@@ -1,4 +1,3 @@
-import { DEFAULT_AI_MODEL } from "../../../shared-kernel/ai-model-defaults";
 
 export type GenerationModelRate = Readonly<{
   inputPricePerMillionTokens: number;
@@ -13,7 +12,12 @@ export type GenerationConfig = Readonly<{
   /** Un seul modèle par défaut, jamais une variable par type de tâche (décision A1, voir rapport
    *  final §H — le routage réel par taskType est dormant tant qu'aucune RoutingPolicy Sprint 5.2
    *  ne peut exister pour Generation). */
-  aiModel: string;
+  /**
+   * Checkpoint TENDEROS-2.1-LEGACY-DECOMMISSIONING — le champ `aiModel` (modele statique par
+   * variable d'environnement) a ete retiré : depuis le checkpoint P2.3-E4, `AiModelRouter` est
+   * la SEULE autorite de selection du modele et un Router indisponible echoue explicitement,
+   * jamais par un repli sur cette configuration. Elle ne porte plus que le transport.
+   */
   aiTimeoutMs: number;
   aiMaxRetries: number;
   aiRetryDelayMs: number;
@@ -67,7 +71,6 @@ function readModelRates(env: NodeJS.ProcessEnv): Readonly<Record<string, Generat
 export function loadGenerationConfig(env: NodeJS.ProcessEnv = process.env): GenerationConfig {
   return {
     aiProvider: env.GENERATION_AI_PROVIDER || env.AI_PROVIDER || undefined,
-    aiModel: env.GENERATION_AI_MODEL || DEFAULT_AI_MODEL,
     aiTimeoutMs: readPositiveIntegerOrDefault(env, "GENERATION_AI_TIMEOUT_MS", DEFAULT_AI_TIMEOUT_MS),
     aiMaxRetries: readNonNegativeIntegerOrDefault(env, "GENERATION_AI_MAX_RETRIES", DEFAULT_AI_MAX_RETRIES),
     aiRetryDelayMs: readNonNegativeIntegerOrDefault(env, "GENERATION_AI_RETRY_DELAY_MS", DEFAULT_AI_RETRY_DELAY_MS),

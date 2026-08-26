@@ -23,7 +23,7 @@ AVANT même la construction du graphe de dépendances Nest — le process ne dé
 
 | Domaine | Variables | Comportement si absent |
 |---|---|---|
-| IA (Analysis/Generation/Chat) | `AI_PROVIDER`, `OPENAI_API_KEY`, `AI_MODEL*`, `AI_TIMEOUT_MS`, `AI_MAX_RETRIES` | Toute tentative d'analyse/génération échoue avec `AI_PROVIDER_NOT_CONFIGURED` — l'application démarre normalement |
+| IA (Analysis/Generation/Chat) | `AI_PROVIDER`, `OPENAI_API_KEY`, `AI_TIMEOUT_MS`, `AI_MAX_RETRIES` | Toute tentative d'analyse/génération échoue avec `AI_PROVIDER_NOT_CONFIGURED` — l'application démarre normalement |
 | Métriques | `METRICS_TOKEN` | `/metrics` reste accessible sans authentification si absent (acceptable en développement/réseau privé — voir §3 de ce document pour la posture recommandée en production) |
 | Email (Resend) | voir module `notifications` | Envoi d'email désactivé, les autres flux métier continuent (mission §68-70 — jamais un email raté qui annule une transaction métier) |
 | Connecteurs Microsoft/Google | credentials OAuth par organisation | Fonctionnalité `NOT_CONFIGURED`, jamais un crash au démarrage |

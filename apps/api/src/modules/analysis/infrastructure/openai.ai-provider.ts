@@ -11,6 +11,7 @@ import {
 } from "../domain/errors";
 import type { AIProvider, AIProviderRequest, AIProviderResult } from "../application/ports/ai-provider";
 import { STRICT_OUTPUT_SCHEMAS } from "./strict-output-schemas";
+import { buildMaxOutputTokensBody } from "./openai-model-parameter-contract";
 
 const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
 
@@ -118,7 +119,8 @@ export class OpenAiProvider implements AIProvider {
             { role: "system", content: request.systemPrompt },
             { role: "user", content: request.userPrompt },
           ],
-          ...(request.maxOutputTokens ? { max_tokens: request.maxOutputTokens } : {}),
+          // F-03 — le NOM du paramètre dépend du modèle (voir openai-model-parameter-contract.ts).
+          ...buildMaxOutputTokensBody(request.model, request.maxOutputTokens),
           ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
           ...(responseFormat ? { response_format: responseFormat } : {}),
         }),

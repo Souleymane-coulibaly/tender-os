@@ -11,18 +11,52 @@ import {
   type RenderedPrompt,
 } from "../application/ports/prompt-template.port";
 
-const COMMON_RULES =
+const RESPONSE_SHAPE_RULES =
   "Respond ONLY with a single strict JSON object matching the exact shape described. No markdown, no " +
   "commentary, no code fences, no field beyond what is described. Every business fact you report MUST " +
-  "carry a 'confidence' number between 0 and 1, and — unless truly tender-wide and un-sourceable — a " +
-  "'citation' (short verbatim excerpt, in the source document's original language, never translated) " +
-  "and either a 'chunkSequence' (the [n] marker of the chunk you found it in) or leave provenance " +
-  "fields out and set 'isInferred' to true if you deduced the fact rather than read it directly. Never " +
-  "invent a chunkSequence, page number, or citation that does not really appear in the provided input.";
+  "carry a 'confidence' number between 0 and 1.";
+
+/**
+ * Règles de provenance du scope DOCUMENT — l'entrée du modèle EST le texte réel des chunks, préfixés
+ * de leur marqueur `[n]` : il peut donc citer verbatim et désigner le chunk qu'il a lu.
+ */
+const DOCUMENT_PROVENANCE_RULES =
+  " Unless truly document-wide and un-sourceable, every fact needs a 'citation' (short verbatim " +
+  "excerpt, in the source document's original language, never translated) and either a " +
+  "'chunkSequence' (the [n] marker of the chunk you found it in) or leave provenance fields out and " +
+  "set 'isInferred' to true if you deduced the fact rather than read it directly. Never invent a " +
+  "chunkSequence, page number, or citation that does not really appear in the provided input.";
+
+/**
+ * Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-1 (F-01, axe B) — règles de provenance du scope TENDER.
+ *
+ * La consolidation NE VOIT PAS le texte des chunks : son entrée est le tableau JSON des analyses
+ * documentaires déjà produites. Lui appliquer les règles DOCUMENT (« cite verbatim », « le marqueur
+ * [n] du chunk où tu l'as trouvé ») lui demandait de citer un texte qu'on ne lui a jamais montré :
+ * le modèle synthétisait alors une citation plausible, que `validateTenderConsolidationProvenance`
+ * comparait aux chunks RÉELS et rejetait à juste titre (`AI_PROVENANCE_VALIDATION_FAILED`). Le
+ * prompt et le validateur étaient en désaccord sur ce que le modèle a le droit de voir.
+ *
+ * Le contrat correct — et le seul déterministe : la provenance a DÉJÀ été validée au niveau
+ * document, et elle est présente telle quelle dans l'entrée. La consolidation doit la RECOPIER,
+ * jamais en écrire une nouvelle. Le garde de provenance reste strictement inchangé : ce qui change,
+ * c'est que le modèle dispose enfin d'une instruction satisfaisable.
+ */
+const TENDER_PROVENANCE_RULES =
+  " Provenance rules for consolidation — read them carefully, they differ from per-document " +
+  "analysis. You do NOT have the source document text here, only the per-document findings. You " +
+  "therefore MUST NOT write a citation of your own. When a consolidated fact comes from an input " +
+  "finding, COPY that finding's 'citation', 'chunkSequence', 'pageStart', 'pageEnd', 'sheetName' and " +
+  "'sectionTitle' EXACTLY as they appear in the input, character for character, and set 'documentId' " +
+  "to that finding's documentId. Never merge, shorten, translate, reformat or combine two citations " +
+  "into one — if two documents support the same fact, keep the provenance of ONE of them and mention " +
+  "the other in the text. When a fact is yours (a deduction, a merge, a risk or a question you " +
+  "inferred rather than read), omit 'citation', 'chunkSequence' and the page fields entirely and set " +
+  "'isInferred' to true. A fabricated or reworded citation is worse than no citation at all.";
 
 /**
  * Renfort LOCAL de l'exigence `confidence` (mission — correctif crash prod `AI_SCHEMA_VALIDATION_FAILED`,
- * confidence manquante malgré `COMMON_RULES`) — une seule mention générale en tête de prompt ne
+ * confidence manquante malgré `RESPONSE_SHAPE_RULES`) — une seule mention générale en tête de prompt ne
  * suffit pas à obtenir une conformité fiable du modèle sur CHAQUE élément d'un tableau ; cette
  * fonction factorise la phrase de renfort (jamais copiée-collée à la main par tableau) pour que les
  * deux prompts restent alignés sans dupliquer le texte. Générique — aucune mention de fournisseur ni
@@ -84,7 +118,8 @@ export class StaticPromptTemplateProvider implements PromptTemplatePort {
         "You are a French public/private procurement (appel d'offres) document analyst working for " +
         "TenderOS. You analyze ONE tender document at a time. You extract reliable, traceable business " +
         "facts — you never invent information, and you never write a free-form summary. " +
-        COMMON_RULES +
+        RESPONSE_SHAPE_RULES +
+        DOCUMENT_PROVENANCE_RULES +
         " " +
         requireConfidenceOn(["deadlines", "criteria", "requirements", "clauses"]) +
         " Classify 'documentType' as one of: " +
@@ -128,7 +163,8 @@ export class StaticPromptTemplateProvider implements PromptTemplatePort {
         "administrative clauses, CCTP for technical requirements, AE for engagement/amounts, BPU/DPGF for " +
         "prices/quantities — but always defer to what the documents actually say over this generic " +
         "rule), detect real business risks, and generate clarification questions for the buyer. " +
-        COMMON_RULES +
+        RESPONSE_SHAPE_RULES +
+        TENDER_PROVENANCE_RULES +
         " " +
         requireConfidenceOn(["deadlines", "criteria", "requirements", "clauses", "risks", "questions"]) +
         " Every finding must set 'documentId' to the exact id of the source document you used (from the " +

@@ -1,4 +1,3 @@
-import { DEFAULT_AI_MODEL } from "../../../shared-kernel/ai-model-defaults";
 
 export type AnalysisConfig = Readonly<{
   /** Nom du provider configuré (ex. "OPENAI") — `undefined` si absent : ne fait JAMAIS échouer le
@@ -6,15 +5,34 @@ export type AnalysisConfig = Readonly<{
    *  faire crasher les modules qui ne déclenchent pas d'analyse"). Résolu paresseusement par
    *  `AIProviderRegistry.resolve()`, uniquement lorsqu'une analyse démarre réellement. */
   aiProvider?: string | undefined;
-  aiModel: string;
-  /** Mission Sprint 4.2 §"Pas de modèle codé en dur dans le domaine" — configuration PAR TYPE DE
-   *  TÂCHE (stratégie volontairement simple : une variable d'environnement par tâche, retombant sur
-   *  `aiModel` si absente), jamais un moteur d'arbitrage complexe. Consommée uniquement par
-   *  `ProcessAnalysisJobUseCase` (jamais par le domaine — `AnalysisJob` ne connaît aucun nom de
-   *  modèle avant que le provider n'ait répondu). */
-  aiModelForDocumentAnalysis: string;
-  aiModelForTenderConsolidation: string;
+  /**
+   * Checkpoint TENDEROS-2.1-LEGACY-DECOMMISSIONING — `aiModel`, `aiModelForDocumentAnalysis` et
+   * `aiModelForTenderConsolidation` (Sprint 4.2, "une variable d'environnement par tâche") ont été
+   * retirés d'ici. Depuis le checkpoint P2.3-E4.1, `AiModelRouter` est la SEULE autorité de
+   * sélection du modèle et une résolution en échec lève `AiModelRouterUnavailableError` — jamais un
+   * repli sur une variable d'environnement. Les trois champs n'avaient donc plus aucun lecteur :
+   * leur seul consommateur documenté, `ProcessAnalysisJobUseCase`, était déjà passé au Router.
+   * Ce module ne configure plus QUE le transport (provider, timeouts, retries, clé API).
+   */
   aiTimeoutMs: number;
+  /**
+   * Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-1 (F-01, axe A) — budget PROPRE à la consolidation
+   * Tender, jamais une augmentation globale de `aiTimeoutMs`.
+   *
+   * Mesuré sur PostgreSQL et provider réels pendant la TNR post-décommissionnement :
+   *  - scope DOCUMENT : 4,2 s à 9,7 s (maximum = 32 % du budget de 30 s) — largement suffisant,
+   *    ce budget reste donc inchangé ;
+   *  - scope TENDER   : le provider a répondu à 16,6 s et 20,0 s sur 3 documents courts, mais a
+   *    dépassé 30 s sur un corpus plus riche — 3 tentatives × 30 s ont produit deux échecs
+   *    `AI_TIMEOUT` mesurés à 93,1 s et 93,2 s.
+   *
+   * L'écart est structurel, pas accidentel : la consolidation émet une sortie structurée bien plus
+   * volumineuse (résumé + 6 tableaux porteurs de provenance) que l'analyse d'un document, et la
+   * durée de génération suit le nombre de tokens produits. 120 s laissent 6× la marge de la plus
+   * longue réponse réellement observée, sans jamais transformer un timeout en succès : l'issue
+   * reste SUCCEEDED ou FAILED.
+   */
+  aiTimeoutMsForTenderConsolidation: number;
   aiMaxRetries: number;
   aiRetryDelayMs: number;
   /** Jamais journalisée, jamais exposée par aucun DTO/présenteur (mission §"Sécurité"). */
@@ -24,6 +42,8 @@ export type AnalysisConfig = Readonly<{
 export const ANALYSIS_CONFIG = Symbol("ANALYSIS_CONFIG");
 
 const DEFAULT_AI_TIMEOUT_MS = 30_000;
+/** Voir la justification mesuree portee par `aiTimeoutMsForTenderConsolidation`. */
+const DEFAULT_AI_TIMEOUT_MS_FOR_TENDER_CONSOLIDATION = 120_000;
 const DEFAULT_AI_MAX_RETRIES = 2;
 const DEFAULT_AI_RETRY_DELAY_MS = 1_000;
 
@@ -55,13 +75,14 @@ function readNonNegativeIntegerOrDefault(env: NodeJS.ProcessEnv, name: string, f
  * silencieusement ignorée.
  */
 export function loadAnalysisConfig(env: NodeJS.ProcessEnv = process.env): AnalysisConfig {
-  const aiModel = env.AI_MODEL || DEFAULT_AI_MODEL;
   return {
     aiProvider: env.AI_PROVIDER || undefined,
-    aiModel,
-    aiModelForDocumentAnalysis: env.AI_MODEL_DOCUMENT_ANALYSIS || aiModel,
-    aiModelForTenderConsolidation: env.AI_MODEL_TENDER_CONSOLIDATION || aiModel,
     aiTimeoutMs: readPositiveIntegerOrDefault(env, "AI_TIMEOUT_MS", DEFAULT_AI_TIMEOUT_MS),
+    aiTimeoutMsForTenderConsolidation: readPositiveIntegerOrDefault(
+      env,
+      "AI_TIMEOUT_MS_TENDER_CONSOLIDATION",
+      DEFAULT_AI_TIMEOUT_MS_FOR_TENDER_CONSOLIDATION,
+    ),
     aiMaxRetries: readNonNegativeIntegerOrDefault(env, "AI_MAX_RETRIES", DEFAULT_AI_MAX_RETRIES),
     aiRetryDelayMs: readNonNegativeIntegerOrDefault(env, "AI_RETRY_DELAY_MS", DEFAULT_AI_RETRY_DELAY_MS),
     openAiApiKey: env.OPENAI_API_KEY || undefined,

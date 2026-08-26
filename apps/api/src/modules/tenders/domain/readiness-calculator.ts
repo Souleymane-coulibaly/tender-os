@@ -6,6 +6,22 @@ import { ReadinessStatus } from "./readiness-status";
 import { RequestedDocument, RequestedDocumentStatus } from "./requested-document.entity";
 import { Risk, RiskStatus } from "./risk.entity";
 
+/**
+ * Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-1 (F-02) — état de la consolidation du DCE, vu par le
+ * score de préparation.
+ *
+ * `CURRENT` reprend exactement `AnalysisFreshness.CURRENT` du contrat public Analysis. Tout le
+ * reste — analyse absente, en cours, en échec, ou périmée par rapport à la révision DCE courante —
+ * est traité de façon identique et volontairement conservatrice : le dossier n'est PAS prêt.
+ *
+ * Défaut historique corrigé ici : le score attribuait le maximum de points aux dimensions
+ * « Checklist obligatoire » et « Pièces obligatoires » lorsqu'elles étaient VIDES (ratio 1 sur un
+ * ensemble vide), si bien qu'un dossier où rien n'avait été fait — et dont la consolidation avait
+ * échoué — atteignait 90/100 « READY ». Un ensemble vide ne compte désormais comme satisfait que
+ * si une consolidation COURANTE a réellement établi qu'il l'était.
+ */
+export type TenderAnalysisReadinessState = "CURRENT" | "MISSING" | "PROCESSING" | "FAILED" | "STALE" | "UNKNOWN";
+
 export type ReadinessBreakdownEntry = Readonly<{
   label: string;
   weight: number;
@@ -41,20 +57,43 @@ export function calculateTenderReadiness(input: {
   milestones: Milestone[];
   risks: Risk[];
   alerts: Alert[];
+  /**
+   * Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-1 (F-02) — état de la consolidation du DCE pour CE
+   * tender, repris TEL QUEL du contrat public Analysis (`EffectiveTenderAnalysisSummary.
+   * analysisFreshness`, même valeur que celle déjà consommée par la readiness de dépôt) : jamais un
+   * second calcul de fraîcheur, jamais une seconde SOT.
+   */
+  analysis: TenderAnalysisReadinessState;
+  /**
+   * Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-2 (F-06) — exigences OBLIGATOIRES detectees mais
+   * encore en attente de validation humaine. Tant qu'il en reste, une checklist vide traduit une
+   * incertitude, jamais l'absence d'exigence : elle ne peut donc pas etre creditee.
+   */
+  pendingMandatoryRequirements: number;
   now: Date;
 }): ReadinessResult {
+  // Une checklist et des pièces obligatoires sont DÉRIVÉES de l'analyse du DCE : tant qu'aucune
+  // consolidation exploitable n'existe, leur vacuité ne signifie pas « rien à faire » mais « pas
+  // encore su ». Voir `TenderAnalysisReadinessState`.
+  const analysisIsCurrent = input.analysis === "CURRENT";
+  // F-06 — un ensemble vide n'est satisfait que si une consolidation COURANTE l'a etabli ET
+  // qu'aucune exigence obligatoire detectee n'attend encore d'etre confirmee.
+  const requirementsSettled = analysisIsCurrent && input.pendingMandatoryRequirements === 0;
+  const emptySetRatio = requirementsSettled ? 1 : 0;
+
   const requiredChecklist = input.checklistItems.filter((item) => item.required);
   const completedChecklist = requiredChecklist.filter(
     (item) => item.status === ChecklistItemStatus.Completed || item.status === ChecklistItemStatus.NotApplicable,
   );
-  const checklistRatio = requiredChecklist.length === 0 ? 1 : completedChecklist.length / requiredChecklist.length;
+  const checklistRatio =
+    requiredChecklist.length === 0 ? emptySetRatio : completedChecklist.length / requiredChecklist.length;
 
   const requiredDocuments = input.requestedDocuments.filter((doc) => doc.required);
   const satisfiedDocuments = requiredDocuments.filter(
     (doc) => doc.status === RequestedDocumentStatus.Provided || doc.status === RequestedDocumentStatus.Validated,
   );
   const documentsRatio =
-    requiredDocuments.length === 0 ? 1 : satisfiedDocuments.length / requiredDocuments.length;
+    requiredDocuments.length === 0 ? emptySetRatio : satisfiedDocuments.length / requiredDocuments.length;
 
   const criteriaRatio = input.criteria.length > 0 ? 1 : 0;
 
@@ -87,6 +126,11 @@ export function calculateTenderReadiness(input: {
   let status: ReadinessStatus;
   if (hasBlockingIssue) {
     status = ReadinessStatus.NotReady;
+  } else if (!requirementsSettled) {
+    // Fail-closed (F-02) — sans consolidation exploitable du DCE, le score reste informatif mais le
+    // STATUT ne peut jamais annoncer un dossier prêt : les exigences ne sont pas encore connues.
+    // Plafonné à IN_PROGRESS, jamais READY ni READY_WITH_WARNINGS, quel que soit le score.
+    status = score >= 30 ? ReadinessStatus.InProgress : ReadinessStatus.NotReady;
   } else if (score >= 90 && warnings === 0) {
     status = ReadinessStatus.Ready;
   } else if (score >= 70) {

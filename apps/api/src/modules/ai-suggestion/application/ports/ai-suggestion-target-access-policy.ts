@@ -5,8 +5,8 @@
  * "prévoir les bases nécessaires aux futures vérifications... sans créer ces fonctionnalités dans
  * ce sprint" — ce port EST la base prévue. V2 Sprint 4 : implémentation réelle fournie par
  * `ai-suggestion-bridge` (rebind du même token, jamais de modification de ce module générique) ;
- * la valeur par défaut (`NoopAiSuggestionTargetAccessPolicy`, instanciée en repli si aucun bridge
- * n'a rebindé le token — voir chaque use case) n'ajoute aucune restriction au-delà d'organisation
+ * la valeur par défaut (`DEFAULT_TARGET_ACCESS_POLICY`, Domain, appliquée en repli par chaque use
+ * case si aucun bridge n'a rebindé le token) n'ajoute aucune restriction au-delà d'organisation
  * + rôle.
  */
 export interface AiSuggestionTargetAccessPolicy {

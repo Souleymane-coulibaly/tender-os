@@ -76,6 +76,16 @@ export function enrichTenders(input: {
       milestones: milestonesByTender.get(tenderId) ?? [],
       risks,
       alerts: alertsByTender.get(tenderId) ?? [],
+      // Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-1 (F-02) — les vues agrégées (board, liste,
+      // statistiques) ne disposent d'aucune lecture GROUPÉE de la fraîcheur de consolidation ; en
+      // interroger une par tender introduirait un N+1 sur des vues de liste. L'état est donc
+      // `UNKNOWN` ici, ce qui plafonne volontairement le statut à IN_PROGRESS : conservateur, jamais
+      // optimiste. Le SCORE et toutes les autres métriques restent inchangés. Une lecture groupée
+      // (`TenderAnalysisStateProvider.getStates`) est enregistrée en suite à donner — c'est elle qui
+      // permettra à ces vues d'annoncer de nouveau READY sans requête par ligne.
+      analysis: "UNKNOWN",
+      // F-06 — meme raison que `analysis` : incertitude maximale sur ces vues agregees.
+      pendingMandatoryRequirements: 1,
       now: input.now,
     });
 

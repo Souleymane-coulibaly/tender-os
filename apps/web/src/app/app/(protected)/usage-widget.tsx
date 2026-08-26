@@ -47,8 +47,12 @@ const USERS_ICON = (
 
 /**
  * V2 Sprint 25 (Dashboard Premium) — mission §25.61/§25.62 "Mon utilisation". Restylage premium de
- * `BillingSummaryWidget` (retiré de cette page, jamais un second calcul de quota/usage — mêmes
- * données `entitlements`/`usage`/`aoCreditBalance`, Sprint 22).
+ * l'ancien `BillingSummaryWidget`, dont ce composant est le SEUL successeur : jamais un second
+ * calcul de quota/usage — mêmes données `entitlements`/`usage`/`aoCreditBalance` (Sprint 22).
+ *
+ * Checkpoint TENDEROS-2.1-LEGACY-DECOMMISSIONING — `billing-summary-widget.tsx` avait été retiré
+ * de la page dès le Sprint 25 mais laissé dans l'arborescence sans plus aucun importeur ; il est
+ * supprimé ici. Aucun changement de contrat commercial : les mêmes champs restent affichés.
  *
  * Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2) — enveloppe `&lt;Card&gt;` (doublon exact du
  * balisage local précédent).

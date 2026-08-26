@@ -19,12 +19,27 @@ export class PrismaTechnicalMemoSectionRevisionRepository implements TechnicalMe
   async create(input: { revision: TechnicalMemoSectionRevision; citations: readonly TechnicalMemoSectionCitation[] }): Promise<void> {
     const { revision, citations } = input;
     const row = toTechnicalMemoSectionRevisionRow(revision);
-    await this.prisma.currentClient().technicalMemoSectionRevision.create({
-      data:
-        citations.length > 0
-          ? { ...row, citations: { createMany: { data: citations.map(toTechnicalMemoSectionCitationRow) } } }
-          : row,
-    });
+
+    // Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-2 (F-09) — les citations sont ecrites par une
+    // SECONDE instruction, jamais par une ecriture imbriquee.
+    //
+    // `organizationId` et `technicalMemoSectionId` participent a la relation COMPOSITE
+    // `section` (@relation(fields: [technicalMemoSectionId, organizationId], ...)). Melanger ces
+    // scalaires avec un `citations: { createMany }` imbrique forcait Prisma sur l'entree CHECKED,
+    // qui refuse les scalaires de cle etrangere : `PrismaClientValidationError: Unknown argument
+    // 'organizationId'`. Le defaut ne se manifestait QUE lorsqu'il y avait reellement des citations
+    // — c'est-a-dire sur le chemin de generation REUSSIE, rendu inatteignable par F-03 : aucune
+    // revision generee par l'IA ne pouvait donc etre persistee.
+    //
+    // Les deux instructions restent dans LA MEME transaction (`finalize` s'execute sous
+    // `atomicTransactionRunner.run`, et `currentClient()` rend le client transactionnel courant) :
+    // l'atomicite revision+citations est strictement preservee.
+    await this.prisma.currentClient().technicalMemoSectionRevision.create({ data: row });
+    if (citations.length > 0) {
+      await this.prisma.currentClient().technicalMemoSectionCitation.createMany({
+        data: citations.map(toTechnicalMemoSectionCitationRow),
+      });
+    }
   }
 
   async findById(input: { organizationId: string; revisionId: string }): Promise<TechnicalMemoSectionRevision | null> {

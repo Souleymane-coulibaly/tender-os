@@ -96,3 +96,24 @@ export class AiModelRouterUnavailableError extends DomainError {
     super("The AI model router is not available. Contact support.");
   }
 }
+
+/**
+ * Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-2 (F-04) — la génération d'une section a réellement
+ * échoué (provider indisponible, réponse invalide, timeout).
+ *
+ * Auparavant, `finalize()` levait une `Error` GÉNÉRIQUE : le filtre n'ayant aucun code à mapper,
+ * l'appelant recevait un `500 INTERNAL_SERVER_ERROR` opaque avec trace serveur. Pire, ce `throw`
+ * se produisait DANS la transaction atomique : il annulait le `markFailed()` et le journal d'audit
+ * qui venaient d'être écrits, laissant la section indéfiniment en `GENERATING` et l'échec sans
+ * aucune trace.
+ *
+ * Même famille que `TechnicalMemoCitationValidationFailedError` : l'opération n'a pas abouti pour
+ * une cause identifiée, l'état FAILED est persisté, et l'utilisateur reçoit un code actionnable
+ * plutôt qu'une erreur interne.
+ */
+export class TechnicalMemoSectionGenerationFailedError extends DomainError {
+  readonly code = "TECHNICAL_MEMO_SECTION_GENERATION_FAILED";
+  constructor(input: { reason: string }) {
+    super(`Technical memo section generation failed: ${input.reason}`);
+  }
+}

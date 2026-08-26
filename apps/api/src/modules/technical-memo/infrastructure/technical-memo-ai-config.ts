@@ -1,4 +1,3 @@
-import { DEFAULT_AI_MODEL } from "../../../shared-kernel/ai-model-defaults";
 
 /** Config locale au module `technical-memo` (même motif que `ChatConfig`/`GenerationConfig`) —
  *  `AI_PROVIDER_REGISTRY` reste partagé (résout la clé API via `AnalysisConfig.openAiApiKey`) : ce
@@ -6,7 +5,12 @@ import { DEFAULT_AI_MODEL } from "../../../shared-kernel/ai-model-defaults";
  *  module. */
 export type TechnicalMemoAiConfig = Readonly<{
   aiProvider?: string | undefined;
-  aiModel: string;
+  /**
+   * Checkpoint TENDEROS-2.1-LEGACY-DECOMMISSIONING — le champ `aiModel` (modele statique par
+   * variable d'environnement) a ete retiré : depuis le checkpoint P2.3-E4, `AiModelRouter` est
+   * la SEULE autorite de selection du modele et un Router indisponible echoue explicitement,
+   * jamais par un repli sur cette configuration. Elle ne porte plus que le transport.
+   */
   aiTimeoutMs: number;
   aiMaxRetries: number;
   aiRetryDelayMs: number;
@@ -42,7 +46,6 @@ function readNonNegativeIntegerOrDefault(env: NodeJS.ProcessEnv, name: string, f
 export function loadTechnicalMemoAiConfig(env: NodeJS.ProcessEnv = process.env): TechnicalMemoAiConfig {
   return {
     aiProvider: env.TECHNICAL_MEMO_AI_PROVIDER || env.AI_PROVIDER || undefined,
-    aiModel: env.TECHNICAL_MEMO_AI_MODEL || DEFAULT_AI_MODEL,
     aiTimeoutMs: readPositiveIntegerOrDefault(env, "TECHNICAL_MEMO_AI_TIMEOUT_MS", DEFAULT_AI_TIMEOUT_MS),
     aiMaxRetries: readNonNegativeIntegerOrDefault(env, "TECHNICAL_MEMO_AI_MAX_RETRIES", DEFAULT_AI_MAX_RETRIES),
     aiRetryDelayMs: readNonNegativeIntegerOrDefault(env, "TECHNICAL_MEMO_AI_RETRY_DELAY_MS", DEFAULT_AI_RETRY_DELAY_MS),

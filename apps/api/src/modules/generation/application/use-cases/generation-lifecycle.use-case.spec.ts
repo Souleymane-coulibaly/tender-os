@@ -34,7 +34,7 @@ const ORG = "org-1";
 const CLIENT = "client-1";
 const TENDER = "tender-1";
 const NOW = new Date("2026-08-01T10:00:00.000Z");
-const CONFIG: GenerationConfig = { aiModel: "gpt-4o-mini", aiTimeoutMs: 60_000, aiMaxRetries: 2, aiRetryDelayMs: 0, modelRates: {} };
+const CONFIG: GenerationConfig = { aiTimeoutMs: 60_000, aiMaxRetries: 2, aiRetryDelayMs: 0, modelRates: {} };
 
 class RecordingDispatcher {
   readonly dispatched: { generationId: string }[] = [];

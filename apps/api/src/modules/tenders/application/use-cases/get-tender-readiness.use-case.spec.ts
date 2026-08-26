@@ -47,7 +47,7 @@ describe("GetTenderReadinessUseCase", () => {
   });
 
   it("composes the sub-resources into a deterministic readiness score", async () => {
-    const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", actorRole: "READ_ONLY" });
+    const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", actorRole: "READ_ONLY", actorId: "actor-1" });
 
     expect(result.score).toBeGreaterThanOrEqual(0);
     expect(result.criticalAlerts).toBe(0);
@@ -66,14 +66,14 @@ describe("GetTenderReadinessUseCase", () => {
       }),
     );
 
-    const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", actorRole: "READ_ONLY" });
+    const result = await useCase.execute({ organizationId: "org-1", tenderId: "tender-1", actorRole: "READ_ONLY", actorId: "actor-1" });
 
     expect(result.status).toBe("NOT_READY");
   });
 
   it("throws TenderNotFoundError for a tender in another organization", async () => {
     await expect(
-      useCase.execute({ organizationId: "org-2", tenderId: "tender-1", actorRole: "READ_ONLY" }),
+      useCase.execute({ organizationId: "org-2", tenderId: "tender-1", actorRole: "READ_ONLY", actorId: "actor-1" }),
     ).rejects.toThrow(TenderNotFoundError);
   });
 });

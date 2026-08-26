@@ -41,6 +41,8 @@ describe("calculateTenderReadiness", () => {
       milestones: [],
       risks: [],
       alerts: [],
+      analysis: "CURRENT",
+      pendingMandatoryRequirements: 0,
       now: NOW,
     });
 
@@ -57,6 +59,8 @@ describe("calculateTenderReadiness", () => {
       milestones: [],
       risks: [],
       alerts: [],
+      analysis: "CURRENT",
+      pendingMandatoryRequirements: 0,
       now: NOW,
     });
 
@@ -82,6 +86,8 @@ describe("calculateTenderReadiness", () => {
       milestones: [],
       risks: [],
       alerts: [alert],
+      analysis: "CURRENT",
+      pendingMandatoryRequirements: 0,
       now: NOW,
     });
 
@@ -107,6 +113,8 @@ describe("calculateTenderReadiness", () => {
       milestones: [],
       risks: [risk],
       alerts: [],
+      analysis: "CURRENT",
+      pendingMandatoryRequirements: 0,
       now: NOW,
     });
 
@@ -122,6 +130,8 @@ describe("calculateTenderReadiness", () => {
       milestones: [],
       risks: [],
       alerts: [],
+      analysis: "CURRENT",
+      pendingMandatoryRequirements: 0,
       now: NOW,
     });
 
@@ -146,6 +156,8 @@ describe("calculateTenderReadiness", () => {
       milestones: [overdueMilestone],
       risks: [],
       alerts: [],
+      analysis: "CURRENT",
+      pendingMandatoryRequirements: 0,
       now: NOW,
     });
 
@@ -171,6 +183,8 @@ describe("calculateTenderReadiness", () => {
       milestones: [],
       risks: [],
       alerts: [],
+      analysis: "CURRENT",
+      pendingMandatoryRequirements: 0,
       now: NOW,
     });
 

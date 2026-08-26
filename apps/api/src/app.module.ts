@@ -35,6 +35,7 @@ import { MarketingModule } from "./modules/marketing";
 import { MarketWatchModule } from "./modules/market-watch";
 import { MembershipsModule } from "./modules/memberships/memberships.module";
 import { MembershipSeatLimitBridgeModule } from "./modules/membership-seat-limit-bridge/membership-seat-limit-bridge.module";
+import { TenderAnalysisStateBridgeModule } from "./modules/tender-analysis-state-bridge/tender-analysis-state-bridge.module";
 import { NotificationEventConsumersModule, NotificationsModule, NOTIFICATION_OUTBOX_HANDLERS } from "./modules/notifications";
 import { OpportunityModule } from "./modules/opportunity";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
@@ -127,6 +128,9 @@ import { SharedKernelModule } from "./shared-kernel/shared-kernel.module";
     ConnectorsModule,
     BillingModule,
     MembershipSeatLimitBridgeModule,
+    // Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-1 (F-02) — sans ce pont, le score de preparation
+    // ne peut jamais annoncer READY (fail-closed volontaire, voir le module).
+    TenderAnalysisStateBridgeModule,
     SubscriptionUsageModule,
     MarketingModule,
   ],

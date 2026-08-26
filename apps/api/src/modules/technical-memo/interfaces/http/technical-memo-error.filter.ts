@@ -12,6 +12,10 @@ const STATUS_BY_CODE: Record<string, number> = {
   TECHNICAL_MEMO_SECTION_ALREADY_VALIDATED: HttpStatus.CONFLICT,
   TECHNICAL_MEMO_TEMPLATE_NOT_READY: HttpStatus.CONFLICT,
   TECHNICAL_MEMO_CITATION_VALIDATION_FAILED: HttpStatus.UNPROCESSABLE_ENTITY,
+  // Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-2 (F-04) — echec REEL de generation (provider
+  // indisponible/reponse invalide/timeout) : la section est persistee FAILED et l'appelant recoit un
+  // code actionnable, jamais un 500 opaque. 502 : la cause est en amont, pas dans la requete.
+  TECHNICAL_MEMO_SECTION_GENERATION_FAILED: HttpStatus.BAD_GATEWAY,
   // Checkpoint 2.1-P2.1-FIX-D — même famille que TECHNICAL_MEMO_TEMPLATE_NOT_READY : état actuel
   // (analyse/mémoire pas encore actualisé) empêche l'action, jamais une erreur de validation.
   TECHNICAL_MEMO_ANALYSIS_NOT_CURRENT: HttpStatus.CONFLICT,

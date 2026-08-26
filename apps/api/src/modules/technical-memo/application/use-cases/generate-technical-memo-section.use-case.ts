@@ -6,7 +6,9 @@ import { AI_PROVIDER_REGISTRY, AiTimeoutError, GetEffectiveTenderAnalysisSummary
 import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { TechnicalMemoCoverageStatus, TechnicalMemoSectionRevisionSource } from "../../domain/enums";
-import { AiModelRouterUnavailableError, TechnicalMemoAnalysisNotCurrentError, TechnicalMemoSectionNotFoundError } from "../../domain/errors";
+import { AiModelRouterUnavailableError, TechnicalMemoAnalysisNotCurrentError, TechnicalMemoSectionNotFoundError,
+  TechnicalMemoSectionGenerationFailedError,
+} from "../../domain/errors";
 import { TechnicalMemoSectionCitation } from "../../domain/technical-memo-section-citation.value-object";
 import { TechnicalMemoSectionRevision } from "../../domain/technical-memo-section-revision.entity";
 import { buildTechnicalMemoSystemPrompt, TECHNICAL_MEMO_SYSTEM_PROMPT_VERSION } from "../../infrastructure/technical-memo-system-prompt";
@@ -361,6 +363,30 @@ export class GenerateTechnicalMemoSectionUseCase {
     }
   }
 
+  /** Persiste l'echec dans SA PROPRE transaction courte, puis rend la main : l'erreur est levee par
+   *  l'appelant, une fois ce commit acquis (F-04). */
+  private async persistFailure(command: GenerateTechnicalMemoSectionCommand, outcome: GenerationOutcome & { kind: "failed" }): Promise<void> {
+    await this.atomicTransactionRunner.run(async () => {
+      await this.revisionRepository.lockSection({ organizationId: command.organizationId, technicalMemoSectionId: command.technicalMemoSectionId });
+      const section = await this.sectionRepository.findById({ organizationId: command.organizationId, technicalMemoSectionId: command.technicalMemoSectionId });
+      if (!section) {
+        throw new TechnicalMemoSectionNotFoundError();
+      }
+      section.markFailed(this.clock.now());
+      await this.sectionRepository.save(section);
+      await this.auditLogWriter.record({
+        organizationId: command.organizationId,
+        actorType: "USER",
+        actorId: command.actorId,
+        action: "technical_memo.section_generation_failed",
+        resourceType: "technical_memo_section",
+        resourceId: section.id,
+        requestId: command.requestId,
+        metadata: { errorMessage: outcome.errorMessage },
+      });
+    });
+  }
+
   private toFailureOutcome(error: unknown): GenerationOutcome {
     const reason = error instanceof Error ? error.message : String(error);
     this.logger.error(`Technical memo section generation failed: ${reason}`);
@@ -378,6 +404,18 @@ export class GenerateTechnicalMemoSectionUseCase {
    *  sur `nextRevisionNumber` sans aucune sérialisation réelle (mission §43/§47 "réutiliser les
    *  mécanismes de lock existants, éviter un read-max-write non protégé"). */
   private async finalize(command: GenerateTechnicalMemoSectionCommand, outcome: GenerationOutcome): Promise<TechnicalMemoSectionRevision> {
+    // Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-2 (F-04) — un ECHEC se COMMITTE, il ne se propage
+    // pas depuis l'interieur de la transaction.
+    //
+    // Le code d'origine ecrivait `markFailed()` + le journal d'audit puis levait une `Error` DANS
+    // `atomicTransactionRunner.run(...)` : le rollback annulait les deux, laissant la section
+    // indefiniment `GENERATING` et l'echec sans aucune trace, tandis que l'appelant recevait un 500
+    // opaque. La transaction d'echec est donc desormais close AVANT que l'erreur ne soit levee.
+    if (outcome.kind === "failed") {
+      await this.persistFailure(command, outcome);
+      throw new TechnicalMemoSectionGenerationFailedError({ reason: outcome.errorMessage });
+    }
+
     return this.atomicTransactionRunner.run(async () => {
       await this.revisionRepository.lockSection({ organizationId: command.organizationId, technicalMemoSectionId: command.technicalMemoSectionId });
 
@@ -386,22 +424,6 @@ export class GenerateTechnicalMemoSectionUseCase {
         throw new TechnicalMemoSectionNotFoundError();
       }
       const occurredAt = this.clock.now();
-
-      if (outcome.kind === "failed") {
-        section.markFailed(occurredAt);
-        await this.sectionRepository.save(section);
-        await this.auditLogWriter.record({
-          organizationId: command.organizationId,
-          actorType: "USER",
-          actorId: command.actorId,
-          action: "technical_memo.section_generation_failed",
-          resourceType: "technical_memo_section",
-          resourceId: section.id,
-          requestId: command.requestId,
-          metadata: { errorMessage: outcome.errorMessage },
-        });
-        throw new Error(outcome.errorMessage);
-      }
 
       const revisionNumber = await this.revisionRepository.nextRevisionNumber({ organizationId: command.organizationId, technicalMemoSectionId: command.technicalMemoSectionId });
       const revisionId = this.idGenerator.generate();

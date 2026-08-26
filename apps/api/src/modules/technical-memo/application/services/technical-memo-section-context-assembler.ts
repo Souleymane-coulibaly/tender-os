@@ -14,6 +14,7 @@ import { TechnicalMemoCitationSourceType, TechnicalMemoRequirementFindingType } 
 import type { TechnicalMemo } from "../../domain/technical-memo.aggregate";
 import type { TechnicalMemoSection } from "../../domain/technical-memo-section.entity";
 import { TECHNICAL_MEMO_SECTION_REQUIREMENT_REPOSITORY, type TechnicalMemoSectionRequirementRepository } from "../ports/technical-memo-section-requirement.repository";
+import { renderTechnicalMemoSourceLine } from "./technical-memo-citation-validator";
 import type { KnownTechnicalMemoReference, KnownTechnicalMemoReferences } from "./technical-memo-citation-validator";
 
 const FINDINGS_PAGE_LIMIT = 200;
@@ -153,7 +154,7 @@ export class TechnicalMemoSectionContextAssembler {
         label: requirement.label,
         content: requirement.label,
       });
-      lines.push(`- [${sourceRef}] (exigence${requirement.isMandatory ? " obligatoire" : ""}) ${requirement.label}`);
+      lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: requirement.label, content: requirement.label }, `exigence${requirement.isMandatory ? " obligatoire" : ""}`));
     }
     for (const criterion of criteria.items) {
       if (!linkedIds.has(`${TechnicalMemoRequirementFindingType.Criterion}:${criterion.id}`)) continue;
@@ -164,7 +165,7 @@ export class TechnicalMemoSectionContextAssembler {
         label: criterion.name,
         content: criterion.name,
       });
-      lines.push(`- [${sourceRef}] (critère de notation) ${criterion.name}`);
+      lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: criterion.name, content: criterion.name }, "critère de notation"));
     }
     for (const clause of clauses.items) {
       if (!linkedIds.has(`${TechnicalMemoRequirementFindingType.Clause}:${clause.id}`)) continue;
@@ -175,7 +176,7 @@ export class TechnicalMemoSectionContextAssembler {
         label: clause.summary,
         content: clause.summary,
       });
-      lines.push(`- [${sourceRef}] (clause) ${clause.summary}`);
+      lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: clause.summary, content: clause.summary }, "clause"));
     }
 
     return {
@@ -231,7 +232,7 @@ export class TechnicalMemoSectionContextAssembler {
         label: "Identité légale de l'entreprise",
         content: identityContent,
       });
-      lines.push(`- [${sourceRef}] Identité légale : ${identityContent}`);
+      lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: "Identité légale de l'entreprise", content: identityContent }));
     }
 
     // Checkpoint 2.1-A6.3 — quand les capacités proviennent d'un fallback legacy (NEW FLOW), chaque
@@ -243,22 +244,22 @@ export class TechnicalMemoSectionContextAssembler {
       if (legacyProfile.humanResources.length > 0) {
         const content = JSON.stringify(legacyProfile.humanResources);
         const sourceRef = register("CANDIDATE:humanResources", { sourceType: TechnicalMemoCitationSourceType.CandidateField, candidateFieldPath: "humanResources", label: `Moyens humains${capabilityQualifier}`, content });
-        lines.push(`- [${sourceRef}] Moyens humains${capabilityQualifier} : ${content}`);
+        lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: `Moyens humains${capabilityQualifier}`, content }));
       }
       if (legacyProfile.materialResources.length > 0) {
         const content = JSON.stringify(legacyProfile.materialResources);
         const sourceRef = register("CANDIDATE:materialResources", { sourceType: TechnicalMemoCitationSourceType.CandidateField, candidateFieldPath: "materialResources", label: `Moyens techniques${capabilityQualifier}`, content });
-        lines.push(`- [${sourceRef}] Moyens techniques${capabilityQualifier} : ${content}`);
+        lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: `Moyens techniques${capabilityQualifier}`, content }));
       }
       if (legacyProfile.certifications.length > 0) {
         const content = JSON.stringify(legacyProfile.certifications);
         const sourceRef = register("CANDIDATE:certifications", { sourceType: TechnicalMemoCitationSourceType.CandidateField, candidateFieldPath: "certifications", label: `Certifications${capabilityQualifier}`, content });
-        lines.push(`- [${sourceRef}] Certifications${capabilityQualifier} : ${content}`);
+        lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: `Certifications${capabilityQualifier}`, content }));
       }
       if (legacyProfile.insurances.length > 0) {
         const content = JSON.stringify(legacyProfile.insurances);
         const sourceRef = register("CANDIDATE:insurances", { sourceType: TechnicalMemoCitationSourceType.CandidateField, candidateFieldPath: "insurances", label: `Assurances${capabilityQualifier}`, content });
-        lines.push(`- [${sourceRef}] Assurances${capabilityQualifier} : ${content}`);
+        lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: `Assurances${capabilityQualifier}`, content }));
       }
 
       // Mission §26 — TenderOS peut proposer/sélectionner les références les plus pertinentes, mais
@@ -271,7 +272,7 @@ export class TechnicalMemoSectionContextAssembler {
           label: `Référence "${reference.projectName}"${capabilityQualifier}`,
           content,
         });
-        lines.push(`- [${sourceRef}] Référence "${reference.projectName}"${capabilityQualifier} (secteur : ${reference.sector ?? "non renseigné"}) : ${content}`);
+        lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: `Référence "${reference.projectName}"${capabilityQualifier}`, content }, `secteur : ${reference.sector ?? "non renseigné"}`));
       }
     }
 
@@ -346,7 +347,7 @@ export class TechnicalMemoSectionContextAssembler {
         label: item.title,
         content: excerpt,
       });
-      lines.push(`- [${sourceRef}] ${item.title} : ${excerpt}`);
+      lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: item.title, content: excerpt }));
     }
 
     return `## CONNAISSANCES VALIDÉES (Knowledge Base)\n${lines.length > 0 ? lines.join("\n") : "(aucune connaissance validée pertinente trouvée)"}`;

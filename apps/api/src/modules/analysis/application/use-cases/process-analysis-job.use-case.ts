@@ -5,6 +5,7 @@ import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import type { AnalysisJob } from "../../domain/analysis-job.aggregate";
+import { AnalysisScope } from "../../domain/analysis-scope";
 import { AnalysisTrigger } from "../../domain/analysis-trigger";
 import { AiTimeoutError } from "../../domain/errors";
 import { isRetryableAiError } from "../policies/ai-error-classification";
@@ -198,6 +199,12 @@ export class ProcessAnalysisJobUseCase {
       return { outcome: this.toFailureOutcome(error, provider.name, model), retryCount: 0 };
     }
 
+    // Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-1 (F-01, axe A) — le budget de temps dépend du
+    // TRAVAIL demandé, jamais d'un réglage global : la consolidation Tender émet une sortie
+    // structurée bien plus volumineuse que l'analyse d'un document (voir la justification mesurée
+    // portée par `AnalysisConfig.aiTimeoutMsForTenderConsolidation`). Le scope DOCUMENT conserve
+    // exactement son budget d'origine.
+    const timeoutMs = job.scope === AnalysisScope.Tender ? this.config.aiTimeoutMsForTenderConsolidation : this.config.aiTimeoutMs;
     const maxAttempts = 1 + this.config.aiMaxRetries;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -207,7 +214,7 @@ export class ProcessAnalysisJobUseCase {
           systemPrompt: prepared.systemPrompt,
           userPrompt: prepared.userPrompt,
           responseSchemaName: prepared.responseSchemaName,
-          timeoutMs: this.config.aiTimeoutMs,
+          timeoutMs,
         });
         // La validation stricte (Zod) se produit ici, hors transaction (mission §"Sorties
         // structurées") — une réponse invalide échoue immédiatement, jamais un retry ciblé
@@ -241,7 +248,7 @@ export class ProcessAnalysisJobUseCase {
     }
 
     // Inatteignable (maxAttempts >= 1 garantit une sortie dans la boucle) — TypeScript exhaustif.
-    return { outcome: this.toFailureOutcome(new AiTimeoutError({ timeoutMs: this.config.aiTimeoutMs })), retryCount: maxAttempts - 1 };
+    return { outcome: this.toFailureOutcome(new AiTimeoutError({ timeoutMs })), retryCount: maxAttempts - 1 };
   }
 
   private async callWithTimeout(provider: AIProvider, request: AIProviderRequest): Promise<AIProviderResult> {

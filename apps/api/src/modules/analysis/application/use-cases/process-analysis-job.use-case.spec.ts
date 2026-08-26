@@ -32,10 +32,8 @@ const ORG = randomUUID();
 const NOW = new Date("2026-07-29T14:00:00Z");
 
 const BASE_CONFIG: AnalysisConfig = {
-  aiModel: "fake-model",
-  aiModelForDocumentAnalysis: "fake-model",
-  aiModelForTenderConsolidation: "fake-model",
   aiTimeoutMs: 2000,
+  aiTimeoutMsForTenderConsolidation: 120_000,
   aiMaxRetries: 2,
   aiRetryDelayMs: 0,
 };

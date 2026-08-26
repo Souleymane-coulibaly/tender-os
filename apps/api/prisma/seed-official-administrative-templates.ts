@@ -60,7 +60,12 @@ const SOURCE_REFERENCE_BY_ARG_KEY: Record<FormTypeArgKey, string> = {
 function parseArgs(): Record<string, string> {
   const result: Record<string, string> = {};
   for (const arg of process.argv.slice(2)) {
-    const match = /^--([a-zA-Z]+)=(.+)$/.exec(arg);
+    // Checkpoint TENDEROS-2.1-POST-DECOM-TNR3 — le motif d'origine n'acceptait que des LETTRES
+    // (`[a-zA-Z]+`) : aucun des quatre arguments de fichier documentes par l'en-tete de ce script
+    // (`--dc1`, `--dc2`, `--dc4`, `--attri1`) ne pouvait donc etre reconnu, et le script echouait
+    // systematiquement sur "No template file provided" meme correctement invoque. Les chiffres
+    // sont desormais acceptes dans le NOM de l'argument.
+    const match = /^--([a-zA-Z][a-zA-Z0-9]*)=(.+)$/.exec(arg);
     if (match?.[1] && match[2]) result[match[1]] = match[2];
   }
   return result;

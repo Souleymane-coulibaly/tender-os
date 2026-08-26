@@ -34,8 +34,31 @@ export type DeclaredChatCitation = Readonly<{ sourceRef: string; excerpt?: strin
  * citation brute déclarée par le modèle) : c'est TOUJOURS elle qui sert à construire la
  * `MessageCitation` persistée.
  */
+/**
+ * Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-2 (F-08) — resolution DETERMINISTE du jeton de source.
+ *
+ * L'assembleur de contexte AFFICHE chaque source entre crochets (`- [CANDIDATE:legalIdentity] ...`)
+ * pour la lisibilite du prompt, mais ENREGISTRE la cle sans crochets. Le modele recopiait donc tres
+ * naturellement la forme qu'il voyait — `[CANDIDATE:legalIdentity]` — et la recherche exacte
+ * echouait : la generation etait rejetee alors que la source citee etait REELLE et bien fournie.
+ *
+ * La normalisation appliquee ici est l'inverse EXACT de la transformation d'affichage : une seule
+ * paire de crochets encadrants est retiree, puis la correspondance reste STRICTEMENT exacte. Ce
+ * n'est pas du rapprochement approximatif — aucune tolerance de casse, d'espace ou de similarite
+ * n'est introduite, et un jeton reellement inconnu reste rejete exactement comme avant.
+ */
+function resolveKnownReference<T>(sourceRef: string, known: ReadonlyMap<string, T>): T | undefined {
+  const direct = known.get(sourceRef);
+  if (direct !== undefined) return direct;
+  const trimmed = sourceRef.trim();
+  if (trimmed.length >= 2 && trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    return known.get(trimmed.slice(1, -1));
+  }
+  return undefined;
+}
+
 export function validateChatCitation(citation: DeclaredChatCitation, known: KnownChatReferences): KnownChatReference {
-  const match = known.get(citation.sourceRef);
+  const match = resolveKnownReference(citation.sourceRef, known);
   if (!match) {
     throw new ChatCitationValidationFailedError({ reason: `cited source "${citation.sourceRef}" was not part of the context actually supplied` });
   }

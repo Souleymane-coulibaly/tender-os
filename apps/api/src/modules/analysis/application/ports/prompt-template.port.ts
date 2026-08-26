@@ -42,7 +42,11 @@ export type PromptVersion = number;
 export const PROMPT_VERSIONS: Record<PromptKey, PromptVersion> = {
   [PromptKey.TechnicalValidationPlaceholder]: 1,
   [PromptKey.AnalyzeDocument]: 1,
-  [PromptKey.ConsolidateTenderAnalysis]: 1,
+  /** Checkpoint TENDEROS-2.1-POST-DECOM-TNR-FIX-1 (F-01, axe B) — 1 → 2 : les règles de provenance
+   *  de la consolidation ont changé de contrat (recopie de la provenance documentaire déjà validée
+   *  au lieu d'une citation rédigée par le modèle, impossible à satisfaire puisque le texte source
+   *  ne lui est pas fourni). Le scope DOCUMENT n'est pas touché et garde sa version 1. */
+  [PromptKey.ConsolidateTenderAnalysis]: 2,
 };
 
 export type PromptVariables = Readonly<Record<string, string>>;

@@ -20,10 +20,8 @@ const NOW = new Date("2026-07-29T14:00:00Z");
 const ACTOR_ID = "u";
 
 const CONFIG: AnalysisConfig = {
-  aiModel: "m",
-  aiModelForDocumentAnalysis: "m",
-  aiModelForTenderConsolidation: "m",
   aiTimeoutMs: 1000,
+  aiTimeoutMsForTenderConsolidation: 120_000,
   aiMaxRetries: 1,
   aiRetryDelayMs: 0,
 };

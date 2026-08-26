@@ -454,6 +454,7 @@ export class TendersController {
   @Get(":tenderId/readiness")
   @HttpCode(HttpStatus.OK)
   async readiness(
+    @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
   ) {
@@ -461,6 +462,7 @@ export class TendersController {
       organizationId: membership.organizationId,
       tenderId,
       actorRole: membership.role,
+      actorId: actor.userId,
     });
     return presentReadiness(result);
   }
