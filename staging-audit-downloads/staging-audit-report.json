@@ -1,0 +1,15 @@
+{
+  "finishedAt": "2026-08-22T01:13:36.589Z",
+  "baseUrl": "https://tender-os-web.vercel.app",
+  "finalUrl": "https://tender-os-web.vercel.app/app/tenders/69da1d49-e75b-4a27-b77b-11e41f7e836f/deliverables",
+  "serverErrors": [],
+  "clientErrors": [
+    "Error: Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "Error: Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+  ],
+  "anomalies": [
+    "No document download captured for deliverable: Mémoire technique"
+  ],
+  "downloadedFiles": [],
+  "pagesOpen": 1
+}

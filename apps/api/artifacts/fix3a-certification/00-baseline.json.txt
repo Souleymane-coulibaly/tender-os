@@ -1,0 +1,5 @@
+=== GIT BASELINE FIX-3A ===
+branch: v2.1-fix-opportunity-gonogo-ux
+HEAD: a895603bf3099e8e64f9de8f30ecc90162f96d20
+modified: 62 untracked: 24
+ 62 files changed, 1387 insertions(+), 237 deletions(-)

@@ -1,0 +1,159 @@
+{
+  "count": 30,
+  "byKind": {
+    "INTERNAL": 20,
+    "EXTERNAL_WEBHOOK": 10
+  },
+  "rows": [
+    {
+      "eventType": "AoCreditBalanceLow",
+      "module": "billing",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "ApprovalApproved",
+      "module": "workspace",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "ApprovalChangesRequested",
+      "module": "workspace",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "ApprovalRejected",
+      "module": "workspace",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "ApprovalRequested",
+      "module": "workspace",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "ChatMessageSent",
+      "module": "chat",
+      "handler": "src/modules/billing/infrastructure/outbox-handlers/quota-threshold-event.outbox-handlers.ts"
+    },
+    {
+      "eventType": "DocumentVersionAdded",
+      "module": "documents",
+      "handler": "src/modules/billing/infrastructure/outbox-handlers/quota-threshold-event.outbox-handlers.ts"
+    },
+    {
+      "eventType": "GoNoGoDecisionRecorded",
+      "module": "opportunity",
+      "handler": "src/modules/integrations/infrastructure/outbox-handlers/go-no-go-decision-recorded.outbox-handler.ts"
+    },
+    {
+      "eventType": "MembershipCreated",
+      "module": "memberships",
+      "handler": "src/modules/billing/infrastructure/outbox-handlers/quota-threshold-event.outbox-handlers.ts"
+    },
+    {
+      "eventType": "PassConsumedForTender",
+      "module": "billing",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "PassPurchaseConfirmed",
+      "module": "billing",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "QuotaThresholdReached",
+      "module": "billing",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "SubscriptionCanceled",
+      "module": "billing",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "SubscriptionPaymentFailed",
+      "module": "billing",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "SubscriptionPlanChanged",
+      "module": "billing",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "SubscriptionPlanChangedQuotaRecheck",
+      "module": "billing",
+      "handler": "src/modules/billing/infrastructure/outbox-handlers/quota-threshold-event.outbox-handlers.ts"
+    },
+    {
+      "eventType": "TaskAssigned",
+      "module": "workspace",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "TaskCompleted",
+      "module": "workspace",
+      "handler": "src/modules/integrations/infrastructure/outbox-handlers/task-completed.outbox-handler.ts"
+    },
+    {
+      "eventType": "TaskCreated",
+      "module": "workspace",
+      "handler": "src/modules/integrations/infrastructure/outbox-handlers/task-created.outbox-handler.ts"
+    },
+    {
+      "eventType": "TenderCreated",
+      "module": "tenders",
+      "handler": "src/modules/integrations/infrastructure/outbox-handlers/tender-created.outbox-handler.ts"
+    },
+    {
+      "eventType": "TrialConverted",
+      "module": "billing",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "TrialEndingSoon",
+      "module": "billing",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "TrialStarted",
+      "module": "billing",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "UserMentioned",
+      "module": "workspace",
+      "handler": "src/modules/notifications/infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers.ts"
+    },
+    {
+      "eventType": "external_tender.created",
+      "module": "market-watch",
+      "handler": "src/modules/integrations/infrastructure/outbox-handlers/external-tender-created.outbox-handler.ts"
+    },
+    {
+      "eventType": "external_tender.updated",
+      "module": "market-watch",
+      "handler": "src/modules/integrations/infrastructure/outbox-handlers/external-tender-updated.outbox-handler.ts"
+    },
+    {
+      "eventType": "notification.created",
+      "module": "market-watch",
+      "handler": "src/modules/integrations/infrastructure/outbox-handlers/notification-created.outbox-handler.ts"
+    },
+    {
+      "eventType": "response_package.generated",
+      "module": "response-package",
+      "handler": "src/modules/integrations/infrastructure/outbox-handlers/response-package-generated.outbox-handler.ts"
+    },
+    {
+      "eventType": "response_package.validated",
+      "module": "response-package",
+      "handler": "src/modules/integrations/infrastructure/outbox-handlers/response-package-validated.outbox-handler.ts"
+    },
+    {
+      "eventType": "saved_search.match_found",
+      "module": "market-watch",
+      "handler": "src/modules/integrations/infrastructure/outbox-handlers/saved-search-match-found.outbox-handler.ts"
+    }
+  ]
+}

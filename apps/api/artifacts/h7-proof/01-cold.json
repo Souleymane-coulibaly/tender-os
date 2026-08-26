@@ -1,0 +1,24 @@
+{
+  "batchSize": 100,
+  "preExistingClaimable": 0,
+  "scenario": {
+    "label": "COLD",
+    "foreignCount": 0,
+    "preExistingClaimable": 0,
+    "ownEventId": "871e45f4-10de-42f5-8953-010c2214e4b0",
+    "foreignEventIdsSample": [],
+    "firstBatch": {
+      "size": 1,
+      "foreign": 0,
+      "own": 1,
+      "ownPresent": true,
+      "sampleIds": [
+        "871e45f4-10de-42f5-8953-010c2214e4b0"
+      ]
+    },
+    "ticksUntilOwnProcessed": 1,
+    "msUntilOwnProcessed": 62,
+    "foreignProcessedBeforeOwn": 0,
+    "ownFinalStatus": "PUBLISHED"
+  }
+}

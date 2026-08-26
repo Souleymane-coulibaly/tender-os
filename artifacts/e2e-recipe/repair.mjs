@@ -1,0 +1,21 @@
+import { readFileSync, writeFileSync } from "node:fs";
+const API = "http://localhost:4000";
+const out = JSON.parse(readFileSync("artifacts/e2e-recipe/dataset.json", "utf8"));
+const g = async (path, token, org) => {
+  const r = await fetch(`${API}/api/v1${path}`, { headers: { Authorization: `Bearer ${token}`, "X-Organization-Id": org } });
+  return { status: r.status, body: await r.json() };
+};
+const ca = await g("/clients", out.users.OWNER_A.token, out.orgs.A.id);
+const cb = await g("/clients", out.users.OWNER_B.token, out.orgs.B.id);
+const ka = await g("/candidate-companies", out.users.OWNER_A.token, out.orgs.A.id);
+const kb = await g("/candidate-companies", out.users.OWNER_B.token, out.orgs.B.id);
+const pick = (res, needle) => (res.body.items ?? res.body ?? []).find((x) => (x.name ?? "").includes(needle));
+out.clients.A1 = { id: pick(ca, "Client A1")?.id };
+out.clients.A2 = { id: pick(ca, "Client A2")?.id };
+out.clients.B1 = { id: pick(cb, "Client B1")?.id };
+out.candidates.A = { id: pick(ka, "Candidate A")?.id };
+out.candidates.B = { id: pick(kb, "Candidate B")?.id };
+console.log("clients A:", ca.status, "| A1:", out.clients.A1.id, "| A2:", out.clients.A2.id);
+console.log("client  B:", cb.status, "| B1:", out.clients.B1.id);
+console.log("candidats:", ka.status, kb.status, "| A:", out.candidates.A.id, "| B:", out.candidates.B.id);
+writeFileSync("artifacts/e2e-recipe/dataset.json", JSON.stringify(out, null, 2));

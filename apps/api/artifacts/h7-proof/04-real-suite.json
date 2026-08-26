@@ -1,0 +1,19 @@
+{
+  "suite": "src/modules/workspace/interfaces/http/workspace-http.integration.spec.ts",
+  "cold": {
+    "exitCode": 0,
+    "seconds": 88,
+    "files": "1 passed",
+    "tests": "18 passed",
+    "claimableBefore": 0
+  },
+  "backlog500": {
+    "exitCode": 1,
+    "seconds": 93,
+    "files": "1 failed",
+    "tests": "1 failed | 17 passed",
+    "claimableBefore": 500,
+    "failingTest": "BLOQUANT — mission §26/§31/§50: full flow on RESPONSE_PACKAGE_VERSION once VALIDATED — reviewer authority reuses ValidateResponsePackage, both request and decision create real Notification rows, activity reflects it",
+    "failureReason": "Test timed out in 5000ms"
+  }
+}

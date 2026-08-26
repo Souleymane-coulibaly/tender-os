@@ -1,0 +1,32 @@
+{
+  "batchSize": 100,
+  "preExistingClaimable": 0,
+  "scenario": {
+    "label": "BACKLOG_500",
+    "foreignCount": 500,
+    "preExistingClaimable": 0,
+    "ownEventId": "82ff7983-bd50-4731-b0a7-e18e0ccd3f56",
+    "foreignEventIdsSample": [
+      "d118ab4b-2803-474c-bff1-ce917c99d258",
+      "671573e9-9dc3-45a5-abfe-b73f7518b789",
+      "1117b5db-0e11-4993-95c0-63699c3a65de"
+    ],
+    "firstBatch": {
+      "size": 100,
+      "foreign": 100,
+      "own": 0,
+      "ownPresent": false,
+      "sampleIds": [
+        "d118ab4b-2803-474c-bff1-ce917c99d258",
+        "671573e9-9dc3-45a5-abfe-b73f7518b789",
+        "1117b5db-0e11-4993-95c0-63699c3a65de",
+        "521dd5d1-0ed6-4249-b294-aa21c45fc0af",
+        "34bb76db-747a-4967-a660-673b0108d383"
+      ]
+    },
+    "ticksUntilOwnProcessed": 6,
+    "msUntilOwnProcessed": 10429,
+    "foreignProcessedBeforeOwn": 500,
+    "ownFinalStatus": "PUBLISHED"
+  }
+}

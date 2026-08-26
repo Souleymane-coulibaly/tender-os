@@ -1,0 +1,14 @@
+{
+  "downloads": [],
+  "notes": [
+    "DC1: not visible on page",
+    "DC2: not visible on page",
+    "DC4: not visible on page",
+    "Technical memo creation attempted.",
+    "Technical memo export button not visible."
+  ],
+  "anomalies": [],
+  "tenderUrl": "https://tender-os-web.vercel.app/app/tenders/68524177-cc62-4788-980d-b4b8af44e5b3",
+  "administrativeUrl": "https://tender-os-web.vercel.app/app/tenders/68524177-cc62-4788-980d-b4b8af44e5b3/administrative-dossier",
+  "technicalMemoUrl": "https://tender-os-web.vercel.app/app/tenders/68524177-cc62-4788-980d-b4b8af44e5b3/technical-memo"
+}

@@ -1,0 +1,731 @@
+{
+  "totals": {
+    "produced": 78,
+    "withInternalHandler": 30,
+    "withoutInternalHandler": 48,
+    "webhookBridged": 9,
+    "governedWebhookTypes": 11
+  },
+  "excluded": {
+    "UNKNOWN": "SignatureProviderEvent.eventType — autre agrégat, jamais écrit dans outbox_events",
+    "webhook.test": "crée une WebhookDelivery directement (SendTestWebhookEventUseCase), ne passe pas par l'Outbox"
+  },
+  "rows": [
+    {
+      "eventType": "AdministrativeFormGenerated",
+      "module": "administrative-dossier",
+      "producers": [
+        "src/modules/administrative-dossier/application/use-cases/dc2-form-fill.use-cases.ts:66",
+        "src/modules/administrative-dossier/application/use-cases/official-form-fill.use-cases.ts:81",
+        "src/modules/administrative-dossier/application/use-cases/official-form-fill.use-cases.ts:138"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "AdministrativeFormGenerationFailed",
+      "module": "administrative-dossier",
+      "producers": [
+        "src/modules/administrative-dossier/application/use-cases/dc2-form-fill.use-cases.ts:67",
+        "src/modules/administrative-dossier/application/use-cases/official-form-fill.use-cases.ts:82",
+        "src/modules/administrative-dossier/application/use-cases/official-form-fill.use-cases.ts:139"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "AiResponseCompleted",
+      "module": "chat",
+      "producers": [
+        "src/modules/chat/application/use-cases/send-message.use-case.ts:207"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "AiResponseFailed",
+      "module": "chat",
+      "producers": [
+        "src/modules/chat/application/use-cases/send-message.use-case.ts:229"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "AiSuggestionAccepted",
+      "module": "ai-suggestion",
+      "producers": [
+        "src/modules/ai-suggestion/application/use-cases/accept-ai-suggestion.use-case.ts:103"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "AiSuggestionCreated",
+      "module": "ai-suggestion",
+      "producers": [
+        "src/modules/ai-suggestion/application/use-cases/create-ai-suggestion.use-case.ts:111"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "AiSuggestionModified",
+      "module": "ai-suggestion",
+      "producers": [
+        "src/modules/ai-suggestion/application/use-cases/modify-ai-suggestion.use-case.ts:126"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "AiSuggestionRejected",
+      "module": "ai-suggestion",
+      "producers": [
+        "src/modules/ai-suggestion/application/use-cases/reject-ai-suggestion.use-case.ts:96"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "AoCreditBalanceLow",
+      "module": "billing",
+      "producers": [
+        "src/modules/billing/application/use-cases/consume-ao-credit.use-case.ts:130"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "ApprovalApproved",
+      "module": "workspace",
+      "producers": [
+        "src/modules/workspace/application/use-cases/review-approval.use-case.ts:131"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "ApprovalChangesRequested",
+      "module": "workspace",
+      "producers": [
+        "src/modules/workspace/application/use-cases/review-approval.use-case.ts:218"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "ApprovalRejected",
+      "module": "workspace",
+      "producers": [
+        "src/modules/workspace/application/use-cases/review-approval.use-case.ts:307"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "ApprovalRequested",
+      "module": "workspace",
+      "producers": [
+        "src/modules/workspace/application/use-cases/request-approval.use-case.ts:151"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "CandidateCompanyProfileUpdated",
+      "module": "company-profile",
+      "producers": [
+        "src/modules/company-profile/application/use-cases/company-legal-identity.use-cases.ts:135"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "CandidateDocumentExpiringSoon",
+      "module": "company-profile",
+      "producers": [
+        "src/modules/company-profile/application/use-cases/company-certification.use-cases.ts:54",
+        "src/modules/company-profile/application/use-cases/company-insurance.use-cases.ts:31"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "ChatMessageSent",
+      "module": "chat",
+      "producers": [
+        "src/modules/chat/application/use-cases/send-message.use-case.ts:211"
+      ],
+      "internalHandler": "src/modules/billing/infrastructure/outbox-handlers/quota-threshold-event.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "ChecklistDocumentAttached",
+      "module": "checklist-intelligence",
+      "producers": [
+        "src/modules/checklist-intelligence/application/use-cases/attach-checklist-item-document.use-case.ts:113"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "ChecklistItemCreated",
+      "module": "tenders",
+      "producers": [
+        "src/modules/tenders/application/use-cases/create-checklist-item.use-case.ts:223"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "ChecklistItemMarkedNotApplicable",
+      "module": "tenders",
+      "producers": [
+        "src/modules/tenders/application/use-cases/validate-checklist-item.use-case.ts:110"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "ChecklistItemValidated",
+      "module": "tenders",
+      "producers": [
+        "src/modules/tenders/application/use-cases/validate-checklist-item.use-case.ts:61"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "CommentAdded",
+      "module": "workspace",
+      "producers": [
+        "src/modules/workspace/application/use-cases/create-comment.use-case.ts:138"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "ConversationCreated",
+      "module": "chat",
+      "producers": [
+        "src/modules/chat/application/use-cases/create-conversation.use-case.ts:78"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "DceAnalysisCompleted",
+      "module": "analysis",
+      "producers": [
+        "src/modules/analysis/application/use-cases/process-analysis-job.use-case.ts:173"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "DceAnalysisFailed",
+      "module": "analysis",
+      "producers": [
+        "src/modules/analysis/application/use-cases/process-analysis-job.use-case.ts:173"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "DceAnalysisRequested",
+      "module": "analysis",
+      "producers": [
+        "src/modules/analysis/application/use-cases/start-document-analysis.use-case.ts:137",
+        "src/modules/analysis/application/use-cases/start-tender-analysis.use-case.ts:117"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "DceAnalysisStarted",
+      "module": "analysis",
+      "producers": [
+        "src/modules/analysis/application/use-cases/process-analysis-job.use-case.ts:312",
+        "src/modules/analysis/application/use-cases/process-analysis-job.use-case.ts:110"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "DocumentGenerationCompleted",
+      "module": "document-generation",
+      "producers": [
+        "src/modules/document-generation/application/use-cases/generate-document.use-case.ts:131",
+        "src/modules/document-generation/application/use-cases/regenerate-document.use-case.ts:124"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "DocumentGenerationFailed",
+      "module": "document-generation",
+      "producers": [
+        "src/modules/document-generation/application/use-cases/generate-document.use-case.ts:131",
+        "src/modules/document-generation/application/use-cases/regenerate-document.use-case.ts:124"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "DocumentVersionAdded",
+      "module": "documents",
+      "producers": [
+        "src/modules/documents/application/use-cases/add-document-version.use-case.ts:119",
+        "src/modules/documents/application/use-cases/create-document-with-first-version.use-case.ts:135"
+      ],
+      "internalHandler": "src/modules/billing/infrastructure/outbox-handlers/quota-threshold-event.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "GoNoGoDecisionRecorded",
+      "module": "opportunity",
+      "producers": [
+        "src/modules/opportunity/application/use-cases/record-opportunity-go-no-go-decision.use-case.ts:134",
+        "src/modules/opportunity/application/use-cases/record-tender-go-no-go-decision.use-case.ts:111"
+      ],
+      "internalHandler": "src/modules/integrations/infrastructure/outbox-handlers/go-no-go-decision-recorded.outbox-handler.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "GoNoGoReportGenerated",
+      "module": "opportunity",
+      "producers": [
+        "src/modules/opportunity/application/use-cases/generate-go-no-go-report.use-case.ts:248"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "KnowledgeEntryArchived",
+      "module": "knowledge-base",
+      "producers": [
+        "src/modules/knowledge-base/application/use-cases/archive-knowledge-entry.use-case.ts:57"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "KnowledgeEntryCreated",
+      "module": "knowledge-base",
+      "producers": [
+        "src/modules/knowledge-base/application/use-cases/create-knowledge-entry.use-case.ts:127"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "KnowledgeEntryPromotedFromTender",
+      "module": "knowledge-base",
+      "producers": [
+        "src/modules/knowledge-base/application/use-cases/promote-checklist-item-to-knowledge.use-case.ts:174"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "KnowledgeEntryValidated",
+      "module": "knowledge-base",
+      "producers": [
+        "src/modules/knowledge-base/application/use-cases/validate-knowledge-entry.use-case.ts:83"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "KnowledgeVersionCreated",
+      "module": "knowledge-base",
+      "producers": [
+        "src/modules/knowledge-base/application/use-cases/restore-knowledge-version.use-case.ts:97",
+        "src/modules/knowledge-base/application/use-cases/update-knowledge-entry.use-case.ts:96"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "MembershipCreated",
+      "module": "memberships",
+      "producers": [
+        "src/modules/memberships/application/use-cases/create-membership.use-case.ts:114"
+      ],
+      "internalHandler": "src/modules/billing/infrastructure/outbox-handlers/quota-threshold-event.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "OpportunityArchived",
+      "module": "opportunity",
+      "producers": [
+        "src/modules/opportunity/application/use-cases/archive-opportunity.use-case.ts:65"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "OpportunityCreated",
+      "module": "opportunity",
+      "producers": [
+        "src/modules/opportunity/application/use-cases/create-opportunity.use-case.ts:148"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "OpportunityPromotedToTender",
+      "module": "opportunity",
+      "producers": [
+        "src/modules/opportunity/application/use-cases/promote-opportunity-to-tender.use-case.ts:211"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "OpportunityQuickScoreComputed",
+      "module": "opportunity",
+      "producers": [
+        "src/modules/opportunity/application/use-cases/compute-opportunity-quick-score.use-case.ts:130"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "OpportunityRestored",
+      "module": "opportunity",
+      "producers": [
+        "src/modules/opportunity/application/use-cases/restore-opportunity.use-case.ts:67"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "OpportunityStatusChanged",
+      "module": "opportunity",
+      "producers": [
+        "src/modules/opportunity/application/use-cases/change-opportunity-status.use-case.ts:85"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "PassConsumedForTender",
+      "module": "billing",
+      "producers": [
+        "src/modules/billing/application/use-cases/consume-pass-for-tender.use-case.ts:91"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "PassPurchaseConfirmed",
+      "module": "billing",
+      "producers": [
+        "src/modules/billing/application/use-cases/record-pass-purchase.use-case.ts:88"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "PassReservationReleased",
+      "module": "billing",
+      "producers": [
+        "src/modules/billing/application/use-cases/release-pass-for-tender.use-case.ts:112"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "PassReservedForTender",
+      "module": "billing",
+      "producers": [
+        "src/modules/billing/application/use-cases/reserve-pass-for-tender.use-case.ts:77"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "QuotaThresholdReached",
+      "module": "billing",
+      "producers": [
+        "src/modules/billing/application/use-cases/check-quota-threshold.use-case.ts:82"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "SubcontractorProfileArchived",
+      "module": "subcontractors",
+      "producers": [
+        "src/modules/subcontractors/application/use-cases/subcontractor-profile.use-cases.ts:238"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "SubcontractorProfileCreated",
+      "module": "subcontractors",
+      "producers": [
+        "src/modules/subcontractors/application/use-cases/subcontractor-profile.use-cases.ts:158"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "SubscriptionCanceled",
+      "module": "billing",
+      "producers": [
+        "src/modules/billing/application/use-cases/cancel-subscription.use-case.ts:42"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "SubscriptionPaymentFailed",
+      "module": "billing",
+      "producers": [
+        "src/modules/billing/application/use-cases/mark-subscription-past-due.use-case.ts:48"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "SubscriptionPlanChanged",
+      "module": "billing",
+      "producers": [
+        "src/modules/billing/application/use-cases/assign-subscription.use-case.ts:223"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "SubscriptionPlanChangedQuotaRecheck",
+      "module": "billing",
+      "producers": [
+        "src/modules/billing/application/use-cases/assign-subscription.use-case.ts:239"
+      ],
+      "internalHandler": "src/modules/billing/infrastructure/outbox-handlers/quota-threshold-event.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TaskAssigned",
+      "module": "workspace",
+      "producers": [
+        "src/modules/workspace/application/use-cases/assign-task.use-case.ts:101",
+        "src/modules/workspace/application/use-cases/create-task.use-case.ts:178"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TaskCompleted",
+      "module": "workspace",
+      "producers": [
+        "src/modules/workspace/application/use-cases/change-task-status.use-case.ts:94"
+      ],
+      "internalHandler": "src/modules/integrations/infrastructure/outbox-handlers/task-completed.outbox-handler.ts",
+      "webhookPublicType": "task.completed"
+    },
+    {
+      "eventType": "TaskCreated",
+      "module": "workspace",
+      "producers": [
+        "src/modules/workspace/application/use-cases/create-task.use-case.ts:169"
+      ],
+      "internalHandler": "src/modules/integrations/infrastructure/outbox-handlers/task-created.outbox-handler.ts",
+      "webhookPublicType": "task.created"
+    },
+    {
+      "eventType": "TaskUpdated",
+      "module": "workspace",
+      "producers": [
+        "src/modules/workspace/application/use-cases/change-task-status.use-case.ts:94"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TenderAbandoned",
+      "module": "tenders",
+      "producers": [
+        "src/modules/tenders/application/use-cases/abandon-tender.use-case.ts:137"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TenderArchived",
+      "module": "tenders",
+      "producers": [
+        "src/modules/tenders/application/use-cases/archive-tender.use-case.ts:76"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TenderCandidateChanged",
+      "module": "tenders",
+      "producers": [
+        "src/modules/tenders/application/use-cases/change-tender-client-account.use-case.ts:99"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TenderCandidateCompanyChanged",
+      "module": "tenders",
+      "producers": [
+        "src/modules/tenders/application/use-cases/change-tender-candidate-company.use-case.ts:92"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TenderCreated",
+      "module": "tenders",
+      "producers": [
+        "src/modules/tenders/application/use-cases/create-tender.use-case.ts:210"
+      ],
+      "internalHandler": "src/modules/integrations/infrastructure/outbox-handlers/tender-created.outbox-handler.ts",
+      "webhookPublicType": "tender.created"
+    },
+    {
+      "eventType": "TenderDeadlineChanged",
+      "module": "tenders",
+      "producers": [
+        "src/modules/tenders/application/use-cases/update-tender.use-case.ts:156"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TenderLotCreated",
+      "module": "tenders",
+      "producers": [
+        "src/modules/tenders/application/use-cases/create-tender-lot.use-case.ts:133"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TenderParticipantAdded",
+      "module": "workspace",
+      "producers": [
+        "src/modules/workspace/application/use-cases/add-tender-participant.use-case.ts:142"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TenderParticipantRemoved",
+      "module": "workspace",
+      "producers": [
+        "src/modules/workspace/application/use-cases/remove-tender-participant.use-case.ts:91"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TenderStatusChanged",
+      "module": "tenders",
+      "producers": [
+        "src/modules/tenders/application/use-cases/change-tender-status.use-case.ts:79"
+      ],
+      "internalHandler": null,
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TrialConverted",
+      "module": "billing",
+      "producers": [
+        "src/modules/billing/application/use-cases/assign-subscription.use-case.ts:193"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TrialEndingSoon",
+      "module": "billing",
+      "producers": [
+        "src/modules/billing/application/use-cases/send-trial-reminders.use-case.ts:62"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "TrialStarted",
+      "module": "billing",
+      "producers": [
+        "src/modules/billing/application/use-cases/assign-subscription.use-case.ts:82",
+        "src/modules/billing/application/use-cases/assign-subscription.use-case.ts:170"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/billing-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "UserMentioned",
+      "module": "workspace",
+      "producers": [
+        "src/modules/workspace/application/use-cases/create-comment.use-case.ts:147"
+      ],
+      "internalHandler": "src/modules/notifications/infrastructure/outbox-handlers/workspace-event-notification.outbox-handlers.ts",
+      "webhookPublicType": null
+    },
+    {
+      "eventType": "external_tender.created",
+      "module": "market-watch",
+      "producers": [
+        "src/modules/market-watch/application/use-cases/sync-market-source.use-case.ts:200"
+      ],
+      "internalHandler": "src/modules/integrations/infrastructure/outbox-handlers/external-tender-created.outbox-handler.ts",
+      "webhookPublicType": "external_tender.created"
+    },
+    {
+      "eventType": "external_tender.updated",
+      "module": "market-watch",
+      "producers": [
+        "src/modules/market-watch/application/use-cases/sync-market-source.use-case.ts:239"
+      ],
+      "internalHandler": "src/modules/integrations/infrastructure/outbox-handlers/external-tender-updated.outbox-handler.ts",
+      "webhookPublicType": "external_tender.updated"
+    },
+    {
+      "eventType": "notification.created",
+      "module": "market-watch",
+      "producers": [
+        "src/modules/market-watch/application/use-cases/sync-market-source.use-case.ts:309"
+      ],
+      "internalHandler": "src/modules/integrations/infrastructure/outbox-handlers/notification-created.outbox-handler.ts",
+      "webhookPublicType": "notification.created"
+    },
+    {
+      "eventType": "response_package.generated",
+      "module": "response-package",
+      "producers": [
+        "src/modules/response-package/application/use-cases/generate-response-package-zip.use-case.ts:182"
+      ],
+      "internalHandler": "src/modules/integrations/infrastructure/outbox-handlers/response-package-generated.outbox-handler.ts",
+      "webhookPublicType": "response_package.generated"
+    },
+    {
+      "eventType": "response_package.validated",
+      "module": "response-package",
+      "producers": [
+        "src/modules/response-package/application/use-cases/validate-response-package-version.use-case.ts:111"
+      ],
+      "internalHandler": "src/modules/integrations/infrastructure/outbox-handlers/response-package-validated.outbox-handler.ts",
+      "webhookPublicType": "response_package.validated"
+    },
+    {
+      "eventType": "saved_search.match_found",
+      "module": "market-watch",
+      "producers": [
+        "src/modules/market-watch/application/use-cases/sync-market-source.use-case.ts:263"
+      ],
+      "internalHandler": "src/modules/integrations/infrastructure/outbox-handlers/saved-search-match-found.outbox-handler.ts",
+      "webhookPublicType": "saved_search.match_found"
+    }
+  ]
+}

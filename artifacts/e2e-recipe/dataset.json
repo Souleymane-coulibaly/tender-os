@@ -1,0 +1,276 @@
+{
+  "stamp": 1787692112598,
+  "users": {
+    "OWNER_A": {
+      "email": "recette-owner_a-1787692112598@recette.test",
+      "id": "a2ec25fd-a9c9-4aef-84c1-1454be2b1457",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhMmVjMjVmZC1hOWM5LTRhZWYtODRjMS0xNDU0YmUyYjE0NTciLCJzaWQiOiI5ODZkZjRjYy0wM2JiLTRmNDEtODUzNi1lZTIxMzAzN2YwMWUiLCJpYXQiOjE3ODc2OTU4NTAsImV4cCI6MTc4NzY5OTQ1MH0.1Q7a2EREWklPoti762kFCyD_NpQUozhgwD_FABMFHhI"
+    },
+    "ORG_ADMIN_A": {
+      "email": "recette-org_admin_a-1787692112598@recette.test",
+      "id": "8feb02e7-a6a8-4f9d-8eee-32aa7ec9e1b0",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4ZmViMDJlNy1hNmE4LTRmOWQtOGVlZS0zMmFhN2VjOWUxYjAiLCJzaWQiOiIyOGIzMGVjYy1hNjA0LTRhZjgtYTQ3OC0wYmQ3YTFlMzUyNjkiLCJpYXQiOjE3ODc2OTIxMTMsImV4cCI6MTc4NzY5NTcxM30.H8B1f3Qqls-b8Ho44GApMoVJCvmgqaG__Ev3s7xGA2s"
+    },
+    "BID_MANAGER_A": {
+      "email": "recette-bid_manager_a-1787692112598@recette.test",
+      "id": "d8daf1bc-82ee-4c5f-b36e-98f35f8df7ac",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkOGRhZjFiYy04MmVlLTRjNWYtYjM2ZS05OGYzNWY4ZGY3YWMiLCJzaWQiOiIwOWMxYWQwNS05MmMxLTQxOWEtYjk3Ni1iYjFiNGE5YmFkMGIiLCJpYXQiOjE3ODc2OTIxMTMsImV4cCI6MTc4NzY5NTcxM30.YbRIqyEQcFtKN6tB_k6jSpwl8Z7ssMXSu9c6gwlB_9A"
+    },
+    "CONTRIBUTOR_A": {
+      "email": "recette-contributor_a-1787692112598@recette.test",
+      "id": "e5d44826-1b68-4830-a1da-fe260b9d95f5",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlNWQ0NDgyNi0xYjY4LTQ4MzAtYTFkYS1mZTI2MGI5ZDk1ZjUiLCJzaWQiOiJjOWFlNjM4YS1kMWI1LTQwOGItYTVjMi0zMjMyMWIyM2FmM2EiLCJpYXQiOjE3ODc2OTIxMTQsImV4cCI6MTc4NzY5NTcxNH0.wGoh-QOwxUNmnkZn8ZTgkmgf-Moqkn4QTbtQ8MuvVcA"
+    },
+    "EXTERNAL_CONSULTANT_A": {
+      "email": "recette-external_consultant_a-1787692112598@recette.test",
+      "id": "172287de-8832-4fcd-ba9d-bfcf65b6d850",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNzIyODdkZS04ODMyLTRmY2QtYmE5ZC1iZmNmNjViNmQ4NTAiLCJzaWQiOiJhMjQxMWQ2ZS05ZWUzLTQ0OGEtYTgwZC02MjY4OTllMjU5OTgiLCJpYXQiOjE3ODc2OTIxMTQsImV4cCI6MTc4NzY5NTcxNH0.lHwrWPElaGvF9JUcPxeOX7nPfFpuxAwmIJ6Xfn8Xspg"
+    },
+    "OWNER_B": {
+      "email": "recette-owner-b-1787692112598@recette.test",
+      "id": "135c22f1-cb9d-42f0-a2e0-c8c3828c2c8c",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMzVjMjJmMS1jYjlkLTQyZjAtYTJlMC1jOGMzODI4YzJjOGMiLCJzaWQiOiJhOWQzZTZkOS1jOThlLTRhNjAtOWI4Yy1jNjUwNGQ3YmJjNjMiLCJpYXQiOjE3ODc2OTIyMTcsImV4cCI6MTc4NzY5NTgxN30.hdTdqpmwSFqt9YWQK2X5iLlHbUbaonSGZI___2d4mw4"
+    }
+  },
+  "orgs": {
+    "A": {
+      "status": 201,
+      "id": "375b165b-5322-4a5a-af79-1f384212784f"
+    },
+    "B": {
+      "status": 201,
+      "id": "33eeed69-6c22-4dd2-b959-2cbdcce94b31"
+    }
+  },
+  "clients": {
+    "A1": {
+      "id": "3aeb1ecf-c700-482b-9d34-c53d3244a39a"
+    },
+    "A2": {
+      "id": "6d6c8149-ed13-4dcd-b248-b6cd2c86ee60"
+    },
+    "B1": {
+      "id": "6131a293-9ca1-47e3-8f80-e57e8b4dc03b"
+    }
+  },
+  "candidates": {
+    "A": {
+      "id": "32765e24-09e6-4d32-80f7-75c52d30c536"
+    },
+    "B": {
+      "id": "e11579b8-0c19-495f-8c8c-26640813e7d1"
+    }
+  },
+  "log": [
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "status": 429
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 429
+    },
+    {
+      "method": "POST",
+      "path": "/organizations",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/organizations",
+      "status": 401
+    },
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/organizations",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/organization-memberships",
+      "status": 402
+    },
+    {
+      "method": "POST",
+      "path": "/organization-memberships",
+      "status": 402
+    },
+    {
+      "method": "POST",
+      "path": "/organization-memberships",
+      "status": 402
+    },
+    {
+      "method": "POST",
+      "path": "/organization-memberships",
+      "status": 402
+    },
+    {
+      "method": "POST",
+      "path": "/clients",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/clients",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/clients",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/candidate-companies",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/candidate-companies",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/organization-memberships",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/organization-memberships",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/organization-memberships",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/organization-memberships",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/clients",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/clients",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/clients",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/candidate-companies",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/candidate-companies",
+      "status": 409
+    }
+  ],
+  "memberships": {
+    "ORG_ADMIN_A": {
+      "status": 201,
+      "id": "6380d2bb-d1ad-4427-8048-fc3e49067d09",
+      "role": "ORGANIZATION_ADMIN"
+    },
+    "BID_MANAGER_A": {
+      "status": 201,
+      "id": "341bf2b1-181c-44d9-911f-766908d66ffe",
+      "role": "BID_MANAGER"
+    },
+    "CONTRIBUTOR_A": {
+      "status": 201,
+      "id": "6bfe38cc-3c49-4629-8024-434ce7259d25",
+      "role": "CONTRIBUTOR"
+    },
+    "EXTERNAL_CONSULTANT_A": {
+      "status": 201,
+      "id": "eed9874a-f0f4-4aa0-8ea1-7e177d903adf",
+      "role": "EXTERNAL_CONSULTANT"
+    }
+  },
+  "savedSearchId": "cb4bc002-a936-42fe-b8d5-ade511a04bf5",
+  "opportunityId": "f45d8715-4725-44d4-8305-a6f3d64db3af",
+  "promotedOpportunityId": "babe5cc8-2c72-4f4b-865f-eefb5c6eb78a",
+  "tenderMono": "3ef85df6-3449-41e5-aa99-2c81a041c847",
+  "tenderMulti": "b4b815d6-65b2-45c7-aab4-e3b4c0d6345d",
+  "lots": [
+    "9c5fd80d-a332-470c-8e6b-05b4beca41a7",
+    "592b5603-cea4-4eaf-b5c5-93ee6e1b4669"
+  ],
+  "dceDocumentId": "c5412b1e-8047-42ce-81e5-b13ff1e0897d",
+  "pricingScheduleId": "0bec0166-2e6b-436e-a46e-469e3914835b",
+  "packageId": "cf1beca7-586d-4eae-ae2c-e4eea3066bc6",
+  "packageVersionId": "0283aa1d-bb20-4594-b3a2-c231cb11da5e"
+}

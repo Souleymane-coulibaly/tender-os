@@ -1,0 +1,501 @@
+{
+  "generatedAt": "2026-08-25T02:02:37.158Z",
+  "byTypeStatus": [
+    {
+      "event_type": "DocumentVersionAdded",
+      "status": "PUBLISHED",
+      "c": 403,
+      "max_attempts": 1
+    },
+    {
+      "event_type": "saved_search.match_found",
+      "status": "PUBLISHED",
+      "c": 117,
+      "max_attempts": 0
+    },
+    {
+      "event_type": "notification.created",
+      "status": "PUBLISHED",
+      "c": 115,
+      "max_attempts": 0
+    },
+    {
+      "event_type": "response_package.validated",
+      "status": "PUBLISHED",
+      "c": 69,
+      "max_attempts": 0
+    },
+    {
+      "event_type": "external_tender.created",
+      "status": "PUBLISHED",
+      "c": 62,
+      "max_attempts": 0
+    },
+    {
+      "event_type": "response_package.generated",
+      "status": "PUBLISHED",
+      "c": 28,
+      "max_attempts": 0
+    },
+    {
+      "event_type": "DceAnalysisStarted",
+      "status": "DEAD_LETTER",
+      "c": 16,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "DceAnalysisFailed",
+      "status": "DEAD_LETTER",
+      "c": 16,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "DceAnalysisRequested",
+      "status": "DEAD_LETTER",
+      "c": 14,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "KnowledgeEntryCreated",
+      "status": "DEAD_LETTER",
+      "c": 10,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "GoNoGoDecisionRecorded",
+      "status": "PUBLISHED",
+      "c": 8,
+      "max_attempts": 0
+    },
+    {
+      "event_type": "DocumentGenerationCompleted",
+      "status": "PROCESSING",
+      "c": 8,
+      "max_attempts": 2
+    },
+    {
+      "event_type": "CandidateCompanyProfileUpdated",
+      "status": "DEAD_LETTER",
+      "c": 8,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "AdministrativeFormGenerated",
+      "status": "DEAD_LETTER",
+      "c": 6,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "OpportunityStatusChanged",
+      "status": "DEAD_LETTER",
+      "c": 6,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "OpportunityStatusChanged",
+      "status": "PROCESSING",
+      "c": 6,
+      "max_attempts": 3
+    },
+    {
+      "event_type": "OpportunityCreated",
+      "status": "DEAD_LETTER",
+      "c": 5,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "OpportunityCreated",
+      "status": "PROCESSING",
+      "c": 5,
+      "max_attempts": 3
+    },
+    {
+      "event_type": "TenderCreated",
+      "status": "PUBLISHED",
+      "c": 4,
+      "max_attempts": 3
+    },
+    {
+      "event_type": "TenderLotCreated",
+      "status": "DEAD_LETTER",
+      "c": 4,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "MembershipCreated",
+      "status": "PUBLISHED",
+      "c": 4,
+      "max_attempts": 2
+    },
+    {
+      "event_type": "KnowledgeEntryArchived",
+      "status": "DEAD_LETTER",
+      "c": 3,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "SubcontractorProfileCreated",
+      "status": "DEAD_LETTER",
+      "c": 3,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "KnowledgeVersionCreated",
+      "status": "DEAD_LETTER",
+      "c": 3,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "TrialStarted",
+      "status": "PUBLISHED",
+      "c": 2,
+      "max_attempts": 0
+    },
+    {
+      "event_type": "OpportunityPromotedToTender",
+      "status": "PROCESSING",
+      "c": 2,
+      "max_attempts": 3
+    },
+    {
+      "event_type": "TenderArchived",
+      "status": "DEAD_LETTER",
+      "c": 2,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "GoNoGoReportGenerated",
+      "status": "PROCESSING",
+      "c": 2,
+      "max_attempts": 2
+    },
+    {
+      "event_type": "TenderStatusChanged",
+      "status": "DEAD_LETTER",
+      "c": 2,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "TenderCandidateChanged",
+      "status": "DEAD_LETTER",
+      "c": 1,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "KnowledgeEntryValidated",
+      "status": "DEAD_LETTER",
+      "c": 1,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "PassReservedForTender",
+      "status": "DEAD_LETTER",
+      "c": 1,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "OpportunityPromotedToTender",
+      "status": "DEAD_LETTER",
+      "c": 1,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "OpportunityQuickScoreComputed",
+      "status": "DEAD_LETTER",
+      "c": 1,
+      "max_attempts": 5
+    },
+    {
+      "event_type": "OpportunityQuickScoreComputed",
+      "status": "PROCESSING",
+      "c": 1,
+      "max_attempts": 3
+    },
+    {
+      "event_type": "DceAnalysisCompleted",
+      "status": "PROCESSING",
+      "c": 1,
+      "max_attempts": 1
+    },
+    {
+      "event_type": "ChecklistItemCreated",
+      "status": "DEAD_LETTER",
+      "c": 1,
+      "max_attempts": 5
+    }
+  ],
+  "deadLetter": [
+    {
+      "event_type": "DceAnalysisFailed",
+      "c": 16
+    },
+    {
+      "event_type": "DceAnalysisStarted",
+      "c": 16
+    },
+    {
+      "event_type": "DceAnalysisRequested",
+      "c": 14
+    },
+    {
+      "event_type": "KnowledgeEntryCreated",
+      "c": 13
+    },
+    {
+      "event_type": "OpportunityStatusChanged",
+      "c": 10
+    },
+    {
+      "event_type": "CandidateCompanyProfileUpdated",
+      "c": 8
+    },
+    {
+      "event_type": "OpportunityCreated",
+      "c": 7
+    },
+    {
+      "event_type": "AdministrativeFormGenerated",
+      "c": 6
+    },
+    {
+      "event_type": "AiSuggestionCreated",
+      "c": 5
+    },
+    {
+      "event_type": "TenderLotCreated",
+      "c": 4
+    },
+    {
+      "event_type": "SubcontractorProfileCreated",
+      "c": 3
+    },
+    {
+      "event_type": "OpportunityQuickScoreComputed",
+      "c": 3
+    },
+    {
+      "event_type": "KnowledgeEntryArchived",
+      "c": 3
+    },
+    {
+      "event_type": "KnowledgeVersionCreated",
+      "c": 3
+    },
+    {
+      "event_type": "KnowledgeEntryValidated",
+      "c": 3
+    },
+    {
+      "event_type": "TenderArchived",
+      "c": 2
+    },
+    {
+      "event_type": "ChecklistItemCreated",
+      "c": 2
+    },
+    {
+      "event_type": "TenderStatusChanged",
+      "c": 2
+    },
+    {
+      "event_type": "GoNoGoDecisionRecorded",
+      "c": 2
+    },
+    {
+      "event_type": "OpportunityPromotedToTender",
+      "c": 2
+    },
+    {
+      "event_type": "ConversationCreated",
+      "c": 1
+    },
+    {
+      "event_type": "TenderCandidateChanged",
+      "c": 1
+    },
+    {
+      "event_type": "AiSuggestionAccepted",
+      "c": 1
+    },
+    {
+      "event_type": "ChecklistItemValidated",
+      "c": 1
+    },
+    {
+      "event_type": "TenderCreated",
+      "c": 1
+    },
+    {
+      "event_type": "GoNoGoReportGenerated",
+      "c": 1
+    },
+    {
+      "event_type": "PassReservedForTender",
+      "c": 1
+    }
+  ],
+  "failedTypes": [
+    {
+      "event_type": "DceAnalysisStarted",
+      "c": 16,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"DceAnalysisStarted\"."
+    },
+    {
+      "event_type": "DceAnalysisFailed",
+      "c": 16,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"DceAnalysisFailed\"."
+    },
+    {
+      "event_type": "DceAnalysisRequested",
+      "c": 14,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"DceAnalysisRequested\"."
+    },
+    {
+      "event_type": "KnowledgeEntryCreated",
+      "c": 10,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"KnowledgeEntryCreated\"."
+    },
+    {
+      "event_type": "CandidateCompanyProfileUpdated",
+      "c": 8,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"CandidateCompanyProfileUpdated\"."
+    },
+    {
+      "event_type": "AdministrativeFormGenerated",
+      "c": 6,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"AdministrativeFormGenerated\"."
+    },
+    {
+      "event_type": "OpportunityStatusChanged",
+      "c": 6,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"OpportunityStatusChanged\"."
+    },
+    {
+      "event_type": "OpportunityCreated",
+      "c": 5,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"OpportunityCreated\"."
+    },
+    {
+      "event_type": "TenderLotCreated",
+      "c": 4,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"TenderLotCreated\"."
+    },
+    {
+      "event_type": "KnowledgeVersionCreated",
+      "c": 3,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"KnowledgeVersionCreated\"."
+    },
+    {
+      "event_type": "KnowledgeEntryArchived",
+      "c": 3,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"KnowledgeEntryArchived\"."
+    },
+    {
+      "event_type": "SubcontractorProfileCreated",
+      "c": 3,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"SubcontractorProfileCreated\"."
+    },
+    {
+      "event_type": "TenderStatusChanged",
+      "c": 2,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"TenderStatusChanged\"."
+    },
+    {
+      "event_type": "TenderArchived",
+      "c": 2,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"TenderArchived\"."
+    },
+    {
+      "event_type": "PassReservedForTender",
+      "c": 1,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"PassReservedForTender\"."
+    },
+    {
+      "event_type": "OpportunityQuickScoreComputed",
+      "c": 1,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"OpportunityQuickScoreComputed\"."
+    },
+    {
+      "event_type": "ChecklistItemCreated",
+      "c": 1,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"ChecklistItemCreated\"."
+    },
+    {
+      "event_type": "KnowledgeEntryValidated",
+      "c": 1,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"KnowledgeEntryValidated\"."
+    },
+    {
+      "event_type": "OpportunityPromotedToTender",
+      "c": 1,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"OpportunityPromotedToTender\"."
+    },
+    {
+      "event_type": "TenderCandidateChanged",
+      "c": 1,
+      "max_attempts": 5,
+      "sample_error": "No outbox handler is registered for event type \"TenderCandidateChanged\"."
+    }
+  ],
+  "publishedTypes": [
+    {
+      "event_type": "DocumentVersionAdded",
+      "c": 403
+    },
+    {
+      "event_type": "saved_search.match_found",
+      "c": 117
+    },
+    {
+      "event_type": "notification.created",
+      "c": 115
+    },
+    {
+      "event_type": "response_package.validated",
+      "c": 69
+    },
+    {
+      "event_type": "external_tender.created",
+      "c": 62
+    },
+    {
+      "event_type": "response_package.generated",
+      "c": 28
+    },
+    {
+      "event_type": "GoNoGoDecisionRecorded",
+      "c": 8
+    },
+    {
+      "event_type": "TenderCreated",
+      "c": 4
+    },
+    {
+      "event_type": "MembershipCreated",
+      "c": 4
+    },
+    {
+      "event_type": "TrialStarted",
+      "c": 2
+    }
+  ]
+}

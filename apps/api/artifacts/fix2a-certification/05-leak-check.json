@@ -1,0 +1,22 @@
+{
+  "baseline": {
+    "capturedAt": "2026-08-25T01:55:46.891Z",
+    "organizations": 432,
+    "users": 587,
+    "sessions": 570,
+    "outboxEvents": 941
+  },
+  "current": {
+    "capturedAt": "2026-08-25T01:55:57.770Z",
+    "organizations": 432,
+    "users": 587,
+    "sessions": 570,
+    "outboxEvents": 941
+  },
+  "delta": {
+    "organizations": 0,
+    "users": 0,
+    "sessions": 0,
+    "outboxEvents": 0
+  }
+}

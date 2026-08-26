@@ -1,0 +1,17 @@
+{
+  "tenderObject": "test",
+  "downloads": [],
+  "notes": [
+    "No administrative document download exposed on tender 'test'.",
+    "Technical memo export button present but no download captured."
+  ],
+  "anomalies": [],
+  "tenderUrl": "https://tender-os-web.vercel.app/app/tenders/69da1d49-e75b-4a27-b77b-11e41f7e836f",
+  "overview": "https://tender-os-web.vercel.app/app/tenders/69da1d49-e75b-4a27-b77b-11e41f7e836f",
+  "dce": "https://tender-os-web.vercel.app/app/tenders/69da1d49-e75b-4a27-b77b-11e41f7e836f/dce",
+  "analysis": "https://tender-os-web.vercel.app/app/tenders/69da1d49-e75b-4a27-b77b-11e41f7e836f/analysis",
+  "checklist": "https://tender-os-web.vercel.app/app/tenders/69da1d49-e75b-4a27-b77b-11e41f7e836f/checklist",
+  "deliverables": "https://tender-os-web.vercel.app/app/tenders/69da1d49-e75b-4a27-b77b-11e41f7e836f/deliverables",
+  "administrative": "https://tender-os-web.vercel.app/app/tenders/69da1d49-e75b-4a27-b77b-11e41f7e836f/administrative-dossier",
+  "technicalMemo": "https://tender-os-web.vercel.app/app/tenders/69da1d49-e75b-4a27-b77b-11e41f7e836f/technical-memo"
+}

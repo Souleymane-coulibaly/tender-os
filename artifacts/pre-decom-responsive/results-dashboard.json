@@ -1,0 +1,46 @@
+[
+  {
+    "viewport": {
+      "name": "390",
+      "width": 390,
+      "height": 844
+    },
+    "overflow": false,
+    "menuVisible": true,
+    "sidebarClasses": "fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-tenderos-navy shadow-xl transition-transform duration-200 lg:static lg:z-auto lg:w-64 lg:max-w-none lg:shrink-0 lg:shadow-none lg:transition-none -translate-x-full lg:translate-x-0",
+    "screenshot": "C:\\Users\\couli\\tender-os\\artifacts\\pre-decom-responsive\\dashboard-390.png"
+  },
+  {
+    "viewport": {
+      "name": "768",
+      "width": 768,
+      "height": 900
+    },
+    "overflow": false,
+    "menuVisible": true,
+    "sidebarClasses": "fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-tenderos-navy shadow-xl transition-transform duration-200 lg:static lg:z-auto lg:w-64 lg:max-w-none lg:shrink-0 lg:shadow-none lg:transition-none -translate-x-full lg:translate-x-0",
+    "screenshot": "C:\\Users\\couli\\tender-os\\artifacts\\pre-decom-responsive\\dashboard-768.png"
+  },
+  {
+    "viewport": {
+      "name": "1024",
+      "width": 1024,
+      "height": 900
+    },
+    "overflow": false,
+    "menuVisible": false,
+    "sidebarClasses": "fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-tenderos-navy shadow-xl transition-transform duration-200 lg:static lg:z-auto lg:w-64 lg:max-w-none lg:shrink-0 lg:shadow-none lg:transition-none -translate-x-full lg:translate-x-0",
+    "screenshot": "C:\\Users\\couli\\tender-os\\artifacts\\pre-decom-responsive\\dashboard-1024.png"
+  },
+  {
+    "viewport": {
+      "name": "1440",
+      "width": 1440,
+      "height": 900
+    },
+    "overflow": false,
+    "menuVisible": false,
+    "sidebarClasses": "fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-tenderos-navy shadow-xl transition-transform duration-200 lg:static lg:z-auto lg:w-64 lg:max-w-none lg:shrink-0 lg:shadow-none lg:transition-none -translate-x-full lg:translate-x-0",
+    "screenshot": "C:\\Users\\couli\\tender-os\\artifacts\\pre-decom-responsive\\dashboard-1440.png"
+  }
+]

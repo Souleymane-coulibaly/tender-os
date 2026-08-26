@@ -1,0 +1,252 @@
+{
+  "checkpoint": "TENDEROS-2.1-P2.3-E12.4-FIX-1-H6",
+  "generatedAt": "2026-08-25T00:57:02.742Z",
+  "environment": {
+    "branch": "v2.1-fix-opportunity-gonogo-ux",
+    "head": "a895603bf3099e8e64f9de8f30ecc90162f96d20",
+    "node": "v24.15.0",
+    "pnpm": "10.17.0",
+    "postgres": "17.10 (Debian 17.10-1.pgdg13+1)"
+  },
+  "historicalBaseline": {
+    "note": "Résidus présents AVANT RUN 1 — hors périmètre de FIX-1 (§14), aucune purge effectuée.",
+    "globalTotals": {
+      "organizations": 434,
+      "users": 587,
+      "sessions": 570,
+      "tenders": 92,
+      "outbox_events": 961,
+      "audit_logs": 548
+    },
+    "familyOrganizations": {
+      "pricing-schedule": 72,
+      "response-package": 54,
+      "analysis": 34,
+      "extraction": 32,
+      "connectors": 28,
+      "submission": 28
+    }
+  },
+  "run1": {
+    "newLeakDelta": 0,
+    "newOrganizations": 0,
+    "newUsers": 0,
+    "newSessions": 0,
+    "families": {
+      "pricing-schedule": {
+        "organizations": 0,
+        "organizationIds": [],
+        "users": 0,
+        "sessions": 0,
+        "childRowDelta": {
+          "outbox_events": 0,
+          "audit_logs": 0,
+          "documents": 0,
+          "tenders": 0,
+          "routing_decisions": 0,
+          "client_accounts": 0,
+          "organization_memberships": 0
+        }
+      },
+      "response-package": {
+        "organizations": 0,
+        "organizationIds": [],
+        "users": 0,
+        "sessions": 0,
+        "childRowDelta": {
+          "outbox_events": -6,
+          "audit_logs": -20,
+          "documents": -4,
+          "tenders": -3,
+          "routing_decisions": 0,
+          "client_accounts": -3,
+          "organization_memberships": -2
+        }
+      },
+      "analysis": {
+        "organizations": 0,
+        "organizationIds": [],
+        "users": 0,
+        "sessions": 0,
+        "childRowDelta": {
+          "outbox_events": 0,
+          "audit_logs": 0,
+          "documents": 0,
+          "tenders": 0,
+          "routing_decisions": 0,
+          "client_accounts": 0,
+          "organization_memberships": 0
+        }
+      },
+      "extraction": {
+        "organizations": 0,
+        "organizationIds": [],
+        "users": 0,
+        "sessions": 0,
+        "childRowDelta": {
+          "outbox_events": 0,
+          "audit_logs": 0,
+          "documents": 0,
+          "tenders": 0,
+          "routing_decisions": 0,
+          "client_accounts": 0,
+          "organization_memberships": 0
+        }
+      },
+      "connectors": {
+        "organizations": 0,
+        "organizationIds": [],
+        "users": 0,
+        "sessions": 0,
+        "childRowDelta": {
+          "outbox_events": 0,
+          "audit_logs": 0,
+          "documents": 0,
+          "tenders": 0,
+          "routing_decisions": 0,
+          "client_accounts": 0,
+          "organization_memberships": 0
+        }
+      },
+      "submission": {
+        "organizations": 0,
+        "organizationIds": [],
+        "users": 0,
+        "sessions": 0,
+        "childRowDelta": {
+          "outbox_events": 0,
+          "audit_logs": 0,
+          "documents": 0,
+          "tenders": 0,
+          "routing_decisions": 0,
+          "client_accounts": 0,
+          "organization_memberships": 0
+        }
+      }
+    }
+  },
+  "run2": {
+    "newLeakDelta": 0,
+    "newOrganizations": 0,
+    "newUsers": 0,
+    "newSessions": 0,
+    "families": {
+      "pricing-schedule": {
+        "organizations": 0,
+        "organizationIds": [],
+        "users": 0,
+        "sessions": 0,
+        "childRowDelta": {
+          "outbox_events": 0,
+          "audit_logs": 0,
+          "documents": 0,
+          "tenders": 0,
+          "routing_decisions": 0,
+          "client_accounts": 0,
+          "organization_memberships": 0
+        }
+      },
+      "response-package": {
+        "organizations": 0,
+        "organizationIds": [],
+        "users": 0,
+        "sessions": 0,
+        "childRowDelta": {
+          "outbox_events": 0,
+          "audit_logs": 0,
+          "documents": 0,
+          "tenders": 0,
+          "routing_decisions": 0,
+          "client_accounts": 0,
+          "organization_memberships": 0
+        }
+      },
+      "analysis": {
+        "organizations": 0,
+        "organizationIds": [],
+        "users": 0,
+        "sessions": 0,
+        "childRowDelta": {
+          "outbox_events": 0,
+          "audit_logs": 0,
+          "documents": 0,
+          "tenders": 0,
+          "routing_decisions": 0,
+          "client_accounts": 0,
+          "organization_memberships": 0
+        }
+      },
+      "extraction": {
+        "organizations": 0,
+        "organizationIds": [],
+        "users": 0,
+        "sessions": 0,
+        "childRowDelta": {
+          "outbox_events": 0,
+          "audit_logs": 0,
+          "documents": 0,
+          "tenders": 0,
+          "routing_decisions": 0,
+          "client_accounts": 0,
+          "organization_memberships": 0
+        }
+      },
+      "connectors": {
+        "organizations": 0,
+        "organizationIds": [],
+        "users": 0,
+        "sessions": 0,
+        "childRowDelta": {
+          "outbox_events": 0,
+          "audit_logs": 0,
+          "documents": 0,
+          "tenders": 0,
+          "routing_decisions": 0,
+          "client_accounts": 0,
+          "organization_memberships": 0
+        }
+      },
+      "submission": {
+        "organizations": 0,
+        "organizationIds": [],
+        "users": 0,
+        "sessions": 0,
+        "childRowDelta": {
+          "outbox_events": 0,
+          "audit_logs": 0,
+          "documents": 0,
+          "tenders": 0,
+          "routing_decisions": 0,
+          "client_accounts": 0,
+          "organization_memberships": 0
+        }
+      }
+    }
+  },
+  "globalTotalsProgression": {
+    "before": {
+      "organizations": 434,
+      "users": 587,
+      "sessions": 570,
+      "tenders": 92,
+      "outbox_events": 961,
+      "audit_logs": 548
+    },
+    "afterRun1": {
+      "organizations": 432,
+      "users": 585,
+      "sessions": 568,
+      "tenders": 83,
+      "outbox_events": 941,
+      "audit_logs": 485
+    },
+    "afterRun2": {
+      "organizations": 432,
+      "users": 585,
+      "sessions": 568,
+      "tenders": 83,
+      "outbox_events": 941,
+      "audit_logs": 485
+    }
+  }
+}

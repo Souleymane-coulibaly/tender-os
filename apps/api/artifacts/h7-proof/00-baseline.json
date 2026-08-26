@@ -1,0 +1,31 @@
+{
+  "label": "H7_BASELINE",
+  "timestamp": "2026-08-25T01:20:42.075Z",
+  "outboxByStatus": [
+    {
+      "status": "PUBLISHED",
+      "c": 755,
+      "claimable": 755
+    },
+    {
+      "status": "DEAD_LETTER",
+      "c": 103,
+      "claimable": 103
+    },
+    {
+      "status": "PENDING",
+      "c": 57,
+      "claimable": 57
+    },
+    {
+      "status": "PROCESSING",
+      "c": 26,
+      "claimable": 26
+    }
+  ],
+  "preExistingClaimable": 83,
+  "totals": {
+    "outbox_events": 941,
+    "organizations": 432
+  }
+}

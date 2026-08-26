@@ -1,0 +1,260 @@
+import { randomUUID } from "node:crypto";
+import { writeFileSync } from "node:fs";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { PrismaService } from "../../../shared-kernel/prisma.service";
+import { PublishPendingOutboxEventsUseCase } from "../application/use-cases/publish-pending-outbox-events.use-case";
+import { RecordEventProcessedByConsumerUseCase } from "../application/use-cases/record-event-processed-by-consumer.use-case";
+import { CompositeOutboxEventDispatcher } from "./composite-outbox-event-dispatcher";
+import { OutboxPublisherWorker } from "./outbox-publisher.worker";
+import { PrismaOutboxEventRepository } from "./prisma-outbox-event.repository";
+import { PrismaProcessedEventRepository } from "./prisma-processed-event.repository";
+
+/**
+ * Checkpoint TENDEROS-2.1-P2.3-E12.4 — H7 PROOF GATE (reproduction contrôlée, AUCUN correctif).
+ *
+ * Prouve — ou réfute — que `claimPendingBatch()`, volontairement GLOBAL en production, fait qu'un
+ * `worker.tick()` déclenché par une suite de tests réclame en priorité les événements PLUS ANCIENS
+ * appartenant à D'AUTRES suites, retardant d'autant le traitement de l'événement de la suite
+ * courante.
+ *
+ * Utilise exclusivement les VRAIES implémentations (`PrismaOutboxEventRepository`,
+ * `PublishPendingOutboxEventsUseCase`, `OutboxPublisherWorker`) contre la VRAIE table
+ * `outbox_events` — jamais une réimplémentation en mémoire de l'algorithme, qui ne prouverait rien.
+ *
+ * Fichier TEMPORAIRE de diagnostic : supprimé à l'issue de la preuve.
+ */
+const BATCH_SIZE = 100;
+const STALE_MS = 5 * 60 * 1000;
+const ARTIFACTS = "artifacts/h7-proof";
+
+type Scenario = {
+  label: string;
+  foreignCount: number;
+  preExistingClaimable: number;
+  ownEventId: string;
+  foreignEventIdsSample: string[];
+  firstBatch: { size: number; foreign: number; own: number; ownPresent: boolean; sampleIds: string[] };
+  ticksUntilOwnProcessed: number;
+  msUntilOwnProcessed: number;
+  foreignProcessedBeforeOwn: number;
+  ownFinalStatus: string;
+};
+
+describe("H7 PROOF — backlog Outbox étranger vs événement propre (PostgreSQL réel)", () => {
+  const prisma = new PrismaService();
+  const outboxRepository = new PrismaOutboxEventRepository(prisma);
+  const processedEventRepository = new PrismaProcessedEventRepository(prisma);
+  const recordProcessed = new RecordEventProcessedByConsumerUseCase(processedEventRepository);
+
+  const orgForeignId = randomUUID();
+  const orgOwnId = randomUUID();
+  const scenarios: Scenario[] = [];
+  let preExistingClaimable = 0;
+
+  /** Compte les handlers réellement exécutés, par organisation — c'est la mesure du travail
+   *  ÉTRANGER effectué avant l'événement propre. */
+  const handled: string[] = [];
+  const dispatcher = new CompositeOutboxEventDispatcher(
+    [
+      { eventType: "H7_FOREIGN_EVENT", handle: async (e: { organizationId: string }) => void handled.push(e.organizationId) },
+      { eventType: "H7_OWN_EVENT", handle: async (e: { organizationId: string }) => void handled.push(e.organizationId) },
+    ] as never,
+    recordProcessed,
+  );
+  const worker = new OutboxPublisherWorker(new PublishPendingOutboxEventsUseCase(outboxRepository, dispatcher, { now: () => new Date() }));
+
+  /** Insère des événements avec un `created_at` MAÎTRISÉ : c'est l'ordre `ORDER BY created_at` du
+   *  claim réel qui est sous test, il doit donc être déterministe et non dépendre de l'horloge. */
+  async function seedEvents(input: { organizationId: string; eventType: string; count: number; createdAtOffsetSeconds: number }): Promise<string[]> {
+    const ids: string[] = [];
+    const values: string[] = [];
+    for (let i = 0; i < input.count; i++) {
+      const id = randomUUID();
+      ids.push(id);
+      values.push(
+        `('${id}'::uuid, '${input.organizationId}'::uuid, '${input.eventType}', 1, 'H7', '${randomUUID()}'::uuid, '{}'::jsonb,` +
+          ` now() - interval '${input.createdAtOffsetSeconds} seconds', 'PENDING', 0,` +
+          ` now() - interval '${input.createdAtOffsetSeconds} seconds', now() - interval '${input.createdAtOffsetSeconds} seconds')`,
+      );
+    }
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO outbox_events (id, organization_id, event_type, event_version, aggregate_type, aggregate_id, payload, occurred_at, status, attempt_count, available_at, created_at) VALUES ${values.join(",")}`,
+    );
+    return ids;
+  }
+
+  async function resetMyEventsToPending(): Promise<void> {
+    await prisma.$executeRawUnsafe(
+      `UPDATE outbox_events SET status='PENDING', attempt_count=0, available_at=created_at, published_at=NULL, last_error=NULL WHERE organization_id IN ('${orgForeignId}'::uuid, '${orgOwnId}'::uuid)`,
+    );
+    await prisma.processedEvent.deleteMany({ where: { organizationId: { in: [orgForeignId, orgOwnId] } } });
+  }
+
+  async function clearMyEvents(): Promise<void> {
+    await prisma.processedEvent.deleteMany({ where: { organizationId: { in: [orgForeignId, orgOwnId] } } });
+    await prisma.deadLetterEvent.deleteMany({ where: { organizationId: { in: [orgForeignId, orgOwnId] } } });
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgForeignId, orgOwnId] } } });
+  }
+
+  async function runScenario(label: string, foreignCount: number): Promise<Scenario> {
+    await clearMyEvents();
+    handled.length = 0;
+
+    // FOREIGN d'abord, avec un `created_at` STRICTEMENT antérieur : c'est la condition du scénario.
+    const foreignIds = foreignCount > 0 ? await seedEvents({ organizationId: orgForeignId, eventType: "H7_FOREIGN_EVENT", count: foreignCount, createdAtOffsetSeconds: 3600 }) : [];
+    const [ownId] = await seedEvents({ organizationId: orgOwnId, eventType: "H7_OWN_EVENT", count: 1, createdAtOffsetSeconds: 1 });
+
+    // --- Phase 1 : composition RÉELLE du premier lot, via le vrai `claimPendingBatch`.
+    const batch = await outboxRepository.claimPendingBatch({ limit: BATCH_SIZE, now: new Date(), staleProcessingThresholdMs: STALE_MS });
+    const firstBatch = {
+      size: batch.length,
+      foreign: batch.filter((e) => e.organizationId === orgForeignId).length,
+      own: batch.filter((e) => e.organizationId === orgOwnId).length,
+      ownPresent: batch.some((e) => e.id === ownId),
+      sampleIds: batch.slice(0, 5).map((e) => e.id),
+    };
+
+    // --- Phase 2 : combien de VRAIS ticks avant que l'événement propre soit traité.
+    await resetMyEventsToPending();
+    handled.length = 0;
+    const startedAt = Date.now();
+    let ticks = 0;
+    let ownStatus = "PENDING";
+    while (ticks < 40) {
+      ticks++;
+      await worker.tick();
+      const row = await prisma.outboxEvent.findUniqueOrThrow({ where: { id: ownId! }, select: { status: true } });
+      ownStatus = row.status;
+      if (ownStatus === "PUBLISHED" || ownStatus === "DEAD_LETTER") break;
+    }
+    const msUntilOwnProcessed = Date.now() - startedAt;
+
+    return {
+      label,
+      foreignCount,
+      preExistingClaimable,
+      ownEventId: ownId!,
+      foreignEventIdsSample: foreignIds.slice(0, 3),
+      firstBatch,
+      ticksUntilOwnProcessed: ticks,
+      msUntilOwnProcessed,
+      foreignProcessedBeforeOwn: handled.filter((o) => o === orgForeignId).length,
+      ownFinalStatus: ownStatus,
+    };
+  }
+
+  beforeAll(async () => {
+    await prisma.$connect();
+    await prisma.organization.createMany({
+      data: [
+        { id: orgForeignId, name: "H7 Foreign", slug: `h7-foreign-${orgForeignId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
+        { id: orgOwnId, name: "H7 Own", slug: `h7-own-${orgOwnId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
+      ],
+    });
+    preExistingClaimable = Number(
+      (await prisma.$queryRawUnsafe<{ c: number }[]>(
+        `SELECT count(*)::int c FROM outbox_events WHERE status IN ('PENDING','FAILED','PROCESSING') AND available_at <= now() AND organization_id NOT IN ('${orgForeignId}'::uuid, '${orgOwnId}'::uuid)`,
+      ))[0]!.c,
+    );
+  }, 60000);
+
+  afterAll(async () => {
+    // §16 — ne jamais réintroduire H6 en prouvant H7.
+    await clearMyEvents();
+    await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgForeignId, orgOwnId] } } });
+    await prisma.organization.deleteMany({ where: { id: { in: [orgForeignId, orgOwnId] } } });
+    writeFileSync(`${ARTIFACTS}/scenarios.json`, JSON.stringify({ preExistingClaimable, batchSize: BATCH_SIZE, scenarios }, null, 2));
+    await prisma.$disconnect();
+  }, 60000);
+
+  it("CAS COLD — sans backlog étranger, l'événement propre est traité au PREMIER tick", async () => {
+    const r = await runScenario("COLD", 0);
+    scenarios.push(r);
+
+    expect(r.ownFinalStatus).toBe("PUBLISHED");
+    // Référence de comparaison pour les scénarios avec backlog.
+    expect(r.ticksUntilOwnProcessed).toBeGreaterThanOrEqual(1);
+  }, 180000);
+
+  it("CAS BACKLOG 100 — 100 événements ÉTRANGERS plus anciens saturent le premier lot", async () => {
+    const r = await runScenario("BACKLOG_100", 100);
+    scenarios.push(r);
+
+    // Le point à prouver : le lot réel est rempli d'événements étrangers.
+    expect(r.firstBatch.size).toBe(BATCH_SIZE);
+    expect(r.firstBatch.foreign).toBeGreaterThan(0);
+    expect(r.ownFinalStatus).toBe("PUBLISHED");
+  }, 300000);
+
+  it("CAS BACKLOG 500 — le retard croît avec la taille du backlog étranger", async () => {
+    const r = await runScenario("BACKLOG_500", 500);
+    scenarios.push(r);
+
+    expect(r.firstBatch.size).toBe(BATCH_SIZE);
+    expect(r.ownFinalStatus).toBe("PUBLISHED");
+  }, 600000);
+
+  /** H7-002 — un eventType SANS handler enregistre consomme-t-il des slots de lot, et redevient-il
+   *  eligible ? Determine s'il amplifie durablement le backlog. */
+  it("AMPLIFICATEUR H7-002 — événements sans handler : claimés, slots consommés, ré-éligibles ?", async () => {
+    await clearMyEvents();
+    const ids = await seedEvents({ organizationId: orgForeignId, eventType: "H7_NO_HANDLER_EVENT", count: 10, createdAtOffsetSeconds: 7200 });
+
+    const batch = await outboxRepository.claimPendingBatch({ limit: BATCH_SIZE, now: new Date(), staleProcessingThresholdMs: STALE_MS });
+    const claimedNoHandler = batch.filter((e) => ids.includes(e.id)).length;
+
+    await resetMyEventsToPending();
+    await worker.tick();
+    const after = await prisma.outboxEvent.groupBy({ by: ["status"], where: { id: { in: ids } }, _count: { _all: true } });
+    const statuses = Object.fromEntries(after.map((r) => [r.status, r._count._all]));
+    // Re-eligibilite : `available_at` repousse-t-il dans le futur (backoff) ou reste-t-il claimable ?
+    const stillClaimable = await prisma.outboxEvent.count({ where: { id: { in: ids }, status: { in: ["PENDING", "FAILED", "PROCESSING"] }, availableAt: { lte: new Date() } } });
+
+    scenarios.push({
+      label: "NO_HANDLER",
+      foreignCount: ids.length,
+      preExistingClaimable,
+      ownEventId: "n/a",
+      foreignEventIdsSample: ids.slice(0, 3),
+      firstBatch: { size: batch.length, foreign: claimedNoHandler, own: 0, ownPresent: false, sampleIds: ids.slice(0, 3) },
+      ticksUntilOwnProcessed: 1,
+      msUntilOwnProcessed: 0,
+      foreignProcessedBeforeOwn: claimedNoHandler,
+      ownFinalStatus: `statuses=${JSON.stringify(statuses)} stillClaimable=${stillClaimable}`,
+    });
+
+    // Preuve factuelle : ils SONT claimés et occupent donc des slots.
+    expect(claimedNoHandler).toBe(ids.length);
+    // Correctif P1-002 du dépôt : jamais marqués PUBLISHED sans handler.
+    expect(statuses.PUBLISHED ?? 0).toBe(0);
+  }, 300000);
+
+  /** H7-003 — une ligne PROCESSING dont le bail a expiré est-elle reclaimée et consomme-t-elle un
+   *  slot ? C'est le mécanisme suspecté derrière les 26 PROCESSING bloqués observés en base. */
+  it("AMPLIFICATEUR H7-003 — PROCESSING à bail expiré : reclaimé et consomme un slot ?", async () => {
+    await clearMyEvents();
+    const ids = await seedEvents({ organizationId: orgForeignId, eventType: "H7_FOREIGN_EVENT", count: 5, createdAtOffsetSeconds: 7200 });
+    // Bail EXPIRÉ : `available_at` dans le passé, statut PROCESSING (worker mort après claim).
+    await prisma.$executeRawUnsafe(
+      `UPDATE outbox_events SET status='PROCESSING', available_at = now() - interval '10 minutes' WHERE id IN (${ids.map((i) => `'${i}'::uuid`).join(",")})`,
+    );
+
+    const batch = await outboxRepository.claimPendingBatch({ limit: BATCH_SIZE, now: new Date(), staleProcessingThresholdMs: STALE_MS });
+    const reclaimed = batch.filter((e) => ids.includes(e.id)).length;
+
+    scenarios.push({
+      label: "EXPIRED_PROCESSING",
+      foreignCount: ids.length,
+      preExistingClaimable,
+      ownEventId: "n/a",
+      foreignEventIdsSample: ids.slice(0, 3),
+      firstBatch: { size: batch.length, foreign: reclaimed, own: 0, ownPresent: false, sampleIds: ids.slice(0, 3) },
+      ticksUntilOwnProcessed: 1,
+      msUntilOwnProcessed: 0,
+      foreignProcessedBeforeOwn: reclaimed,
+      ownFinalStatus: `reclaimed=${reclaimed}/${ids.length}`,
+    });
+
+    expect(reclaimed).toBe(ids.length);
+  }, 300000);
+});

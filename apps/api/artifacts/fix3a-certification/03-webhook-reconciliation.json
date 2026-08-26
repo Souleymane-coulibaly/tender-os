@@ -1,0 +1,79 @@
+{
+  "governed": [
+    "tender.created",
+    "task.created",
+    "task.completed",
+    "opportunity.go_decided",
+    "opportunity.no_go_decided",
+    "response_package.validated",
+    "response_package.generated",
+    "external_tender.created",
+    "external_tender.updated",
+    "saved_search.match_found",
+    "notification.created"
+  ],
+  "note": "GoNoGoDecisionRecorded resout vers 2 types publics selon le payload",
+  "rows": [
+    {
+      "eventType": "GoNoGoDecisionRecorded",
+      "publicWebhookTypes": [
+        "opportunity.go_decided",
+        "opportunity.no_go_decided"
+      ]
+    },
+    {
+      "eventType": "TaskCompleted",
+      "publicWebhookTypes": [
+        "task.completed"
+      ]
+    },
+    {
+      "eventType": "TaskCreated",
+      "publicWebhookTypes": [
+        "task.created"
+      ]
+    },
+    {
+      "eventType": "TenderCreated",
+      "publicWebhookTypes": [
+        "tender.created"
+      ]
+    },
+    {
+      "eventType": "external_tender.created",
+      "publicWebhookTypes": [
+        "external_tender.created"
+      ]
+    },
+    {
+      "eventType": "external_tender.updated",
+      "publicWebhookTypes": [
+        "external_tender.updated"
+      ]
+    },
+    {
+      "eventType": "notification.created",
+      "publicWebhookTypes": [
+        "notification.created"
+      ]
+    },
+    {
+      "eventType": "response_package.generated",
+      "publicWebhookTypes": [
+        "response_package.generated"
+      ]
+    },
+    {
+      "eventType": "response_package.validated",
+      "publicWebhookTypes": [
+        "response_package.validated"
+      ]
+    },
+    {
+      "eventType": "saved_search.match_found",
+      "publicWebhookTypes": [
+        "saved_search.match_found"
+      ]
+    }
+  ]
+}

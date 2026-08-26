@@ -1,0 +1,56 @@
+{
+  "batchSize": 100,
+  "preExistingClaimable": 0,
+  "noHandler": {
+    "label": "NO_HANDLER",
+    "foreignCount": 10,
+    "preExistingClaimable": 0,
+    "ownEventId": "n/a",
+    "foreignEventIdsSample": [
+      "00118425-3260-4801-a6b3-45dd31a03cf8",
+      "ffc8d86e-1c95-4b9a-97f8-0327c8e7d246",
+      "d422d5f5-d257-4eca-801b-1f72998a25fc"
+    ],
+    "firstBatch": {
+      "size": 10,
+      "foreign": 10,
+      "own": 0,
+      "ownPresent": false,
+      "sampleIds": [
+        "00118425-3260-4801-a6b3-45dd31a03cf8",
+        "ffc8d86e-1c95-4b9a-97f8-0327c8e7d246",
+        "d422d5f5-d257-4eca-801b-1f72998a25fc"
+      ]
+    },
+    "ticksUntilOwnProcessed": 1,
+    "msUntilOwnProcessed": 0,
+    "foreignProcessedBeforeOwn": 10,
+    "ownFinalStatus": "statuses={\"FAILED\":10} stillClaimable=0"
+  },
+  "expiredProcessing": {
+    "label": "EXPIRED_PROCESSING",
+    "foreignCount": 5,
+    "preExistingClaimable": 0,
+    "ownEventId": "n/a",
+    "foreignEventIdsSample": [
+      "051b9bcd-e2b0-4d28-8c5e-6b915d57d2d4",
+      "32834d6f-a480-488a-a1ff-3e7c9d0113b5",
+      "bbab8029-ba65-4c56-9113-7c2d120e1bfd"
+    ],
+    "firstBatch": {
+      "size": 5,
+      "foreign": 5,
+      "own": 0,
+      "ownPresent": false,
+      "sampleIds": [
+        "051b9bcd-e2b0-4d28-8c5e-6b915d57d2d4",
+        "32834d6f-a480-488a-a1ff-3e7c9d0113b5",
+        "bbab8029-ba65-4c56-9113-7c2d120e1bfd"
+      ]
+    },
+    "ticksUntilOwnProcessed": 1,
+    "msUntilOwnProcessed": 0,
+    "foreignProcessedBeforeOwn": 5,
+    "ownFinalStatus": "reclaimed=5/5"
+  }
+}

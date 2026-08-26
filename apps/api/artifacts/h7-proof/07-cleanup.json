@@ -1,0 +1,20 @@
+{
+  "NEW_ORGANIZATION_LEAK": 0,
+  "NEW_OUTBOX_LEAK": 0,
+  "currentOutboxByStatus": [
+    {
+      "status": "PUBLISHED",
+      "c": 812
+    },
+    {
+      "status": "DEAD_LETTER",
+      "c": 104
+    },
+    {
+      "status": "FAILED",
+      "c": 25
+    }
+  ],
+  "currentClaimable": 1,
+  "organizationsTotal": 432
+}
