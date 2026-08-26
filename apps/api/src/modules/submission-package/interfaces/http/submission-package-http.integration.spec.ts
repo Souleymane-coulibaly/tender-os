@@ -225,6 +225,16 @@ describe("SubmissionPackage — real HTTP + PostgreSQL (NestJS)", () => {
   }, 60000);
 
   afterAll(async () => {
+    // Checkpoint TENDEROS-2.1-P2.3-E12.4 FIX-1 (H6-01) — l'application est fermee AVANT la purge,
+    // jamais apres. Preuve a l'origine de ce correctif : sur 246 organisations residuelles, les
+    // tables qui bloquaient encore leur suppression etaient `outbox_events` (440 lignes) et
+    // `audit_logs` (218) — ecrites par le travail de fond APRES que ce teardown les ait purgees.
+    // La suppression finale de l'organisation violait alors la FK, `afterAll` avortait, et toute
+    // la fixture racine (organisation, utilisateurs, sessions) fuyait d'un run a l'autre.
+    // `app.close()` attend desormais le travail en vol (`BackgroundTaskRunner`, E12.3) : apres ce
+    // point plus aucune ecriture n'est possible, la purge est donc deterministe. Prisma se
+    // reconnecte paresseusement pour les suppressions ci-dessous.
+    await app.close();
     await prisma.packageFile.deleteMany({ where: { organizationId: orgAId } });
     await prisma.submissionPackage.deleteMany({ where: { organizationId: orgAId } });
     // TEST HYGIENE (Checkpoint TENDEROS-2.1-P2.2-F5) — le nouveau test de garde signature sème des
@@ -271,7 +281,6 @@ describe("SubmissionPackage — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
-    await app.close();
   });
 
   it("refuses an unauthenticated request (401)", async () => {

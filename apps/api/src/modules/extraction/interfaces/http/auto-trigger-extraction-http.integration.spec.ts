@@ -180,6 +180,18 @@ describe("Auto-trigger extraction — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.organization.create({
       data: { id: orgBId, name: "Auto-Trigger Org B", slug: `auto-trigger-org-b-${orgBId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
     });
+    // Checkpoint TENDEROS-2.1-P2.3-E12.1 — même cause que `extraction-http.integration.spec.ts` :
+    // les routes DCE exercées ici sont gatées par `EntitlementService` depuis le Checkpoint E1.1
+    // (FINDING 1) et ce spec n'avait jamais été mis à jour, contrairement à `dce-http`. Le 402
+    // observé était la réponse CORRECTE du produit, pas une régression — la précondition commerciale
+    // est donc créée réellement, jamais le gate contourné. La preuve du REFUS sans entitlement vit
+    // dans `extraction-http.integration.spec.ts` (test dédié "gate commercial"), pas dupliquée ici.
+    await prisma.organizationSubscription.createMany({
+      data: [
+        { id: randomUUID(), organizationId: orgAId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+        { id: randomUUID(), organizationId: orgBId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+      ],
+    });
 
     const adminA = await registerAndLogin(`auto-trigger-admin-a-${randomUUID()}@smoke.test`);
     const adminB = await registerAndLogin(`auto-trigger-admin-b-${randomUUID()}@smoke.test`);
@@ -208,6 +220,16 @@ describe("Auto-trigger extraction — real HTTP + PostgreSQL (NestJS)", () => {
   }, 60000);
 
   afterAll(async () => {
+    // Checkpoint TENDEROS-2.1-P2.3-E12.2 — l'application est fermée AVANT le nettoyage, jamais après.
+    // Ce spec déclenche un pipeline d'extraction/analyse ASYNCHRONE : tant que l'app tourne, ses
+    // dispatchers de fond continuent d'écrire de vrais `OutboxEvent` pour ces organisations. L'ordre
+    // précédent (purge de l'Outbox en tête, `organization.deleteMany` ~20 requêtes plus loin)
+    // laissait une fenêtre pendant laquelle un évènement pouvait être réécrit, faisant échouer la
+    // suppression finale sur `outbox_events_organization_id_fkey` — observé au FULL RUN #2, jamais
+    // au RUN #1 : une course, donc invisible tant qu'on ne rejoue pas la suite deux fois de suite.
+    // Fermer l'app d'abord supprime la course à sa source, sans `sleep` ni retry (Prisma se
+    // reconnecte paresseusement pour les requêtes de nettoyage ci-dessous).
+    await app.close();
     // Audit Codex P1-4 — RoutingPolicyBridgeModule est câblé dans l'app réelle : une décision de
     // routage durable est créée pour chaque job traité (même sans provider IA configuré, l'échec
     // AI_PROVIDER_NOT_CONFIGURED intervient après la persistance de la décision), jamais nettoyée
@@ -217,6 +239,8 @@ describe("Auto-trigger extraction — real HTTP + PostgreSQL (NestJS)", () => {
     // d'écrire des évènements Outbox après que la réponse HTTP soit revenue, jamais nettoyés par
     // les suppressions "métier" ci-dessous.
     await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.organizationPassPurchase.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.documentBusinessAnalysis.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.analysisAttempt.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.analysisJob.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -237,7 +261,6 @@ describe("Auto-trigger extraction — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
-    await app.close();
   }, 30000);
 
   it("a document imported via DCE reaches a terminal extraction status with zero manual trigger", async () => {

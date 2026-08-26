@@ -2,7 +2,9 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { GetCurrentUserUseCase } from "../../../identity";
 import { MEMBERSHIP_REPOSITORY, OrganizationRole, type MembershipRepository } from "../../../memberships";
 import { EMAIL_PROVIDER, type EmailProvider } from "../../../../shared-kernel/email-provider";
+import { NotificationCategory } from "../../domain/notification-category";
 import { CreateNotificationUseCase } from "../../application/use-cases/create-notification.use-case";
+import { IsCategoryEmailEnabledUseCase } from "../../application/use-cases/is-category-email-enabled.use-case";
 
 export type NotifyBillingInput = Readonly<{
   organizationId: string;
@@ -37,6 +39,7 @@ export class BillingEventNotificationService {
   constructor(
     private readonly createNotificationUseCase: CreateNotificationUseCase,
     private readonly getCurrentUserUseCase: GetCurrentUserUseCase,
+    private readonly isCategoryEmailEnabledUseCase: IsCategoryEmailEnabledUseCase,
     @Inject(MEMBERSHIP_REPOSITORY) private readonly membershipRepository: MembershipRepository,
     @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider,
   ) {}
@@ -71,6 +74,13 @@ export class BillingEventNotificationService {
       targetUrl: input.targetUrl,
       metadata: input.metadata,
     });
+
+    // Checkpoint TENDEROS-2.1-P2.3-E11 — même garde que `WorkspaceEventNotificationService` : l'in-app
+    // ci-dessus reste toujours créé, seul l'email est conditionné à la préférence de CE destinataire.
+    const emailEnabled = await this.isCategoryEmailEnabledUseCase.execute({ userId, category: NotificationCategory.Billing });
+    if (!emailEnabled) {
+      return;
+    }
 
     try {
       const user = await this.getCurrentUserUseCase.execute({ userId });

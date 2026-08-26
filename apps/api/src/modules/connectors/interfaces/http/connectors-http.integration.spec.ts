@@ -166,6 +166,16 @@ describe("Connecteurs (connectors) — real HTTP + PostgreSQL (NestJS)", () => {
   });
 
   afterAll(async () => {
+    // Checkpoint TENDEROS-2.1-P2.3-E12.4 FIX-1 (H6-01) — l'application est fermee AVANT la purge,
+    // jamais apres. Preuve a l'origine de ce correctif : sur 246 organisations residuelles, les
+    // tables qui bloquaient encore leur suppression etaient `outbox_events` (440 lignes) et
+    // `audit_logs` (218) — ecrites par le travail de fond APRES que ce teardown les ait purgees.
+    // La suppression finale de l'organisation violait alors la FK, `afterAll` avortait, et toute
+    // la fixture racine (organisation, utilisateurs, sessions) fuyait d'un run a l'autre.
+    // `app.close()` attend desormais le travail en vol (`BackgroundTaskRunner`, E12.3) : apres ce
+    // point plus aucune ecriture n'est possible, la purge est donc deterministe. Prisma se
+    // reconnecte paresseusement pour les suppressions ci-dessous.
+    await app.close();
     await prisma.calendarSyncedEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.syncConfiguration.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.oAuthFlowState.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -178,12 +188,19 @@ describe("Connecteurs (connectors) — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.clientAssignment.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    // Checkpoint TENDEROS-2.1-P2.3-E12 (mission §100 qualité des tests) — purge MANQUANTE : ce
+    // teardown ne supprimait pas les `OutboxEvent` produits par les use cases exercés ici, si bien
+    // que `organization.deleteMany` ci-dessous violait systématiquement
+    // `outbox_events_organization_id_fkey`. Les 19 tests passaient, mais la SUITE était rapportée en
+    // échec et laissait des organisations + événements orphelins en base — une source réelle de
+    // pollution pour les suites exécutées ensuite (et une part du bruit "flaky" observé sur la
+    // suite complète). Même ordre de purge que les autres specs d'intégration du dépôt.
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
-    await app.close();
   });
 
   it("main flow: initiate -> OAuth callback -> ACTIVE -> import -> export -> calendar event, all real HTTP", async () => {

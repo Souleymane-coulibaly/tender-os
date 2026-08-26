@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { BackgroundTaskRunner } from "../../shared-kernel/background-task-runner";
 import { BillingModule } from "../billing";
 import { DocumentsModule } from "../documents";
 import { IdentityModule } from "../identity";
@@ -42,6 +43,10 @@ import { DceController } from "./interfaces/http/dce.controller";
   imports: [IdentityModule, MembershipsModule, TendersModule, DocumentsModule, BillingModule],
   controllers: [DceController],
   providers: [
+    // Checkpoint TENDEROS-2.1-P2.3-E12.3 — fourni PAR CE MODULE (jamais globalement) :
+    // Nest detruit les modules metier AVANT `DatabaseModule`, donc le travail de fond encore en vol
+    // est attendu avant la deconnexion Prisma. Voir `BackgroundTaskRunner` pour le contrat complet.
+    BackgroundTaskRunner,
     CreateDceUseCase,
     GetDceUseCase,
     ImportDceFilesUseCase,

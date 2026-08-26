@@ -5,6 +5,7 @@ import type { RequestWithId } from "../../../../shared-kernel/request-id.middlew
 
 const STATUS_BY_CODE: Record<string, number> = {
   NOTIFICATION_NOT_FOUND: HttpStatus.NOT_FOUND,
+  INVALID_NOTIFICATION_CATEGORY: HttpStatus.UNPROCESSABLE_ENTITY,
 };
 
 @Catch(DomainError)

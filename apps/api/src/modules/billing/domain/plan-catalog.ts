@@ -39,6 +39,30 @@ function starterLikeQuotas(overrides: Partial<Record<QuotaType, QuotaLimit>> = {
   };
 }
 
+/**
+ * Checkpoint TENDEROS-2.1-PRE-DECOM-FIX (REC-001) — quotas d'une organisation SANS aucun plan.
+ *
+ * POURQUOI CETTE LIGNE DE BASE EXISTE — `CreateOrganizationWithOwnerUseCase` cree atomiquement
+ * l'organisation ET sa Membership OWNER, mais aucun etat commercial (l'essai Starter est pilote par
+ * Stripe, Sprint 25). `getEffectiveLimit` renvoyait alors `0` pour TOUS les quotas, y compris
+ * `USERS_MAX` : l'organisation naissait donc a `1 membre / 0 siege` et refusait tout ajout avec
+ * `SEAT_LIMIT_EXCEEDED (1/0)` — son propre fondateur la mettait deja hors quota.
+ *
+ * CE QUE CETTE LIGNE DE BASE N'EST PAS — un nouveau palier commercial. Elle n'accorde AUCUN credit
+ * AO, AUCUNE fonctionnalite, et n'autorise AUCUNE operation sur un Tender (`canOperateOnTender` ne
+ * la consulte jamais). Acheter reste l'unique moyen d'obtenir un second siege : Stripe n'est pas
+ * contourne. Elle rend seulement le moteur d'entitlement COHERENT avec le bootstrap, en garantissant
+ * l'invariant `USERS_MAX >= membres crees par l'onboarding` (1 >= 1).
+ */
+export const NO_PLAN_BASELINE_QUOTAS: Readonly<Record<QuotaType, QuotaLimit>> = {
+  [QuotaType.AoMonthlyGrant]: 0,
+  [QuotaType.AoRolloverCap]: 0,
+  /** Le fondateur, et lui seul. */
+  [QuotaType.UsersMax]: 1,
+  [QuotaType.ChatAiDailyMax]: 0,
+  [QuotaType.StorageGbMax]: 0,
+};
+
 export const PLAN_CATALOG: Readonly<Record<PlanTier, PlanCatalogEntry>> = {
   /**
    * Mission §3/§4 — "Pass = 1 AO + fonctionnalités métier Starter + paiement unique + accès limité

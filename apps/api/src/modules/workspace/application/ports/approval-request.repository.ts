@@ -13,6 +13,18 @@ export interface ApprovalRequestRepository {
     restrictToClientAccountIds?: readonly string[] | undefined;
     status?: string | undefined;
   }): Promise<ApprovalRequest[]>;
+  /** Checkpoint TENDEROS-2.1-P2.3-E12.1 — MÊME périmètre exact que `listByReviewer` (mêmes
+   *  prédicats, mêmes conventions de restriction), mais compté par PostgreSQL. Existe pour le KPI
+   *  Dashboard "Validations en attente : N", qui n'avait besoin QUE du nombre et matérialisait
+   *  pourtant toutes les lignes. Poser un `take` sur `listByReviewer` aurait au contraire rendu ce
+   *  KPI silencieusement FAUX au-delà de la borne — un compteur ne doit jamais devenir inexact pour
+   *  gagner en performance. */
+  countByReviewer(input: {
+    organizationId: string;
+    reviewerId: string;
+    restrictToClientAccountIds?: readonly string[] | undefined;
+    status?: string | undefined;
+  }): Promise<number>;
   /** Utilisée uniquement pour la CRÉATION (`RequestApprovalUseCase`) — aucune revue concurrente
    *  possible sur un enregistrement qui vient d'être inséré par cette même requête. */
   save(approval: ApprovalRequest): Promise<void>;

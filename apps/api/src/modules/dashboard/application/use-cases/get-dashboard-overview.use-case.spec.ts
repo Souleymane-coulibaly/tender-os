@@ -11,9 +11,14 @@ function buildUseCase(overrides: Partial<Record<string, { execute: ReturnType<ty
     getTenderStatisticsUseCase: stub({ totalActive: 0, byStatus: {}, deadlinesNext7Days: 0, overdueCount: 0, readyToSubmitCount: 0, atRiskCount: 0, averageReadinessScore: 0 }),
     getTenderListViewUseCase: stub({ items: [], nextCursor: null }),
     getMyTasksUseCase: stub([]),
-    listMyApprovalsUseCase: stub([]),
+    // Checkpoint TENDEROS-2.1-P2.3-E12.1 — le Dashboard consomme désormais `count()` (COUNT(*) SQL)
+    // et non plus `execute()` : il n'a jamais eu besoin que du nombre de validations en attente.
+    listMyApprovalsUseCase: { ...stub([]), count: async () => 0 },
     listRecentActivityForDashboardUseCase: stub([]),
-    getResponsePackagePortfolioSummaryForDashboardUseCase: stub([]),
+    // Checkpoint TENDEROS-2.1-P2.3-E12 — le portefeuille renvoie désormais des AGRÉGATS calculés par
+    // PostgreSQL (`countByStatus`/`total`, état courant global) plus les seules lignes des Tenders
+    // affichés, jamais la liste complète du portefeuille.
+    getResponsePackagePortfolioSummaryForDashboardUseCase: stub({ countByStatus: {}, total: 0, rowsForTenders: [] }),
     getGoNoGoSummaryForDashboardUseCase: stub({ countByDecision: {}, total: 0 }),
     listTenderParticipantsUseCase: stub([]),
     getCurrentUserUseCase: stub({ id: "user-1", displayName: "Test User" }),

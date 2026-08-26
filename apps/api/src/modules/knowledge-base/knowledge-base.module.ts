@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { BackgroundTaskRunner } from "../../shared-kernel/background-task-runner";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { DocumentsModule } from "../documents";
 import { ExtractionModule } from "../extraction";
@@ -58,6 +59,10 @@ import { KnowledgeController } from "./interfaces/http/knowledge.controller";
   imports: [IdentityModule, MembershipsModule, DocumentsModule, ExtractionModule, ClientPortfolioModule, OutboxWriterModule, TendersModule],
   controllers: [KnowledgeController, ChecklistPromotionController],
   providers: [
+    // Checkpoint TENDEROS-2.1-P2.3-E12.3 — fourni PAR CE MODULE (jamais globalement) :
+    // Nest detruit les modules metier AVANT `DatabaseModule`, donc le travail de fond encore en vol
+    // est attendu avant la deconnexion Prisma. Voir `BackgroundTaskRunner` pour le contrat complet.
+    BackgroundTaskRunner,
     GetOrCreateDefaultKnowledgeSpaceUseCase,
     CreateKnowledgeEntryUseCase,
     PromoteChecklistItemToKnowledgeUseCase,

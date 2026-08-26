@@ -7,7 +7,13 @@ import type { TenderActivityEntry, TenderActivityWriter } from "../application/p
 import type { PackageArtifactRepository } from "../application/ports/package-artifact.repository";
 import type { PackageItemRepository } from "../application/ports/package-item.repository";
 import type { ResponsePackageVersionRepository } from "../application/ports/response-package-version.repository";
-import type { ResponsePackageDashboardRow, ResponsePackageRepository } from "../application/ports/response-package.repository";
+import type {
+  ResponsePackageCountByStatus,
+  ResponsePackageDashboardRow,
+  ResponsePackageDashboardScope,
+  ResponsePackageRepository,
+} from "../application/ports/response-package.repository";
+import type { ResponsePackageStatus } from "../domain/enums";
 import type { PackageArtifact } from "../domain/package-artifact.value-object";
 import type { PackageItem } from "../domain/package-item.entity";
 import type { ResponsePackageVersion } from "../domain/response-package-version.entity";
@@ -85,9 +91,26 @@ export class InMemoryResponsePackageRepository implements ResponsePackageReposit
       (p) => p.organizationId === input.organizationId && p.tenderId === input.tenderId && (input.lotId === undefined || p.lotId === input.lotId) && (input.clientAccountId === undefined || p.clientAccountId === input.clientAccountId),
     );
   }
-  async listForDashboard(input: { organizationId: string; restrictToClientAccountIds?: readonly string[] | undefined }): Promise<readonly ResponsePackageDashboardRow[]> {
+  /** Checkpoint TENDEROS-2.1-P2.3-E12 — même intersection accès/filtre que le repository Prisma
+   *  réel : un `clientAccountId` hors périmètre accessible ne peut que réduire à zéro. */
+  private inDashboardScope(p: ResponsePackage, scope: ResponsePackageDashboardScope): boolean {
+    if (p.organizationId !== scope.organizationId) return false;
+    if (scope.restrictToClientAccountIds !== undefined && !scope.restrictToClientAccountIds.includes(p.clientAccountId)) return false;
+    return scope.clientAccountId === undefined || p.clientAccountId === scope.clientAccountId;
+  }
+
+  async countByStatusForDashboard(scope: ResponsePackageDashboardScope): Promise<ResponsePackageCountByStatus> {
+    const countByStatus: Partial<Record<ResponsePackageStatus, number>> = {};
+    for (const p of this.packages) {
+      if (!this.inDashboardScope(p, scope)) continue;
+      countByStatus[p.status] = (countByStatus[p.status] ?? 0) + 1;
+    }
+    return countByStatus;
+  }
+
+  async listForDashboardTenders(scope: ResponsePackageDashboardScope & { tenderIds: readonly string[] }): Promise<readonly ResponsePackageDashboardRow[]> {
     return this.packages
-      .filter((p) => p.organizationId === input.organizationId && (input.restrictToClientAccountIds === undefined || input.restrictToClientAccountIds.includes(p.clientAccountId)))
+      .filter((p) => this.inDashboardScope(p, scope) && scope.tenderIds.includes(p.tenderId))
       .map((p) => ({ id: p.id, tenderId: p.tenderId, lotId: p.lotId ?? null, clientAccountId: p.clientAccountId, status: p.status }));
   }
 }

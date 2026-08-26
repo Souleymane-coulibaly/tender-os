@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { GetCurrentUserUseCase } from "../../../identity";
+import { IsCategoryEmailEnabledUseCase, NotificationCategory } from "../../../notifications";
 import { EMAIL_PROVIDER, type EmailProvider } from "../../../../shared-kernel/email-provider";
 import { EMAIL_ALERT_STALE_CLAIM_THRESHOLD_MS, EmailFrequency } from "../../domain/enums";
 import type { ExternalTender } from "../../domain/external-tender.entity";
@@ -38,6 +39,7 @@ export class SendPendingEmailAlertsUseCase {
     @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly getCurrentUserUseCase: GetCurrentUserUseCase,
+    private readonly isCategoryEmailEnabledUseCase: IsCategoryEmailEnabledUseCase,
   ) {}
 
   async execute(input: SendPendingEmailAlertsInput): Promise<SendPendingEmailAlertsResult> {
@@ -68,6 +70,18 @@ export class SendPendingEmailAlertsUseCase {
       // SENDING pour toujours (jamais réclamables par un tick futur, même une fois la préférence
       // réactivée).
       if (!savedSearch || !savedSearch.alertEmail || !savedSearch.isActive) {
+        await this.releaseClaims(matches, now);
+        continue;
+      }
+
+      // Checkpoint TENDEROS-2.1-P2.3-E11 (mission §15/§25/§26) — préférence GÉNÉRALE catégorie
+      // "Veille", COMPOSÉE avec (jamais remplaçant) le réglage `alertEmail` propre à la veille
+      // ci-dessus : les DEUX doivent être vrais pour qu'un email parte. Même sémantique "reste
+      // PENDING pour toujours, jamais un échec" que le réglage par veille (mission §127/§129
+      // d'origine E10) — jamais un second comportement pour une désactivation via la nouvelle
+      // surface de préférences.
+      const categoryEmailEnabled = await this.isCategoryEmailEnabledUseCase.execute({ userId: savedSearch.ownerUserId, category: NotificationCategory.MarketWatch });
+      if (!categoryEmailEnabled) {
         await this.releaseClaims(matches, now);
         continue;
       }

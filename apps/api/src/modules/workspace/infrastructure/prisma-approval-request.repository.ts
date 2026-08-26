@@ -74,6 +74,24 @@ export class PrismaApprovalRequestRepository implements ApprovalRequestRepositor
     return records.map(toDomain);
   }
 
+  async countByReviewer(input: {
+    organizationId: string;
+    reviewerId: string;
+    restrictToClientAccountIds?: readonly string[] | undefined;
+    status?: string | undefined;
+  }): Promise<number> {
+    // Checkpoint TENDEROS-2.1-P2.3-E12.1 — prédicats STRICTEMENT identiques à `listByReviewer`
+    // ci-dessus : le compteur et la liste ne peuvent jamais diverger.
+    return this.prisma.currentClient().approvalRequest.count({
+      where: {
+        organizationId: input.organizationId,
+        reviewerId: input.reviewerId,
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.restrictToClientAccountIds !== undefined ? { tender: { clientAccountId: { in: [...input.restrictToClientAccountIds] } } } : {}),
+      },
+    });
+  }
+
   async save(approval: ApprovalRequest): Promise<void> {
     const data = toPersistence(approval);
     await this.prisma.currentClient().approvalRequest.upsert({ where: { id: data.id }, create: data, update: data });

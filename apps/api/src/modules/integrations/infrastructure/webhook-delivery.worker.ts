@@ -16,6 +16,8 @@ import { DeliverWebhookService } from "./deliver-webhook.service";
 export class WebhookDeliveryWorker implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WebhookDeliveryWorker.name);
   private timer: ReturnType<typeof setInterval> | undefined;
+  /** Tick actuellement en vol — attendu par `onModuleDestroy` (Checkpoint E12.3, §8). */
+  private currentTick: Promise<void> | undefined;
   private ticking = false;
 
   constructor(
@@ -32,18 +34,24 @@ export class WebhookDeliveryWorker implements OnModuleInit, OnModuleDestroy {
 
     const intervalMs = this.readPositiveIntEnv("WEBHOOK_DELIVERY_POLL_INTERVAL_MS", 2000);
     this.timer = setInterval(() => {
-      void this.tick();
+      // Checkpoint TENDEROS-2.1-P2.3-E12.3 (§8) — même contrat que `OutboxPublisherWorker` : le tick
+      // en vol est conservé pour être attendu à l'arrêt, afin qu'aucune requête Prisma (ni aucune
+      // livraison HTTP sortante) ne parte après la fermeture ("Engine is not yet connected").
+      this.currentTick = this.tick();
+      void this.currentTick;
     }, intervalMs);
     this.timer.unref();
     this.logger.log(`Webhook delivery worker started (interval=${intervalMs}ms).`);
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = undefined;
-      this.logger.log("Webhook delivery worker stopped.");
     }
+    await this.currentTick;
+    this.currentTick = undefined;
+    this.logger.log("Webhook delivery worker stopped.");
   }
 
   async tick(): Promise<void> {

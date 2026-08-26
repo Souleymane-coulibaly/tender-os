@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
+import { BackgroundTaskRunner } from "../../../shared-kernel/background-task-runner";
 import type { GenerationDispatcher, GenerationDispatchInput } from "../application/ports/generation-dispatcher";
 import { ProcessGenerationUseCase } from "../application/use-cases/process-generation.use-case";
 
@@ -7,18 +8,12 @@ import { ProcessGenerationUseCase } from "../application/use-cases/process-gener
  *  un retry manuel — limite documentée (voir rapport final §Q "risques résiduels"). */
 @Injectable()
 export class InProcessGenerationDispatcher implements GenerationDispatcher {
-  private readonly logger = new Logger(InProcessGenerationDispatcher.name);
-
-  constructor(@Inject(ProcessGenerationUseCase) private readonly processUseCase: ProcessGenerationUseCase) {}
+  constructor(@Inject(ProcessGenerationUseCase) private readonly processUseCase: ProcessGenerationUseCase, private readonly backgroundTasks: BackgroundTaskRunner) {}
 
   dispatch(input: GenerationDispatchInput): void {
-    setImmediate(() => {
-      this.processUseCase.execute(input).catch((error: unknown) => {
-        this.logger.error(
-          `Unhandled error while processing generation ${input.generationId}: ` +
-            `${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
-    });
+    // Checkpoint TENDEROS-2.1-P2.3-E12.3 — passe par `BackgroundTaskRunner` : le travail
+    // detache est desormais SUIVI, refuse apres le debut de l'arret, et attendu par
+    // `onModuleDestroy` avant la deconnexion Prisma. Voir le contrat complet dans ce service.
+    this.backgroundTasks.run(`generation:${input.generationId}`, () => this.processUseCase.execute(input));
   }
 }

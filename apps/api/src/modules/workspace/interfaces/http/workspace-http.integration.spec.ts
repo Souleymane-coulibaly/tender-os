@@ -8,7 +8,8 @@ import { MembershipId } from "../../../memberships/domain/membership-id.value-ob
 import { OrganizationMembership } from "../../../memberships/domain/organization-membership.aggregate";
 import { OrganizationRole } from "../../../memberships/domain/organization-role";
 import { PrismaMembershipRepository } from "../../../memberships/infrastructure/prisma-membership.repository";
-import { OutboxPublisherWorker } from "../../../outbox/infrastructure/outbox-publisher.worker";
+import { OUTBOX_EVENT_DISPATCHER, type OutboxEventDispatcher } from "../../../outbox";
+import { listOutboxEventIds, publishOutboxEventsByIds } from "../../../outbox/test-support/scoped-outbox-test-harness";
 
 /**
  * V2 Sprint 7 (Workspace collaboratif) — preuve réelle contre HTTP + PostgreSQL (NestJS) : flux
@@ -20,7 +21,7 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let baseUrl: string;
-  let outboxWorker: OutboxPublisherWorker;
+  let outboxDispatcher: OutboxEventDispatcher;
 
   const orgAId = randomUUID();
   const orgBId = randomUUID();
@@ -78,6 +79,25 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
     return { clientAccountId: clientAccount.id, tenderId: tender.id };
   }
 
+  async function seedForeignOutboxEvents(count: number, input: { status?: "PENDING" | "PROCESSING"; availableAt?: Date } = {}): Promise<string[]> {
+    const ids = Array.from({ length: count }, () => randomUUID());
+    await prisma.outboxEvent.createMany({
+      data: ids.map((id) => ({
+        id,
+        organizationId: orgBId,
+        eventType: "FOREIGN_BACKLOG_EVENT",
+        eventVersion: 1,
+        aggregateType: "Backlog",
+        aggregateId: randomUUID(),
+        payload: {},
+        occurredAt: new Date(),
+        status: input.status ?? "PENDING",
+        availableAt: input.availableAt ?? new Date(),
+      })),
+    });
+    return ids;
+  }
+
   /** V2 Sprint 18 — cible immuable la plus simple à fabriquer directement (pas de Document/
    *  DocumentVersion source requis, contrairement à PricingScheduleVersion). `status` par défaut
    *  DRAFT (mission §25 "jamais latest/modifiable" — les tests ci-dessous vérifient explicitement
@@ -111,11 +131,12 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
    *  fragile sous exécution concurrente (déjà vrai avant ce sprint, aggravé par le nombre de tests
    *  qui vérifient maintenant des effets Notification précis) — on retente donc plusieurs tick()
    *  espacés avant d'échouer, jamais une seule tentative sèche. */
-  async function waitForNotification(predicate: () => Promise<boolean>, timeoutMs = 10000): Promise<void> {
+  async function waitForNotification(input: { eventIds: string[]; predicate: () => Promise<boolean>; timeoutMs?: number }): Promise<void> {
+    const timeoutMs = input.timeoutMs ?? 10000;
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      await outboxWorker.tick();
-      if (await predicate()) return;
+      await publishOutboxEventsByIds({ prisma, dispatcher: outboxDispatcher, eventIds: input.eventIds });
+      if (await input.predicate()) return;
       if (Date.now() >= deadline) {
         throw new Error(`waitForNotification: condition not met within ${timeoutMs}ms`);
       }
@@ -134,7 +155,7 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
     baseUrl = `http://127.0.0.1:${port}`;
 
     prisma = moduleRef.get(PrismaService);
-    outboxWorker = moduleRef.get(OutboxPublisherWorker);
+    outboxDispatcher = moduleRef.get<OutboxEventDispatcher>(OUTBOX_EVENT_DISPATCHER as never);
 
     await prisma.organization.createMany({
       data: [
@@ -515,15 +536,21 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
     expect(requestRes.status).toBe(201);
     const approval = (await requestRes.json()) as { id: string; status: string };
     expect(approval.status).toBe("PENDING");
+    const approvalRequestedEventIds = await listOutboxEventIds({
+      prisma,
+      organizationId: orgAId,
+      eventTypes: ["ApprovalRequested"],
+      aggregateId: approval.id,
+    });
 
     // Mission §50 "Demande créée → approver notifié" — vraie ligne Notification, pas seulement un
     // événement Outbox non consommé (le bug corrigé lors de l'audit Sprint 18). `karimUserId` est
     // réutilisé par d'autres tests de ce fichier : on cherche la notification qui référence CETTE
     // approbation précise, jamais `[0]`.
-    await waitForNotification(async () => {
+    await waitForNotification({ eventIds: approvalRequestedEventIds, predicate: async () => {
       const rows = await prisma.notification.findMany({ where: { organizationId: orgAId, userId: karimUserId, type: "WORKSPACE_APPROVAL_REQUESTED" } });
       return rows.some((n) => n.targetUrl?.includes(approval.id));
-    });
+    } });
 
     const approveRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals/${approval.id}/approve`, {
       method: "POST",
@@ -532,12 +559,18 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
     });
     expect(approveRes.status).toBe(200);
     expect(((await approveRes.json()) as { status: string }).status).toBe("APPROVED");
+    const approvalApprovedEventIds = await listOutboxEventIds({
+      prisma,
+      organizationId: orgAId,
+      eventTypes: ["ApprovalApproved"],
+      aggregateId: approval.id,
+    });
 
     // Mission §50 "Approved/Rejected → requester notified".
-    await waitForNotification(async () => {
+    await waitForNotification({ eventIds: approvalApprovedEventIds, predicate: async () => {
       const rows = await prisma.notification.findMany({ where: { organizationId: orgAId, userId: ownerAUserId, type: "WORKSPACE_APPROVAL_APPROVED" } });
       return rows.some((n) => n.targetUrl?.includes(approval.id));
-    });
+    } });
 
     const activityRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/activity`, { headers: authHeaders(tokenOwnerA, orgAId) });
     const activity = (await activityRes.json()) as { items: { type: string }[] };
@@ -570,11 +603,17 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
     const rejected = (await rejectRes.json()) as { status: string; comment: string };
     expect(rejected.status).toBe("REJECTED");
     expect(rejected.comment).toBe("Pièce financière manquante.");
+    const approvalRejectedEventIds = await listOutboxEventIds({
+      prisma,
+      organizationId: orgAId,
+      eventTypes: ["ApprovalRejected"],
+      aggregateId: approval.id,
+    });
 
-    await waitForNotification(async () => {
+    await waitForNotification({ eventIds: approvalRejectedEventIds, predicate: async () => {
       const rows = await prisma.notification.findMany({ where: { organizationId: orgAId, userId: ownerAUserId, type: "WORKSPACE_APPROVAL_REJECTED" } });
       return rows.some((n) => n.targetUrl?.includes(approval.id));
-    });
+    } });
 
     const secondDecisionRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/approvals/${approval.id}/approve`, { method: "POST", headers: authHeaders(tokenKarim, orgAId), body: JSON.stringify({}) });
     expect(secondDecisionRes.status).toBe(409);
@@ -722,12 +761,49 @@ describe("Workspace collaboratif — real HTTP + PostgreSQL (NestJS)", () => {
       body: JSON.stringify({ title: "Fournir le mémoire technique", assigneeId: karimUserId }),
     });
     expect(taskRes.status).toBe(201);
+    const createdTask = (await taskRes.json()) as { id: string };
+    const taskAssignedEventIds = await listOutboxEventIds({
+      prisma,
+      organizationId: orgAId,
+      eventTypes: ["TaskAssigned"],
+      aggregateId: createdTask.id,
+    });
 
     // `tenderId` est frais (créé au début de ce test) — suffisant pour désambiguïser sans dépendre
     // de la forme exacte du JSON `metadata` stocké.
-    await waitForNotification(async () => {
+    await waitForNotification({ eventIds: taskAssignedEventIds, predicate: async () => {
       const rows = await prisma.notification.findMany({ where: { organizationId: orgAId, userId: karimUserId, type: "WORKSPACE_TASK_ASSIGNED" } });
       return rows.some((n) => n.targetUrl?.includes(tenderId));
+    } });
+  });
+
+  it("FIX-2A backlog 500 — a task assignment notification is delivered without draining 500 foreign outbox events", async () => {
+    const foreignIds = await seedForeignOutboxEvents(500);
+    const { clientAccountId, tenderId } = await createClientAndTender({ organizationId: orgAId, userId: ownerAUserId });
+    await assignClient({ organizationId: orgAId, clientAccountId, userId: karimUserId, role: "CONTRIBUTOR", createdBy: ownerAUserId });
+    await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/participants`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ userId: karimUserId, role: "TECHNICAL_WRITER" }) });
+
+    const taskRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/tasks`, {
+      method: "POST",
+      headers: authHeaders(tokenOwnerA, orgAId),
+      body: JSON.stringify({ title: "Notification backlog 500", assigneeId: karimUserId }),
     });
+    expect(taskRes.status).toBe(201);
+    const createdTask = (await taskRes.json()) as { id: string };
+    const taskAssignedEventIds = await listOutboxEventIds({
+      prisma,
+      organizationId: orgAId,
+      eventTypes: ["TaskAssigned"],
+      aggregateId: createdTask.id,
+    });
+
+    await waitForNotification({ eventIds: taskAssignedEventIds, predicate: async () => {
+      const rows = await prisma.notification.findMany({ where: { organizationId: orgAId, userId: karimUserId, type: "WORKSPACE_TASK_ASSIGNED" } });
+      return rows.some((n) => n.targetUrl?.includes(tenderId));
+    } });
+
+    const foreignRows = await prisma.outboxEvent.findMany({ where: { id: { in: foreignIds } }, select: { status: true } });
+    expect(foreignRows).toHaveLength(500);
+    expect(foreignRows.every((row) => row.status === "PENDING")).toBe(true);
   });
 });

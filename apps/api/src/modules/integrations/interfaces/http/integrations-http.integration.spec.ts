@@ -9,8 +9,9 @@ import { MembershipId } from "../../../memberships/domain/membership-id.value-ob
 import { OrganizationMembership } from "../../../memberships/domain/organization-membership.aggregate";
 import { OrganizationRole } from "../../../memberships/domain/organization-role";
 import { PrismaMembershipRepository } from "../../../memberships/infrastructure/prisma-membership.repository";
+import { OUTBOX_EVENT_DISPATCHER, type OutboxEventDispatcher } from "../../../outbox";
 import { WebhookDeliveryWorker } from "../../infrastructure/webhook-delivery.worker";
-import { OutboxPublisherWorker } from "../../../outbox/infrastructure/outbox-publisher.worker";
+import { listOutboxEventIds, publishOutboxEventsByIds } from "../../../outbox/test-support/scoped-outbox-test-harness";
 
 /**
  * V2 Sprint 16 (Integration Hub) — preuve réelle contre HTTP + PostgreSQL (NestJS), même motif que
@@ -24,7 +25,7 @@ describe("Integration Hub (integrations) — real HTTP + PostgreSQL (NestJS)", (
   let prisma: PrismaService;
   let baseUrl: string;
   let webhookWorker: WebhookDeliveryWorker;
-  let outboxWorker: OutboxPublisherWorker;
+  let outboxDispatcher: OutboxEventDispatcher;
 
   const orgAId = randomUUID();
   const orgBId = randomUUID();
@@ -64,6 +65,25 @@ describe("Integration Hub (integrations) — real HTTP + PostgreSQL (NestJS)", (
     return tender.id;
   }
 
+  async function seedForeignOutboxEvents(count: number, input: { status?: "PENDING" | "PROCESSING"; availableAt?: Date } = {}): Promise<string[]> {
+    const ids = Array.from({ length: count }, () => randomUUID());
+    await prisma.outboxEvent.createMany({
+      data: ids.map((id) => ({
+        id,
+        organizationId: orgBId,
+        eventType: "FOREIGN_BACKLOG_EVENT",
+        eventVersion: 1,
+        aggregateType: "Backlog",
+        aggregateId: randomUUID(),
+        payload: {},
+        occurredAt: new Date(),
+        status: input.status ?? "PENDING",
+        availableAt: input.availableAt ?? new Date(),
+      })),
+    });
+    return ids;
+  }
+
   async function createApiKey(token: string, organizationId: string, body: Record<string, unknown>): Promise<{ fullKey: string; id: string }> {
     const res = await fetch(`${baseUrl}/api/v1/integrations/api-keys`, { method: "POST", headers: authHeaders(token, organizationId), body: JSON.stringify(body) });
     expect(res.status).toBe(201);
@@ -83,7 +103,7 @@ describe("Integration Hub (integrations) — real HTTP + PostgreSQL (NestJS)", (
 
     prisma = moduleRef.get(PrismaService);
     webhookWorker = moduleRef.get(WebhookDeliveryWorker);
-    outboxWorker = moduleRef.get(OutboxPublisherWorker);
+    outboxDispatcher = moduleRef.get<OutboxEventDispatcher>(OUTBOX_EVENT_DISPATCHER as never);
 
     await prisma.organization.createMany({
       data: [
@@ -283,13 +303,20 @@ describe("Integration Hub (integrations) — real HTTP + PostgreSQL (NestJS)", (
       const tenderTitle = `Webhook E2E Tender ${randomUUID()}`;
       const createRes = await fetch(`${baseUrl}/api/v1/tenders`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ title: tenderTitle, clientAccountId: clientA }) });
       expect(createRes.status).toBe(201);
+      const createdTender = (await createRes.json()) as { id: string };
+      const tenderCreatedEventIds = await listOutboxEventIds({
+        prisma,
+        organizationId: orgAId,
+        eventTypes: ["TenderCreated"],
+        aggregateId: createdTender.id,
+      });
 
       // Mission §36 — jamais dans la transaction métier : on laisse les vrais workers faire leur
       // tick (Outbox PUIS Webhook, exactement la chaîne réelle), jamais un appel direct au service
       // de livraison ni au handler.
       let delivered = false;
       for (let attempt = 0; attempt < 20 && !delivered; attempt += 1) {
-        await outboxWorker.tick();
+        await publishOutboxEventsByIds({ prisma, dispatcher: outboxDispatcher, eventIds: tenderCreatedEventIds });
         await webhookWorker.tick();
         const deliveries = await prisma.webhookDelivery.findMany({ where: { organizationId: orgAId, subscriptionId: webhook.subscription.id } });
         delivered = deliveries.some((d) => d.status === "SUCCEEDED");
@@ -364,6 +391,68 @@ describe("Integration Hub (integrations) — real HTTP + PostgreSQL (NestJS)", (
       delete process.env.WEBHOOK_ALLOW_PRIVATE_NETWORKS;
     }
   }, 20000);
+
+  it("FIX-2A backlog 500 — TenderCreated reaches WebhookDelivery without draining 500 foreign outbox events", async () => {
+    let received = 0;
+    let testServer!: Server;
+    const testServerPort = await new Promise<number>((resolve) => {
+      testServer = createServer((req, res) => {
+        req.resume();
+        received += 1;
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      });
+      testServer.listen(0, "127.0.0.1", () => {
+        const addr = testServer.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const foreignIds = await seedForeignOutboxEvents(500);
+    process.env.WEBHOOK_ALLOW_PRIVATE_NETWORKS = "true";
+    try {
+      const webhookRes = await fetch(`${baseUrl}/api/v1/integrations/webhooks`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ endpointUrl: `http://127.0.0.1:${testServerPort}/webhook`, events: ["tender.created"] }),
+      });
+      expect(webhookRes.status).toBe(201);
+      const webhook = (await webhookRes.json()) as { subscription: { id: string } };
+
+      const clientA = await createClient(orgAId, ownerAUserId, `Client Webhook Backlog ${randomUUID()}`);
+      const createRes = await fetch(`${baseUrl}/api/v1/tenders`, {
+        method: "POST",
+        headers: authHeaders(tokenOwnerA, orgAId),
+        body: JSON.stringify({ title: `Webhook Backlog Tender ${randomUUID()}`, clientAccountId: clientA }),
+      });
+      expect(createRes.status).toBe(201);
+      const createdTender = (await createRes.json()) as { id: string };
+      const tenderCreatedEventIds = await listOutboxEventIds({
+        prisma,
+        organizationId: orgAId,
+        eventTypes: ["TenderCreated"],
+        aggregateId: createdTender.id,
+      });
+
+      let delivered = false;
+      for (let attempt = 0; attempt < 20 && !delivered; attempt += 1) {
+        await publishOutboxEventsByIds({ prisma, dispatcher: outboxDispatcher, eventIds: tenderCreatedEventIds });
+        await webhookWorker.tick();
+        const deliveries = await prisma.webhookDelivery.findMany({ where: { organizationId: orgAId, subscriptionId: webhook.subscription.id } });
+        delivered = deliveries.some((d) => d.status === "SUCCEEDED");
+        if (!delivered) await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      expect(delivered).toBe(true);
+      expect(received).toBeGreaterThanOrEqual(1);
+      const foreignRows = await prisma.outboxEvent.findMany({ where: { id: { in: foreignIds } }, select: { status: true } });
+      expect(foreignRows).toHaveLength(500);
+      expect(foreignRows.every((row) => row.status === "PENDING")).toBe(true);
+    } finally {
+      testServer.close();
+      delete process.env.WEBHOOK_ALLOW_PRIVATE_NETWORKS;
+    }
+  }, 30000);
 
   it("BLOQUANT — audit Codex INT-P1-01 : une redirection HTTP vers une cible interne/de métadonnées cloud n'est JAMAIS suivie, la delivery passe DEAD (non-retryable)", async () => {
     let redirectServer!: Server;

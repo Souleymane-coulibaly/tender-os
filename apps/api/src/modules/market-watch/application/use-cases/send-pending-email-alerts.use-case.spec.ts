@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GetCurrentUserUseCase } from "../../../identity";
+import type { IsCategoryEmailEnabledUseCase } from "../../../notifications";
 import { ExternalTender } from "../../domain/external-tender.entity";
 import { EmailFrequency } from "../../domain/enums";
 import { SavedSearch } from "../../domain/saved-search.entity";
@@ -12,6 +13,12 @@ const ORG_ID = "org-1";
 
 function fakeGetCurrentUserUseCase(email = "user1@example.com"): GetCurrentUserUseCase {
   return { execute: vi.fn(async () => ({ id: "user-1", email, displayName: "User One", status: "ACTIVE", createdAt: NOW.toISOString() })) } as unknown as GetCurrentUserUseCase;
+}
+
+/** Checkpoint TENDEROS-2.1-P2.3-E11 — `true` par défaut (préserve le comportement E10 existant
+ *  pour tous les tests qui ne testent pas spécifiquement la préférence). */
+function fakeIsCategoryEmailEnabledUseCase(enabled = true): IsCategoryEmailEnabledUseCase {
+  return { execute: vi.fn(async () => enabled) } as unknown as IsCategoryEmailEnabledUseCase;
 }
 
 function buildTender(id: string) {
@@ -31,8 +38,8 @@ describe("SendPendingEmailAlertsUseCase — mission §43/§66/§67/§111/§136/�
     emailProvider = new FakeEmailProvider();
   });
 
-  function buildUseCase(getCurrentUserUseCase: GetCurrentUserUseCase = fakeGetCurrentUserUseCase()) {
-    return new SendPendingEmailAlertsUseCase(matchRepository, savedSearchRepository, externalTenderRepository, emailProvider, new FixedClock(NOW), getCurrentUserUseCase);
+  function buildUseCase(getCurrentUserUseCase: GetCurrentUserUseCase = fakeGetCurrentUserUseCase(), isCategoryEmailEnabledUseCase: IsCategoryEmailEnabledUseCase = fakeIsCategoryEmailEnabledUseCase()) {
+    return new SendPendingEmailAlertsUseCase(matchRepository, savedSearchRepository, externalTenderRepository, emailProvider, new FixedClock(NOW), getCurrentUserUseCase, isCategoryEmailEnabledUseCase);
   }
 
   it("BLOQUANT — mission §138: IMMEDIATE frequency sends a single email right away for one match", async () => {
@@ -96,6 +103,35 @@ describe("SendPendingEmailAlertsUseCase — mission §43/§66/§67/§111/§136/�
     expect(result.sent).toBe(0);
     expect(result.failed).toBe(0);
     expect(match.emailStatus).toBe("PENDING");
+  });
+
+  it("BLOQUANT (E11 §26) — the general MARKET_WATCH email preference disabled leaves matches PENDING forever, never sent, never a failure, even when the per-search alertEmail is true", async () => {
+    const search = SavedSearch.create({ id: "ss-1", organizationId: ORG_ID, ownerUserId: "user-1", name: "Nettoyage", alertEmail: true, emailFrequency: EmailFrequency.Immediate, createdBy: "user-1", occurredAt: NOW });
+    savedSearchRepository.searches.push(search);
+    externalTenderRepository.tenders.push(buildTender("et-1"));
+    const match = SavedSearchMatch.create({ id: "m-1", organizationId: ORG_ID, savedSearchId: "ss-1", externalTenderId: "et-1", score: 80, matchReasons: [], occurredAt: NOW });
+    matchRepository.matches.push(match);
+
+    const result = await buildUseCase(fakeGetCurrentUserUseCase(), fakeIsCategoryEmailEnabledUseCase(false)).execute({ batchSize: 100, baseUrl: "https://x" });
+
+    expect(result.sent).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(match.emailStatus).toBe("PENDING");
+    expect(emailProvider.sent).toHaveLength(0);
+  });
+
+  it("BLOQUANT (E11 §27) — the general MARKET_WATCH email preference ENABLED (default) still sends when the per-search alertEmail is true", async () => {
+    const search = SavedSearch.create({ id: "ss-1", organizationId: ORG_ID, ownerUserId: "user-1", name: "Nettoyage", alertEmail: true, emailFrequency: EmailFrequency.Immediate, createdBy: "user-1", occurredAt: NOW });
+    savedSearchRepository.searches.push(search);
+    externalTenderRepository.tenders.push(buildTender("et-1"));
+    const match = SavedSearchMatch.create({ id: "m-1", organizationId: ORG_ID, savedSearchId: "ss-1", externalTenderId: "et-1", score: 80, matchReasons: [], occurredAt: NOW });
+    matchRepository.matches.push(match);
+
+    const result = await buildUseCase(fakeGetCurrentUserUseCase(), fakeIsCategoryEmailEnabledUseCase(true)).execute({ batchSize: 100, baseUrl: "https://x" });
+
+    expect(result.sent).toBe(1);
+    expect(emailProvider.sent).toHaveLength(1);
+    expect(match.emailStatus).toBe("SENT");
   });
 
   it("BLOQUANT — mission §75: the recipient is always resolved from the owner's account, never a frontend-supplied address", async () => {

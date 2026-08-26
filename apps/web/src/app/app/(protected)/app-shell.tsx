@@ -15,7 +15,14 @@ function isActiveHref(pathname: string, href: string): boolean {
  * Sidebar Navy unique (jamais deux blocs `data-tour` distincts desktop/mobile — les cibles de la
  * visite guidée, `tour-steps.ts`, doivent rester interrogeables via `document.querySelector` quel
  * que soit l'état ouvert/fermé du panneau) : toujours montée dans le DOM, positionnée statiquement
- * dès `md:`, transformée hors-écran (`-translate-x-full`) en drawer avant `md:`. `headerActions`
+ * dès `lg:`, transformée hors-écran (`-translate-x-full`) en drawer avant `lg:`. `headerActions`
+ *
+ * Checkpoint TENDEROS-2.1-PRE-DECOM-FIX (REC-003) — le point de bascule etait `md:` (768px) :
+ * a EXACTEMENT 768px la barre laterale redevenait statique et consommait 256px, ne laissant que
+ * 512px au contenu. La ligne de metadonnees des cartes Veille s'y chevauchait
+ * (`PublieDeadliMontantfford`) et la page debordait horizontalement. Le drawer est desormais
+ * conserve jusqu'a `lg:` (1024px), largeur a partir de laquelle les deux colonnes tiennent
+ * reellement. Les paddings `md:` sont volontairement inchanges : ils ne causaient aucun debordement.
  * (notifications, redémarrer la visite, déconnexion) reste rendu côté serveur par `layout.tsx` et
  * traverse la frontière client/serveur en tant que `ReactNode`, jamais réimplémenté ici.
  */
@@ -25,20 +32,20 @@ export function AppShell({ headerActions, actorRole, children }: { headerActions
   const navSections = getVisibleNavSections(actorRole);
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
+    <div className="flex min-h-screen flex-col lg:flex-row">
       {isOpen ? (
         <button
           type="button"
           aria-label="Fermer le menu"
           onClick={() => setOpen(false)}
-          className="fixed inset-0 z-40 bg-tenderos-navy/40 md:hidden"
+          className="fixed inset-0 z-40 bg-tenderos-navy/40 lg:hidden"
         />
       ) : null}
 
       <aside
         id="app-sidebar-nav"
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-tenderos-navy shadow-xl transition-transform duration-200 md:static md:z-auto md:w-64 md:max-w-none md:shrink-0 md:shadow-none md:transition-none ${
-          isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-tenderos-navy shadow-xl transition-transform duration-200 lg:static lg:z-auto lg:w-64 lg:max-w-none lg:shrink-0 lg:shadow-none lg:transition-none ${
+          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
         <div className="flex h-16 items-center justify-between px-5">
@@ -54,7 +61,7 @@ export function AppShell({ headerActions, actorRole, children }: { headerActions
             type="button"
             onClick={() => setOpen(false)}
             aria-label="Fermer le menu"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-white hover:bg-white/10 md:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-white hover:bg-white/10 lg:hidden"
           >
             <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -98,7 +105,7 @@ export function AppShell({ headerActions, actorRole, children }: { headerActions
             aria-expanded={isOpen}
             aria-controls="app-sidebar-nav"
             aria-label="Ouvrir le menu"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-tenderos-navy hover:bg-tenderos-light md:hidden"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-tenderos-navy hover:bg-tenderos-light lg:hidden"
           >
             <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
               <path d="M2 6H20M2 11H20M2 16H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />

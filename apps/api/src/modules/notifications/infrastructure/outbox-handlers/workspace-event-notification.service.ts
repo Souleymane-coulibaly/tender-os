@@ -1,7 +1,9 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { GetCurrentUserUseCase } from "../../../identity";
 import { EMAIL_PROVIDER, type EmailProvider } from "../../../../shared-kernel/email-provider";
+import { NotificationCategory } from "../../domain/notification-category";
 import { CreateNotificationUseCase } from "../../application/use-cases/create-notification.use-case";
+import { IsCategoryEmailEnabledUseCase } from "../../application/use-cases/is-category-email-enabled.use-case";
 
 export type NotifyUserInput = Readonly<{
   organizationId: string;
@@ -38,6 +40,7 @@ export class WorkspaceEventNotificationService {
   constructor(
     private readonly createNotificationUseCase: CreateNotificationUseCase,
     private readonly getCurrentUserUseCase: GetCurrentUserUseCase,
+    private readonly isCategoryEmailEnabledUseCase: IsCategoryEmailEnabledUseCase,
     @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider,
   ) {}
 
@@ -51,6 +54,15 @@ export class WorkspaceEventNotificationService {
       targetUrl: input.targetUrl,
       metadata: input.metadata,
     });
+
+    // Checkpoint TENDEROS-2.1-P2.3-E11 (mission §20/§22/§23) — l'in-app ci-dessus reste TOUJOURS
+    // créé, jamais conditionné à la préférence : seul l'email est optionnel. Vérifié APRÈS la
+    // notification in-app (mission §49 "un échec de canal ne doit jamais supprimer la SOT du
+    // match"), jamais avant.
+    const emailEnabled = await this.isCategoryEmailEnabledUseCase.execute({ userId: input.userId, category: NotificationCategory.Collaboration });
+    if (!emailEnabled) {
+      return;
+    }
 
     try {
       const user = await this.getCurrentUserUseCase.execute({ userId: input.userId });

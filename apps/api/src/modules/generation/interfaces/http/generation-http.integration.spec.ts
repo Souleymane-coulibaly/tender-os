@@ -18,6 +18,10 @@ import { PrismaGenerationRepository } from "../../infrastructure/prisma-generati
 
 const CANDIDATE_MODEL_KEYS = ["gpt-4.1", "gpt-4.1-mini", "o3-mini", "gpt-4o", "gpt-4o-mini"] as const;
 
+/** Ids des lignes du catalogue GLOBAL `ai_models` créées par ce fichier — voir le nettoyage dédié
+ *  dans `afterAll` (un teardown org-scopé ne peut pas les atteindre : la table n'a pas d'organisation). */
+const createdGlobalAiModelIds: string[] = [];
+
 /** Le registre `ai_model` est GLOBAL et partagé par tous les fichiers de test exécutés en parallèle
  *  contre la MÊME base réelle — essaie chaque clé autorisée jusqu'à ce qu'une création réussisse,
  *  plutôt que de parier sur une clé "probablement libre" (déjà observé fragile sous forte charge). */
@@ -37,6 +41,11 @@ async function createUniqueProductionAiModel(
     });
     try {
       await aiModelRepository.create(model);
+      // Checkpoint TENDEROS-2.1-P2.3-E12.1 — le suivi est fait ICI, dans le helper lui-même, et non
+      // sur chaque site d'appel : c'est la seule façon de garantir qu'AUCUN modèle global créé par ce
+      // fichier ne puisse échapper au nettoyage (c'est précisément un site d'appel oublié —
+      // `activateRoutingPolicyFor` — qui polluait le catalogue partagé).
+      createdGlobalAiModelIds.push(model.id);
       return model;
     } catch (error) {
       if (error instanceof DuplicateAiModelError) {
@@ -156,6 +165,18 @@ describe("Generation — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.generation.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.routingDecision.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.routingPolicy.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    // Checkpoint TENDEROS-2.1-P2.3-E12.1 — `ai_models` est un catalogue GLOBAL (catalogue de modèles
+    // fournisseurs réels : il n'a pas, et ne doit pas avoir, d'`organizationId`). Un teardown
+    // org-scopé ne peut donc STRUCTURELLEMENT pas l'atteindre : les modèles créés ici survivaient au
+    // fichier et faisaient échouer `ai-benchmark-http.integration.spec.ts` en 409 sur les mêmes clés
+    // partagées (`CANDIDATE_MODEL_KEYS`). Le nettoyage doit être explicitement global, par id suivi —
+    // jamais un `deleteMany` non filtré, qui effacerait le catalogue d'un autre test concurrent.
+    // Doit précéder la suppression des RoutingPolicy ? Non : la FK va de la policy vers le modèle,
+    // donc les policies sont déjà supprimées juste au-dessus.
+    if (createdGlobalAiModelIds.length > 0) {
+      await prisma.aiModelPricingSnapshot.deleteMany({ where: { aiModelId: { in: createdGlobalAiModelIds } } });
+      await prisma.aiModel.deleteMany({ where: { id: { in: createdGlobalAiModelIds } } });
+    }
     await prisma.promptVersion.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.promptTemplate.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.tender.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });

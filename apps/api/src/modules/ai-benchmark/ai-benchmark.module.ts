@@ -1,4 +1,5 @@
 import { Logger, Module, type OnModuleInit } from "@nestjs/common";
+import { BackgroundTaskRunner } from "../../shared-kernel/background-task-runner";
 import { AnalysisModule } from "../analysis";
 import { IdentityModule } from "../identity";
 import { MembershipsModule } from "../memberships";
@@ -77,6 +78,10 @@ import { RoutingPoliciesController } from "./interfaces/http/routing-policies.co
     RoutingPoliciesController,
   ],
   providers: [
+    // Checkpoint TENDEROS-2.1-P2.3-E12.3 — fourni PAR CE MODULE (jamais globalement) :
+    // Nest detruit les modules metier AVANT `DatabaseModule`, donc le travail de fond encore en vol
+    // est attendu avant la deconnexion Prisma. Voir `BackgroundTaskRunner` pour le contrat complet.
+    BackgroundTaskRunner,
     CreateAiModelUseCase,
     UpdateAiModelUseCase,
     EnableAiModelUseCase,

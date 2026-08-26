@@ -27,7 +27,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   let initialNotifications: Awaited<ReturnType<typeof fetchNotifications>>["items"] = [];
   let initialUnreadCount = 0;
   try {
-    const [notificationsPage, unreadCount] = await Promise.all([fetchNotifications(), fetchUnreadNotificationCount()]);
+    // Checkpoint TENDEROS-2.1-P2.3-E11, mission §9 — jamais un volume illimité dans le dropdown de
+    // la cloche : la liste complète paginée vit désormais sur /app/notifications.
+    const [notificationsPage, unreadCount] = await Promise.all([fetchNotifications({ limit: 5 }), fetchUnreadNotificationCount()]);
     initialNotifications = notificationsPage.items;
     initialUnreadCount = unreadCount;
   } catch {

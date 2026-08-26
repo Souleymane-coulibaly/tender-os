@@ -22,7 +22,7 @@ function event(overrides: Partial<OutboxEventToDispatch> = {}): OutboxEventToDis
   return {
     id: "event-1",
     organizationId: "org-1",
-    eventType: "TEST_EVENT",
+    eventType: "UserMentioned",
     eventVersion: 1,
     aggregateType: "Test",
     aggregateId: "agg-1",
@@ -42,7 +42,7 @@ function buildDispatcher(handlers: OutboxEventHandler[]): { dispatcher: Composit
 describe("CompositeOutboxEventDispatcher", () => {
   it("routes an event to the handler registered for its eventType", async () => {
     const received: OutboxEventToDispatch[] = [];
-    const handler: OutboxEventHandler = { eventType: "TEST_EVENT", handle: async (e) => { received.push(e); } };
+    const handler: OutboxEventHandler = { eventType: "UserMentioned", handle: async (e) => { received.push(e); } };
     const { dispatcher } = buildDispatcher([handler]);
 
     await dispatcher.dispatch(event());
@@ -53,19 +53,19 @@ describe("CompositeOutboxEventDispatcher", () => {
   it("mission Sprint 1 correctif audit Codex P1-002 — never silently succeeds for an unregistered eventType", async () => {
     const { dispatcher } = buildDispatcher([]);
 
-    await expect(dispatcher.dispatch(event({ eventType: "NEVER_REGISTERED" }))).rejects.toThrow(NoOutboxHandlerRegisteredError);
+    await expect(dispatcher.dispatch(event({ eventType: "ApprovalRequested" }))).rejects.toThrow(NoOutboxHandlerRegisteredError);
   });
 
   it("dispatches to the correct handler among several registered", async () => {
     const calls: string[] = [];
     const { dispatcher } = buildDispatcher([
-      { eventType: "A", handle: async () => { calls.push("A"); } },
-      { eventType: "B", handle: async () => { calls.push("B"); } },
+      { eventType: "TaskAssigned", handle: async () => { calls.push("TaskAssigned"); } },
+      { eventType: "UserMentioned", handle: async () => { calls.push("UserMentioned"); } },
     ]);
 
-    await dispatcher.dispatch(event({ eventType: "B" }));
+    await dispatcher.dispatch(event({ eventType: "UserMentioned" }));
 
-    expect(calls).toEqual(["B"]);
+    expect(calls).toEqual(["UserMentioned"]);
   });
 
   it("works with no handlers registered at all (default Sprint 1 wiring)", () => {
@@ -76,7 +76,7 @@ describe("CompositeOutboxEventDispatcher", () => {
   describe("Sprint 21 (hardening) — idempotent consumer, never a duplicate side effect on redelivery", () => {
     it("BLOQUANT — a redelivered event (same id, same eventType) never re-executes the handler's side effect", async () => {
       let callCount = 0;
-      const handler: OutboxEventHandler = { eventType: "TEST_EVENT", handle: async () => { callCount += 1; } };
+      const handler: OutboxEventHandler = { eventType: "UserMentioned", handle: async () => { callCount += 1; } };
       const { dispatcher } = buildDispatcher([handler]);
 
       await dispatcher.dispatch(event());
@@ -88,7 +88,7 @@ describe("CompositeOutboxEventDispatcher", () => {
     it("never marks an event processed if the handler throws — a genuine failure must remain retryable", async () => {
       let callCount = 0;
       const handler: OutboxEventHandler = {
-        eventType: "TEST_EVENT",
+        eventType: "UserMentioned",
         handle: async () => {
           callCount += 1;
           if (callCount === 1) throw new Error("transient failure");
@@ -97,16 +97,16 @@ describe("CompositeOutboxEventDispatcher", () => {
       const { dispatcher, processedEventRepository } = buildDispatcher([handler]);
 
       await expect(dispatcher.dispatch(event())).rejects.toThrow("transient failure");
-      expect(await processedEventRepository.wasProcessedBy({ outboxEventId: "event-1", consumerName: "TEST_EVENT" })).toBe(false);
+      expect(await processedEventRepository.wasProcessedBy({ outboxEventId: "event-1", consumerName: "UserMentioned" })).toBe(false);
 
       await dispatcher.dispatch(event()); // retry succeeds
       expect(callCount).toBe(2);
-      expect(await processedEventRepository.wasProcessedBy({ outboxEventId: "event-1", consumerName: "TEST_EVENT" })).toBe(true);
+      expect(await processedEventRepository.wasProcessedBy({ outboxEventId: "event-1", consumerName: "UserMentioned" })).toBe(true);
     });
 
     it("never conflates two DIFFERENT event ids sharing the same eventType — both are processed", async () => {
       let callCount = 0;
-      const handler: OutboxEventHandler = { eventType: "TEST_EVENT", handle: async () => { callCount += 1; } };
+      const handler: OutboxEventHandler = { eventType: "UserMentioned", handle: async () => { callCount += 1; } };
       const { dispatcher } = buildDispatcher([handler]);
 
       await dispatcher.dispatch(event({ id: "event-1" }));

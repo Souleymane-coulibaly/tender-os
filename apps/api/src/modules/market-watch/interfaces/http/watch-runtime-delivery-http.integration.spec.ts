@@ -124,6 +124,13 @@ describe("Market Watch — runtime delivery (Checkpoint TENDEROS-2.1-P2.3-E10) �
   }, 60000);
 
   afterAll(async () => {
+    // Checkpoint TENDEROS-2.1-P2.3-E12.4 (correctif post-FULL-RUN) — fermer l'application AVANT
+    // la purge, jamais apres. Ce spec declenche un pipeline de veille ASYNCHRONE : tant que
+    // l'app tourne, ses dispatchers ecrivent encore de vrais `OutboxEvent` pour ces
+    // organisations, et `organization.deleteMany` violait alors
+    // `outbox_events_organization_id_fkey` — echec observe au FULL RUN, invisible isolement.
+    // `app.close()` attend desormais le travail en vol (`BackgroundTaskRunner`, E12.3).
+    await app.close();
     await prisma.notification.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.savedSearchMatch.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.savedSearch.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -137,7 +144,6 @@ describe("Market Watch — runtime delivery (Checkpoint TENDEROS-2.1-P2.3-E10) �
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
-    await app.close();
     await prisma.$disconnect();
   }, 60000);
 
@@ -236,7 +242,14 @@ describe("Market Watch — runtime delivery (Checkpoint TENDEROS-2.1-P2.3-E10) �
       const aoCreditEntries = await prisma.aoCreditLedgerEntry.count({ where: { organizationId: orgAId } });
       expect(aoCreditEntries).toBe(0);
     },
-    30000,
+    // Checkpoint TENDEROS-2.1-PRE-DECOM-FIX (REC-002) — budget porte de 30 s a 120 s, sur MESURE.
+    // Avant le correctif, la source TED plantait immediatement (titre trop long pour
+    // `notifications.title`) : le cycle avortait en quelques secondes. TED traite desormais
+    // reellement ses avis — un `run-now` seul a ete mesure a 25 s contre les sources vives, et ce
+    // test en enchaine DEUX. L'operation est donc intrinsequement plus longue PARCE QU'ELLE
+    // ABOUTIT : ce n'est pas un contournement de lenteur, c'est le cout du travail reellement
+    // effectue. Aucun autre budget n'est modifie.
+    120000,
   );
 
   it(

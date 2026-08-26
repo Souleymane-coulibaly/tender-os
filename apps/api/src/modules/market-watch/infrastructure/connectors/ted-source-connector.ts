@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { MarketType } from "../../../tenders/domain/market-type";
 import { TenderSource } from "../../../tenders/domain/tender-source";
 import type { CollectedTender, MarketSourceConnector, MarketSourceSearchCriteria, MarketSourceSearchResult } from "../../application/ports/market-source-connector";
+import { MarketSourceHttpError } from "../../application/services/with-source-retry";
 
 const TED_API_URL = "https://api.ted.europa.eu/v3/notices/search";
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -33,11 +34,18 @@ type TedNotice = Readonly<{
   "publication-number"?: string;
   "notice-title"?: TedMultilingualText;
   "publication-date"?: string;
-  deadline?: string;
+  /** Checkpoint TENDEROS-2.1-P2.3-E12 — TABLEAU dans l'API réelle (`["2026-09-08T10:15:00+02:00"]`),
+   *  jamais une chaîne : le type `string` d'origine était la cause racine de l'échec systématique de
+   *  TED. Les deux formes sont acceptées par `parseDateOrUndefined` (voir son commentaire). */
+  deadline?: string | readonly string[];
   "classification-cpv"?: readonly string[];
   "buyer-name"?: Readonly<Record<string, readonly string[]>>;
   "buyer-country"?: string | readonly string[];
-  "buyer-city"?: string | readonly string[];
+  /** Checkpoint TENDEROS-2.1-P2.3-E12 — OBJET multilingue dans l'API réelle
+   *  (`{"mul":["Wanfried"]}`), jamais une chaîne ni un tableau plat : même forme que `buyer-name`,
+   *  et la clé de langue observée est `mul` (multilingue), donc c'est le repli "première clé
+   *  disponible" de `multilingualArrayFirst` qui sert réellement ici, pas `fra`/`eng`. */
+  "buyer-city"?: Readonly<Record<string, readonly string[]>>;
   "estimated-value-lot"?: readonly string[];
   "estimated-value-cur-lot"?: readonly string[];
   links?: Readonly<{ pdf?: Readonly<Record<string, string>> }>;
@@ -45,30 +53,43 @@ type TedNotice = Readonly<{
 
 type TedSearchResponse = Readonly<{ notices?: readonly TedNotice[]; totalNoticeCount?: number }>;
 
+/** Checkpoint TENDEROS-2.1-P2.3-E12 — garde de type unique de ce connecteur. Les types `TedNotice`
+ *  ci-dessus décrivent les formes RÉELLES observées, mais ce ne sont que des assertions sur du JSON
+ *  non validé : TED fait varier ses formes par type d'avis, et une forme non prévue ne doit JAMAIS
+ *  traverser jusqu'à Prisma (cause racine n°2 de l'échec systématique de TED — un objet multilingue
+ *  `buyer-city` renvoyé tel quel pour une colonne `String`, rejeté par la base, faisant échouer la
+ *  totalité du cycle). Tout extracteur de ce fichier renvoie donc `string | undefined`, jamais autre
+ *  chose : un champ de forme inattendue rend l'avis moins enrichi, jamais perdu, et ne peut plus
+ *  faire échouer la source entière. */
+function asNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 function firstPreferredValue(record: Readonly<Record<string, string>> | undefined, preferredKeys: readonly string[]): string | undefined {
   if (!record) return undefined;
   for (const key of preferredKeys) {
-    const value = record[key];
+    const value = asNonEmptyString(record[key]);
     if (value) return value;
   }
   const firstKey = Object.keys(record)[0];
-  return firstKey ? record[firstKey] : undefined;
+  return firstKey ? asNonEmptyString(record[firstKey]) : undefined;
 }
 
+/** Le repli `[0]` n'est JAMAIS appliqué à une valeur non-tableau : sur une chaîne il renverrait
+ *  silencieusement son premier caractère (`"Paris"` → `"P"`), une corruption bien pire qu'un champ
+ *  absent. `firstScalarOrArrayValue` couvre déjà les deux formes de façon sûre. */
 function multilingualArrayFirst(record: Readonly<Record<string, readonly string[]>> | undefined): string | undefined {
   if (!record) return undefined;
   for (const key of PREFERRED_LANGUAGES) {
-    const values = record[key];
-    if (values && values.length > 0) return values[0];
+    const value = firstScalarOrArrayValue(record[key]);
+    if (value) return value;
   }
   const firstKey = Object.keys(record)[0];
-  const values = firstKey ? record[firstKey] : undefined;
-  return values?.[0];
+  return firstKey ? firstScalarOrArrayValue(record[firstKey]) : undefined;
 }
 
 function firstScalarOrArrayValue(value: string | readonly string[] | undefined): string | undefined {
-  if (!value) return undefined;
-  return Array.isArray(value) ? value[0] : (value as string);
+  return asNonEmptyString(Array.isArray(value) ? value[0] : value);
 }
 
 /** `estimated-value-lot` est un tableau (un montant par lot, mission §37 "conserver les lots si la
@@ -85,10 +106,21 @@ function firstNumericValue(values: readonly string[] | undefined): number | unde
 
 /** La forme réelle observée empiriquement (`"2026-08-15+01:00"`, sans `T`) n'est PAS un ISO 8601
  *  valide pour `new Date()` (retourne systématiquement Invalid Date) — un `T00:00:00` est inséré
- *  avant le décalage horaire final quand aucun `T` n'est déjà présent. */
-function parseDateOrUndefined(value: string | undefined): Date | undefined {
-  if (!value) return undefined;
-  const normalized = value.includes("T") ? value : value.replace(/([+-]\d{2}:\d{2})$/, "T00:00:00$1");
+ *  avant le décalage horaire final quand aucun `T` n'est déjà présent.
+ *
+ *  Checkpoint TENDEROS-2.1-P2.3-E12 (correctif P1, registre E13 L-02) — cause racine de l'échec
+ *  SYSTÉMATIQUE de TED (`value.replace is not a function`, visible sur CHAQUE `MarketSourceSyncRun`
+ *  TED depuis l'origine) : contrairement à `publication-date` (toujours une chaîne), `deadline` est
+ *  renvoyé par l'API TED sous forme de TABLEAU (`["2026-09-08T10:15:00+02:00"]`) — vérifié
+ *  empiriquement contre l'API réelle : sur 20 avis, 16 sans deadline et 4 avec un tableau, ZÉRO
+ *  avec une chaîne. Le type déclarait `string`, donc `.replace` explosait au premier avis pourvu
+ *  d'une deadline et faisait échouer la totalité du cycle TED (jamais un seul avis ingéré). Accepte
+ *  désormais les deux formes — même discipline best-effort que BOAMP : une forme inattendue rend
+ *  l'avis moins enrichi, jamais perdu, et ne fait jamais échouer la source entière. */
+function parseDateOrUndefined(value: string | readonly string[] | undefined): Date | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (typeof raw !== "string" || !raw) return undefined;
+  const normalized = raw.includes("T") ? raw : raw.replace(/([+-]\d{2}:\d{2})$/, "T00:00:00$1");
   const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
@@ -141,7 +173,7 @@ export class TedSourceConnector implements MarketSourceConnector {
     }
 
     if (!response.ok) {
-      throw new Error(`TED API responded HTTP ${response.status}`);
+      throw new MarketSourceHttpError("TED", response.status);
     }
 
     const body = (await response.json()) as TedSearchResponse;
@@ -159,7 +191,7 @@ export class TedSourceConnector implements MarketSourceConnector {
           title,
           buyerName: multilingualArrayFirst(notice["buyer-name"]),
           country: firstScalarOrArrayValue(notice["buyer-country"]),
-          city: firstScalarOrArrayValue(notice["buyer-city"]),
+          city: multilingualArrayFirst(notice["buyer-city"]),
           cpvCodes,
           estimatedAmount: firstNumericValue(notice["estimated-value-lot"]),
           currency: notice["estimated-value-cur-lot"]?.[0],

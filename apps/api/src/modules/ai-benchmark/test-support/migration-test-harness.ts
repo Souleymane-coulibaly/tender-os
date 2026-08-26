@@ -59,8 +59,35 @@ async function withAdminClient<T>(fn: (client: PrismaClient) => Promise<T>): Pro
   }
 }
 
+/** Préfixe EXCLUSIF des bases jetables de ce harness — jamais une base de développement. */
+const THROWAWAY_PREFIX = "tenderos_migproof_";
+/** Une base plus vieille que ce délai ne peut appartenir qu'à un run mort : la plus longue chaîne
+ *  de migrations rejouée ici prend quelques minutes, jamais plusieurs heures. */
+const STALE_THROWAWAY_AGE_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Checkpoint TENDEROS-2.1-P2.3-E12.3 (§18) — auto-réparation : les bases jetables sont bien
+ * supprimées par `afterAll` en cas de succès ET d'échec, mais PAS quand le process de test est tué
+ * (timeout global, interruption, crash) — le hook ne s'exécute alors jamais. Douze bases orphelines
+ * s'étaient ainsi accumulées sur plusieurs jours, chacune de ~10 Mo, dégradant progressivement les
+ * `CREATE DATABASE` suivants. Purge donc les résidus ANCIENS (jamais ceux d'un run concurrent en
+ * cours) au moment de créer une nouvelle base : c'est le seul instant où l'on sait qu'un run de
+ * migration démarre. Le nom porte son horodatage de création, aucune métadonnée externe n'est requise.
+ */
+async function dropStaleThrowawayDatabases(client: { $queryRawUnsafe: (sql: string) => Promise<unknown>; $executeRawUnsafe: (sql: string) => Promise<unknown> }): Promise<void> {
+  const rows = (await client.$queryRawUnsafe(`SELECT datname FROM pg_database WHERE datname LIKE '${THROWAWAY_PREFIX}%'`)) as { datname: string }[];
+  const now = Date.now();
+  for (const { datname } of rows) {
+    const timestamp = Number(/_(\d{10,})/.exec(datname)?.[1]);
+    // Un nom non horodaté n'est jamais supprimé : on ne devine pas.
+    if (!Number.isFinite(timestamp) || now - timestamp < STALE_THROWAWAY_AGE_MS) continue;
+    await client.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${datname}" WITH (FORCE)`);
+  }
+}
+
 export async function createThrowawayDatabase(name: string): Promise<void> {
   await withAdminClient(async (client) => {
+    await dropStaleThrowawayDatabases(client);
     await client.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
     await client.$executeRawUnsafe(`CREATE DATABASE "${name}"`);
   });

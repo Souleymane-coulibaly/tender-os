@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
-import { getPlanQuotaLimit, planHasFeature } from "../../domain/plan-catalog";
+import { getPlanQuotaLimit, NO_PLAN_BASELINE_QUOTAS, planHasFeature } from "../../domain/plan-catalog";
 import type { EntitlementFeature } from "../../domain/entitlement-feature";
 import { TenderOperationNotEntitledError } from "../../domain/errors";
 import { PlanTier } from "../../domain/plan-tier";
@@ -193,6 +193,10 @@ export class DefaultEntitlementService implements EntitlementService {
     }
 
     const tier = await this.getEffectivePlanTier(organizationId);
-    return tier === null ? 0 : getPlanQuotaLimit(tier, quota);
+    // Checkpoint TENDEROS-2.1-PRE-DECOM-FIX (REC-001) — sans plan, la ligne de base explicite du
+    // catalogue (Billing SOT) remplace le `0` uniforme d'origine : elle vaut 0 partout SAUF
+    // `USERS_MAX = 1`, afin que le fondateur cree par l'onboarding ne mette jamais son organisation
+    // hors quota des sa creation. Voir `NO_PLAN_BASELINE_QUOTAS` pour le raisonnement complet.
+    return tier === null ? NO_PLAN_BASELINE_QUOTAS[quota] : getPlanQuotaLimit(tier, quota);
   }
 }

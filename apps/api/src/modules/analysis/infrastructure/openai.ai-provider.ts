@@ -141,13 +141,23 @@ export class OpenAiProvider implements AIProvider {
     if (response.status === 429) {
       throw new AiRateLimitedError();
     }
+    // Checkpoint TENDEROS-2.1-P2.3-E12 (P2, mission §53 "l'utilisateur ne doit pas recevoir
+    // 'OpenAI 429...' brut") — `AI_PROVIDER_UNAVAILABLE`/`AI_INVALID_RESPONSE` sont mappés par
+    // `analysis-error.filter.ts` et renvoient `exception.message` TEL QUEL au client : y interpoler
+    // le corps d'erreur du fournisseur exposait à un utilisateur final des identifiants de modèle,
+    // des identifiants d'organisation/projet OpenAI, l'état de quota et la forme de notre propre
+    // payload. Le détail reste INTÉGRALEMENT disponible pour le diagnostic (journalisé ci-dessous,
+    // passé par la redaction du logger structuré) ; seul le statut HTTP, non sensible, atteint le
+    // client. Jamais une perte d'information d'exploitation, uniquement un arrêt de la fuite.
     if (response.status >= 500) {
       const detail = await describeProviderErrorBody(response);
-      throw new AiProviderUnavailableError({ reason: `AI provider returned HTTP ${response.status}${detail ? `: ${detail}` : ""}` });
+      if (detail) this.logger.error(`AI provider returned HTTP ${response.status}: ${detail}`);
+      throw new AiProviderUnavailableError({ reason: `AI provider returned HTTP ${response.status}` });
     }
     if (!response.ok) {
       const detail = await describeProviderErrorBody(response);
-      throw new AiInvalidResponseError({ reason: `AI provider returned HTTP ${response.status}${detail ? `: ${detail}` : ""}` });
+      if (detail) this.logger.error(`AI provider returned HTTP ${response.status}: ${detail}`);
+      throw new AiInvalidResponseError({ reason: `AI provider returned HTTP ${response.status}` });
     }
 
     let body: unknown;

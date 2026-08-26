@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
+import { BackgroundTaskRunner } from "../../../shared-kernel/background-task-runner";
 import type { KnowledgeDispatcher, KnowledgeDocumentDispatchInput } from "../application/ports/knowledge-dispatcher";
 import { ProcessKnowledgeDocumentUseCase } from "../application/use-cases/process-knowledge-document.use-case";
 
@@ -11,18 +12,12 @@ import { ProcessKnowledgeDocumentUseCase } from "../application/use-cases/proces
  */
 @Injectable()
 export class InProcessKnowledgeDispatcher implements KnowledgeDispatcher {
-  private readonly logger = new Logger(InProcessKnowledgeDispatcher.name);
-
-  constructor(@Inject(ProcessKnowledgeDocumentUseCase) private readonly processUseCase: ProcessKnowledgeDocumentUseCase) {}
+  constructor(@Inject(ProcessKnowledgeDocumentUseCase) private readonly processUseCase: ProcessKnowledgeDocumentUseCase, private readonly backgroundTasks: BackgroundTaskRunner) {}
 
   dispatch(input: KnowledgeDocumentDispatchInput): void {
-    setImmediate(() => {
-      this.processUseCase.execute(input).catch((error: unknown) => {
-        this.logger.error(
-          `Unhandled error while processing knowledge document ${input.knowledgeDocumentId}: ` +
-            `${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
-    });
+    // Checkpoint TENDEROS-2.1-P2.3-E12.3 — passe par `BackgroundTaskRunner` : le travail
+    // detache est desormais SUIVI, refuse apres le debut de l'arret, et attendu par
+    // `onModuleDestroy` avant la deconnexion Prisma. Voir le contrat complet dans ce service.
+    this.backgroundTasks.run(`knowledge-document:${input.knowledgeDocumentId}`, () => this.processUseCase.execute(input));
   }
 }

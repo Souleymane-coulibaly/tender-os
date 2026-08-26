@@ -1,19 +1,51 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { markAllNotificationsReadAction, markNotificationReadAction } from "../notifications-actions";
+import { fetchNotifications, fetchUnreadNotificationCount, markAllNotificationsReadAction, markNotificationReadAction } from "../notifications-actions";
 import type { NotificationSummary } from "../../../lib/market-watch-types";
 
-/** Mission §37/§99/§100 — cloche de notification minimale (badge non-lues + liste + clic ->
- *  marché correspondant), pas de centre de notifications séparé plus complexe. */
+/** Checkpoint TENDEROS-2.1-P2.3-E10/E11 — cloche + Centre de notifications complet
+ *  (`/app/notifications`, mission §5/§9). "Voir toutes les notifications" y renvoie.
+ *
+ * Mission §45/§46 — aucune infrastructure realtime (WebSocket/SSE) n'existe dans ce dépôt : polling
+ * léger du unread-count (60s), première instance de ce motif dans le frontend — jamais introduit
+ * SEULEMENT pour ce Checkpoint sans besoin réel (mission §45 "ne pas introduire WebSocket/SSE sauf
+ * infrastructure déjà existante"). Mission §47 — suspendu quand l'onglet est masqué
+ * (`document.visibilityState`), sans framework de polling dédié disproportionné pour ce besoin. */
+const POLL_INTERVAL_MS = 60_000;
+
 export function NotificationBell({ initialNotifications, initialUnreadCount }: { initialNotifications: NotificationSummary[]; initialUnreadCount: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState(initialNotifications);
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   const [, startTransition] = useTransition();
+  const openRef = useRef(open);
+  openRef.current = open;
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void (async () => {
+        try {
+          const count = await fetchUnreadNotificationCount();
+          setUnreadCount(count);
+          // Rafraîchit aussi la liste récente si le dropdown est ouvert (mission §48 "après action,
+          // mettre à jour dropdown/badge sans hard refresh" — s'applique symétriquement à l'arrivée
+          // d'une notification pendant que le dropdown est déjà ouvert).
+          if (openRef.current) {
+            const page = await fetchNotifications({ limit: 5 });
+            setNotifications(page.items);
+          }
+        } catch {
+          // Best-effort — un poll manqué ne doit jamais afficher d'erreur intrusive.
+        }
+      })();
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, []);
 
   function handleClickNotification(notification: NotificationSummary) {
     if (!notification.readAt) {
@@ -73,8 +105,8 @@ export function NotificationBell({ initialNotifications, initialUnreadCount }: {
               </ul>
             )}
           </div>
-          <Link href="/app/market-watch" onClick={() => setOpen(false)} className="block border-t border-neutral-100 px-3 py-2 text-center text-xs text-neutral-600 hover:bg-neutral-50">
-            Voir la veille
+          <Link href="/app/notifications" onClick={() => setOpen(false)} className="block border-t border-neutral-100 px-3 py-2 text-center text-xs font-medium text-neutral-600 hover:bg-neutral-50">
+            Voir toutes les notifications
           </Link>
         </div>
       ) : null}

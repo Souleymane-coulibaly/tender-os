@@ -7870,11 +7870,11 @@ model MarketSourceSyncRun {
   finishedAt DateTime? @map("finished_at")
   status     String    @db.VarChar(20) /// RUNNING | SUCCEEDED | FAILED
 
-  opportunitiesFetched    Int @default(0) @map("opportunities_fetched")
-  opportunitiesCreated    Int @default(0) @map("opportunities_created")
-  opportunitiesUpdated    Int @default(0) @map("opportunities_updated")
-  matchesCreated          Int @default(0) @map("matches_created")
-  notificationsCreated    Int @default(0) @map("notifications_created")
+  opportunitiesFetched Int @default(0) @map("opportunities_fetched")
+  opportunitiesCreated Int @default(0) @map("opportunities_created")
+  opportunitiesUpdated Int @default(0) @map("opportunities_updated")
+  matchesCreated       Int @default(0) @map("matches_created")
+  notificationsCreated Int @default(0) @map("notifications_created")
 
   /// Jamais le contenu source brut (mission §28 "ne pas loguer inutilement du contenu sensible") —
   /// un résumé borné uniquement.
@@ -7938,6 +7938,31 @@ model Notification {
   @@index([organizationId, userId, readAt])
   @@index([organizationId, userId, createdAt])
   @@map("notifications")
+}
+
+/// Checkpoint TENDEROS-2.1-P2.3-E11 (Notifications V2) — préférence email PERSONNELLE par
+/// catégorie (mission §20/§21), jamais par organisation : un utilisateur membre de plusieurs
+/// organisations garde la même préférence partout (mission §30 "multi-org"). `emailEnabled`
+/// uniquement — l'in-app reste toujours actif pour les événements produit pertinents (mission §20
+/// "IN-APP: toujours disponible"), jamais un second toggle qui permettrait de désactiver
+/// silencieusement une notification in-app critique (mission §22). Absence de ligne = valeur par
+/// défaut `true` (mission §28 "jamais un état ambigu"), gérée applicativement, jamais une
+/// contrainte NOT NULL DEFAULT qui masquerait la distinction "jamais configuré" vs "explicitement
+/// réactivé après désactivation".
+model NotificationPreference {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  /// MARKET_WATCH | COLLABORATION | BILLING (mission §20, catégories réelles couvertes par le
+  /// pipeline Outbox existant — jamais une catégorie inventée sans producteur réel).
+  category     String  @db.VarChar(40)
+  emailEnabled Boolean @default(true) @map("email_enabled")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, category])
+  @@map("notification_preferences")
 }
 
 /// V2 Sprint 22 (billing, étape 22A) — au plus une ligne par organisation : l'état COURANT de

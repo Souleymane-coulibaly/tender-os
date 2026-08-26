@@ -18,6 +18,14 @@ describe("callProviderJson", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    // Checkpoint TENDEROS-2.1-P2.3-E12.2 — `restoreAllMocks()` n'annule PAS `vi.stubGlobal` : ce
+    // fichier remplaçait `globalThis.fetch` par un `vi.fn()` et le laissait en place pour TOUS les
+    // fichiers exécutés ensuite dans le même process (`--poolOptions.forks.singleFork` partage
+    // `globalThis`). Les specs d'intégration suivantes recevaient alors `undefined` de chaque appel
+    // `fetch`, ce qui faisait surface en `Cannot read properties of undefined (reading 'json')` —
+    // un échec attribué à tort à de l'instabilité de concurrence (`seat-limit-concurrency`).
+    // Reproduit de façon déterministe : ce fichier suivi de ce spec suffisait à le déclencher.
+    vi.unstubAllGlobals();
   });
 
   it("returns the parsed body on a 200 response without retrying", async () => {

@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
+import { BackgroundTaskRunner } from "../../../shared-kernel/background-task-runner";
 import type { ExtractionDispatcher, ExtractionDispatchInput } from "../application/ports/extraction-dispatcher";
 import { ProcessDocumentExtractionUseCase } from "../application/use-cases/process-document-extraction.use-case";
 
@@ -11,20 +12,15 @@ import { ProcessDocumentExtractionUseCase } from "../application/use-cases/proce
  */
 @Injectable()
 export class InProcessExtractionDispatcher implements ExtractionDispatcher {
-  private readonly logger = new Logger(InProcessExtractionDispatcher.name);
-
   constructor(
     @Inject(ProcessDocumentExtractionUseCase) private readonly processUseCase: ProcessDocumentExtractionUseCase,
+    private readonly backgroundTasks: BackgroundTaskRunner,
   ) {}
 
   dispatch(input: ExtractionDispatchInput): void {
-    setImmediate(() => {
-      this.processUseCase.execute(input).catch((error: unknown) => {
-        this.logger.error(
-          `Unhandled error while processing extraction for document ${input.documentId}: ` +
-            `${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
-    });
+    // Checkpoint TENDEROS-2.1-P2.3-E12.3 — passe par `BackgroundTaskRunner` : le travail
+    // detache est desormais SUIVI, refuse apres le debut de l'arret, et attendu par
+    // `onModuleDestroy` avant la deconnexion Prisma. Voir le contrat complet dans ce service.
+    this.backgroundTasks.run(`extraction:${input.documentId}`, () => this.processUseCase.execute(input));
   }
 }

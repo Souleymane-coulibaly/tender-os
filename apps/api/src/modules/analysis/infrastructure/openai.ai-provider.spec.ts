@@ -200,7 +200,16 @@ describe("OpenAiProvider — Checkpoint B, correctifs audit P2 (System Prompt pl
 
 /** Mission — correctif "AI_INVALID_RESPONSE: AI provider returned HTTP 400" sans aucun détail
  *  exploitable : le corps d'erreur d'OpenAI (jamais du contenu client, toujours une description du
- *  problème de FORME de la requête envoyée) est désormais inclus dans `reason`, jamais ignoré. */
+ *  problème de FORME de la requête envoyée) ne doit jamais être perdu.
+ *
+ *  Checkpoint TENDEROS-2.1-P2.3-E12 (mission §53) — le CANAL de ce détail a changé, jamais sa
+ *  disponibilité : `AI_INVALID_RESPONSE`/`AI_PROVIDER_UNAVAILABLE` sont mappés par
+ *  `analysis-error.filter.ts`, qui renvoie `exception.message` TEL QUEL au client ; y laisser le
+ *  corps d'OpenAI exposait à un utilisateur final des identifiants de modèle/organisation/projet,
+ *  l'état de quota et la forme de notre propre payload. Le détail part désormais dans le LOG
+ *  (diagnostic préservé, redaction du logger structuré appliquée) et le message d'erreur ne porte
+ *  plus que le statut HTTP, non sensible. Ces deux tests verrouillent les DEUX moitiés du contrat :
+ *  détail présent dans le log, absent de l'erreur. */
 describe("OpenAiProvider — détail des erreurs HTTP du provider", () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
 
@@ -213,18 +222,10 @@ describe("OpenAiProvider — détail des erreurs HTTP du provider", () => {
     vi.unstubAllGlobals();
   });
 
-  it("includes OpenAI's own error message in the reason for a 400 response", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: { message: "Invalid schema for response_format 'X': field 'foo' is required" } }), { status: 400 }),
-    );
-
-    await expect(new OpenAiProvider("key").complete(baseRequest())).rejects.toMatchObject({
-      message: expect.stringContaining("Invalid schema for response_format 'X': field 'foo' is required"),
-    });
-  });
-
-  it("includes OpenAI's own error message in the reason for a 5xx response", async () => {
-    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "The server had an error processing your request" } }), { status: 503 }));
+  it("BLOQUANT (E12 §53) — logs OpenAI's own error message for a 400, but NEVER exposes it in the error surfaced to the client", async () => {
+    const providerDetail = "Invalid schema for response_format 'X': field 'foo' is required";
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: providerDetail } }), { status: 400 }));
+    const errorSpy = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
 
     let caught: unknown;
     try {
@@ -232,8 +233,33 @@ describe("OpenAiProvider — détail des erreurs HTTP du provider", () => {
     } catch (error) {
       caught = error;
     }
+
+    expect(caught).toBeInstanceOf(AiInvalidResponseError);
+    // Diagnostic préservé : le détail est bien journalisé.
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining(providerDetail));
+    // Fuite fermée : il n'atteint plus le message renvoyé au client.
+    expect((caught as Error).message).not.toContain(providerDetail);
+    expect((caught as Error).message).toContain("400");
+    errorSpy.mockRestore();
+  });
+
+  it("BLOQUANT (E12 §53) — same contract for a 5xx: detail logged, never surfaced", async () => {
+    const providerDetail = "The server had an error processing your request";
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: providerDetail } }), { status: 503 }));
+    const errorSpy = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+
+    let caught: unknown;
+    try {
+      await new OpenAiProvider("key").complete(baseRequest());
+    } catch (error) {
+      caught = error;
+    }
+
     expect(caught).toBeInstanceOf(AiProviderUnavailableError);
-    expect((caught as Error).message).toContain("The server had an error processing your request");
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining(providerDetail));
+    expect((caught as Error).message).not.toContain(providerDetail);
+    expect((caught as Error).message).toContain("503");
+    errorSpy.mockRestore();
   });
 
   it("falls back to just the HTTP status when the error body is not valid JSON — never throws while describing the failure", async () => {
@@ -242,9 +268,13 @@ describe("OpenAiProvider — détail des erreurs HTTP du provider", () => {
     await expect(new OpenAiProvider("key").complete(baseRequest())).rejects.toBeInstanceOf(AiInvalidResponseError);
   });
 
-  it("truncates an overly long error message rather than persisting it unbounded", async () => {
+  it("truncates an overly long provider error rather than logging it unbounded", async () => {
     const longMessage = "x".repeat(1000);
     fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: longMessage } }), { status: 400 }));
+    // Checkpoint TENDEROS-2.1-P2.3-E12 — la troncature s'observe désormais dans le LOG : depuis que
+    // le détail ne rejoint plus le message d'erreur, l'asserter sur `caught.message` serait devenu
+    // tautologique (il ne contient plus jamais le détail, tronqué ou non).
+    const errorSpy = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
 
     let caught: unknown;
     try {
@@ -253,6 +283,9 @@ describe("OpenAiProvider — détail des erreurs HTTP du provider", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(AiInvalidResponseError);
-    expect((caught as Error).message.length).toBeLessThan(longMessage.length);
+    const logged = errorSpy.mock.calls[0]?.[0] as string;
+    expect(logged).toContain("…");
+    expect(logged.length).toBeLessThan(longMessage.length);
+    errorSpy.mockRestore();
   });
 });

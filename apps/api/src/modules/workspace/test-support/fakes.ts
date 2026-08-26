@@ -165,6 +165,12 @@ export class InMemoryApprovalRequestRepository implements ApprovalRequestReposit
     return this.approvals.filter((a) => a.organizationId === input.organizationId && a.reviewerId === input.reviewerId && (!input.status || a.status === input.status));
   }
 
+  /** Checkpoint TENDEROS-2.1-P2.3-E12.1 — dérivé de `listByReviewer` pour que le fake ne puisse pas,
+   *  lui non plus, faire diverger le compteur de la liste. */
+  async countByReviewer(input: { organizationId: string; reviewerId: string; restrictToClientAccountIds?: readonly string[] | undefined; status?: string | undefined }): Promise<number> {
+    return (await this.listByReviewer(input)).length;
+  }
+
   async save(approval: ApprovalRequest): Promise<void> {
     const index = this.approvals.findIndex((a) => a.id === approval.id);
     if (index === -1) this.approvals.push(approval);

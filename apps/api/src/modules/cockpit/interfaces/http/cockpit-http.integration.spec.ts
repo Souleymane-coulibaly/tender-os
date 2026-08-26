@@ -100,6 +100,19 @@ describe("Cockpit — real HTTP + PostgreSQL (NestJS)", () => {
         { id: orgBId, name: "Cockpit Org B HTTP", slug: `cockpit-org-b-http-${orgBId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
       ],
     });
+    // Checkpoint TENDEROS-2.1-P2.3-E12.2 — même cause exacte que les specs Extraction (E12.1) : les
+    // routes DCE exercées ici sont gatées par `EntitlementService.runTenderOperationEntitled` depuis
+    // le Checkpoint E1.1 (FINDING 1), et ce spec n'avait jamais été mis à jour alors que `dce-http`
+    // l'avait été. Le 402 observé était la réponse CORRECTE du produit, jamais une régression : la
+    // précondition commerciale est donc créée réellement, le gate n'est jamais contourné. La preuve
+    // du REFUS sans entitlement vit dans `extraction-http.integration.spec.ts` (test dédié "gate
+    // commercial"), elle n'est pas dupliquée ici.
+    await prisma.organizationSubscription.createMany({
+      data: [
+        { id: randomUUID(), organizationId: orgAId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+        { id: randomUUID(), organizationId: orgBId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+      ],
+    });
 
     const ownerA = await registerAndLogin(`cockpit-owner-a-${randomUUID()}@smoke.test`);
     const ownerB = await registerAndLogin(`cockpit-owner-b-${randomUUID()}@smoke.test`);
@@ -117,6 +130,12 @@ describe("Cockpit — real HTTP + PostgreSQL (NestJS)", () => {
   }, 60000);
 
   afterAll(async () => {
+    // Checkpoint TENDEROS-2.1-P2.3-E12.2 — l'entitlement rend ce scénario réellement mutant, donc
+    // réellement traçant : Pass réservés et OutboxEvent portent une FK organisation et bloqueraient
+    // `organization.deleteMany`, laissant des lignes orphelines qui pollueraient les autres suites.
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.organizationPassPurchase.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.dceDocument.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.dce.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.documentVersion.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });

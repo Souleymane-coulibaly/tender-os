@@ -36,6 +36,10 @@ describe("Extraction — real HTTP + PostgreSQL (NestJS)", () => {
 
   const orgAId = randomUUID();
   const orgBId = randomUUID();
+  const orgNoEntitlementId = randomUUID();
+  const allOrgIds = [orgAId, orgBId, orgNoEntitlementId];
+  let tokenAdminNoEntitlement: string;
+  let tenderNoEntitlementId: string;
   const userIds: string[] = [];
 
   let tokenAdminA: string;
@@ -162,6 +166,21 @@ describe("Extraction — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.organization.create({
       data: { id: orgBId, name: "Extraction Org B HTTP", slug: `extraction-org-b-http-${orgBId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
     });
+    // Checkpoint TENDEROS-2.1-P2.3-E12.1 — précondition COMMERCIALE réelle, jamais un contournement
+    // du gate. Les routes DCE exercées ici passent par `EntitlementService.runTenderOperationEntitled`
+    // (Checkpoint E1.1, FINDING 1) : sans abonnement entitled ni Pass, un 402 est la réponse CORRECTE
+    // du produit. `dce-http.integration.spec.ts` avait été mis à jour à E1.1 ; ces specs Extraction,
+    // qui appellent pourtant les MÊMES routes, ne l'avaient jamais été — d'où leur échec. ENTERPRISE
+    // (illimité) évite tout effet de bord de quota/crédits AO, exactement comme le spec DCE.
+    // La preuve du REFUS sans entitlement est faite explicitement par le test dédié plus bas (une
+    // organisation SANS abonnement), pour que ce fixture ne puisse jamais masquer une régression du
+    // gate — un fixture qui rend seulement le test vert serait précisément le contournement interdit.
+    await prisma.organizationSubscription.createMany({
+      data: [
+        { id: randomUUID(), organizationId: orgAId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+        { id: randomUUID(), organizationId: orgBId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+      ],
+    });
 
     const adminA = await registerAndLogin(`extraction-admin-a-${randomUUID()}@smoke.test`);
     const readOnlyA = await registerAndLogin(`extraction-readonly-a-${randomUUID()}@smoke.test`);
@@ -208,29 +227,70 @@ describe("Extraction — real HTTP + PostgreSQL (NestJS)", () => {
       data: { id: tenderBId, organizationId: orgBId, clientAccountId: clientAccountB.id, title: "Tender B — Extraction HTTP", status: "DRAFT", tags: [], createdBy: adminB.userId },
     });
 
+    // Checkpoint TENDEROS-2.1-P2.3-E12.1 — organisation DÉLIBÉRÉMENT sans abonnement ni Pass, pour
+    // prouver que le gate commercial est toujours vivant (voir le test dédié en fin de fichier).
+    await prisma.organization.create({
+      data: { id: orgNoEntitlementId, name: "Extraction Org sans entitlement", slug: `extraction-org-none-${orgNoEntitlementId}`, defaultTimezone: "Europe/Paris", status: "TRIAL" },
+    });
+    const adminNone = await registerAndLogin(`extraction-admin-none-${randomUUID()}@smoke.test`);
+    userIds.push(adminNone.userId);
+    tokenAdminNoEntitlement = adminNone.token;
+    await addMembership({ organizationId: orgNoEntitlementId, userId: adminNone.userId, role: OrganizationRole.OrganizationAdmin });
+    const clientAccountNone = await prisma.clientAccount.create({
+      data: { id: randomUUID(), organizationId: orgNoEntitlementId, name: "Client sans entitlement", nameNormalized: "client sans entitlement", status: "ACTIVE", createdBy: adminNone.userId },
+    });
+    tenderNoEntitlementId = randomUUID();
+    await prisma.tender.create({
+      data: {
+        id: tenderNoEntitlementId,
+        organizationId: orgNoEntitlementId,
+        clientAccountId: clientAccountNone.id,
+        title: "Tender sans entitlement",
+        status: "DRAFT",
+        tags: [],
+        createdBy: adminNone.userId,
+      },
+    });
+
     await ensureDce(tenderAId, tokenAdminA, orgAId);
     await ensureDce(tenderBId, tokenAdminB, orgBId);
   }, 60000);
 
   afterAll(async () => {
-    await prisma.extractionChunk.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
-    await prisma.extractionAttempt.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
-    await prisma.documentExtraction.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
-    await prisma.dceDocument.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
-    await prisma.dce.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
-    await prisma.documentVersion.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
-    await prisma.document.updateMany({ where: { organizationId: { in: [orgAId, orgBId] } }, data: { currentVersionId: null } });
-    await prisma.document.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
-    await prisma.tender.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
-    await prisma.clientAssignment.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
-    await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
-    await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
-    await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: [orgAId, orgBId] } } } });
-    await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    // Checkpoint TENDEROS-2.1-P2.3-E12.4 FIX-1 (H6-01) — l'application est fermee AVANT la purge,
+    // jamais apres. Preuve a l'origine de ce correctif : sur 246 organisations residuelles, les
+    // tables qui bloquaient encore leur suppression etaient `outbox_events` (440 lignes) et
+    // `audit_logs` (218) — ecrites par le travail de fond APRES que ce teardown les ait purgees.
+    // La suppression finale de l'organisation violait alors la FK, `afterAll` avortait, et toute
+    // la fixture racine (organisation, utilisateurs, sessions) fuyait d'un run a l'autre.
+    // `app.close()` attend desormais le travail en vol (`BackgroundTaskRunner`, E12.3) : apres ce
+    // point plus aucune ecriture n'est possible, la purge est donc deterministe. Prisma se
+    // reconnecte paresseusement pour les suppressions ci-dessous.
+    await app.close();
+    // Checkpoint TENDEROS-2.1-P2.3-E12.1 — les OutboxEvent portent une FK organisation : sans ce
+    // nettoyage, `organization.deleteMany` échoue et laisse des lignes orphelines qui polluent les
+    // autres suites. Le défaut était invisible tant que ce spec échouait en 402 AVANT toute écriture
+    // métier : corriger l'entitlement a rendu le scénario réellement mutant, donc réellement traçant.
+    await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.organizationPassPurchase.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.extractionChunk.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.extractionAttempt.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.documentExtraction.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.dceDocument.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.dce.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.documentVersion.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.document.updateMany({ where: { organizationId: { in: allOrgIds } }, data: { currentVersionId: null } });
+    await prisma.document.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.tender.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.clientAssignment.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.clientAccount.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.auditLog.deleteMany({ where: { organizationId: { in: allOrgIds } } });
+    await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: allOrgIds } } } });
+    await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: allOrgIds } } });
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
-    await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
-    await app.close();
+    await prisma.organization.deleteMany({ where: { id: { in: allOrgIds } } });
   }, 30000);
 
   it("extracts a real native-text PDF end-to-end: PENDING -> ... -> SUCCEEDED, with persisted chunks", async () => {
@@ -395,4 +455,51 @@ describe("Extraction — real HTTP + PostgreSQL (NestJS)", () => {
     });
     expect(crossGetOwnOrgHeaderButForeignTender.status).toBe(404);
   });
+
+  /**
+   * Checkpoint TENDEROS-2.1-P2.3-E12.1 — le gate commercial E1.1/E1.3 dans LES DEUX SENS, sur la
+   * route réellement gatée. Sans cette preuve, le fixture ENTERPRISE ajouté en `beforeAll` pourrait
+   * masquer silencieusement une désactivation future du gate : ce test échouerait alors, et c'est
+   * exactement son rôle.
+   */
+  it("BLOQUANT (gate commercial) — sans abonnement ni Pass, l'import DCE est refusé 402 ; l'octroi d'un Pass réel le débloque et le Pass est RÉSERVÉ sur ce Tender", async () => {
+    const dceUrl = `${baseUrl}/api/v1/tenders/${tenderNoEntitlementId}/dce`;
+    const headers = { "Content-Type": "application/json", ...authHeaders(tokenAdminNoEntitlement, orgNoEntitlementId) };
+
+    // 1) REFUS — l'organisation n'a ni abonnement entitled ni Pass disponible.
+    const denied = await fetch(dceUrl, { method: "POST", headers });
+    expect(denied.status).toBe(402);
+    const deniedBody = (await denied.json()) as { error?: { code?: string } };
+    expect(deniedBody.error?.code).toBe("TENDER_OPERATION_NOT_ENTITLED");
+
+    // Aucune écriture métier ne doit avoir eu lieu malgré le refus.
+    expect(await prisma.dce.count({ where: { organizationId: orgNoEntitlementId } })).toBe(0);
+
+    // 2) OCTROI d'un Pass RÉEL (jamais un bypass du gate, jamais des crédits infinis globaux).
+    const passId = randomUUID();
+    await prisma.organizationPassPurchase.create({
+      data: {
+        id: passId,
+        organizationId: orgNoEntitlementId,
+        status: "AVAILABLE",
+        externalReference: `e12-1-entitlement-proof-${passId}`,
+        priceCents: 9900,
+        currency: "EUR",
+      },
+    });
+
+    // 3) AUTORISÉ — même requête, même acteur, seule la précondition commerciale a changé.
+    const allowed = await fetch(dceUrl, { method: "POST", headers });
+    expect(allowed.status).toBe(201);
+    expect(await prisma.dce.count({ where: { organizationId: orgNoEntitlementId } })).toBe(1);
+
+    // 4) CONSOMMATION conforme à E1.2/E1.3 : le Pass est RÉSERVÉ sur CE Tender (affectation au
+    //    premier usage métier payant), jamais consommé commercialement à ce stade — la consommation
+    //    définitive (`consumedTenderId`) n'intervient qu'au premier dépôt réussi (E9).
+    const pass = await prisma.organizationPassPurchase.findUniqueOrThrow({ where: { id: passId } });
+    expect(pass.status).toBe("RESERVED");
+    expect(pass.reservedTenderId).toBe(tenderNoEntitlementId);
+    expect(pass.reservedAt).not.toBeNull();
+    expect(pass.consumedTenderId).toBeNull();
+  }, 30000);
 });

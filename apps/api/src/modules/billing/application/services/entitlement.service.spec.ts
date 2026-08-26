@@ -43,11 +43,31 @@ describe("DefaultEntitlementService", () => {
     service = new DefaultEntitlementService(subscriptions, passes, overrides, new FixedClock(), reservePassForTenderUseCase, releasePassForTenderUseCase);
   });
 
-  it("returns null plan and refuses every feature/limit for an organization with no subscription and no Pass", async () => {
+  it("returns null plan and refuses every feature for an organization with no subscription and no Pass", async () => {
     expect(await service.getEffectivePlanTier(ORG_A)).toBeNull();
     expect(await service.canUseFeature(ORG_A, EntitlementFeature.AdvancedCollaboration)).toBe(false);
-    expect(await service.getEffectiveLimit(ORG_A, QuotaType.UsersMax)).toBe(0);
     expect(await service.canOperateOnTender(ORG_A, TENDER_A)).toBe(false);
+  });
+
+  /**
+   * Checkpoint TENDEROS-2.1-PRE-DECOM-FIX (REC-001) — le contrat "sans plan" a change
+   * DELIBEREMENT, et ce test remplace l'ancienne assertion `UsersMax === 0`.
+   *
+   * Auparavant TOUS les quotas valaient 0 sans plan. Or `CreateOrganizationWithOwnerUseCase` cree
+   * atomiquement l'organisation ET sa Membership OWNER : l'organisation naissait donc a
+   * `1 membre / 0 siege` et son propre fondateur la mettait hors quota
+   * (`SEAT_LIMIT_EXCEEDED (1/0)`, constate en recette E2E). Le seul quota releve est `USERS_MAX = 1`
+   * — exactement le fondateur. Tout le reste reste a ZERO : aucun credit AO, aucune fonctionnalite,
+   * et `canOperateOnTender` continue de refuser. Acheter demeure l'unique voie vers un second siege.
+   */
+  it("BLOQUANT (REC-001) — sans plan, seul USERS_MAX vaut 1 (le fondateur) : aucun autre quota n'est accorde", async () => {
+    expect(await service.getEffectiveLimit(ORG_A, QuotaType.UsersMax)).toBe(1);
+
+    for (const quota of [QuotaType.AoMonthlyGrant, QuotaType.AoRolloverCap, QuotaType.ChatAiDailyMax, QuotaType.StorageGbMax]) {
+      expect(await service.getEffectiveLimit(ORG_A, quota), `${quota} ne doit rien accorder sans plan`).toBe(0);
+    }
+    // L'invariant qui motive ce contrat : la limite couvre les membres crees par l'onboarding.
+    expect(await service.getEffectiveLimit(ORG_A, QuotaType.UsersMax)).toBeGreaterThanOrEqual(1);
   });
 
   it("Business subscription grants Advanced Collaboration but never Public API", async () => {
@@ -324,7 +344,10 @@ describe("DefaultEntitlementService", () => {
         }),
       );
 
-      expect(await service.getEffectiveLimit(ORG_A, QuotaType.UsersMax)).toBe(0);
+      // REC-001 — l'organisation de ce test n'a aucun plan : la valeur de repli attendue est donc
+      // desormais la ligne de base "sans plan" (`USERS_MAX = 1`), jamais l'override expire (999).
+      // Ce que ce test verrouille reste inchange : un override expire est IGNORE.
+      expect(await service.getEffectiveLimit(ORG_A, QuotaType.UsersMax)).toBe(1);
     });
 
     it("mission §39 — a feature override never grants access to a different Tender (Pass-scope is untouched)", async () => {

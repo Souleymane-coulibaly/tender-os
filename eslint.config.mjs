@@ -13,6 +13,10 @@ export default tseslint.config(
       "**/coverage/**",
       "**/playwright-report/**",
       "**/test-results/**",
+      // Checkpoint TENDEROS-2.1-P2.3-E12.4 — artefacts de certification (scripts de diagnostic
+      // jetables, jamais livres et jamais commites). Ils faisaient echouer le lint de
+      // `apps/api` alors qu'aucune ligne de code produit n'etait en cause.
+      "**/artifacts/**",
       "**/*.d.ts",
     ],
   },

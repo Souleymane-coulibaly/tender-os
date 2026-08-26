@@ -11,6 +11,12 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { StorageProvider } from "../application/ports/storage-provider";
 import type { R2Config } from "./r2-config";
 
+/** Checkpoint TENDEROS-2.1-P2.3-E12 (P1) — voir le constructeur. Établissement de connexion court
+ *  (une cible injoignable doit échouer vite) ; transfert plus long (un DCE volumineux traverse
+ *  légitimement plusieurs dizaines de secondes). */
+const R2_CONNECTION_TIMEOUT_MS = 5_000;
+const R2_REQUEST_TIMEOUT_MS = 60_000;
+
 function isNotFound(error: unknown): boolean {
   return error instanceof S3ServiceException && error.name === "NotFound";
 }
@@ -39,6 +45,17 @@ export class CloudflareR2StorageProvider implements StorageProvider {
       region: "auto",
       endpoint: config.endpoint,
       credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
+      // Checkpoint TENDEROS-2.1-P2.3-E12 (P1, mission §50/§57) — `NodeHttpHandler` laisse
+      // `requestTimeout` DÉSACTIVÉ par défaut : un socket semi-ouvert vers R2 (put/get/head/delete)
+      // pouvait faire pendre INDÉFINIMENT la requête HTTP appelante (upload/téléchargement de
+      // document, export), immobilisant une connexion du pool sans jamais échouer ni se libérer.
+      // Seul adaptateur externe du dépôt sans borne temporelle explicite — tous les autres
+      // (OpenAI/BOAMP/TED/Resend/webhooks/connecteurs) utilisent déjà `AbortSignal.timeout`.
+      // Bornes distinctes : l'établissement de connexion doit échouer vite, le transfert d'un gros
+      // DCE a besoin de plus de marge. `maxAttempts` explicite plutôt que le défaut implicite du
+      // SDK — jamais un second moteur de retry, simplement la valeur rendue visible.
+      requestHandler: { connectionTimeout: R2_CONNECTION_TIMEOUT_MS, requestTimeout: R2_REQUEST_TIMEOUT_MS },
+      maxAttempts: 3,
     });
     this.bucket = config.bucketName;
   }

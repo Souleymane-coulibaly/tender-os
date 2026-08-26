@@ -4,6 +4,7 @@ import { Test } from "@nestjs/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../../../../app.module";
 import { PrismaService } from "../../../../shared-kernel/prisma.service";
+import { ACCESS_TOKEN_SERVICE, type AccessTokenService } from "../../../identity/application/ports/access-token.service";
 import { MembershipId } from "../../../memberships/domain/membership-id.value-object";
 import { OrganizationMembership } from "../../../memberships/domain/organization-membership.aggregate";
 import { OrganizationRole } from "../../../memberships/domain/organization-role";
@@ -21,6 +22,7 @@ import { buildPricingFixtureBuffer } from "../../test-support/build-pricing-fixt
 describe("Chiffrage (pricing-schedule) — real HTTP + PostgreSQL (NestJS)", () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let accessTokenService: AccessTokenService;
   let baseUrl: string;
 
   const orgAId = randomUUID();
@@ -31,21 +33,23 @@ describe("Chiffrage (pricing-schedule) — real HTTP + PostgreSQL (NestJS)", () 
   let tokenOwnerB: string;
   let ownerAUserId: string;
 
+  /**
+   * Checkpoint TENDEROS-2.1-P2.3-E12.1 — ce fichier a besoin de 6 acteurs, soit 12 requêtes sur
+   * `/auth/register` + `/auth/login`, qui PARTAGENT un même bucket de rate limiting réel de 10
+   * requêtes / 60 s par IP (`AuthThrottlerGuard`, Sprint 21). Le 6e acteur recevait donc un 429
+   * parfaitement CORRECT du produit — mais l'ancienne version de ce helper ne vérifiait aucun statut
+   * HTTP : elle renvoyait `userId: undefined`, qui ne faisait surface que bien plus tard sous la
+   * forme d'une erreur Prisma incompréhensible (`in[5]: undefined` au teardown). Le rate limiter
+   * n'est jamais désactivé ni contourné en production ; ce spec ne teste tout simplement pas le flux
+   * d'authentification (couvert par les specs du module `identity`), il crée donc ses acteurs
+   * directement — même motif que `documents-tenant-isolation` et `dashboard-query-bounding`.
+   */
   async function registerAndLogin(email: string): Promise<{ userId: string; token: string }> {
-    const password = "SmokeTest#12345";
-    const registerRes = await fetch(`${baseUrl}/api/v1/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, displayName: "Pricing Schedule HTTP Test", termsAccepted: true }),
-    });
-    const user = (await registerRes.json()) as { id: string };
-    const loginRes = await fetch(`${baseUrl}/api/v1/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const { accessToken } = (await loginRes.json()) as { accessToken: string };
-    return { userId: user.id, token: accessToken };
+    const userId = randomUUID();
+    await prisma.user.create({ data: { id: userId, email, displayName: "Pricing Schedule HTTP Test", status: "ACTIVE", passwordHash: "not-used-direct-actor-creation" } });
+    const sessionId = randomUUID();
+    await prisma.session.create({ data: { id: sessionId, userId, expiresAt: new Date(Date.now() + 3600_000) } });
+    return { userId, token: accessTokenService.issue({ userId, sessionId }, 3600) };
   }
 
   async function addMembership(input: { organizationId: string; userId: string; role: (typeof OrganizationRole)[keyof typeof OrganizationRole] }): Promise<void> {
@@ -107,6 +111,7 @@ describe("Chiffrage (pricing-schedule) — real HTTP + PostgreSQL (NestJS)", () 
     baseUrl = `http://127.0.0.1:${port}`;
 
     prisma = moduleRef.get(PrismaService);
+    accessTokenService = moduleRef.get(ACCESS_TOKEN_SERVICE);
 
     await prisma.organization.createMany({
       data: [
@@ -140,6 +145,16 @@ describe("Chiffrage (pricing-schedule) — real HTTP + PostgreSQL (NestJS)", () 
   }, 60000);
 
   afterAll(async () => {
+    // Checkpoint TENDEROS-2.1-P2.3-E12.4 FIX-1 (H6-01) — l'application est fermee AVANT la purge,
+    // jamais apres. Preuve a l'origine de ce correctif : sur 246 organisations residuelles, les
+    // tables qui bloquaient encore leur suppression etaient `outbox_events` (440 lignes) et
+    // `audit_logs` (218) — ecrites par le travail de fond APRES que ce teardown les ait purgees.
+    // La suppression finale de l'organisation violait alors la FK, `afterAll` avortait, et toute
+    // la fixture racine (organisation, utilisateurs, sessions) fuyait d'un run a l'autre.
+    // `app.close()` attend desormais le travail en vol (`BackgroundTaskRunner`, E12.3) : apres ce
+    // point plus aucune ecriture n'est possible, la purge est donc deterministe. Prisma se
+    // reconnecte paresseusement pour les suppressions ci-dessous.
+    await app.close();
     await prisma.pricingScheduleFinalFile.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.pricingScheduleLine.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.pricingScheduleVersion.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -163,7 +178,6 @@ describe("Chiffrage (pricing-schedule) — real HTTP + PostgreSQL (NestJS)", () 
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
-    await app.close();
     await prisma.$disconnect();
   }, 60000);
 

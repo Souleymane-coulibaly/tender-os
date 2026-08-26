@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { HasAnyAdministrativeDocumentUseCase } from "../../../administrative-dossier";
 import { ListAccessibleClientsUseCase, ListClientAccountsUseCase } from "../../../client-portfolio";
@@ -9,7 +9,7 @@ import { GetOrganizationUseCase } from "../../../organizations";
 import { GetMyTasksUseCase, ListMyApprovalsUseCase, ListRecentActivityForDashboardUseCase, ListTenderParticipantsUseCase } from "../../../workspace";
 import { GetResponsePackagePortfolioSummaryForDashboardUseCase, ResponsePackageStatus } from "../../../response-package";
 import { GetGoNoGoSummaryForDashboardUseCase, GoNoGoDecisionValue } from "../../../opportunity";
-import { ListSavedSearchesUseCase, ListSavedSearchMatchesUseCase, SavedSearchMatchStatus, type SavedSearchMatchWithTender } from "../../../market-watch";
+import { ListSavedSearchesUseCase, ListSavedSearchMatchesUseCase, MarketWatchPermissionMissingError, SavedSearchMatchStatus, type SavedSearchMatchWithTender } from "../../../market-watch";
 import { GetTenderActivityTrendUseCase, GetTenderListViewUseCase, GetTenderStatisticsUseCase, ReadinessStatus, TenderPermission, TenderStatus, assertHasTenderPermission } from "../../../tenders";
 import { DeadlineBucket } from "../../domain/enums";
 import { classifyDeadlineBucket } from "../../domain/services/classify-deadline-bucket";
@@ -94,6 +94,8 @@ function attentionRank(bucket: DeadlineBucket | undefined): number {
  */
 @Injectable()
 export class GetDashboardOverviewUseCase {
+  private readonly logger = new Logger(GetDashboardOverviewUseCase.name);
+
   constructor(
     private readonly listAccessibleClientsUseCase: ListAccessibleClientsUseCase,
     private readonly getTenderStatisticsUseCase: GetTenderStatisticsUseCase,
@@ -152,7 +154,7 @@ export class GetDashboardOverviewUseCase {
       return EMPTY_DASHBOARD_OVERVIEW(now.toISOString(), scope, periodDays);
     }
 
-    const [tenderStats, activeTendersPage, myTasksOverdue, packageRowsAll, myPendingApprovals, organization] = await Promise.all([
+    const [tenderStats, activeTendersPage, myTasksOverdue, pendingApprovalsCount, organization] = await Promise.all([
       this.getTenderStatisticsUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, clientAccountId: scopedClientAccountId }),
       this.getTenderListViewUseCase.execute({
         organizationId: query.organizationId,
@@ -164,19 +166,19 @@ export class GetDashboardOverviewUseCase {
         sortDirection: "desc",
       }),
       this.getMyTasksUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, clientAccountId: scopedClientAccountId, overdueOnly: true }),
-      this.getResponsePackagePortfolioSummaryForDashboardUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole }),
       // V2 Sprint 18 (mission §66-68) — "Validations en attente : N", même discipline ClientAccess
       // que myTasksOverdue ci-dessus.
-      this.listMyApprovalsUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, clientAccountId: scopedClientAccountId, status: "PENDING" }),
+      // Checkpoint TENDEROS-2.1-P2.3-E12.1 — `count` (COUNT(*) SQL) et non `execute` : le Dashboard
+      // n'a jamais eu besoin que du NOMBRE ici. Sémantique du KPI strictement inchangée (mêmes
+      // prédicats, même périmètre ClientAccess), seules les lignes cessent d'être matérialisées.
+      this.listMyApprovalsUseCase.count({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, clientAccountId: scopedClientAccountId, status: "PENDING" }),
       // Checkpoint E5 (Premium Analytics addendum §32) — fuseau horaire réel de l'organisation pour
       // le bucketing par jour du graphique d'activité, jamais une hypothèse Europe/Paris/UTC.
       this.getOrganizationUseCase.execute({ id: query.organizationId }),
     ]);
 
-    const packageRows = scopedClientAccountId ? packageRowsAll.filter((row) => row.clientAccountId === scopedClientAccountId) : packageRowsAll;
-
     const tenderIds = activeTendersPage.items.map((tender) => tender.id);
-    const [goNoGo, myTasksItems, activity, activityTrend] = await Promise.all([
+    const [goNoGo, myTasksItems, activity, activityTrend, packages] = await Promise.all([
       this.getGoNoGoSummaryForDashboardUseCase.execute({ organizationId: query.organizationId, tenderIds, since }),
       this.getMyTasksUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, clientAccountId: scopedClientAccountId }),
       this.listRecentActivityForDashboardUseCase.execute({ organizationId: query.organizationId, tenderIds, limit: ACTIVITY_LIMIT }),
@@ -189,10 +191,23 @@ export class GetDashboardOverviewUseCase {
         timezone: organization.defaultTimezone,
         now,
       }),
+      // Checkpoint TENDEROS-2.1-P2.3-E12 (Dashboard unbounded query) — déplacé dans cette seconde
+      // vague parce qu'il a désormais besoin de `tenderIds` : les lignes détaillées ne sont
+      // matérialisées que pour les Tenders réellement rendus, tandis que les compteurs de
+      // portefeuille (CURRENT_STATE) sont agrégés par PostgreSQL. Le filtre client est poussé dans
+      // le SQL au lieu d'être appliqué en mémoire ici après avoir tout chargé. Aucune vague
+      // supplémentaire : cette vague existait déjà.
+      this.getResponsePackagePortfolioSummaryForDashboardUseCase.execute({
+        organizationId: query.organizationId,
+        actorId: query.actorId,
+        actorRole: query.actorRole,
+        clientAccountId: scopedClientAccountId,
+        tenderIds,
+      }),
     ]);
 
     const packagesByTender = new Map<string, { lotId: string | null; status: ResponsePackageStatus }[]>();
-    for (const row of packageRows) {
+    for (const row of packages.rowsForTenders) {
       const list = packagesByTender.get(row.tenderId) ?? [];
       list.push({ lotId: row.lotId, status: row.status });
       packagesByTender.set(row.tenderId, list);
@@ -249,11 +264,6 @@ export class GetDashboardOverviewUseCase {
       this.buildActivationChecklist(query, activeTendersPage.items.length > 0, marketWatch.hasSavedSearches),
     ]);
 
-    const packageCountByStatus = {} as Record<ResponsePackageStatus, number>;
-    for (const row of packageRows) {
-      packageCountByStatus[row.status] = (packageCountByStatus[row.status] ?? 0) + 1;
-    }
-
     const pipeline: DashboardPipelineStageDto[] = Object.entries(tenderStats.byStatus).map(([status, count]) => ({ status: status as TenderStatus, count }));
 
     // Checkpoint E5 (Premium Analytics addendum §8) — tally de `readinessStatus` déjà résolu sur
@@ -293,18 +303,22 @@ export class GetDashboardOverviewUseCase {
         deadlinesNext7Days: tenderStats.deadlinesNext7Days,
         overdueTenders: tenderStats.overdueCount,
         readyToSubmit: tenderStats.readyToSubmitCount,
-        packagesReady: packageRows.filter((row) => READY_PACKAGE_STATUSES.includes(row.status)).length,
+        // Checkpoint TENDEROS-2.1-P2.3-E12 — sémantique métier INCHANGÉE (dossiers du portefeuille
+        // accessible dont le statut dénormalisé est prêt/validé/exporté, état courant GLOBAL sans
+        // aucun cutoff temporel) ; seul le mode de calcul change : somme d'un agrégat PostgreSQL
+        // plutôt que filtrage en mémoire de toutes les lignes du portefeuille.
+        packagesReady: READY_PACKAGE_STATUSES.reduce((sum, status) => sum + (packages.countByStatus[status] ?? 0), 0),
         // Mission §60 "KPI et listes doivent utiliser les mêmes règles de filtrage" — TOUJOURS la
         // longueur COMPLÈTE (avant troncature d'affichage ci-dessous), jamais la longueur de la
         // page affichée.
         needingAttention: attentionItems.length,
         overdueTasks: myTasksOverdue.length,
-        pendingApprovals: myPendingApprovals.length,
+        pendingApprovals: pendingApprovalsCount,
       },
       pipeline,
       deadlines: deadlineItems.slice(0, DEADLINES_DISPLAY_LIMIT),
       attentionItems: attentionItemsWithAssignees.slice(0, ATTENTION_DISPLAY_LIMIT),
-      packages: { countByStatus: packageCountByStatus, total: packageRows.length },
+      packages: { countByStatus: packages.countByStatus as Record<ResponsePackageStatus, number>, total: packages.total },
       goNoGo: { countByDecision: goNoGo.countByDecision, total: goNoGo.total, periodDays },
       myTasks: { overdueCount: myTasksOverdue.length, items: myTasksItems.slice(0, MY_TASKS_DISPLAY_LIMIT) },
       activity: activity.map((entry) => ({ id: entry.id, tenderId: entry.tenderId, type: entry.type, summary: entry.summary, createdAt: entry.createdAt.toISOString() })),
@@ -371,7 +385,22 @@ export class GetDashboardOverviewUseCase {
     let savedSearches: Awaited<ReturnType<ListSavedSearchesUseCase["execute"]>>;
     try {
       savedSearches = await this.listSavedSearchesUseCase.execute({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole });
-    } catch {
+    } catch (error) {
+      // Checkpoint TENDEROS-2.1-P2.3-E12 (P1, mission §4 "erreurs actuellement avalées") — ce
+      // `catch` était NON TYPÉ et SANS LOG : il n'absorbait pas seulement le cas RBAC documenté
+      // ci-dessus, il absorbait AUSSI une panne réelle (base indisponible, repository en erreur) en
+      // renvoyant des données métier FABRIQUÉES ("aucune veille configurée"). Un incident de
+      // disponibilité devenait alors indistinguable d'un widget légitimement vide, côté utilisateur
+      // comme côté exploitant, sans la moindre trace. Seule l'absence de droit Market Watch reste
+      // silencieuse (comportement voulu, voir ci-dessus) ; toute autre cause est désormais
+      // journalisée en ERROR — le Dashboard reste non bloquant (jamais une page cassée pour un seul
+      // widget), mais l'incident cesse d'être invisible.
+      if (!(error instanceof MarketWatchPermissionMissingError)) {
+        this.logger.error(
+          `Market Watch dashboard widget failed for organization ${query.organizationId}: ${error instanceof Error ? error.message : String(error)}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
       return { hasSavedSearches: false, relevantOpportunitiesCount: 0, recommended: [] };
     }
     if (savedSearches.length === 0) {

@@ -3,6 +3,7 @@ import { MarketType } from "../../../tenders/domain/market-type";
 import { TenderSource } from "../../../tenders/domain/tender-source";
 import type { CollectedTender, MarketSourceConnector, MarketSourceSearchCriteria, MarketSourceSearchResult } from "../../application/ports/market-source-connector";
 import { resolveFrenchRegionFromDepartment } from "../../domain/services/french-geography";
+import { MarketSourceHttpError } from "../../application/services/with-source-retry";
 
 const BOAMP_API_BASE_URL = "https://boamp-datadila.opendatasoft.com/api/records/1.0/search/";
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -79,6 +80,44 @@ function extractFromLegacyDonnees(donneesRaw: string | undefined): { cpvCodes: s
  * le matching applicatif (mission §26) fait tout le travail de filtrage ensuite — un connecteur
  * SANS capacité de filtrage fin reste utilisable (mission §5 "adapter à la réalité").
  */
+/**
+ * Checkpoint TENDEROS-2.1-PRE-DECOM-FIX (REC-004) — BOAMP livre certains champs texte avec des
+ * ENTITES HTML deja encodees (`Ville d&#039;Arcueil`), qui s'affichaient telles quelles dans le
+ * produit. La normalisation a lieu ICI, a l'INGESTION : la donnee persistee redevient du texte
+ * brut, ce qui evite un double decodage cote lecture et n'exige aucun rendu HTML dangereux dans
+ * l'interface (React echappe deja tout texte par defaut, la sortie reste donc sure).
+ *
+ * Jeu volontairement FERME d'entites : seules les cinq entites XML/HTML de base et les references
+ * numeriques sont decodees. On ne deroule jamais un decodage recursif — `&amp;#039;` doit rester
+ * `&#039;` apres un seul passage, jamais devenir une apostrophe (protection contre le double
+ * decodage, qui permettrait de reconstituer des sequences non voulues).
+ */
+const NAMED_HTML_ENTITIES: Readonly<Record<string, string>> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+};
+
+export function decodeHtmlEntities(value: string): string {
+  return value.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, entity: string) => {
+    if (entity.startsWith("#x") || entity.startsWith("#X")) {
+      const code = Number.parseInt(entity.slice(2), 16);
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+    }
+    if (entity.startsWith("#")) {
+      const code = Number.parseInt(entity.slice(1), 10);
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+    }
+    return NAMED_HTML_ENTITIES[entity.toLowerCase()] ?? match;
+  });
+}
+
+function decodedOrUndefined(value: string | undefined): string | undefined {
+  return value === undefined ? undefined : decodeHtmlEntities(value);
+}
+
 @Injectable()
 export class BoampSourceConnector implements MarketSourceConnector {
   private readonly logger = new Logger(BoampSourceConnector.name);
@@ -119,7 +158,7 @@ export class BoampSourceConnector implements MarketSourceConnector {
     }
 
     if (!response.ok) {
-      throw new Error(`BOAMP API responded HTTP ${response.status}`);
+      throw new MarketSourceHttpError("BOAMP", response.status);
     }
 
     const body = (await response.json()) as BoampSearchResponse;
@@ -134,9 +173,9 @@ export class BoampSourceConnector implements MarketSourceConnector {
 
         return {
           externalId,
-          title: f.objet,
-          description,
-          buyerName: f.nomacheteur,
+          title: decodeHtmlEntities(f.objet),
+          description: decodedOrUndefined(description),
+          buyerName: decodedOrUndefined(f.nomacheteur),
           country: "FR",
           region: resolveFrenchRegionFromDepartment(department),
           department,

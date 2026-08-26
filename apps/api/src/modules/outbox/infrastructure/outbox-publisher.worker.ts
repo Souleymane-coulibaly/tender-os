@@ -19,6 +19,8 @@ import { PublishPendingOutboxEventsUseCase } from "../application/use-cases/publ
 export class OutboxPublisherWorker implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OutboxPublisherWorker.name);
   private timer: ReturnType<typeof setInterval> | undefined;
+  /** Tick actuellement en vol — attendu par `onModuleDestroy` (Checkpoint E12.3). */
+  private currentTick: Promise<void> | undefined;
   private ticking = false;
 
   constructor(private readonly publishPendingOutboxEventsUseCase: PublishPendingOutboxEventsUseCase) {}
@@ -31,18 +33,26 @@ export class OutboxPublisherWorker implements OnModuleInit, OnModuleDestroy {
 
     const intervalMs = this.readPositiveIntEnv("OUTBOX_POLL_INTERVAL_MS", 2000);
     this.timer = setInterval(() => {
-      void this.tick();
+      // Checkpoint TENDEROS-2.1-P2.3-E12.3 (§4/§7) — le tick en cours est CONSERVÉ pour que
+      // `onModuleDestroy` puisse l'attendre : `clearInterval` seul empêche les ticks FUTURS, mais
+      // laissait un tick déjà démarré poursuivre ses requêtes Prisma après la fermeture.
+      this.currentTick = this.tick();
+      void this.currentTick;
     }, intervalMs);
     this.timer.unref();
     this.logger.log(`Outbox worker started (interval=${intervalMs}ms).`);
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = undefined;
-      this.logger.log("Outbox worker stopped.");
     }
+    // Aucune nouvelle requête Prisma ne doit partir après le retour de ce hook : le tick déjà
+    // démarré est attendu jusqu'à son terme (il absorbe déjà ses propres erreurs, voir `tick`).
+    await this.currentTick;
+    this.currentTick = undefined;
+    this.logger.log("Outbox worker stopped.");
   }
 
   /** Exposé pour les tests (et un éventuel déclenchement manuel/CLI) — même logique qu'un tick

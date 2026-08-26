@@ -11,6 +11,9 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
 const DRIVE_BASE_URL = "https://www.googleapis.com/drive/v3";
+/** Checkpoint TENDEROS-2.1-P2.3-E12 — aligné sur `REQUEST_TIMEOUT_MS` de `provider-http-client.ts`
+ *  (15 s), la borne déjà appliquée à tous les autres appels provider de ce module. */
+const REVOKE_REQUEST_TIMEOUT_MS = 15_000;
 const DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
 const CALENDAR_BASE_URL = "https://www.googleapis.com/calendar/v3";
 const MAX_SIMPLE_UPLOAD_BYTES = 20 * 1024 * 1024;
@@ -112,7 +115,13 @@ export class GoogleWorkspaceAdapter implements ConnectorProviderAdapter {
    *  appelé en best-effort : un échec ne bloque jamais la déconnexion locale. */
   async revokeToken(refreshToken: string): Promise<void> {
     try {
-      await fetch(`${REVOKE_URL}?token=${encodeURIComponent(refreshToken)}`, { method: "POST" });
+      // Checkpoint TENDEROS-2.1-P2.3-E12 (P1, mission §50) — SEUL `fetch` sortant du module qui
+      // contournait `callProviderJson` et partait donc SANS borne temporelle : un socket semi-ouvert
+      // chez Google faisait pendre indéfiniment la requête de déconnexion de l'utilisateur, et le
+      // `catch` best-effort ci-dessous ne se déclenche JAMAIS sur un hang (seulement sur un rejet).
+      // Même durée que tout appel provider de ce module (`provider-http-client.ts`), jamais une
+      // constante concurrente.
+      await fetch(`${REVOKE_URL}?token=${encodeURIComponent(refreshToken)}`, { method: "POST", signal: AbortSignal.timeout(REVOKE_REQUEST_TIMEOUT_MS) });
     } catch {
       // Best-effort (mission §12) — la suppression locale des credentials reste la garantie réelle.
     }

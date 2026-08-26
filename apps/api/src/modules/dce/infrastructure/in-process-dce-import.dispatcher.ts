@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
+import { BackgroundTaskRunner } from "../../../shared-kernel/background-task-runner";
 import type { DceImportDispatcher, DceImportDispatchInput } from "../application/ports/dce-import-dispatcher";
 import { ProcessDceZipImportUseCase } from "../application/use-cases/process-dce-zip-import.use-case";
 
@@ -8,18 +9,12 @@ import { ProcessDceZipImportUseCase } from "../application/use-cases/process-dce
  *  le job dans un état non terminal (limite documentée, acceptable pour cette tranche). */
 @Injectable()
 export class InProcessDceImportDispatcher implements DceImportDispatcher {
-  private readonly logger = new Logger(InProcessDceImportDispatcher.name);
-
-  constructor(@Inject(ProcessDceZipImportUseCase) private readonly processUseCase: ProcessDceZipImportUseCase) {}
+  constructor(@Inject(ProcessDceZipImportUseCase) private readonly processUseCase: ProcessDceZipImportUseCase, private readonly backgroundTasks: BackgroundTaskRunner) {}
 
   dispatch(input: DceImportDispatchInput): void {
-    setImmediate(() => {
-      this.processUseCase.execute(input).catch((error: unknown) => {
-        this.logger.error(
-          `Unhandled error while processing DCE ZIP import job ${input.jobId}: ` +
-            `${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
-    });
+    // Checkpoint TENDEROS-2.1-P2.3-E12.3 — passe par `BackgroundTaskRunner` : le travail
+    // detache est desormais SUIVI, refuse apres le debut de l'arret, et attendu par
+    // `onModuleDestroy` avant la deconnexion Prisma. Voir le contrat complet dans ce service.
+    this.backgroundTasks.run(`dce-zip-import:${input.jobId}`, () => this.processUseCase.execute(input));
   }
 }
