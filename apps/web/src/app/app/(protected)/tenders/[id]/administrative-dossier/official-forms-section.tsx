@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { generateDc1Action, generateDc2CandidateAction, generateDc2MemberAction, generateDc4Action } from "../../../../official-form-actions";
+import {
+  generateDc1Action,
+  generateDc2CandidateAction,
+  generateDc2MemberAction,
+  generateDc4Action,
+} from "../../../../official-form-actions";
 import {
   formFieldSourceLabel,
   officialFormFieldStatusBadgeClass,
@@ -10,6 +15,7 @@ import {
   type OfficialFormGeneratedDocumentSummary,
   type OfficialFormReadiness,
 } from "../../../../../../lib/official-form-types";
+import { Button } from "../../../../../../components/ui/button";
 
 export type FormCardSpec = {
   key: string;
@@ -27,12 +33,22 @@ export type FormCardSpec = {
 
 function FieldRow({ field }: { field: OfficialFormReadiness["fields"][number] }) {
   return (
-    <tr className="border-b border-neutral-100">
-      <td className="py-1 pr-4 text-neutral-700">{field.label}</td>
-      <td className="py-1 pr-4">{typeof field.value === "boolean" ? (field.value ? "Oui" : "Non") : (field.value ?? <span className="text-neutral-400">—</span>)}</td>
-      <td className="py-1 pr-4 text-neutral-500">{formFieldSourceLabel(field.source)}</td>
+    <tr className="border-b border-tenderos-navy/10">
+      <td className="py-1 pr-4 text-tenderos-navy">{field.label}</td>
       <td className="py-1 pr-4">
-        <span className={`rounded border px-2 py-0.5 text-xs font-medium ${officialFormFieldStatusBadgeClass(field.status)}`}>{officialFormFieldStatusLabel(field.status)}</span>
+        {typeof field.value === "boolean"
+          ? field.value
+            ? "Oui"
+            : "Non"
+          : (field.value ?? <span className="text-tenderos-slate">—</span>)}
+      </td>
+      <td className="py-1 pr-4 text-tenderos-slate">{formFieldSourceLabel(field.source)}</td>
+      <td className="py-1 pr-4">
+        <span
+          className={`rounded border px-2 py-0.5 text-xs font-medium ${officialFormFieldStatusBadgeClass(field.status)}`}
+        >
+          {officialFormFieldStatusLabel(field.status)}
+        </span>
       </td>
     </tr>
   );
@@ -66,10 +82,21 @@ export function OfficialFormCard({ spec }: { spec: FormCardSpec }) {
   const [error, setError] = useState<string | undefined>();
   const [justGeneratedRevisionId, setJustGeneratedRevisionId] = useState<string | undefined>();
 
-  const revisions = [...(generatedDocument?.revisions ?? [])].sort((a, b) => b.revisionNumber - a.revisionNumber);
+  const revisions = [...(generatedDocument?.revisions ?? [])].sort(
+    (a, b) => b.revisionNumber - a.revisionNumber,
+  );
   const latest = revisions[0];
-  const missingRequired = readiness.fields.filter((f) => f.required && (f.status === "MISSING" || f.status === "NEEDS_REVIEW"));
-  const hintSources = Array.from(new Set(readiness.missingFieldKeys.map((key) => readiness.fields.find((f) => f.fieldKey === key)?.source).map(sourceHint).filter((v): v is string => Boolean(v))));
+  const missingRequired = readiness.fields.filter(
+    (f) => f.required && (f.status === "MISSING" || f.status === "NEEDS_REVIEW"),
+  );
+  const hintSources = Array.from(
+    new Set(
+      readiness.missingFieldKeys
+        .map((key) => readiness.fields.find((f) => f.fieldKey === key)?.source)
+        .map(sourceHint)
+        .filter((v): v is string => Boolean(v)),
+    ),
+  );
 
   async function runGenerate() {
     setIsPending(true);
@@ -90,7 +117,9 @@ export function OfficialFormCard({ spec }: { spec: FormCardSpec }) {
     }
     if (result.generated) {
       setGeneratedDocument(result.generated);
-      const newest = [...(result.generated.revisions ?? [])].sort((a, b) => b.revisionNumber - a.revisionNumber)[0];
+      const newest = [...(result.generated.revisions ?? [])].sort(
+        (a, b) => b.revisionNumber - a.revisionNumber,
+      )[0];
       setJustGeneratedRevisionId(newest?.id);
     }
   }
@@ -104,62 +133,102 @@ export function OfficialFormCard({ spec }: { spec: FormCardSpec }) {
   }
 
   return (
-    <div className="rounded border border-neutral-200 p-4">
+    <div className="rounded border border-tenderos-navy/10 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="font-medium text-neutral-900">
+          <p className="font-medium text-tenderos-navy">
             {spec.title} — {spec.operatorLabel}
           </p>
-          <p className="text-xs text-neutral-500">
-            {readiness.availableFieldCount} / {readiness.applicableFieldCount} champs applicables disponibles
+          <p className="text-xs text-tenderos-slate">
+            {readiness.availableFieldCount} / {readiness.applicableFieldCount} champs applicables
+            disponibles
           </p>
         </div>
-        <span className={`w-fit rounded border px-2 py-1 text-sm font-semibold ${readinessBadgeClass(readiness.readinessPercentage)}`}>{readiness.readinessPercentage}% prêt</span>
+        <span
+          className={`w-fit rounded border px-2 py-1 text-sm font-semibold ${readinessBadgeClass(readiness.readinessPercentage)}`}
+        >
+          {readiness.readinessPercentage}% prêt
+        </span>
       </div>
 
-      {readiness.needsReviewFieldKeys.length > 0 ? <p className="mt-2 text-xs text-amber-700">{readiness.needsReviewFieldKeys.length} donnée(s) à confirmer manuellement avant génération.</p> : null}
+      {readiness.needsReviewFieldKeys.length > 0 ? (
+        <p className="mt-2 text-xs text-warning-fg">
+          {readiness.needsReviewFieldKeys.length} donnée(s) à confirmer manuellement avant
+          génération.
+        </p>
+      ) : null}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" onClick={() => setExpanded((v) => !v)} className="w-fit rounded border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700">
+        <Button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="w-fit"
+          variant="secondary"
+          size="sm"
+        >
           {expanded ? "Masquer l'aperçu" : "Prévisualiser"}
-        </button>
+        </Button>
         {spec.canGenerate ? (
-          <button type="button" onClick={handleGenerateClick} disabled={isPending} className="w-fit rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+          <Button
+            type="button"
+            onClick={handleGenerateClick}
+            disabled={isPending}
+            className="w-fit"
+            variant="primary"
+            size="sm"
+          >
             {isPending ? "Génération…" : "Générer le DOCX"}
-          </button>
+          </Button>
         ) : null}
       </div>
 
       {confirmingPartial ? (
-        <div role="alert" className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+        <div
+          role="alert"
+          className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-warning-fg"
+        >
           <p>
-            {missingRequired.length} champ(s) important(s) sont manquants ou à confirmer ({missingRequired.map((f) => f.label).join(", ")}). Générer quand même ? Les champs absents resteront
-            vides dans le document — jamais une valeur inventée.
+            {missingRequired.length} champ(s) important(s) sont manquants ou à confirmer (
+            {missingRequired.map((f) => f.label).join(", ")}). Générer quand même ? Les champs
+            absents resteront vides dans le document — jamais une valeur inventée.
           </p>
           <div className="mt-2 flex gap-2">
-            <button type="button" onClick={() => void runGenerate()} className="w-fit rounded bg-amber-700 px-2 py-1 text-xs font-medium text-white">
+            <Button
+              type="button"
+              onClick={() => void runGenerate()}
+              className="w-fit"
+              variant="ghost"
+              size="sm"
+            >
               Générer quand même
-            </button>
-            <button type="button" onClick={() => setConfirmingPartial(false)} className="w-fit rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-800">
+            </Button>
+            <Button
+              type="button"
+              onClick={() => setConfirmingPartial(false)}
+              className="w-fit"
+              variant="ghost"
+              size="sm"
+            >
               Annuler
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
 
       {error ? (
-        <p role="alert" className="mt-2 text-xs text-red-700">
+        <p role="alert" className="mt-2 text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
 
       {justGeneratedRevisionId ? (
-        <p className="mt-2 text-xs text-green-700">
+        <p className="mt-2 text-xs text-success-fg">
           Révision générée —{" "}
           <a href={spec.downloadHref(justGeneratedRevisionId)} className="font-medium underline">
             Télécharger le DOCX
           </a>
-          . Ce document reste à l&apos;état « généré », une validation humaine explicite reste nécessaire avant tout dépôt.
+          . Ce document reste à l&apos;état « généré », une validation humaine explicite reste
+          nécessaire avant tout dépôt.
         </p>
       ) : null}
 
@@ -167,7 +236,7 @@ export function OfficialFormCard({ spec }: { spec: FormCardSpec }) {
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-neutral-300 text-neutral-500">
+              <tr className="border-b border-tenderos-navy/15 text-tenderos-slate">
                 <th className="py-1 pr-4 font-medium">Champ</th>
                 <th className="py-1 pr-4 font-medium">Valeur</th>
                 <th className="py-1 pr-4 font-medium">Source</th>
@@ -181,7 +250,7 @@ export function OfficialFormCard({ spec }: { spec: FormCardSpec }) {
             </tbody>
           </table>
           {hintSources.length > 0 ? (
-            <p className="mt-2 text-xs text-neutral-600">
+            <p className="mt-2 text-xs text-tenderos-slate">
               Pour compléter les données manquantes : {hintSources.join(" · ")}.
             </p>
           ) : null}
@@ -190,10 +259,10 @@ export function OfficialFormCard({ spec }: { spec: FormCardSpec }) {
 
       {revisions.length > 0 ? (
         <div className="mt-3">
-          <p className="mb-1 text-xs font-medium text-neutral-500">Historique des révisions</p>
+          <p className="mb-1 text-xs font-medium text-tenderos-slate">Historique des révisions</p>
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-neutral-200 text-neutral-500">
+              <tr className="border-b border-tenderos-navy/10 text-tenderos-slate">
                 <th className="py-1 pr-4 font-medium">Révision</th>
                 <th className="py-1 pr-4 font-medium">Statut</th>
                 <th className="py-1 pr-4 font-medium">Date</th>
@@ -202,17 +271,22 @@ export function OfficialFormCard({ spec }: { spec: FormCardSpec }) {
             </thead>
             <tbody>
               {revisions.map((revision) => (
-                <tr key={revision.id} className="border-b border-neutral-100">
+                <tr key={revision.id} className="border-b border-tenderos-navy/10">
                   <td className="py-1 pr-4">R{revision.revisionNumber}</td>
                   <td className="py-1 pr-4">{revision.status}</td>
-                  <td className="py-1 pr-4">{new Date(revision.createdAt).toLocaleString("fr-FR")}</td>
+                  <td className="py-1 pr-4">
+                    {new Date(revision.createdAt).toLocaleString("fr-FR")}
+                  </td>
                   <td className="py-1 pr-4">
                     {revision.status === "COMPLETED" ? (
-                      <a href={spec.downloadHref(revision.id)} className="text-neutral-900 hover:underline">
+                      <a
+                        href={spec.downloadHref(revision.id)}
+                        className="text-tenderos-navy hover:underline"
+                      >
                         Télécharger
                       </a>
                     ) : revision.errorMessage ? (
-                      <span className="text-red-700">{revision.errorMessage}</span>
+                      <span className="text-danger-fg">{revision.errorMessage}</span>
                     ) : null}
                   </td>
                 </tr>
@@ -221,7 +295,9 @@ export function OfficialFormCard({ spec }: { spec: FormCardSpec }) {
           </table>
         </div>
       ) : latest === undefined ? (
-        <p className="mt-3 text-xs text-neutral-400">Jamais généré — la génération reste facultative, le reste du dossier fonctionne sans elle.</p>
+        <p className="mt-3 text-xs text-tenderos-slate">
+          Jamais généré — la génération reste facultative, le reste du dossier fonctionne sans elle.
+        </p>
       ) : null}
     </div>
   );
@@ -229,7 +305,11 @@ export function OfficialFormCard({ spec }: { spec: FormCardSpec }) {
 
 export function OfficialFormsSection({ cards }: { cards: FormCardSpec[] }) {
   if (cards.length === 0) {
-    return <p className="text-sm text-neutral-500">Aucun formulaire officiel disponible pour l&apos;instant.</p>;
+    return (
+      <p className="text-sm text-tenderos-slate">
+        Aucun formulaire officiel disponible pour l&apos;instant.
+      </p>
+    );
   }
   return (
     <div className="flex flex-col gap-3">

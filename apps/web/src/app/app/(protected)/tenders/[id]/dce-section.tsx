@@ -10,8 +10,17 @@ import {
   startDceZipImportAction,
   type ImportActionState,
 } from "../../../dce-actions";
-import { getAnalysisJobAction, retryDocumentAnalysisAction, startDocumentAnalysisAction } from "../../../analysis-actions";
-import { ANALYSIS_CAPABILITY_REASON_LABELS, ANALYSIS_STATUS_LABELS, type AnalysisCapability, type AnalysisJobSummary } from "../../../../../lib/analysis-types";
+import {
+  getAnalysisJobAction,
+  retryDocumentAnalysisAction,
+  startDocumentAnalysisAction,
+} from "../../../analysis-actions";
+import {
+  ANALYSIS_CAPABILITY_REASON_LABELS,
+  ANALYSIS_STATUS_LABELS,
+  type AnalysisCapability,
+  type AnalysisJobSummary,
+} from "../../../../../lib/analysis-types";
 import {
   DCE_DOCUMENT_PROCESSING_STATUS_LABELS,
   DCE_IMPORT_JOB_STATUS_LABELS,
@@ -52,7 +61,13 @@ function analysisStatusTone(status: AnalysisJobSummary["status"]): BadgeTone {
  * persistée côté API à ce jour) — un rechargement de page réinitialise ce contrôle à son état
  * initial "Analyser", sans perdre l'analyse déjà lancée côté backend.
  */
-function DocumentAnalysisControl({ tenderId, documentId, processingStatus, canAnalyze, analysisCapability }: {
+function DocumentAnalysisControl({
+  tenderId,
+  documentId,
+  processingStatus,
+  canAnalyze,
+  analysisCapability,
+}: {
   tenderId: string;
   documentId: string;
   processingStatus: DceDocumentSummary["processingStatus"];
@@ -65,7 +80,8 @@ function DocumentAnalysisControl({ tenderId, documentId, processingStatus, canAn
   const ready = isReadyForAnalysis(processingStatus);
   // Mission — "ne pas afficher Analyser disponible si la config IA manque". `analysisCapability`
   // absent (route non encore appelée) est traité comme prêt, jamais un blocage inventé.
-  const capabilityReasonCode = analysisCapability && !analysisCapability.ready ? analysisCapability.reasonCode : undefined;
+  const capabilityReasonCode =
+    analysisCapability && !analysisCapability.ready ? analysisCapability.reasonCode : undefined;
   const isRunning = job !== undefined && NON_TERMINAL_ANALYSIS_STATUSES.includes(job.status);
 
   async function handleStart(): Promise<void> {
@@ -110,7 +126,9 @@ function DocumentAnalysisControl({ tenderId, documentId, processingStatus, canAn
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-2">
         <Badge tone="neutral">{DCE_DOCUMENT_PROCESSING_STATUS_LABELS[processingStatus]}</Badge>
-        {job ? <Badge tone={analysisStatusTone(job.status)}>{ANALYSIS_STATUS_LABELS[job.status]}</Badge> : null}
+        {job ? (
+          <Badge tone={analysisStatusTone(job.status)}>{ANALYSIS_STATUS_LABELS[job.status]}</Badge>
+        ) : null}
       </div>
       {canAnalyze ? (
         <div className="flex items-center gap-2">
@@ -147,12 +165,13 @@ function DocumentAnalysisControl({ tenderId, documentId, processingStatus, canAn
         </div>
       ) : null}
       {capabilityReasonCode ? (
-        <p role="alert" className="text-xs text-amber-700">
-          {ANALYSIS_CAPABILITY_REASON_LABELS[capabilityReasonCode] ?? "L'analyse IA n'est pas disponible pour le moment."}
+        <p role="alert" className="text-xs text-warning-fg">
+          {ANALYSIS_CAPABILITY_REASON_LABELS[capabilityReasonCode] ??
+            "L'analyse IA n'est pas disponible pour le moment."}
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
@@ -169,12 +188,12 @@ function ImportResultSummary({ result }: { result: ImportActionState["result"] }
   return (
     <ul className="w-full text-xs">
       {result.accepted.map((doc) => (
-        <li key={doc.documentId} className="text-green-700">
+        <li key={doc.documentId} className="text-success-fg">
           {doc.originalFilename} — importe
         </li>
       ))}
       {result.rejected.map((entry) => (
-        <li key={entry.originalFilename} className="text-red-600">
+        <li key={entry.originalFilename} className="text-danger-fg">
           {entry.originalFilename} — refuse ({entry.reason})
         </li>
       ))}
@@ -197,12 +216,12 @@ function DeleteDocumentButton({ tenderId, documentId }: { tenderId: string; docu
           setIsPending(false);
           setError(result.error);
         }}
-        className="text-xs font-medium text-red-700 hover:underline disabled:opacity-50"
+        className="text-xs font-medium text-danger-fg hover:underline disabled:opacity-50"
       >
         Supprimer
       </button>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
@@ -235,7 +254,7 @@ function InitDceButton({ tenderId, onSettled }: { tenderId: string; onSettled: (
         Initialiser le DCE
       </Button>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
@@ -309,13 +328,13 @@ function ZipImportControl({ tenderId, onSettled }: { tenderId: string; onSettled
         </p>
       ) : null}
       {job?.status === "FAILED" && job.errorMessage ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {job.errorMessage}
         </p>
       ) : null}
       {job?.result ? <ImportResultSummary result={job.result} /> : null}
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
@@ -383,12 +402,17 @@ export function DceSection({
         <EmptyState
           title="Aucun DCE initialisé"
           description="Initialisez le DCE de cet appel d'offres pour commencer à importer ses documents."
-          actions={canManage ? <InitDceButton tenderId={tenderId} onSettled={handleRefresh} /> : undefined}
+          actions={
+            canManage ? <InitDceButton tenderId={tenderId} onSettled={handleRefresh} /> : undefined
+          }
         />
       ) : (
         <div className="flex flex-col gap-3">
           {liveDocuments.length === 0 ? (
-            <EmptyState title="Aucun document du DCE." description="Importez des fichiers individuels ou une archive ZIP ci-dessous." />
+            <EmptyState
+              title="Aucun document du DCE."
+              description="Importez des fichiers individuels ou une archive ZIP ci-dessous."
+            />
           ) : (
             <ul>
               {liveDocuments.map((doc) => (
@@ -398,7 +422,9 @@ export function DceSection({
                 >
                   <div>
                     <span className="font-semibold text-tenderos-navy">{doc.originalFilename}</span>
-                    <span className="ml-2 text-xs text-tenderos-slate">{formatDceFileSize(doc.sizeBytes)}</span>
+                    <span className="ml-2 text-xs text-tenderos-slate">
+                      {formatDceFileSize(doc.sizeBytes)}
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <DocumentAnalysisControl
@@ -414,7 +440,9 @@ export function DceSection({
                     >
                       Télécharger
                     </a>
-                    {canDelete ? <DeleteDocumentButton tenderId={tenderId} documentId={doc.documentId} /> : null}
+                    {canDelete ? (
+                      <DeleteDocumentButton tenderId={tenderId} documentId={doc.documentId} />
+                    ) : null}
                   </div>
                 </li>
               ))}
@@ -431,7 +459,7 @@ export function DceSection({
                   </Button>
                 </div>
                 {importFilesState.error ? (
-                  <p role="alert" className="text-xs text-red-600">
+                  <p role="alert" className="text-xs text-danger-fg">
                     {importFilesState.error}
                   </p>
                 ) : null}

@@ -1,23 +1,27 @@
 "use client";
 
 import { useActionState } from "react";
+import { Badge, type BadgeTone } from "../../../../../components/ui/badge";
+import { Button } from "../../../../../components/ui/button";
+import { Card } from "../../../../../components/ui/card";
+import { Checkbox } from "../../../../../components/ui/checkbox";
+import { Input } from "../../../../../components/ui/input";
 import { createRequestedDocumentAction, type FormActionState } from "../../../actions";
-import type { RequestedDocument } from "../../../../../lib/tenders-types";
+import type { RequestedDocument, RequestedDocumentStatus } from "../../../../../lib/tenders-types";
 
 const INITIAL_STATE: FormActionState = {};
 
-function statusBadgeClass(status: RequestedDocument["status"]): string {
-  switch (status) {
-    case "VALIDATED":
-      return "bg-green-100 text-green-800";
-    case "REJECTED":
-      return "bg-red-100 text-red-800";
-    case "PROVIDED":
-      return "bg-blue-100 text-blue-800";
-    default:
-      return "bg-neutral-100 text-neutral-700";
-  }
-}
+/**
+ * Design System — remplace l'ancien `statusBadgeClass()` local, valeurs visuelles identiques. La
+ * table est EXHAUSTIVE sur l'union plutot que refermee par un `default:` : un futur statut ne
+ * passera plus silencieusement en gris, il fera echouer la compilation.
+ */
+const STATUS_TONE: Record<RequestedDocumentStatus, BadgeTone> = {
+  VALIDATED: "success",
+  REJECTED: "danger",
+  PROVIDED: "info",
+  PENDING: "neutral",
+};
 
 export function RequestedDocumentsSection({
   tenderId,
@@ -30,59 +34,57 @@ export function RequestedDocumentsSection({
   const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold text-neutral-700">Pieces demandees</h2>
-      {documents.length === 0 ? (
-        <p className="text-sm text-neutral-500">Aucune piece demandee.</p>
-      ) : (
-        <ul>
-          {documents.map((document) => (
-            <li key={document.id} className="flex items-center gap-2 border-b border-neutral-100 py-2 text-sm">
-              <span className="font-medium text-neutral-900">{document.name}</span>
-              {document.required ? <span className="text-xs text-amber-700">obligatoire</span> : null}
-              <span className={`rounded px-2 py-0.5 text-xs font-medium ${statusBadgeClass(document.status)}`}>
-                {document.status}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {/* H.3-b — cette ligne debordait de sa colonne, pas du document : deux `input` sans plancher
-          ni autorisation de retrecir (270 + 270 px), plus la case a cocher et le bouton, dans une
-          piste `md:grid-cols-2` en `minmax(0, 1fr)` dont la largeur est plafonnee. Le trop-plein se
-          deversait DANS la colonne voisine, recouvrant « Ajouter » — invisible pour un controle de
-          `document.scrollWidth`, qui ne voyait aucune largeur totale supplementaire. Mesure : +8 px
-          a 1512, +48 px a 1280, +176 px a 1024. */}
-      <form action={formAction} className="flex flex-wrap items-end gap-2">
-        <input
-          name="name"
-          type="text"
-          required
-          placeholder="Nom de la piece..."
-          className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
-        />
-        <input
-          name="category"
-          type="text"
-          placeholder="Categorie"
-          className="min-w-[8rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
-        />
-        <label className="flex items-center gap-1 text-xs text-neutral-600">
-          <input name="required" type="checkbox" /> obligatoire
-        </label>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
-        >
-          Ajouter
-        </button>
-        {state.error ? (
-          <p role="alert" className="text-xs text-red-600">
-            {state.error}
-          </p>
-        ) : null}
-      </form>
-    </section>
+    <Card title="Pieces demandees">
+      <div className="flex flex-col gap-2">
+        {documents.length === 0 ? (
+          <p className="text-sm text-tenderos-slate">Aucune piece demandee.</p>
+        ) : (
+          <ul>
+            {documents.map((document) => (
+              <li
+                key={document.id}
+                className="flex flex-wrap items-center gap-2 border-b border-tenderos-navy/10 py-2 text-sm"
+              >
+                <span className="font-medium text-tenderos-navy">{document.name}</span>
+                {document.required ? (
+                  <span className="text-xs text-warning-fg">obligatoire</span>
+                ) : null}
+                <Badge tone={STATUS_TONE[document.status]}>{document.status}</Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+        {/* H.3-b — cette ligne debordait de sa colonne, pas du document : deux `input` sans plancher
+            ni autorisation de retrecir (270 + 270 px), plus la case a cocher et le bouton, dans une
+            piste `md:grid-cols-2` en `minmax(0, 1fr)` dont la largeur est plafonnee. Le trop-plein
+            se deversait DANS la colonne voisine, recouvrant « Ajouter » — invisible pour un controle
+            de `document.scrollWidth`, qui ne voyait aucune largeur totale supplementaire. Mesure :
+            +8 px a 1512, +48 px a 1280, +176 px a 1024. */}
+        <form action={formAction} className="flex flex-wrap items-end gap-2">
+          <Input
+            name="name"
+            type="text"
+            required
+            placeholder="Nom de la piece..."
+            className="min-w-[10rem] flex-1"
+          />
+          <Input
+            name="category"
+            type="text"
+            placeholder="Categorie"
+            className="min-w-[8rem] flex-1"
+          />
+          <Checkbox name="required" label="obligatoire" className="h-9 shrink-0 text-xs" />
+          <Button type="submit" size="sm" loading={isPending}>
+            Ajouter
+          </Button>
+          {state.error ? (
+            <p role="alert" className="text-xs text-danger-fg">
+              {state.error}
+            </p>
+          ) : null}
+        </form>
+      </div>
+    </Card>
   );
 }

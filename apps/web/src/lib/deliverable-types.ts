@@ -1,3 +1,4 @@
+import type { BadgeTone } from "../components/ui/badge";
 export type DeliverableSectionSummary = {
   id: string;
   deliverableId: string;
@@ -131,21 +132,22 @@ export const DELIVERABLE_STATUS_LABELS: Record<string, string> = {
   BLOCKED: "Bloqué",
 };
 
-export function deliverableStatusBadgeClass(status: string): string {
+/** Design System — ton semantique plutot qu'un jeu de classes parallele a celui de `Badge`. */
+export function deliverableStatusTone(status: string): BadgeTone {
   switch (status) {
     case "VALIDATED":
     case "APPROVED":
     case "EXPORTED":
-      return "bg-green-100 text-green-800";
+      return "success";
     case "READY_FOR_REVIEW":
     case "IN_PROGRESS":
     case "DRAFT":
-      return "bg-amber-100 text-amber-800";
+      return "warning";
     case "CHANGES_REQUESTED":
     case "BLOCKED":
-      return "bg-red-100 text-red-800";
+      return "danger";
     default:
-      return "bg-neutral-200 text-neutral-700";
+      return "neutral";
   }
 }
 
@@ -158,19 +160,18 @@ export const REVISION_STATUS_LABELS: Record<string, string> = {
   ARCHIVED: "Archivée",
 };
 
-export function revisionStatusBadgeClass(status: string): string {
+/** Design System — ton semantique plutot qu'un jeu de classes parallele a celui de `Badge`. */
+export function revisionStatusTone(status: string): BadgeTone {
   switch (status) {
     case "VALIDATED":
-      return "bg-green-100 text-green-800";
+      return "success";
     case "READY_FOR_REVIEW":
-      return "bg-blue-100 text-blue-800";
+      return "info";
     case "CHANGES_REQUESTED":
     case "REJECTED":
-      return "bg-red-100 text-red-800";
-    case "ARCHIVED":
-      return "bg-neutral-200 text-neutral-500";
+      return "danger";
     default:
-      return "bg-neutral-200 text-neutral-700";
+      return "neutral";
   }
 }
 

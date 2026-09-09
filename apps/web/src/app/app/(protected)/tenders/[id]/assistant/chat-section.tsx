@@ -2,9 +2,21 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { archiveConversationAction, createConversationAction, fetchMessages, sendMessageAction } from "../../../../chat-actions";
-import { CITATION_SOURCE_LABELS, type Conversation, type Message, type MessageCitation } from "../../../../../../lib/chat-types";
+import {
+  archiveConversationAction,
+  createConversationAction,
+  fetchMessages,
+  sendMessageAction,
+} from "../../../../chat-actions";
+import {
+  CITATION_SOURCE_LABELS,
+  type Conversation,
+  type Message,
+  type MessageCitation,
+} from "../../../../../../lib/chat-types";
 import { formatProvenanceLocation } from "../../../../../../lib/knowledge-types";
+import { Button } from "../../../../../../components/ui/button";
+import { Input } from "../../../../../../components/ui/input";
 
 /** Correctif audit Codex P2 — un lien ouvrable vers la page de détail existante, jamais un nouveau
  *  viewer. La page cible revérifie l'accès (Server Component authentifié + RBAC backend réel, même
@@ -12,8 +24,10 @@ import { formatProvenanceLocation } from "../../../../../../lib/knowledge-types"
  *  `undefined` pour les sources sans page de détail dédiée (TENDER_FIELD, FINDING, CHECKLIST_ITEM) —
  *  reste alors un simple texte, jamais un lien mort. */
 function citationHref(citation: MessageCitation): string | undefined {
-  if (citation.sourceType === "DOCUMENT" && citation.documentId) return `/app/documents/${citation.documentId}`;
-  if (citation.sourceType === "KNOWLEDGE_ENTRY" && citation.knowledgeEntryId) return `/app/knowledge/${citation.knowledgeEntryId}`;
+  if (citation.sourceType === "DOCUMENT" && citation.documentId)
+    return `/app/documents/${citation.documentId}`;
+  if (citation.sourceType === "KNOWLEDGE_ENTRY" && citation.knowledgeEntryId)
+    return `/app/knowledge/${citation.knowledgeEntryId}`;
   return undefined;
 }
 
@@ -36,25 +50,37 @@ function ConversationList({
   onArchive: (id: string) => void;
 }) {
   if (conversations.length === 0) {
-    return <p className="p-3 text-sm text-neutral-500">Aucune conversation pour l&apos;instant.</p>;
+    return (
+      <p className="p-3 text-sm text-tenderos-slate">Aucune conversation pour l&apos;instant.</p>
+    );
   }
   return (
     <ul className="flex flex-col gap-1">
       {conversations.map((conversation) => (
         <li key={conversation.id}>
-          <div className={`flex items-center justify-between gap-1 rounded px-2 py-1.5 text-sm ${selectedId === conversation.id ? "bg-neutral-900 text-white" : "hover:bg-neutral-100"}`}>
-            <button type="button" onClick={() => onSelect(conversation.id)} className="flex-1 truncate text-left">
+          <div
+            className={`flex items-center justify-between gap-1 rounded px-2 py-1.5 text-sm ${selectedId === conversation.id ? "bg-tenderos-navy text-white" : "hover:bg-tenderos-light"}`}
+          >
+            <Button
+              type="button"
+              onClick={() => onSelect(conversation.id)}
+              className="flex-1 truncate"
+              variant="ghost"
+              size="sm"
+            >
               {conversation.title ?? "Conversation sans titre"}
-            </button>
+            </Button>
             {selectedId === conversation.id ? (
-              <button
+              <Button
                 type="button"
                 onClick={() => onArchive(conversation.id)}
-                className="shrink-0 text-xs text-neutral-300 hover:text-white"
+                className="shrink-0"
                 title="Archiver cette conversation"
+                variant="ghost"
+                size="sm"
               >
                 Archiver
-              </button>
+              </Button>
             ) : null}
           </div>
         </li>
@@ -67,22 +93,31 @@ function CitationsList({ citations }: { citations: Message["citations"] }) {
   if (citations.length === 0) return null;
   return (
     <details className="mt-2">
-      <summary className="cursor-pointer text-xs font-medium text-neutral-600">Sources ({citations.length})</summary>
-      <ul className="mt-1 flex flex-col gap-1 border-l-2 border-neutral-200 pl-2">
+      <summary className="cursor-pointer text-xs font-medium text-tenderos-slate">
+        Sources ({citations.length})
+      </summary>
+      <ul className="mt-1 flex flex-col gap-1 border-l-2 border-tenderos-navy/10 pl-2">
         {citations.map((citation) => {
           const location = formatProvenanceLocation(citation);
           const href = citationHref(citation);
           return (
-            <li key={citation.id} className="text-xs text-neutral-600">
-              <span className="font-medium text-neutral-500">[{CITATION_SOURCE_LABELS[citation.sourceType]}]</span>{" "}
+            <li key={citation.id} className="text-xs text-tenderos-slate">
+              <span className="font-medium text-tenderos-slate">
+                [{CITATION_SOURCE_LABELS[citation.sourceType]}]
+              </span>{" "}
               {href ? (
-                <Link href={href} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline hover:text-blue-900">
+                <Link
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-tenderos-blue underline hover:text-tenderos-blue"
+                >
                   {citation.label}
                 </Link>
               ) : (
                 citation.label
               )}
-              {location ? <span className="text-neutral-400"> — {location}</span> : null}
+              {location ? <span className="text-tenderos-slate"> — {location}</span> : null}
             </li>
           );
         })}
@@ -95,17 +130,35 @@ function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "USER";
   return (
     <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
-      <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${isUser ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-900"}`}>
-        {message.status === "PENDING" ? <span className="italic text-neutral-500">Génération en cours…</span> : null}
-        {message.status === "FAILED" ? <span className="text-red-600">La génération a échoué. {message.errorMessage ?? ""}</span> : null}
-        {message.status === "COMPLETED" ? <p className="whitespace-pre-wrap">{message.content}</p> : null}
+      <div
+        className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${isUser ? "bg-tenderos-navy text-white" : "bg-tenderos-light text-tenderos-navy"}`}
+      >
+        {message.status === "PENDING" ? (
+          <span className="italic text-tenderos-slate">Génération en cours…</span>
+        ) : null}
+        {message.status === "FAILED" ? (
+          <span className="text-danger-fg">
+            La génération a échoué. {message.errorMessage ?? ""}
+          </span>
+        ) : null}
+        {message.status === "COMPLETED" ? (
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        ) : null}
       </div>
-      {message.status === "COMPLETED" && !isUser ? <CitationsList citations={message.citations} /> : null}
+      {message.status === "COMPLETED" && !isUser ? (
+        <CitationsList citations={message.citations} />
+      ) : null}
     </div>
   );
 }
 
-export function ChatSection({ tenderId, initialConversations }: { tenderId: string; initialConversations: Conversation[] }) {
+export function ChatSection({
+  tenderId,
+  initialConversations,
+}: {
+  tenderId: string;
+  initialConversations: Conversation[];
+}) {
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
   const [selectedId, setSelectedId] = useState<string | undefined>(initialConversations[0]?.id);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -210,31 +263,46 @@ export function ChatSection({ tenderId, initialConversations }: { tenderId: stri
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-[220px_1fr]">
-      <aside className="flex flex-col gap-2 rounded border border-neutral-200 p-2">
-        <button type="button" onClick={handleCreateConversation} className="rounded bg-neutral-900 px-2 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
+      <aside className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-2">
+        <Button type="button" onClick={handleCreateConversation} variant="primary" size="sm">
           + Nouvelle conversation
-        </button>
-        <ConversationList conversations={conversations} selectedId={selectedId} onSelect={handleSelect} onArchive={handleArchive} />
+        </Button>
+        <ConversationList
+          conversations={conversations}
+          selectedId={selectedId}
+          onSelect={handleSelect}
+          onArchive={handleArchive}
+        />
       </aside>
 
-      <section className="flex min-h-[420px] flex-col gap-3 rounded border border-neutral-200 p-3">
+      <section className="flex min-h-[420px] flex-col gap-3 rounded border border-tenderos-navy/10 p-3">
         {error ? (
-          <p role="alert" className="rounded bg-red-50 p-2 text-xs text-red-700">
+          <p role="alert" className="rounded bg-red-50 p-2 text-xs text-danger-fg">
             {error}
           </p>
         ) : null}
 
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
-          {isLoadingMessages ? <p className="text-sm text-neutral-500">Chargement…</p> : null}
-          {!isLoadingMessages && selectedId && messages.length === 0 ? <p className="text-sm text-neutral-500">Aucun message pour l&apos;instant.</p> : null}
+          {isLoadingMessages ? <p className="text-sm text-tenderos-slate">Chargement…</p> : null}
+          {!isLoadingMessages && selectedId && messages.length === 0 ? (
+            <p className="text-sm text-tenderos-slate">Aucun message pour l&apos;instant.</p>
+          ) : null}
           {!selectedId && messages.length === 0 ? (
             <div className="flex flex-col gap-2">
-              <p className="text-sm text-neutral-500">Posez une question pour démarrer une conversation. Exemples :</p>
+              <p className="text-sm text-tenderos-slate">
+                Posez une question pour démarrer une conversation. Exemples :
+              </p>
               <div className="flex flex-wrap gap-2">
                 {SUGGESTED_QUESTIONS.map((question) => (
-                  <button key={question} type="button" onClick={() => handleSend(question)} className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100">
+                  <Button
+                    key={question}
+                    type="button"
+                    onClick={() => handleSend(question)}
+                    variant="secondary"
+                    size="sm"
+                  >
                     {question}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -251,16 +319,16 @@ export function ChatSection({ tenderId, initialConversations }: { tenderId: stri
             void handleSend(input);
           }}
         >
-          <input
+          <Input
             value={input}
             onChange={(event) => setInput(event.target.value)}
             placeholder="Posez votre question sur ce dossier…"
             disabled={!canSend}
-            className="flex-1 rounded border border-neutral-300 px-3 py-2 text-sm disabled:bg-neutral-100"
+            className="flex-1 disabled:bg-tenderos-light"
           />
-          <button type="submit" disabled={!canSend || !input.trim()} className="rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+          <Button type="submit" disabled={!canSend || !input.trim()} variant="primary" size="sm">
             {isSending ? "Envoi…" : "Envoyer"}
-          </button>
+          </Button>
         </form>
       </section>
     </div>

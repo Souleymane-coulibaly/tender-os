@@ -19,6 +19,9 @@ import {
   type GenerationCapability,
   type GenerationSummary,
 } from "../../../../../../lib/generation-types";
+import { Button } from "../../../../../../components/ui/button";
+import { Select } from "../../../../../../components/ui/select";
+import { Textarea } from "../../../../../../components/ui/textarea";
 
 function canLaunchGeneration(actorRole: string | undefined): boolean {
   // Vérification UI uniquement, jamais l'autorité — le backend revalide systématiquement via
@@ -49,7 +52,9 @@ export function GenerationSection({
   const [isLaunching, setIsLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | undefined>();
 
-  const capabilityByTaskType = new Map(capabilities.map((capability) => [capability.taskType, capability]));
+  const capabilityByTaskType = new Map(
+    capabilities.map((capability) => [capability.taskType, capability]),
+  );
   const selectedCapability = capabilityByTaskType.get(taskType);
   const isSelectedTaskTypeReady = selectedCapability?.ready ?? true;
 
@@ -68,18 +73,17 @@ export function GenerationSection({
   return (
     <div className="flex flex-col gap-6">
       {canLaunchGeneration(actorRole) ? (
-        <div className="flex flex-col gap-2 rounded border border-neutral-200 p-4">
-          <h2 className="text-sm font-semibold text-neutral-900">Lancer une génération</h2>
+        <div className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-4">
+          <h2 className="text-sm font-semibold text-tenderos-navy">Lancer une génération</h2>
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1">
-              <label htmlFor="taskType" className="text-sm font-medium text-neutral-700">
+              <label htmlFor="taskType" className="text-sm font-medium text-tenderos-navy">
                 Type de contenu
               </label>
-              <select
+              <Select
                 id="taskType"
                 value={taskType}
                 onChange={(event) => setTaskType(event.target.value)}
-                className="rounded border border-neutral-300 px-3 py-2 text-sm"
               >
                 {Object.entries(taskTypeLabels).map(([value, label]) => {
                   const ready = capabilityByTaskType.get(value)?.ready ?? true;
@@ -89,24 +93,25 @@ export function GenerationSection({
                     </option>
                   );
                 })}
-              </select>
+              </Select>
             </div>
-            <button
+            <Button
               type="button"
               onClick={handleLaunch}
               disabled={isLaunching || !isSelectedTaskTypeReady}
-              className="rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              variant="primary"
+              size="sm"
             >
               {isLaunching ? "Lancement..." : "Générer"}
-            </button>
+            </Button>
           </div>
           {!isSelectedTaskTypeReady && selectedCapability?.reasonCode ? (
-            <p role="alert" className="text-sm text-amber-700">
+            <p role="alert" className="text-sm text-warning-fg">
               {GENERATION_CAPABILITY_REASON_LABELS[selectedCapability.reasonCode]}
             </p>
           ) : null}
           {launchError ? (
-            <p role="alert" className="text-sm text-red-600">
+            <p role="alert" className="text-sm text-danger-fg">
               {launchError}
             </p>
           ) : null}
@@ -114,11 +119,17 @@ export function GenerationSection({
       ) : null}
 
       {initialGenerations.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucune génération pour l&apos;instant.</p>
+        <p className="text-sm text-tenderos-slate">Aucune génération pour l&apos;instant.</p>
       ) : (
         <div className="flex flex-col gap-4">
           {initialGenerations.map((generation) => (
-            <GenerationCard key={generation.id} tenderId={tenderId} generation={generation} taskTypeLabels={taskTypeLabels} actorRole={actorRole} />
+            <GenerationCard
+              key={generation.id}
+              tenderId={tenderId}
+              generation={generation}
+              taskTypeLabels={taskTypeLabels}
+              actorRole={actorRole}
+            />
           ))}
         </div>
       )}
@@ -141,7 +152,9 @@ function GenerationCard({
   const [error, setError] = useState<string | undefined>();
   const [isPending, setIsPending] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(generation.editedContent ?? generation.generatedContent ?? "");
+  const [editedContent, setEditedContent] = useState(
+    generation.editedContent ?? generation.generatedContent ?? "",
+  );
   const [isRejecting, setIsRejecting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
 
@@ -158,75 +171,96 @@ function GenerationCard({
   const canAct = actorRole !== "READ_ONLY" && actorRole !== undefined;
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-neutral-200 p-4">
+    <div className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-4">
       <div className="flex items-center justify-between">
         <div>
-          <span className="font-medium text-neutral-900">{taskTypeLabels[generation.taskType] ?? generation.taskType}</span>
-          <span className="ml-2 text-xs text-neutral-500">version {generation.version}</span>
+          <span className="font-medium text-tenderos-navy">
+            {taskTypeLabels[generation.taskType] ?? generation.taskType}
+          </span>
+          <span className="ml-2 text-xs text-tenderos-slate">version {generation.version}</span>
         </div>
-        <span className={`rounded px-2 py-0.5 text-xs font-medium ${generationStatusBadgeClass(generation.status)}`}>
+        <span
+          className={`rounded px-2 py-0.5 text-xs font-medium ${generationStatusBadgeClass(generation.status)}`}
+        >
           {GENERATION_STATUS_LABELS[generation.status] ?? generation.status}
         </span>
       </div>
 
       {generation.status === "FAILED" ? (
-        <p className="text-sm text-red-600">Échec : {describeGenerationFailureCode(generation.errorCode)}</p>
+        <p className="text-sm text-danger-fg">
+          Échec : {describeGenerationFailureCode(generation.errorCode)}
+        </p>
       ) : null}
 
       {content ? (
         isEditing ? (
           <div className="flex flex-col gap-2">
-            <textarea
+            <Textarea
               value={editedContent}
               onChange={(event) => setEditedContent(event.target.value)}
               rows={8}
-              className="rounded border border-neutral-300 px-3 py-2 text-sm"
             />
             <div className="flex gap-2">
-              <button
+              <Button
                 type="button"
                 disabled={isPending}
                 onClick={() =>
                   run(async () => {
-                    const result = await editGenerationAction(tenderId, generation.id, editedContent);
+                    const result = await editGenerationAction(
+                      tenderId,
+                      generation.id,
+                      editedContent,
+                    );
                     if (!result.error) setIsEditing(false);
                     return result;
                   })
                 }
-                className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                variant="primary"
+                size="sm"
               >
                 Enregistrer
-              </button>
-              <button type="button" onClick={() => setIsEditing(false)} className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700">
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                variant="secondary"
+                size="sm"
+              >
                 Annuler
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
-          <p className="whitespace-pre-wrap rounded bg-neutral-50 p-3 text-sm text-neutral-800">{content}</p>
+          <p className="whitespace-pre-wrap rounded bg-tenderos-light p-3 text-sm text-tenderos-navy">
+            {content}
+          </p>
         )
       ) : null}
 
       {generation.modelKey ? (
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-tenderos-slate">
           Modèle : {generation.modelProvider}/{generation.modelKey}
           {generation.fallbackLevel > 0 ? " (escalade)" : ""}
         </p>
       ) : null}
 
       {canSeeCost(generation) ? (
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-tenderos-slate">
           {generation.totalTokenCount !== undefined ? `${generation.totalTokenCount} tokens` : null}
-          {generation.estimatedCostAmount ? ` · ${generation.estimatedCostAmount} ${generation.currency ?? ""}` : null}
+          {generation.estimatedCostAmount
+            ? ` · ${generation.estimatedCostAmount} ${generation.currency ?? ""}`
+            : null}
         </p>
       ) : null}
 
       {generation.validatedAt ? (
-        <p className="text-xs text-green-700">Validée le {new Date(generation.validatedAt).toLocaleString("fr-FR")}</p>
+        <p className="text-xs text-success-fg">
+          Validée le {new Date(generation.validatedAt).toLocaleString("fr-FR")}
+        </p>
       ) : null}
 
       {generation.rejectedAt ? (
-        <p className="text-xs text-red-700">
+        <p className="text-xs text-danger-fg">
           Rejetée le {new Date(generation.rejectedAt).toLocaleString("fr-FR")}
           {generation.rejectionReason ? ` : ${generation.rejectionReason}` : ""}
         </p>
@@ -234,38 +268,46 @@ function GenerationCard({
 
       {canAct && isRejecting ? (
         <div className="flex flex-col gap-2">
-          <label htmlFor={`reject-reason-${generation.id}`} className="text-sm font-medium text-neutral-700">
+          <label
+            htmlFor={`reject-reason-${generation.id}`}
+            className="text-sm font-medium text-tenderos-navy"
+          >
             Raison du rejet (optionnelle)
           </label>
-          <textarea
+          <Textarea
             id={`reject-reason-${generation.id}`}
             value={rejectionReason}
             onChange={(event) => setRejectionReason(event.target.value)}
             rows={3}
-            className="rounded border border-neutral-300 px-3 py-2 text-sm"
           />
           <div className="flex gap-2">
-            <button
+            <Button
               type="button"
               disabled={isPending}
               onClick={() =>
                 run(async () => {
-                  const result = await rejectGenerationAction(tenderId, generation.id, rejectionReason.trim() || undefined);
+                  const result = await rejectGenerationAction(
+                    tenderId,
+                    generation.id,
+                    rejectionReason.trim() || undefined,
+                  );
                   if (!result.error) setIsRejecting(false);
                   return result;
                 })
               }
-              className="rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+              variant="danger"
+              size="sm"
             >
               Confirmer le rejet
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={() => setIsRejecting(false)}
-              className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700"
+              variant="secondary"
+              size="sm"
             >
               Annuler
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
@@ -273,67 +315,77 @@ function GenerationCard({
       {canAct ? (
         <div className="flex flex-wrap gap-2">
           {generation.status === "FAILED" ? (
-            <button
+            <Button
               type="button"
               disabled={isPending}
               onClick={() => run(() => retryGenerationAction(tenderId, generation.id))}
-              className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 disabled:opacity-50"
+              variant="secondary"
+              size="sm"
             >
               Réessayer
-            </button>
+            </Button>
           ) : null}
           {generation.status === "GENERATED" ? (
             <>
-              <button
+              <Button
                 type="button"
                 disabled={isPending}
                 onClick={() => run(() => regenerateGenerationAction(tenderId, generation.id))}
-                className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 disabled:opacity-50"
+                variant="secondary"
+                size="sm"
               >
                 Régénérer
-              </button>
+              </Button>
               {!isEditing ? (
-                <button type="button" onClick={() => setIsEditing(true)} className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700">
+                <Button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  variant="secondary"
+                  size="sm"
+                >
                   Éditer
-                </button>
+                </Button>
               ) : null}
               {!generation.validatedAt && !generation.rejectedAt ? (
-                <button
+                <Button
                   type="button"
                   disabled={isPending}
                   onClick={() => run(() => validateGenerationAction(tenderId, generation.id))}
-                  className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                  variant="primary"
+                  size="sm"
                 >
                   Valider
-                </button>
+                </Button>
               ) : null}
               {!generation.validatedAt && !generation.rejectedAt && !isRejecting ? (
-                <button
+                <Button
                   type="button"
                   disabled={isPending}
                   onClick={() => setIsRejecting(true)}
-                  className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700 disabled:opacity-50"
+                  variant="danger"
+                  size="sm"
                 >
                   Rejeter
-                </button>
+                </Button>
               ) : null}
             </>
           ) : null}
-          {(generation.status === "PENDING" || generation.status === "GENERATING") ? (
-            <button
+          {generation.status === "PENDING" || generation.status === "GENERATING" ? (
+            <Button
               type="button"
               disabled={isPending}
               onClick={() => run(() => cancelGenerationAction(tenderId, generation.id))}
-              className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700 disabled:opacity-50"
+              variant="danger"
+              size="sm"
             >
               Annuler
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
 
       {error ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger-fg">
           {error}
         </p>
       ) : null}

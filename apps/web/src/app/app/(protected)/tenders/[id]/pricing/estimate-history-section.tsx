@@ -8,6 +8,7 @@ import {
   type PricingEstimateSummary,
 } from "../../../../../../lib/pricing-types";
 import { EstimateComparisonPanel } from "./estimate-comparison-panel";
+import { Button } from "../../../../../../components/ui/button";
 
 function VersionDetail({ estimateId, version }: { estimateId: string; version: number }) {
   const [detail, setDetail] = useState<PricingEstimateSummary | undefined>();
@@ -32,26 +33,26 @@ function VersionDetail({ estimateId, version }: { estimateId: string; version: n
 
   return (
     <div className="flex flex-col gap-1">
-      <button type="button" onClick={toggle} className="self-start text-sm text-neutral-700 underline">
+      <Button type="button" onClick={toggle} className="self-start" variant="ghost" size="sm">
         {isOpen ? "Masquer" : "Voir"} la version {version}
-      </button>
-      {isLoading ? <p className="text-xs text-neutral-500">Chargement...</p> : null}
+      </Button>
+      {isLoading ? <p className="text-xs text-tenderos-slate">Chargement...</p> : null}
       {error ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger-fg">
           {error}
         </p>
       ) : null}
       {isOpen && detail ? (
-        <div className="flex flex-col gap-1 rounded border border-neutral-200 bg-neutral-50 p-3 text-sm">
-          <span className="font-medium text-neutral-900">
+        <div className="flex flex-col gap-1 rounded border border-tenderos-navy/10 bg-tenderos-light p-3 text-sm">
+          <span className="font-medium text-tenderos-navy">
             {detail.currentVersion.amount} {detail.currentVersion.currency}
           </span>
           <table className="w-full text-xs">
             <tbody>
               {detail.currentVersion.breakdown.map((line) => (
-                <tr key={line.type} className="border-t border-neutral-100">
-                  <td className="py-1 text-neutral-700">{line.label}</td>
-                  <td className="py-1 text-right text-neutral-900">
+                <tr key={line.type} className="border-t border-tenderos-navy/10">
+                  <td className="py-1 text-tenderos-navy">{line.label}</td>
+                  <td className="py-1 text-right text-tenderos-navy">
                     {line.amount} {line.currency}
                   </td>
                 </tr>
@@ -59,9 +60,11 @@ function VersionDetail({ estimateId, version }: { estimateId: string; version: n
             </tbody>
           </table>
           {detail.currentVersion.recalculationReason ? (
-            <p className="text-xs text-neutral-600">Raison du recalcul : {detail.currentVersion.recalculationReason}</p>
+            <p className="text-xs text-tenderos-slate">
+              Raison du recalcul : {detail.currentVersion.recalculationReason}
+            </p>
           ) : null}
-          <p className="text-xs text-neutral-500">{detail.currentVersion.disclaimerText}</p>
+          <p className="text-xs text-tenderos-slate">{detail.currentVersion.disclaimerText}</p>
         </div>
       ) : null}
     </div>
@@ -75,26 +78,39 @@ function VersionDetail({ estimateId, version }: { estimateId: string; version: n
  */
 export function EstimateHistorySection({ estimates }: { estimates: PricingEstimateSummary[] }) {
   if (estimates.length === 0) {
-    return <p className="text-sm text-neutral-600">Aucune estimation pour ce Tender pour l&apos;instant.</p>;
+    return (
+      <p className="text-sm text-tenderos-slate">
+        Aucune estimation pour ce Tender pour l&apos;instant.
+      </p>
+    );
   }
 
   return (
     <div className="flex flex-col gap-4">
       {estimates.map((estimate) => (
-        <div key={estimate.id} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
+        <div
+          key={estimate.id}
+          className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-neutral-900">
+            <span className="text-sm font-medium text-tenderos-navy">
               Estimation {estimate.id.slice(0, 8)} — {estimate.currentVersionNumber} version(s)
             </span>
-            <span className={`rounded px-2 py-0.5 text-xs font-medium ${pricingStatusBadgeClass(estimate.status)}`}>
+            <span
+              className={`rounded px-2 py-0.5 text-xs font-medium ${pricingStatusBadgeClass(estimate.status)}`}
+            >
               {PRICING_STATUS_LABELS[estimate.status] ?? estimate.status}
             </span>
           </div>
-          <p className="text-xs text-neutral-500">Créée le {new Date(estimate.createdAt).toLocaleString("fr-FR")}</p>
+          <p className="text-xs text-tenderos-slate">
+            Créée le {new Date(estimate.createdAt).toLocaleString("fr-FR")}
+          </p>
           <div className="flex flex-wrap gap-3">
-            {Array.from({ length: estimate.currentVersionNumber }, (_, index) => index + 1).map((version) => (
-              <VersionDetail key={version} estimateId={estimate.id} version={version} />
-            ))}
+            {Array.from({ length: estimate.currentVersionNumber }, (_, index) => index + 1).map(
+              (version) => (
+                <VersionDetail key={version} estimateId={estimate.id} version={version} />
+              ),
+            )}
           </div>
           <EstimateComparisonPanel estimateId={estimate.id} />
         </div>

@@ -12,23 +12,36 @@ import { AdministrativeChecklistSection } from "./administrative-checklist-secti
 
 export const metadata: Metadata = { title: "Checklist administrative — TenderOS" };
 
-export default async function AdministrativeChecklistPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AdministrativeChecklistPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id: tenderId } = await params;
 
   try {
-    const [checklist, requirements, capabilities, tenderDocuments, documentTypes] = await Promise.all([
-      appApiFetch<AdministrativeChecklist>(`/api/v1/tenders/${tenderId}/administrative-checklist`),
-      appApiFetch<AdministrativeRequirementSummary[]>(`/api/v1/tenders/${tenderId}/administrative-requirements`),
-      appApiFetch<AdministrativeDossierCapabilities>(`/api/v1/tenders/${tenderId}/administrative-dossier/capabilities`),
-      appApiFetch<DocumentSummary[]>(`/api/v1/tenders/${tenderId}/documents`),
-      appApiFetch<AdministrativeDocumentTypeMetadata[]>(`/api/v1/administrative-document-types`),
-    ]);
+    const [checklist, requirements, capabilities, tenderDocuments, documentTypes] =
+      await Promise.all([
+        appApiFetch<AdministrativeChecklist>(
+          `/api/v1/tenders/${tenderId}/administrative-checklist`,
+        ),
+        appApiFetch<AdministrativeRequirementSummary[]>(
+          `/api/v1/tenders/${tenderId}/administrative-requirements`,
+        ),
+        appApiFetch<AdministrativeDossierCapabilities>(
+          `/api/v1/tenders/${tenderId}/administrative-dossier/capabilities`,
+        ),
+        appApiFetch<DocumentSummary[]>(`/api/v1/tenders/${tenderId}/documents`),
+        appApiFetch<AdministrativeDocumentTypeMetadata[]>(`/api/v1/administrative-document-types`),
+      ]);
 
     return (
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-xl font-semibold">Checklist administrative</h1>
-          <p className="text-sm text-neutral-600">{checklist.completionPercentage}% des pièces obligatoires sont prêtes.</p>
+          <p className="text-sm text-tenderos-slate">
+            {checklist.completionPercentage}% des pièces obligatoires sont prêtes.
+          </p>
         </div>
         <AdministrativeChecklistSection
           tenderId={tenderId}

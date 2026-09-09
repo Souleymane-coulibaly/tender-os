@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { Alert } from "../../../../../components/ui/alert";
+import { Badge } from "../../../../../components/ui/badge";
+import { Card } from "../../../../../components/ui/card";
 import {
   COCKPIT_ALERT_LABELS,
   COCKPIT_MODULE_LABELS,
@@ -6,8 +9,8 @@ import {
   COCKPIT_MODULE_STATUS_LABELS,
   COCKPIT_NEXT_ACTION_LABELS,
   COCKPIT_STEP_LABELS,
-  cockpitAlertBadgeClass,
-  cockpitModuleStatusBadgeClass,
+  cockpitAlertTone,
+  cockpitModuleStatusTone,
   type TenderCockpit,
 } from "../../../../../lib/cockpit-types";
 
@@ -16,42 +19,46 @@ import {
  *  blocages/avertissements, prochaine action, avec des liens directs vers chaque sous-écran déjà
  *  existant. Tout le calcul vient de `GET /tenders/:id/cockpit` (`GetTenderCockpitUseCase`),
  *  jamais reconstruit ici. */
-export function CockpitSection({ tenderId, cockpit }: { tenderId: string; cockpit: TenderCockpit }) {
+export function CockpitSection({
+  tenderId,
+  cockpit,
+}: {
+  tenderId: string;
+  cockpit: TenderCockpit;
+}) {
   return (
-    <section className="rounded border border-neutral-200 p-4" aria-labelledby="cockpit-heading">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 id="cockpit-heading" className="text-sm font-semibold text-neutral-700">
-            Cockpit
-          </h2>
-          <p className="text-sm text-neutral-900">{COCKPIT_STEP_LABELS[cockpit.currentStep] ?? cockpit.currentStep}</p>
-        </div>
-        <div className="rounded bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white">
+    <Card
+      title="Cockpit"
+      description={COCKPIT_STEP_LABELS[cockpit.currentStep] ?? cockpit.currentStep}
+      actions={
+        <Badge tone="gold">
           Prochaine action : {COCKPIT_NEXT_ACTION_LABELS[cockpit.nextAction] ?? cockpit.nextAction}
-        </div>
-      </div>
-
+        </Badge>
+      }
+    >
       {cockpit.alerts.length > 0 ? (
-        <ul className="mt-3 flex flex-col gap-1.5">
+        <ul className="mb-4 flex flex-col gap-1.5">
           {cockpit.alerts.map((alert, index) => (
-            <li key={`${alert.code}-${index}`} role={alert.level === "BLOCKER" ? "alert" : undefined} className={`rounded border px-3 py-1.5 text-xs ${cockpitAlertBadgeClass(alert.level)}`}>
-              {COCKPIT_ALERT_LABELS[alert.code] ?? alert.code}
+            <li key={`${alert.code}-${index}`}>
+              <Alert tone={cockpitAlertTone(alert.level)}>
+                {COCKPIT_ALERT_LABELS[alert.code] ?? alert.code}
+              </Alert>
             </li>
           ))}
         </ul>
       ) : null}
 
-      <ul className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {cockpit.modules.map((module) => {
           const route = COCKPIT_MODULE_ROUTES[module.key];
           const label = COCKPIT_MODULE_LABELS[module.key] ?? module.key;
           const content = (
-            <div className="flex h-full flex-col gap-1 rounded border border-neutral-200 p-2.5 hover:border-neutral-400">
-              <span className="text-xs font-medium text-neutral-700">{label}</span>
-              <span className={`w-fit rounded px-1.5 py-0.5 text-[11px] font-medium ${cockpitModuleStatusBadgeClass(module.status)}`}>
+            <div className="flex h-full flex-col items-start gap-1.5 rounded-lg border border-tenderos-navy/10 p-2.5 transition hover:border-tenderos-blue/40">
+              <span className="text-xs font-medium text-tenderos-navy">{label}</span>
+              <Badge tone={cockpitModuleStatusTone(module.status)}>
                 {COCKPIT_MODULE_STATUS_LABELS[module.status] ?? module.status}
                 {module.total !== undefined ? ` (${module.count ?? 0}/${module.total})` : null}
-              </span>
+              </Badge>
             </div>
           );
           return (
@@ -67,6 +74,6 @@ export function CockpitSection({ tenderId, cockpit }: { tenderId: string; cockpi
           );
         })}
       </ul>
-    </section>
+    </Card>
   );
 }

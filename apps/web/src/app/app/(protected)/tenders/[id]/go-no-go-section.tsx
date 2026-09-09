@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { generateGoNoGoReportAction, recordTenderGoNoGoDecisionAction } from "../../../opportunity-actions";
+import {
+  generateGoNoGoReportAction,
+  recordTenderGoNoGoDecisionAction,
+} from "../../../opportunity-actions";
 import {
   DOCUMENTARY_LOAD_LABELS,
   GO_NO_GO_DECISION_LABELS,
@@ -134,7 +137,18 @@ export function GoNoGoSection({
       return;
     }
     setDecisions([
-      { id: "pending", organizationId: "", level: "TENDER", tenderId, decision: selected, justification, conditions, comment, actorId: "", decidedAt: new Date().toISOString() },
+      {
+        id: "pending",
+        organizationId: "",
+        level: "TENDER",
+        tenderId,
+        decision: selected,
+        justification,
+        conditions,
+        comment,
+        actorId: "",
+        decidedAt: new Date().toISOString(),
+      },
       ...decisions,
     ]);
     setSelected(undefined);
@@ -154,7 +168,11 @@ export function GoNoGoSection({
             variant="secondary"
             disabled={isPending || report?.dceStale === true}
             onClick={handleGenerate}
-            title={report?.dceStale ? "Actualisez d'abord l'analyse IA du DCE avant de recalculer le GO/NO-GO." : undefined}
+            title={
+              report?.dceStale
+                ? "Actualisez d'abord l'analyse IA du DCE avant de recalculer le GO/NO-GO."
+                : undefined
+            }
           >
             {isPending ? "Génération…" : report ? "Recalculer le GO/NO-GO" : "Générer le rapport"}
           </Button>
@@ -163,34 +181,45 @@ export function GoNoGoSection({
     >
       <div className="flex flex-col gap-3">
         {error ? (
-          <p role="alert" className="text-xs text-red-600">
+          <p role="alert" className="text-xs text-danger-fg">
             {error}
           </p>
         ) : null}
 
         {!report ? (
           <p className="text-sm text-tenderos-slate">
-            Aucun rapport généré pour le moment. Une analyse IA du DCE doit avoir réussi avant de pouvoir générer ce rapport.
+            Aucun rapport généré pour le moment. Une analyse IA du DCE doit avoir réussi avant de
+            pouvoir générer ce rapport.
           </p>
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-3">
               <Badge tone={scoreTone(report.globalScore)}>{report.globalScore}/100</Badge>
-              <span className="text-xs text-tenderos-slate">Confiance {Math.round(report.confidence * 100)}% — Complexité {report.complexity}/5</span>
-              <span className="text-xs text-tenderos-slate">Charge documentaire : {DOCUMENTARY_LOAD_LABELS[report.documentaryLoad]}</span>
+              <span className="text-xs text-tenderos-slate">
+                Confiance {Math.round(report.confidence * 100)}% — Complexité {report.complexity}/5
+              </span>
+              <span className="text-xs text-tenderos-slate">
+                Charge documentaire : {DOCUMENTARY_LOAD_LABELS[report.documentaryLoad]}
+              </span>
               <span className="text-xs text-tenderos-slate/70">v{report.reportVersion}</span>
               {/* Checkpoint 2.1-P2.1-FIX-C — jamais un faux vert (mission §38) : ce badge reflète
                   la fraîcheur réelle vis-à-vis du DCE/de l'analyse/du candidat courants, calculée à
                   chaque lecture, jamais figée avec le rapport. */}
-              {report.freshness ? <Badge tone={freshnessTone(report.freshness)}>{GO_NO_GO_FRESHNESS_LABELS[report.freshness]}</Badge> : null}
+              {report.freshness ? (
+                <Badge tone={freshnessTone(report.freshness)}>
+                  {GO_NO_GO_FRESHNESS_LABELS[report.freshness]}
+                </Badge>
+              ) : null}
             </div>
 
             {report.freshness === "STALE" ? (
-              <p className="text-xs text-amber-700">
+              <p className="text-xs text-warning-fg">
                 {[
                   report.dceStale ? "Le DCE a été modifié depuis ce rapport." : null,
                   report.analysisStale ? "Une analyse plus récente est disponible." : null,
-                  report.candidateStale ? "L'entreprise candidate a changé depuis ce rapport." : null,
+                  report.candidateStale
+                    ? "L'entreprise candidate a changé depuis ce rapport."
+                    : null,
                 ]
                   .filter(Boolean)
                   .join(" ")}{" "}
@@ -200,20 +229,37 @@ export function GoNoGoSection({
 
             <div className="rounded-xl bg-tenderos-light p-3">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-tenderos-slate">Recommandation IA :</span>
-                <Badge tone={decisionTone(report.recommendation)}>{GO_NO_GO_DECISION_LABELS[report.recommendation]}</Badge>
+                <span className="text-xs font-semibold text-tenderos-slate">
+                  Recommandation IA :
+                </span>
+                <Badge tone={decisionTone(report.recommendation)}>
+                  {GO_NO_GO_DECISION_LABELS[report.recommendation]}
+                </Badge>
               </div>
               <p className="mt-1 text-xs text-tenderos-slate">{report.recommendationRationale}</p>
-              <p className="mt-1 text-xs italic text-tenderos-slate">Recommandation indicative — la décision finale reste exclusivement humaine.</p>
+              <p className="mt-1 text-xs italic text-tenderos-slate">
+                Recommandation indicative — la décision finale reste exclusivement humaine.
+              </p>
             </div>
 
             <ul className="flex flex-col gap-1 text-xs text-tenderos-slate">
-              {(Object.entries(report.categoryScores) as [Level2Category, { score: number; weight: number; justification: string }][]).map(([category, entry]) => (
-                <li key={category} className="flex flex-col border-b border-tenderos-navy/5 py-1 last:border-b-0">
+              {(
+                Object.entries(report.categoryScores) as [
+                  Level2Category,
+                  { score: number; weight: number; justification: string },
+                ][]
+              ).map(([category, entry]) => (
+                <li
+                  key={category}
+                  className="flex flex-col border-b border-tenderos-navy/5 py-1 last:border-b-0"
+                >
                   <div className="flex justify-between">
-                    <span className="font-semibold text-tenderos-navy">{LEVEL_2_CATEGORY_LABELS[category]}</span>
+                    <span className="font-semibold text-tenderos-navy">
+                      {LEVEL_2_CATEGORY_LABELS[category]}
+                    </span>
                     <span className="tabular-nums">
-                      {entry.score}/100 <span className="text-tenderos-slate/70">(poids {entry.weight})</span>
+                      {entry.score}/100{" "}
+                      <span className="text-tenderos-slate/70">(poids {entry.weight})</span>
                     </span>
                   </div>
                   <span className="italic">{entry.justification}</span>
@@ -223,20 +269,31 @@ export function GoNoGoSection({
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-tenderos-slate">Temps de préparation estimé</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-tenderos-slate">
+                  Temps de préparation estimé
+                </h3>
                 <ul className="mt-1 text-xs text-tenderos-slate">
-                  <li>Administratif : {PREP_TIME_LABELS[report.estimatedPrepTime.administratif]}</li>
-                  <li>Mémoire technique : {PREP_TIME_LABELS[report.estimatedPrepTime.memoireTechnique]}</li>
+                  <li>
+                    Administratif : {PREP_TIME_LABELS[report.estimatedPrepTime.administratif]}
+                  </li>
+                  <li>
+                    Mémoire technique :{" "}
+                    {PREP_TIME_LABELS[report.estimatedPrepTime.memoireTechnique]}
+                  </li>
                   <li>Pricing : {PREP_TIME_LABELS[report.estimatedPrepTime.pricing]}</li>
                   <li>Documents : {PREP_TIME_LABELS[report.estimatedPrepTime.documents]}</li>
                   <li>Validation : {PREP_TIME_LABELS[report.estimatedPrepTime.validation]}</li>
                 </ul>
-                <p className="mt-1 text-xs italic text-tenderos-slate">Estimation indicative, jamais une garantie.</p>
+                <p className="mt-1 text-xs italic text-tenderos-slate">
+                  Estimation indicative, jamais une garantie.
+                </p>
               </div>
 
               {report.risks.length > 0 ? (
                 <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-tenderos-slate">Risques identifiés</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-tenderos-slate">
+                    Risques identifiés
+                  </h3>
                   <ul className="mt-1 flex flex-col gap-1 text-xs text-tenderos-slate">
                     {report.risks.map((risk, i) => (
                       <li key={i}>{risk.description}</li>
@@ -248,8 +305,10 @@ export function GoNoGoSection({
 
             {report.blockers.length > 0 ? (
               <div className="rounded-xl border border-red-200 bg-red-50 p-3">
-                <p className="text-xs font-semibold text-red-800">Blocages détectés (facteurs, jamais un blocage automatique de la décision)</p>
-                <ul className="mt-1 flex flex-col gap-1 text-xs text-red-700">
+                <p className="text-xs font-semibold text-danger-fg">
+                  Blocages détectés (facteurs, jamais un blocage automatique de la décision)
+                </p>
+                <ul className="mt-1 flex flex-col gap-1 text-xs text-danger-fg">
                   {report.blockers.map((blocker, i) => (
                     <li key={i}>{blocker.description}</li>
                   ))}
@@ -259,8 +318,8 @@ export function GoNoGoSection({
 
             {report.missingInfo.length > 0 ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs font-semibold text-amber-800">Informations manquantes</p>
-                <ul className="mt-1 flex flex-col gap-1 text-xs text-amber-700">
+                <p className="text-xs font-semibold text-warning-fg">Informations manquantes</p>
+                <ul className="mt-1 flex flex-col gap-1 text-xs text-warning-fg">
                   {report.missingInfo.map((item, i) => (
                     <li key={i}>{item}</li>
                   ))}
@@ -270,7 +329,9 @@ export function GoNoGoSection({
 
             {report.subcontractingFlags.length > 0 ? (
               <div className="rounded-xl border border-tenderos-blue/20 bg-tenderos-blue/5 p-3">
-                <p className="text-xs font-semibold text-tenderos-blue">Signaux de sous-traitance / groupement (facteur informatif uniquement)</p>
+                <p className="text-xs font-semibold text-tenderos-blue">
+                  Signaux de sous-traitance / groupement (facteur informatif uniquement)
+                </p>
                 <ul className="mt-1 flex flex-col gap-1 text-xs text-tenderos-navy">
                   {report.subcontractingFlags.map((flag, i) => (
                     <li key={i}>{flag}</li>
@@ -282,7 +343,9 @@ export function GoNoGoSection({
         )}
 
         <div className="mt-2 border-t border-tenderos-navy/10 pt-3">
-          <h3 className="font-tenderos-display text-sm font-bold text-tenderos-navy">Décision humaine GO / NO-GO</h3>
+          <h3 className="font-tenderos-display text-sm font-bold text-tenderos-navy">
+            Décision humaine GO / NO-GO
+          </h3>
 
           {canDecide ? (
             <div className="mt-2 flex flex-col gap-3 rounded-xl bg-tenderos-light p-3">
@@ -309,7 +372,10 @@ export function GoNoGoSection({
 
               {selected === "NO_GO" ? (
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="tender-justification" className="text-xs font-medium text-tenderos-navy">
+                  <label
+                    htmlFor="tender-justification"
+                    className="text-xs font-medium text-tenderos-navy"
+                  >
                     Justification (obligatoire)
                   </label>
                   <textarea
@@ -324,7 +390,10 @@ export function GoNoGoSection({
 
               {selected === "GO_CONDITIONAL" ? (
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="tender-conditions" className="text-xs font-medium text-tenderos-navy">
+                  <label
+                    htmlFor="tender-conditions"
+                    className="text-xs font-medium text-tenderos-navy"
+                  >
                     Conditions (obligatoire)
                   </label>
                   <textarea
@@ -339,7 +408,10 @@ export function GoNoGoSection({
 
               {selected ? (
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="tender-comment" className="text-xs font-medium text-tenderos-navy">
+                  <label
+                    htmlFor="tender-comment"
+                    className="text-xs font-medium text-tenderos-navy"
+                  >
                     Commentaire (facultatif)
                   </label>
                   <textarea
@@ -353,13 +425,21 @@ export function GoNoGoSection({
               ) : null}
 
               {selected ? (
-                <Button variant="primary" className="self-start" disabled={isPending} onClick={handleSubmitDecision}>
+                <Button
+                  variant="primary"
+                  className="self-start"
+                  disabled={isPending}
+                  onClick={handleSubmitDecision}
+                >
                   {isPending ? "Enregistrement…" : "Enregistrer la décision"}
                 </Button>
               ) : null}
             </div>
           ) : (
-            <p className="mt-1 text-xs text-tenderos-slate">L&apos;enregistrement d&apos;une décision est réservé aux rôles OWNER / ADMIN / BID_MANAGER.</p>
+            <p className="mt-1 text-xs text-tenderos-slate">
+              L&apos;enregistrement d&apos;une décision est réservé aux rôles OWNER / ADMIN /
+              BID_MANAGER.
+            </p>
           )}
 
           {decisions.length === 0 ? (
@@ -367,14 +447,29 @@ export function GoNoGoSection({
           ) : (
             <ul className="mt-2 flex flex-col gap-2">
               {decisions.map((decision) => (
-                <li key={decision.id} className="border-b border-tenderos-navy/5 py-2 text-sm last:border-b-0">
+                <li
+                  key={decision.id}
+                  className="border-b border-tenderos-navy/5 py-2 text-sm last:border-b-0"
+                >
                   <div className="flex items-center gap-2">
-                    <Badge tone={decisionTone(decision.decision)}>{GO_NO_GO_DECISION_LABELS[decision.decision]}</Badge>
-                    <span className="text-xs text-tenderos-slate">{new Date(decision.decidedAt).toLocaleString("fr-FR")}</span>
+                    <Badge tone={decisionTone(decision.decision)}>
+                      {GO_NO_GO_DECISION_LABELS[decision.decision]}
+                    </Badge>
+                    <span className="text-xs text-tenderos-slate">
+                      {new Date(decision.decidedAt).toLocaleString("fr-FR")}
+                    </span>
                   </div>
-                  {decision.justification ? <p className="mt-1 text-xs text-tenderos-navy">{decision.justification}</p> : null}
-                  {decision.conditions ? <p className="mt-1 text-xs text-tenderos-navy">Conditions : {decision.conditions}</p> : null}
-                  {decision.comment ? <p className="mt-1 text-xs italic text-tenderos-slate">{decision.comment}</p> : null}
+                  {decision.justification ? (
+                    <p className="mt-1 text-xs text-tenderos-navy">{decision.justification}</p>
+                  ) : null}
+                  {decision.conditions ? (
+                    <p className="mt-1 text-xs text-tenderos-navy">
+                      Conditions : {decision.conditions}
+                    </p>
+                  ) : null}
+                  {decision.comment ? (
+                    <p className="mt-1 text-xs italic text-tenderos-slate">{decision.comment}</p>
+                  ) : null}
                 </li>
               ))}
             </ul>

@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Button } from "../../../../../components/ui/button";
+import { Input } from "../../../../../components/ui/input";
 import { restoreTenderAction, type FormActionState } from "../../../actions";
 
 const INITIAL_STATE: FormActionState = {};
@@ -14,41 +16,33 @@ export function RestoreButton({ tenderId }: { tenderId: string }) {
 
   if (!confirming) {
     return (
-      <button
-        type="button"
-        onClick={() => setConfirming(true)}
-        className="rounded border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100"
-      >
+      <Button type="button" variant="secondary" size="sm" onClick={() => setConfirming(true)}>
         Restaurer
-      </button>
+      </Button>
     );
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-      <p className="text-sm font-medium text-neutral-800">
+    <form
+      action={formAction}
+      className="flex flex-col gap-2 rounded-lg border border-tenderos-navy/10 p-3"
+    >
+      <p className="text-sm font-medium text-tenderos-navy">
         Restaurer cet appel d&apos;offres archive ? Il repassera au statut Brouillon.
       </p>
-      <label htmlFor="restore-reason" className="text-xs text-neutral-600">
-        Motif (facultatif)
-      </label>
-      <input id="restore-reason" name="reason" type="text" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
+      <Input name="reason" type="text" label="Motif (facultatif)" />
       {state.error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {state.error}
         </p>
       ) : null}
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {isPending ? "Restauration..." : "Confirmer la restauration"}
-        </button>
-        <button type="button" onClick={() => setConfirming(false)} className="rounded px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100">
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" variant="primary" size="sm" loading={isPending}>
+          Confirmer la restauration
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)}>
           Annuler
-        </button>
+        </Button>
       </div>
     </form>
   );

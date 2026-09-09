@@ -22,6 +22,9 @@ import {
   type TenderSubmissionReadinessResult,
   type TenderSubmissionSummary,
 } from "../../../../../../lib/submission-types";
+import { Button } from "../../../../../../components/ui/button";
+import { Input } from "../../../../../../components/ui/input";
+import { Select } from "../../../../../../components/ui/select";
 
 const PLATFORM_REQUIRING_CUSTOM_NAME = new Set(["OTHER", "PLATEFORME_ACHETEUR"]);
 const IN_FLIGHT_STATUSES = new Set(["SUBMISSION_IN_PROGRESS", "SUBMITTED", "RECEIPT_CONFIRMED"]);
@@ -29,7 +32,7 @@ const IN_FLIGHT_STATUSES = new Set(["SUBMISSION_IN_PROGRESS", "SUBMITTED", "RECE
 function ErrorText({ error }: { error: string | undefined }) {
   if (!error) return null;
   return (
-    <p role="alert" className="text-xs text-red-700">
+    <p role="alert" className="text-xs text-danger-fg">
       {error}
     </p>
   );
@@ -51,26 +54,40 @@ function formatRemainingTime(ms: number | undefined): string | undefined {
 // Checkpoint 2.1-P2.1-FIX-F — la case "Dossier complet" (mission §121-130) reflète l'agrégation
 // backend `fileReadinessReasons`, jamais un calcul frontend : `dossierComplet` est dérivé
 // uniquement de l'absence de raison BLOCKING dans ce que le backend a déjà classifié.
-function FileReadinessSummary({ tenderId, reasons }: { tenderId: string; reasons: TenderSubmissionReadinessResult["fileReadinessReasons"] }) {
+function FileReadinessSummary({
+  tenderId,
+  reasons,
+}: {
+  tenderId: string;
+  reasons: TenderSubmissionReadinessResult["fileReadinessReasons"];
+}) {
   const blocking = reasons.filter((r) => r.severity === "BLOCKING");
   const warning = reasons.filter((r) => r.severity === "WARNING");
   const dossierComplet = blocking.length === 0;
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-neutral-200 p-4 text-sm">
+    <div className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-4 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-medium">Dossier prêt au dépôt</span>
-        <span className={`rounded px-2 py-1 text-xs font-medium ${dossierComplet ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}`}>
+        <span
+          className={`rounded px-2 py-1 text-xs font-medium ${dossierComplet ? "bg-success-bg text-success-fg" : "bg-danger-bg text-danger-fg"}`}
+        >
           {dossierComplet ? "Dossier complet" : "Dossier non prêt"}
         </span>
       </div>
       {blocking.length > 0 ? (
-        <ul className="flex flex-col gap-1 text-xs text-red-700">
+        <ul className="flex flex-col gap-1 text-xs text-danger-fg">
           {blocking.map((reason) => (
-            <li key={reason.code} className="flex flex-wrap items-center justify-between gap-2 rounded bg-red-50 px-2 py-1">
+            <li
+              key={reason.code}
+              className="flex flex-wrap items-center justify-between gap-2 rounded bg-red-50 px-2 py-1"
+            >
               <span>{reason.message}</span>
               {reason.action ? (
-                <Link href={submissionReadinessActionRoute(tenderId, reason.action)} className="shrink-0 text-red-800 underline">
+                <Link
+                  href={submissionReadinessActionRoute(tenderId, reason.action)}
+                  className="shrink-0 text-danger-fg underline"
+                >
                   {SUBMISSION_READINESS_ACTION_LABELS[reason.action]}
                 </Link>
               ) : null}
@@ -79,12 +96,18 @@ function FileReadinessSummary({ tenderId, reasons }: { tenderId: string; reasons
         </ul>
       ) : null}
       {warning.length > 0 ? (
-        <ul className="flex flex-col gap-1 text-xs text-amber-700">
+        <ul className="flex flex-col gap-1 text-xs text-warning-fg">
           {warning.map((reason) => (
-            <li key={reason.code} className="flex flex-wrap items-center justify-between gap-2 rounded bg-amber-50 px-2 py-1">
+            <li
+              key={reason.code}
+              className="flex flex-wrap items-center justify-between gap-2 rounded bg-amber-50 px-2 py-1"
+            >
               <span>{reason.message}</span>
               {reason.action ? (
-                <Link href={submissionReadinessActionRoute(tenderId, reason.action)} className="shrink-0 text-amber-800 underline">
+                <Link
+                  href={submissionReadinessActionRoute(tenderId, reason.action)}
+                  className="shrink-0 text-warning-fg underline"
+                >
                   {SUBMISSION_READINESS_ACTION_LABELS[reason.action]}
                 </Link>
               ) : null}
@@ -96,7 +119,13 @@ function FileReadinessSummary({ tenderId, reasons }: { tenderId: string; reasons
   );
 }
 
-function ReadinessCard({ tenderId, readiness }: { tenderId: string; readiness: TenderSubmissionReadinessResult }) {
+function ReadinessCard({
+  tenderId,
+  readiness,
+}: {
+  tenderId: string;
+  readiness: TenderSubmissionReadinessResult;
+}) {
   // Les messages déjà couverts par `fileReadinessReasons` (rendus par FileReadinessSummary
   // ci-dessus) ne sont pas dupliqués ici — seuls les blockers/warnings historiques (package,
   // signature, date limite) restent affichés dans cette liste générique.
@@ -107,37 +136,43 @@ function ReadinessCard({ tenderId, readiness }: { tenderId: string; readiness: T
   return (
     <div className="flex flex-col gap-4">
       <FileReadinessSummary tenderId={tenderId} reasons={readiness.fileReadinessReasons} />
-      <div className="flex flex-col gap-2 rounded border border-neutral-200 p-4 text-sm">
+      <div className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-4 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="font-medium">État de préparation</span>
-          <span className="rounded bg-neutral-100 px-2 py-1 text-xs font-medium">{readiness.readinessStatus}</span>
+          <span className="rounded bg-tenderos-light px-2 py-1 text-xs font-medium">
+            {readiness.readinessStatus}
+          </span>
         </div>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-neutral-700 sm:grid-cols-4">
-          <dt className="text-neutral-500">Package</dt>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-tenderos-navy sm:grid-cols-4">
+          <dt className="text-tenderos-slate">Package</dt>
           <dd>{readiness.packageId ? `v${readiness.packageVersion}` : "—"}</dd>
-          <dt className="text-neutral-500">Hash (court)</dt>
-          <dd className="truncate">{readiness.packageHash ? readiness.packageHash.slice(0, 12) : "—"}</dd>
-          <dt className="text-neutral-500">Date limite</dt>
+          <dt className="text-tenderos-slate">Hash (court)</dt>
+          <dd className="truncate">
+            {readiness.packageHash ? readiness.packageHash.slice(0, 12) : "—"}
+          </dd>
+          <dt className="text-tenderos-slate">Date limite</dt>
           <dd>{formatDateTime(readiness.deadline)}</dd>
-          <dt className="text-neutral-500">Temps restant</dt>
+          <dt className="text-tenderos-slate">Temps restant</dt>
           <dd>{formatRemainingTime(readiness.remainingTimeMs) ?? "—"}</dd>
         </dl>
         {otherBlockers.length > 0 ? (
-          <ul className="list-disc pl-4 text-xs text-red-700">
+          <ul className="list-disc pl-4 text-xs text-danger-fg">
             {otherBlockers.map((blocker) => (
               <li key={blocker}>{blocker}</li>
             ))}
           </ul>
         ) : null}
         {otherWarnings.length > 0 ? (
-          <ul className="list-disc pl-4 text-xs text-amber-700">
+          <ul className="list-disc pl-4 text-xs text-warning-fg">
             {otherWarnings.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
           </ul>
         ) : null}
         {readiness.requiredActions.length > 0 ? (
-          <p className="text-xs text-neutral-600">Prochaines actions : {readiness.requiredActions.join(" → ")}</p>
+          <p className="text-xs text-tenderos-slate">
+            Prochaines actions : {readiness.requiredActions.join(" → ")}
+          </p>
         ) : null}
       </div>
     </div>
@@ -169,7 +204,9 @@ function RecordSubmissionForm({
     const result = await recordTenderSubmissionAction(tenderId, {
       packageId: readiness.packageId,
       platform,
-      customPlatformName: PLATFORM_REQUIRING_CUSTOM_NAME.has(platform) ? customPlatformName : undefined,
+      customPlatformName: PLATFORM_REQUIRING_CUSTOM_NAME.has(platform)
+        ? customPlatformName
+        : undefined,
       submittedAt: new Date(submittedAt).toISOString(),
       platformReference: platformReference || undefined,
       receiptReference: receiptReference || undefined,
@@ -181,52 +218,85 @@ function RecordSubmissionForm({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded border border-neutral-200 p-4 text-sm">
+    <div className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4 text-sm">
       <span className="font-medium">Enregistrer un dépôt</span>
-      <p className="text-xs text-neutral-600">Package : v{readiness.packageVersion} — hash {readiness.packageHash?.slice(0, 12)} (lecture seule).</p>
+      <p className="text-xs text-tenderos-slate">
+        Package : v{readiness.packageVersion} — hash {readiness.packageHash?.slice(0, 12)} (lecture
+        seule).
+      </p>
       <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1 text-xs text-neutral-600">
+        <label className="flex flex-col gap-1 text-xs text-tenderos-slate">
           Plateforme
-          <select value={platform} onChange={(event) => setPlatform(event.target.value)} className="rounded border border-neutral-300 px-2 py-1">
+          <Select value={platform} onChange={(event) => setPlatform(event.target.value)}>
             {Object.entries(SUBMISSION_PLATFORM_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {PLATFORM_REQUIRING_CUSTOM_NAME.has(platform) ? (
-          <label className="flex flex-col gap-1 text-xs text-neutral-600">
+          <label className="flex flex-col gap-1 text-xs text-tenderos-slate">
             Nom de la plateforme
-            <input type="text" value={customPlatformName} onChange={(event) => setCustomPlatformName(event.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
+            <Input
+              type="text"
+              value={customPlatformName}
+              onChange={(event) => setCustomPlatformName(event.target.value)}
+            />
           </label>
         ) : null}
-        <label className="flex flex-col gap-1 text-xs text-neutral-600">
+        <label className="flex flex-col gap-1 text-xs text-tenderos-slate">
           Date et heure du dépôt
-          <input type="datetime-local" value={submittedAt} onChange={(event) => setSubmittedAt(event.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
+          <Input
+            type="datetime-local"
+            value={submittedAt}
+            onChange={(event) => setSubmittedAt(event.target.value)}
+          />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-neutral-600">
+        <label className="flex flex-col gap-1 text-xs text-tenderos-slate">
           Référence du dépôt
-          <input type="text" value={platformReference} onChange={(event) => setPlatformReference(event.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
+          <Input
+            type="text"
+            value={platformReference}
+            onChange={(event) => setPlatformReference(event.target.value)}
+          />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-neutral-600">
+        <label className="flex flex-col gap-1 text-xs text-tenderos-slate">
           Référence du reçu
-          <input type="text" value={receiptReference} onChange={(event) => setReceiptReference(event.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
+          <Input
+            type="text"
+            value={receiptReference}
+            onChange={(event) => setReceiptReference(event.target.value)}
+          />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-neutral-600">
+        <label className="flex flex-col gap-1 text-xs text-tenderos-slate">
           Notes
-          <input type="text" value={notes} onChange={(event) => setNotes(event.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
+          <Input type="text" value={notes} onChange={(event) => setNotes(event.target.value)} />
         </label>
-        <button type="button" disabled={isPending || !readiness.packageId} onClick={handleSubmit} className="rounded border border-neutral-300 px-3 py-1 disabled:opacity-50">
+        <Button
+          type="button"
+          disabled={isPending || !readiness.packageId}
+          onClick={handleSubmit}
+          variant="secondary"
+          size="sm"
+        >
           Enregistrer le dépôt
-        </button>
+        </Button>
       </div>
       <ErrorText error={error} />
     </div>
   );
 }
 
-function ProofUploadForm({ tenderId, submissionId, onUpdated }: { tenderId: string; submissionId: string; onUpdated: (submission: TenderSubmissionSummary) => void }) {
+function ProofUploadForm({
+  tenderId,
+  submissionId,
+  onUpdated,
+}: {
+  tenderId: string;
+  submissionId: string;
+  onUpdated: (submission: TenderSubmissionSummary) => void;
+}) {
   const [proofType, setProofType] = useState("RECEIPT");
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -242,23 +312,23 @@ function ProofUploadForm({ tenderId, submissionId, onUpdated }: { tenderId: stri
 
   return (
     <form action={handleSubmit} className="flex flex-wrap items-end gap-2 text-xs">
-      <label className="flex flex-col gap-1 text-neutral-600">
+      <label className="flex flex-col gap-1 text-tenderos-slate">
         Type de preuve
-        <select value={proofType} onChange={(event) => setProofType(event.target.value)} className="rounded border border-neutral-300 px-2 py-1">
+        <Select value={proofType} onChange={(event) => setProofType(event.target.value)}>
           {Object.entries(SUBMISSION_PROOF_TYPE_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
-      <label className="flex flex-col gap-1 text-neutral-600">
+      <label className="flex flex-col gap-1 text-tenderos-slate">
         Fichier
-        <input type="file" name="file" required className="text-xs" />
+        <Input type="file" name="file" required />
       </label>
-      <button type="submit" disabled={isPending} className="rounded border border-neutral-300 px-3 py-1 disabled:opacity-50">
+      <Button type="submit" disabled={isPending} variant="secondary" size="sm">
         Ajouter la preuve
-      </button>
+      </Button>
       <ErrorText error={error} />
     </form>
   );
@@ -283,7 +353,9 @@ function ActiveSubmissionCard({
   const [rejectionCategory, setRejectionCategory] = useState("OTHER");
   const [rejectionDescription, setRejectionDescription] = useState("");
 
-  async function run(action: () => Promise<{ error?: string; submission?: TenderSubmissionSummary }>) {
+  async function run(
+    action: () => Promise<{ error?: string; submission?: TenderSubmissionSummary }>,
+  ) {
     setIsPending(true);
     setError(undefined);
     const result = await action();
@@ -293,19 +365,25 @@ function ActiveSubmissionCard({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded border border-neutral-200 p-4 text-sm">
+    <div className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-medium">Dépôt actif</span>
-        <span className="rounded bg-neutral-100 px-2 py-1 text-xs font-medium">{TENDER_SUBMISSION_STATUS_LABELS[submission.status] ?? submission.status}</span>
+        <span className="rounded bg-tenderos-light px-2 py-1 text-xs font-medium">
+          {TENDER_SUBMISSION_STATUS_LABELS[submission.status] ?? submission.status}
+        </span>
       </div>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-neutral-700 sm:grid-cols-4">
-        <dt className="text-neutral-500">Plateforme</dt>
-        <dd>{submission.customPlatformName ?? SUBMISSION_PLATFORM_LABELS[submission.platform] ?? submission.platform}</dd>
-        <dt className="text-neutral-500">Déposé le</dt>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-tenderos-navy sm:grid-cols-4">
+        <dt className="text-tenderos-slate">Plateforme</dt>
+        <dd>
+          {submission.customPlatformName ??
+            SUBMISSION_PLATFORM_LABELS[submission.platform] ??
+            submission.platform}
+        </dd>
+        <dt className="text-tenderos-slate">Déposé le</dt>
         <dd>{formatDateTime(submission.submittedAt)}</dd>
-        <dt className="text-neutral-500">Référence</dt>
+        <dt className="text-tenderos-slate">Référence</dt>
         <dd>{submission.platformReference ?? "—"}</dd>
-        <dt className="text-neutral-500">Reçu</dt>
+        <dt className="text-tenderos-slate">Reçu</dt>
         <dd>{submission.receiptReference ?? "—"}</dd>
       </dl>
 
@@ -314,7 +392,12 @@ function ActiveSubmissionCard({
           {submission.proofs.map((proof) => (
             <li key={proof.id}>
               {SUBMISSION_PROOF_TYPE_LABELS[proof.proofType] ?? proof.proofType} —{" "}
-              <a href={`/app/documents/${proof.documentId}/download`} target="_blank" rel="noreferrer" className="text-emerald-700 underline">
+              <a
+                href={`/app/documents/${proof.documentId}/download`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-success-fg underline"
+              >
                 télécharger
               </a>
             </li>
@@ -322,78 +405,139 @@ function ActiveSubmissionCard({
         </ul>
       ) : null}
 
-      {capabilities.canUploadProof ? <ProofUploadForm tenderId={tenderId} submissionId={submission.id} onUpdated={onUpdated} /> : null}
+      {capabilities.canUploadProof ? (
+        <ProofUploadForm tenderId={tenderId} submissionId={submission.id} onUpdated={onUpdated} />
+      ) : null}
 
       <div className="flex flex-wrap items-end gap-2 text-xs">
         {capabilities.canConfirmReceipt ? (
           <>
-            <label className="flex flex-col gap-1 text-neutral-600">
+            <label className="flex flex-col gap-1 text-tenderos-slate">
               Référence du reçu (si pas de preuve)
-              <input type="text" value={receiptReference} onChange={(event) => setReceiptReference(event.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
+              <Input
+                type="text"
+                value={receiptReference}
+                onChange={(event) => setReceiptReference(event.target.value)}
+              />
             </label>
             {!receiptReference && submission.proofs.length === 0 ? (
-              <label className="flex items-center gap-1 text-neutral-600">
-                <input type="checkbox" checked={confirmWithoutEvidence} onChange={(event) => setConfirmWithoutEvidence(event.target.checked)} />
+              <label className="flex items-center gap-1 text-tenderos-slate">
+                <input
+                  type="checkbox"
+                  checked={confirmWithoutEvidence}
+                  onChange={(event) => setConfirmWithoutEvidence(event.target.checked)}
+                />
                 Je confirme explicitement le reçu sans référence ni preuve
               </label>
             ) : null}
-            <button
+            <Button
               type="button"
-              disabled={isPending || (!receiptReference && submission.proofs.length === 0 && !confirmWithoutEvidence)}
-              onClick={() => run(() => confirmSubmissionReceiptAction(tenderId, submission.id, { receiptReference: receiptReference || undefined, confirmedWithoutEvidence: confirmWithoutEvidence }))}
-              className="rounded border border-neutral-300 px-3 py-1 disabled:opacity-50"
+              disabled={
+                isPending ||
+                (!receiptReference && submission.proofs.length === 0 && !confirmWithoutEvidence)
+              }
+              onClick={() =>
+                run(() =>
+                  confirmSubmissionReceiptAction(tenderId, submission.id, {
+                    receiptReference: receiptReference || undefined,
+                    confirmedWithoutEvidence: confirmWithoutEvidence,
+                  }),
+                )
+              }
+              variant="secondary"
+              size="sm"
             >
               Confirmer le reçu
-            </button>
+            </Button>
           </>
         ) : null}
 
         {capabilities.canCancelSubmission ? (
-          <button type="button" disabled={isPending} onClick={() => run(() => cancelTenderSubmissionAction(tenderId, submission.id, {}))} className="rounded border border-neutral-300 px-3 py-1 disabled:opacity-50">
+          <Button
+            type="button"
+            disabled={isPending}
+            onClick={() => run(() => cancelTenderSubmissionAction(tenderId, submission.id, {}))}
+            variant="secondary"
+            size="sm"
+          >
             Annuler le dépôt en cours
-          </button>
+          </Button>
         ) : null}
       </div>
 
       {capabilities.canWithdrawSubmission ? (
         <div className="flex flex-col gap-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs">
-          <p className="text-amber-800">Cette action enregistre le retrait dans TenderOS. Elle ne réalise pas automatiquement le retrait sur la plateforme acheteur.</p>
+          <p className="text-warning-fg">
+            Cette action enregistre le retrait dans TenderOS. Elle ne réalise pas automatiquement le
+            retrait sur la plateforme acheteur.
+          </p>
           <div className="flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-1 text-neutral-600">
+            <label className="flex flex-col gap-1 text-tenderos-slate">
               Motif du retrait
-              <input type="text" value={withdrawalReason} onChange={(event) => setWithdrawalReason(event.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
+              <Input
+                type="text"
+                value={withdrawalReason}
+                onChange={(event) => setWithdrawalReason(event.target.value)}
+              />
             </label>
-            <button type="button" disabled={isPending} onClick={() => run(() => withdrawTenderSubmissionAction(tenderId, submission.id, { withdrawalReason: withdrawalReason || undefined }))} className="rounded border border-neutral-300 px-3 py-1 disabled:opacity-50">
+            <Button
+              type="button"
+              disabled={isPending}
+              onClick={() =>
+                run(() =>
+                  withdrawTenderSubmissionAction(tenderId, submission.id, {
+                    withdrawalReason: withdrawalReason || undefined,
+                  }),
+                )
+              }
+              variant="secondary"
+              size="sm"
+            >
               Enregistrer le retrait
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
 
       {capabilities.canRecordRejection ? (
         <div className="flex flex-wrap items-end gap-2 text-xs">
-          <label className="flex flex-col gap-1 text-neutral-600">
+          <label className="flex flex-col gap-1 text-tenderos-slate">
             Catégorie de rejet
-            <select value={rejectionCategory} onChange={(event) => setRejectionCategory(event.target.value)} className="rounded border border-neutral-300 px-2 py-1">
+            <Select
+              value={rejectionCategory}
+              onChange={(event) => setRejectionCategory(event.target.value)}
+            >
               {Object.entries(SUBMISSION_REJECTION_CATEGORY_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
-          <label className="flex flex-col gap-1 text-neutral-600">
+          <label className="flex flex-col gap-1 text-tenderos-slate">
             Description
-            <input type="text" value={rejectionDescription} onChange={(event) => setRejectionDescription(event.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
+            <Input
+              type="text"
+              value={rejectionDescription}
+              onChange={(event) => setRejectionDescription(event.target.value)}
+            />
           </label>
-          <button
+          <Button
             type="button"
             disabled={isPending || !rejectionDescription.trim()}
-            onClick={() => run(() => recordSubmissionRejectionAction(tenderId, submission.id, { rejectionCategory, rejectionDescription }))}
-            className="rounded border border-neutral-300 px-3 py-1 disabled:opacity-50"
+            onClick={() =>
+              run(() =>
+                recordSubmissionRejectionAction(tenderId, submission.id, {
+                  rejectionCategory,
+                  rejectionDescription,
+                }),
+              )
+            }
+            variant="secondary"
+            size="sm"
           >
             Enregistrer le rejet
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -426,7 +570,9 @@ function ReplaceSubmissionForm({
     const result = await replaceTenderSubmissionAction(tenderId, submissionId, {
       packageId: readiness.packageId,
       platform,
-      customPlatformName: PLATFORM_REQUIRING_CUSTOM_NAME.has(platform) ? customPlatformName : undefined,
+      customPlatformName: PLATFORM_REQUIRING_CUSTOM_NAME.has(platform)
+        ? customPlatformName
+        : undefined,
       submittedAt: new Date(submittedAt).toISOString(),
     });
     setIsPending(false);
@@ -435,33 +581,50 @@ function ReplaceSubmissionForm({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-neutral-200 p-4 text-sm">
+    <div className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-4 text-sm">
       <span className="font-medium">Remplacer le dépôt</span>
-      <p className="text-xs text-neutral-600">Nouveau package : v{readiness.packageVersion} — hash {readiness.packageHash?.slice(0, 12)} (lecture seule).</p>
+      <p className="text-xs text-tenderos-slate">
+        Nouveau package : v{readiness.packageVersion} — hash {readiness.packageHash?.slice(0, 12)}{" "}
+        (lecture seule).
+      </p>
       <div className="flex flex-wrap items-end gap-2 text-xs">
-        <label className="flex flex-col gap-1 text-neutral-600">
+        <label className="flex flex-col gap-1 text-tenderos-slate">
           Plateforme
-          <select value={platform} onChange={(event) => setPlatform(event.target.value)} className="rounded border border-neutral-300 px-2 py-1">
+          <Select value={platform} onChange={(event) => setPlatform(event.target.value)}>
             {Object.entries(SUBMISSION_PLATFORM_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {PLATFORM_REQUIRING_CUSTOM_NAME.has(platform) ? (
-          <label className="flex flex-col gap-1 text-neutral-600">
+          <label className="flex flex-col gap-1 text-tenderos-slate">
             Nom de la plateforme
-            <input type="text" value={customPlatformName} onChange={(event) => setCustomPlatformName(event.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
+            <Input
+              type="text"
+              value={customPlatformName}
+              onChange={(event) => setCustomPlatformName(event.target.value)}
+            />
           </label>
         ) : null}
-        <label className="flex flex-col gap-1 text-neutral-600">
+        <label className="flex flex-col gap-1 text-tenderos-slate">
           Date et heure du dépôt
-          <input type="datetime-local" value={submittedAt} onChange={(event) => setSubmittedAt(event.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
+          <Input
+            type="datetime-local"
+            value={submittedAt}
+            onChange={(event) => setSubmittedAt(event.target.value)}
+          />
         </label>
-        <button type="button" disabled={isPending || !readiness.packageId} onClick={handleSubmit} className="rounded border border-neutral-300 px-3 py-1 disabled:opacity-50">
+        <Button
+          type="button"
+          disabled={isPending || !readiness.packageId}
+          onClick={handleSubmit}
+          variant="secondary"
+          size="sm"
+        >
           Remplacer
-        </button>
+        </Button>
       </div>
       <ErrorText error={error} />
     </div>
@@ -469,20 +632,29 @@ function ReplaceSubmissionForm({
 }
 
 function HistoryTimeline({ submissions }: { submissions: TenderSubmissionSummary[] }) {
-  const ordered = [...submissions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const ordered = [...submissions].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
   return (
     <div className="flex flex-col gap-2">
       <span className="text-sm font-medium">Historique</span>
       {ordered.length === 0 ? (
-        <p className="text-xs text-neutral-500">Aucun dépôt enregistré.</p>
+        <p className="text-xs text-tenderos-slate">Aucun dépôt enregistré.</p>
       ) : (
-        <ol className="flex flex-col gap-1 border-l border-neutral-200 pl-3 text-xs">
+        <ol className="flex flex-col gap-1 border-l border-tenderos-navy/10 pl-3 text-xs">
           {ordered.map((submission) => (
             <li key={submission.id}>
-              <span className="font-medium">{TENDER_SUBMISSION_STATUS_LABELS[submission.status] ?? submission.status}</span> — {SUBMISSION_PLATFORM_LABELS[submission.platform] ?? submission.platform} —{" "}
+              <span className="font-medium">
+                {TENDER_SUBMISSION_STATUS_LABELS[submission.status] ?? submission.status}
+              </span>{" "}
+              — {SUBMISSION_PLATFORM_LABELS[submission.platform] ?? submission.platform} —{" "}
               {formatDateTime(submission.createdAt)}
-              {submission.rejectionDescription ? <span className="text-red-700"> — {submission.rejectionDescription}</span> : null}
-              {submission.withdrawalReason ? <span className="text-neutral-600"> — {submission.withdrawalReason}</span> : null}
+              {submission.rejectionDescription ? (
+                <span className="text-danger-fg"> — {submission.rejectionDescription}</span>
+              ) : null}
+              {submission.withdrawalReason ? (
+                <span className="text-tenderos-slate"> — {submission.withdrawalReason}</span>
+              ) : null}
             </li>
           ))}
         </ol>
@@ -514,21 +686,42 @@ export function SubmissionSection({
     setCapabilities((prev) => ({ ...prev, activeSubmissionId: submission.id }));
   }
 
-  const activeSubmission = submissions.find((s) => s.id === capabilities.activeSubmissionId) ?? submissions.find((s) => IN_FLIGHT_STATUSES.has(s.status));
+  const activeSubmission =
+    submissions.find((s) => s.id === capabilities.activeSubmissionId) ??
+    submissions.find((s) => IN_FLIGHT_STATUSES.has(s.status));
 
   return (
     <div className="flex flex-col gap-6">
       <ReadinessCard tenderId={tenderId} readiness={readiness} />
 
       {activeSubmission ? (
-        <ActiveSubmissionCard tenderId={tenderId} submission={activeSubmission} capabilities={capabilities} onUpdated={applyUpdatedSubmission} />
+        <ActiveSubmissionCard
+          tenderId={tenderId}
+          submission={activeSubmission}
+          capabilities={capabilities}
+          onUpdated={applyUpdatedSubmission}
+        />
       ) : capabilities.canRecordSubmission ? (
-        <RecordSubmissionForm tenderId={tenderId} readiness={readiness} onRecorded={applyUpdatedSubmission} />
+        <RecordSubmissionForm
+          tenderId={tenderId}
+          readiness={readiness}
+          onRecorded={applyUpdatedSubmission}
+        />
       ) : (
-        <p className="text-sm text-neutral-500">{Object.values(capabilities.reasonsByAction)[0] ?? "Le dépôt n'est pas encore disponible."}</p>
+        <p className="text-sm text-tenderos-slate">
+          {Object.values(capabilities.reasonsByAction)[0] ??
+            "Le dépôt n'est pas encore disponible."}
+        </p>
       )}
 
-      {activeSubmission && capabilities.canReplaceSubmission ? <ReplaceSubmissionForm tenderId={tenderId} submissionId={activeSubmission.id} readiness={readiness} onReplaced={applyUpdatedSubmission} /> : null}
+      {activeSubmission && capabilities.canReplaceSubmission ? (
+        <ReplaceSubmissionForm
+          tenderId={tenderId}
+          submissionId={activeSubmission.id}
+          readiness={readiness}
+          onReplaced={applyUpdatedSubmission}
+        />
+      ) : null}
 
       <HistoryTimeline submissions={submissions} />
     </div>

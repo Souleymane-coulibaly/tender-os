@@ -52,10 +52,15 @@ const TYPES: ChecklistItemType[] = [
   "DELIVERABLE",
   "OTHER",
 ];
-const REQUIREMENT_LEVELS: ChecklistRequirementLevel[] = ["MANDATORY", "CONDITIONAL", "INFORMATIONAL"];
+const REQUIREMENT_LEVELS: ChecklistRequirementLevel[] = [
+  "MANDATORY",
+  "CONDITIONAL",
+  "INFORMATIONAL",
+];
 const CRITICALITIES: ChecklistItemCriticality[] = ["BLOCKING", "HIGH", "MEDIUM", "LOW"];
 
-const INPUT_CLASS = "rounded-lg border border-tenderos-navy/15 px-2.5 py-1.5 text-xs text-tenderos-navy";
+const INPUT_CLASS =
+  "rounded-lg border border-tenderos-navy/15 px-2.5 py-1.5 text-xs text-tenderos-navy";
 
 function statusLabel(status: ChecklistItemStatus): string {
   switch (status) {
@@ -148,9 +153,22 @@ function complianceTone(status: ChecklistComplianceStatus): BadgeTone {
 /** V2 Sprint 6 §7 -> V2 Sprint 7 §12 — une criticité BLOCKING peut SUGGÉRER une priorité URGENT à
  *  la création depuis la checklist, jamais recopiée automatiquement : l'utilisateur confirme
  *  toujours (mission §14), voir le <select> priority ci-dessous, jamais désactivé. */
-const CRITICALITY_TO_SUGGESTED_PRIORITY: Record<string, string> = { BLOCKING: "URGENT", HIGH: "HIGH", MEDIUM: "MEDIUM", LOW: "LOW" };
+const CRITICALITY_TO_SUGGESTED_PRIORITY: Record<string, string> = {
+  BLOCKING: "URGENT",
+  HIGH: "HIGH",
+  MEDIUM: "MEDIUM",
+  LOW: "LOW",
+};
 
-function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: ChecklistItem; lots: TenderLot[] }) {
+function ChecklistItemRow({
+  tenderId,
+  item,
+  lots,
+}: {
+  tenderId: string;
+  item: ChecklistItem;
+  lots: TenderLot[];
+}) {
   const [status, setStatus] = useState(item.status);
   const [error, setError] = useState<string | undefined>();
   const [isPending, setIsPending] = useState(false);
@@ -180,9 +198,13 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
             <Badge tone="neutral">{typeLabel(item.type)}</Badge>
             <Badge tone={criticalityTone(item.criticality)}>{item.criticality}</Badge>
             <Badge tone="neutral">{requirementLevelLabel(item.requirementLevel)}</Badge>
-            <Badge tone={complianceTone(item.complianceStatus)}>{complianceStatusLabel(item.complianceStatus)}</Badge>
+            <Badge tone={complianceTone(item.complianceStatus)}>
+              {complianceStatusLabel(item.complianceStatus)}
+            </Badge>
             {lot ? <Badge tone="info">{lot.title}</Badge> : <Badge tone="neutral">Global</Badge>}
-            {item.origin === "AI_SUGGESTION" ? <Badge tone="gold">Suggéré par l&apos;IA</Badge> : null}
+            {item.origin === "AI_SUGGESTION" ? (
+              <Badge tone="gold">Suggéré par l&apos;IA</Badge>
+            ) : null}
             {/* Checkpoint 2.1-P2.1-FIX-B — signal ADDITIF, jamais une rétrogradation de
                 complianceStatus (mission §20/§21) : un item validé reste affiché "Validé" ci-dessus,
                 ce badge attire seulement l'attention sur une exigence disparue/changée depuis. */}
@@ -190,15 +212,20 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
               <Badge tone="warning">Absente de la dernière analyse</Badge>
             ) : null}
           </div>
-          {item.conditionText ? <p className="text-xs italic text-tenderos-slate">Condition : {item.conditionText}</p> : null}
+          {item.conditionText ? (
+            <p className="text-xs italic text-tenderos-slate">Condition : {item.conditionText}</p>
+          ) : null}
           {item.matchedDocumentId ? (
             <p className="text-xs text-tenderos-slate">
-              Document associé — statut : <span className="font-medium text-tenderos-navy">{item.documentStatus}</span>
-              {item.documentExpiresAt ? ` (expire le ${new Date(item.documentExpiresAt).toLocaleDateString("fr-FR")})` : ""}
+              Document associé — statut :{" "}
+              <span className="font-medium text-tenderos-navy">{item.documentStatus}</span>
+              {item.documentExpiresAt
+                ? ` (expire le ${new Date(item.documentExpiresAt).toLocaleDateString("fr-FR")})`
+                : ""}
             </p>
           ) : null}
           {error ? (
-            <p role="alert" className="text-xs text-red-600">
+            <p role="alert" className="text-xs text-danger-fg">
               {error}
             </p>
           ) : null}
@@ -227,7 +254,7 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
       <div className="flex flex-wrap items-center gap-2">
         {item.complianceStatus !== "VALIDATED" ? (
           // Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2, audit hardcode) — remplace
-          // `border-green-200 bg-green-50 text-green-800` (couleur brute) par les jetons sémantiques
+          // `border-green-200 bg-green-50 text-success-fg` (couleur brute) par les jetons sémantiques
           // `success` (Checkpoint A/B), les mêmes que `Badge tone="success"` — jamais un vert propre
           // à cet écran.
           <button
@@ -275,11 +302,17 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
           </button>
         )}
         {!taskCreated ? (
-          <button type="button" onClick={() => setShowTaskForm((v) => !v)} className="rounded-lg border border-tenderos-navy/15 px-2.5 py-1 text-xs font-medium text-tenderos-navy hover:bg-tenderos-light">
+          <button
+            type="button"
+            onClick={() => setShowTaskForm((v) => !v)}
+            className="rounded-lg border border-tenderos-navy/15 px-2.5 py-1 text-xs font-medium text-tenderos-navy hover:bg-tenderos-light"
+          >
             Créer une tâche
           </button>
         ) : (
-          <span className="text-xs text-tenderos-slate">Tâche créée — voir l&apos;onglet Workspace.</span>
+          <span className="text-xs text-tenderos-slate">
+            Tâche créée — voir l&apos;onglet Workspace.
+          </span>
         )}
         {item.complianceStatus === "VALIDATED" ? (
           !promotedEntryId ? (
@@ -291,7 +324,10 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
               Ajouter à la bibliothèque
             </button>
           ) : (
-            <a href={`/app/knowledge/${promotedEntryId}`} className="text-xs font-medium text-tenderos-blue hover:underline">
+            <a
+              href={`/app/knowledge/${promotedEntryId}`}
+              className="text-xs font-medium text-tenderos-blue hover:underline"
+            >
               Ajoutée à la bibliothèque — voir l&apos;entrée
             </a>
           )
@@ -324,8 +360,17 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
           {/* Préremplissage indicatif (titre + criticité -> priorité suggérée), jamais
               d'affectation automatique (mission §14 : le responsable/l'échéance/la priorité
               restent à confirmer explicitement par l'utilisateur). */}
-          <input name="title" defaultValue={item.title} required className={`min-w-56 ${INPUT_CLASS}`} />
-          <select name="priority" defaultValue={CRITICALITY_TO_SUGGESTED_PRIORITY[item.criticality] ?? "MEDIUM"} className={INPUT_CLASS}>
+          <input
+            name="title"
+            defaultValue={item.title}
+            required
+            className={`min-w-56 ${INPUT_CLASS}`}
+          />
+          <select
+            name="priority"
+            defaultValue={CRITICALITY_TO_SUGGESTED_PRIORITY[item.criticality] ?? "MEDIUM"}
+            className={INPUT_CLASS}
+          >
             <option value="LOW">LOW</option>
             <option value="MEDIUM">MEDIUM</option>
             <option value="HIGH">HIGH</option>
@@ -365,7 +410,12 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
         >
           {/* Mission §19/§53 — jamais un titre/une catégorie hérités silencieusement : préremplissage
               indicatif uniquement (titre de l'item), l'utilisateur confirme ou modifie avant l'envoi. */}
-          <input name="title" defaultValue={item.title} required className={`min-w-56 ${INPUT_CLASS}`} />
+          <input
+            name="title"
+            defaultValue={item.title}
+            required
+            className={`min-w-56 ${INPUT_CLASS}`}
+          />
           <select name="category" defaultValue="ADMINISTRATIVE" className={INPUT_CLASS}>
             {Object.entries(KNOWLEDGE_CATEGORY_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
@@ -373,7 +423,12 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
               </option>
             ))}
           </select>
-          <input name="tags" type="text" placeholder="Tags (séparés par virgule)" className={INPUT_CLASS} />
+          <input
+            name="tags"
+            type="text"
+            placeholder="Tags (séparés par virgule)"
+            className={INPUT_CLASS}
+          />
           <Button type="submit" disabled={isPending}>
             Enregistrer
           </Button>
@@ -383,7 +438,9 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
       {matches ? (
         <div className="rounded-xl bg-tenderos-light p-3 text-xs">
           <p className="mb-1 font-semibold text-tenderos-navy">
-            {matches.candidates.length === 0 ? "Aucun document correspondant trouvé." : `Correspondance : ${matches.status}`}
+            {matches.candidates.length === 0
+              ? "Aucun document correspondant trouvé."
+              : `Correspondance : ${matches.status}`}
           </p>
           <ul className="flex flex-col gap-1">
             {matches.candidates.map((candidate) => (
@@ -422,7 +479,10 @@ function ChecklistItemRow({ tenderId, item, lots }: { tenderId: string; item: Ch
 function ProgressSummary({ progress }: { progress: ChecklistProgress | null }) {
   if (!progress) return null;
   const { global } = progress;
-  const percent = global.totalApplicable === 0 ? 100 : Math.round((global.validated / global.totalApplicable) * 100);
+  const percent =
+    global.totalApplicable === 0
+      ? 100
+      : Math.round((global.validated / global.totalApplicable) * 100);
 
   return (
     <div className="flex flex-col gap-2 rounded-xl bg-tenderos-light p-3">
@@ -430,14 +490,25 @@ function ProgressSummary({ progress }: { progress: ChecklistProgress | null }) {
         <span className="text-sm font-bold text-tenderos-navy">
           {global.validated} / {global.totalApplicable} validés ({percent}%)
         </span>
-        {global.blockingMissing > 0 ? <Badge tone="danger">{global.blockingMissing} bloquant{global.blockingMissing > 1 ? "s" : ""}</Badge> : null}
+        {global.blockingMissing > 0 ? (
+          <Badge tone="danger">
+            {global.blockingMissing} bloquant{global.blockingMissing > 1 ? "s" : ""}
+          </Badge>
+        ) : null}
       </div>
       <span className="h-1.5 w-full overflow-hidden rounded-full bg-white">
-        <span className="block h-full rounded-full bg-tenderos-blue" style={{ width: `${percent}%` }} />
+        <span
+          className="block h-full rounded-full bg-tenderos-blue"
+          style={{ width: `${percent}%` }}
+        />
       </span>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-tenderos-slate">
-        <span>{global.missing} manquant{global.missing > 1 ? "s" : ""}</span>
-        <span>{global.expired} expiré{global.expired > 1 ? "s" : ""}</span>
+        <span>
+          {global.missing} manquant{global.missing > 1 ? "s" : ""}
+        </span>
+        <span>
+          {global.expired} expiré{global.expired > 1 ? "s" : ""}
+        </span>
         <span>{global.toReview} à vérifier</span>
       </div>
     </div>
@@ -500,12 +571,18 @@ export function ChecklistSection({
       }
     >
       <div className="flex flex-col gap-3">
-        {reconcileMessage ? <p className="text-xs text-tenderos-slate">{reconcileMessage}</p> : null}
+        {reconcileMessage ? (
+          <p className="text-xs text-tenderos-slate">{reconcileMessage}</p>
+        ) : null}
         <ProgressSummary progress={progress} />
         {lots.length > 0 ? (
           <label className="flex items-center gap-2 text-xs text-tenderos-slate">
             Filtrer par lot
-            <select value={lotFilter} onChange={(event) => setLotFilter(event.target.value)} className={INPUT_CLASS}>
+            <select
+              value={lotFilter}
+              onChange={(event) => setLotFilter(event.target.value)}
+              className={INPUT_CLASS}
+            >
               <option value="ALL">Tous</option>
               <option value="GLOBAL">Global</option>
               {lots.map((lot) => (
@@ -517,7 +594,10 @@ export function ChecklistSection({
           </label>
         ) : null}
         {filteredItems.length === 0 ? (
-          <EmptyState title="Aucun élément de checklist" description="Ajoutez un élément manuellement ci-dessous, ou comparez avec la dernière analyse IA pour en suggérer." />
+          <EmptyState
+            title="Aucun élément de checklist"
+            description="Ajoutez un élément manuellement ci-dessous, ou comparez avec la dernière analyse IA pour en suggérer."
+          />
         ) : (
           <ul>
             {filteredItems.map((item) => (
@@ -525,8 +605,17 @@ export function ChecklistSection({
             ))}
           </ul>
         )}
-        <form action={formAction} className="flex flex-wrap items-end gap-2 border-t border-tenderos-navy/10 pt-3">
-          <input name="title" type="text" required placeholder="Nouvel element..." className={`text-sm ${INPUT_CLASS}`} />
+        <form
+          action={formAction}
+          className="flex flex-wrap items-end gap-2 border-t border-tenderos-navy/10 pt-3"
+        >
+          <input
+            name="title"
+            type="text"
+            required
+            placeholder="Nouvel element..."
+            className={`text-sm ${INPUT_CLASS}`}
+          />
           <select name="type" defaultValue="OTHER" className={INPUT_CLASS}>
             {TYPES.map((type) => (
               <option key={type} value={type}>
@@ -552,7 +641,7 @@ export function ChecklistSection({
             Ajouter
           </Button>
           {state.error ? (
-            <p role="alert" className="text-xs text-red-600">
+            <p role="alert" className="text-xs text-danger-fg">
               {state.error}
             </p>
           ) : null}

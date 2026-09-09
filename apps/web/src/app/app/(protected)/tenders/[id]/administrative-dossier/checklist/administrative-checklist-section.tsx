@@ -26,6 +26,9 @@ import {
   type AdministrativeDossierCapabilities,
   type AdministrativeRequirementSummary,
 } from "../../../../../../../lib/administrative-dossier-types";
+import { Button } from "../../../../../../../components/ui/button";
+import { Input } from "../../../../../../../components/ui/input";
+import { Select } from "../../../../../../../components/ui/select";
 
 type AvailableDocument = { id: string; title: string };
 
@@ -46,7 +49,12 @@ function RequirementRow({
   async function decide(action: "CONFIRM" | "REJECT" | "NOT_APPLICABLE") {
     setIsPending(true);
     setError(undefined);
-    const fn = action === "CONFIRM" ? confirmAdministrativeRequirementAction : action === "REJECT" ? rejectAdministrativeRequirementAction : markAdministrativeRequirementNotApplicableAction;
+    const fn =
+      action === "CONFIRM"
+        ? confirmAdministrativeRequirementAction
+        : action === "REJECT"
+          ? rejectAdministrativeRequirementAction
+          : markAdministrativeRequirementNotApplicableAction;
     const result = await fn(tenderId, requirement.id);
     setIsPending(false);
     if (result.error) setError(result.error);
@@ -54,34 +62,60 @@ function RequirementRow({
   }
 
   return (
-    <li className="flex flex-col gap-1 rounded border border-neutral-200 p-2.5">
+    <li className="flex flex-col gap-1 rounded border border-tenderos-navy/10 p-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-medium text-neutral-900">
-          {requirement.title} {requirement.required ? <span className="text-xs text-neutral-500">(obligatoire)</span> : null}
+        <span className="text-sm font-medium text-tenderos-navy">
+          {requirement.title}{" "}
+          {requirement.required ? (
+            <span className="text-xs text-tenderos-slate">(obligatoire)</span>
+          ) : null}
         </span>
-        <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">{requirement.validationStatus}</span>
+        <span className="rounded bg-tenderos-light px-2 py-0.5 text-xs font-medium text-tenderos-navy">
+          {requirement.validationStatus}
+        </span>
       </div>
       {requirement.validationStatus === "SUGGESTED" ? (
         canValidate ? (
           <div className="flex gap-2">
-            <button type="button" disabled={isPending} onClick={() => decide("CONFIRM")} className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50">
+            <Button
+              type="button"
+              disabled={isPending}
+              onClick={() => decide("CONFIRM")}
+              variant="primary"
+              size="sm"
+            >
               Confirmer
-            </button>
-            <button type="button" disabled={isPending} onClick={() => decide("REJECT")} className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-700 disabled:opacity-50">
+            </Button>
+            <Button
+              type="button"
+              disabled={isPending}
+              onClick={() => decide("REJECT")}
+              variant="secondary"
+              size="sm"
+            >
               Rejeter
-            </button>
-            <button type="button" disabled={isPending} onClick={() => decide("NOT_APPLICABLE")} className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-700 disabled:opacity-50">
+            </Button>
+            <Button
+              type="button"
+              disabled={isPending}
+              onClick={() => decide("NOT_APPLICABLE")}
+              variant="secondary"
+              size="sm"
+            >
               Non applicable
-            </button>
+            </Button>
           </div>
         ) : (
-          <p className="text-xs text-neutral-500" title="Vous n'avez pas les droits nécessaires pour valider une exigence">
+          <p
+            className="text-xs text-tenderos-slate"
+            title="Vous n'avez pas les droits nécessaires pour valider une exigence"
+          >
             En attente de confirmation — droits de validation requis.
           </p>
         )
       ) : null}
       {error ? (
-        <p role="alert" className="text-xs text-red-700">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
@@ -122,7 +156,11 @@ function ChecklistLineRow({
   async function handleCreateDocument() {
     setIsPending(true);
     setError(undefined);
-    const result = await createAdministrativeDocumentAction(tenderId, { documentType: requirement.expectedDocumentType, label: requirement.title, requirementId: requirement.id });
+    const result = await createAdministrativeDocumentAction(tenderId, {
+      documentType: requirement.expectedDocumentType,
+      label: requirement.title,
+      requirementId: requirement.id,
+    });
     setIsPending(false);
     if (result.error) setError(result.error);
     else onChanged();
@@ -132,7 +170,11 @@ function ChecklistLineRow({
     if (!requirement.matchedDocumentId || !selectedDocumentId) return;
     setIsPending(true);
     setError(undefined);
-    const result = await attachAdministrativeDocumentRevisionAction(tenderId, requirement.matchedDocumentId, { documentId: selectedDocumentId });
+    const result = await attachAdministrativeDocumentRevisionAction(
+      tenderId,
+      requirement.matchedDocumentId,
+      { documentId: selectedDocumentId },
+    );
     setIsPending(false);
     if (result.error) setError(result.error);
     else {
@@ -145,7 +187,11 @@ function ChecklistLineRow({
     if (!requirement.matchedDocumentId) return;
     setIsPending(true);
     setError(undefined);
-    const result = await validateAdministrativeDocumentAction(tenderId, requirement.matchedDocumentId, revisionId);
+    const result = await validateAdministrativeDocumentAction(
+      tenderId,
+      requirement.matchedDocumentId,
+      revisionId,
+    );
     setIsPending(false);
     if (result.error) setError(result.error);
     else {
@@ -158,7 +204,11 @@ function ChecklistLineRow({
     if (!requirement.matchedDocumentId) return;
     setIsPending(true);
     setError(undefined);
-    const result = await rejectAdministrativeDocumentAction(tenderId, requirement.matchedDocumentId, revisionId);
+    const result = await rejectAdministrativeDocumentAction(
+      tenderId,
+      requirement.matchedDocumentId,
+      revisionId,
+    );
     setIsPending(false);
     if (result.error) setError(result.error);
     else {
@@ -171,7 +221,11 @@ function ChecklistLineRow({
     if (!requirement.matchedDocumentId) return;
     setIsPending(true);
     setError(undefined);
-    const result = await setAdministrativeDocumentSignatureModeAction(tenderId, requirement.matchedDocumentId, mode);
+    const result = await setAdministrativeDocumentSignatureModeAction(
+      tenderId,
+      requirement.matchedDocumentId,
+      mode,
+    );
     setIsPending(false);
     if (result.error) setError(result.error);
     else {
@@ -184,7 +238,10 @@ function ChecklistLineRow({
     if (!requirement.matchedDocumentId) return;
     setIsPending(true);
     setError(undefined);
-    const result = await recordAdministrativeDocumentSignatureAction(tenderId, requirement.matchedDocumentId);
+    const result = await recordAdministrativeDocumentSignatureAction(
+      tenderId,
+      requirement.matchedDocumentId,
+    );
     setIsPending(false);
     if (result.error) setError(result.error);
     else {
@@ -196,71 +253,125 @@ function ChecklistLineRow({
   const latestRevision = document?.revisions[document.revisions.length - 1];
 
   return (
-    <li className="flex flex-col gap-2 rounded border border-neutral-200 p-2.5">
+    <li className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-medium text-neutral-900">{requirement.title}</span>
-        <span className={`rounded px-2 py-0.5 text-xs font-medium ${administrativeChecklistStateBadgeClass(state)}`}>{ADMINISTRATIVE_CHECKLIST_STATE_LABELS[state] ?? state}</span>
+        <span className="text-sm font-medium text-tenderos-navy">{requirement.title}</span>
+        <span
+          className={`rounded px-2 py-0.5 text-xs font-medium ${administrativeChecklistStateBadgeClass(state)}`}
+        >
+          {ADMINISTRATIVE_CHECKLIST_STATE_LABELS[state] ?? state}
+        </span>
       </div>
 
       {canEdit ? (
-        <button type="button" onClick={expand} className="w-fit text-xs text-neutral-600 underline">
+        <Button type="button" onClick={expand} className="w-fit" variant="ghost" size="sm">
           {expanded ? "Masquer" : "Gérer la pièce"}
-        </button>
+        </Button>
       ) : null}
 
       {expanded ? (
-        <div className="flex flex-col gap-2 rounded bg-neutral-50 p-2">
+        <div className="flex flex-col gap-2 rounded bg-tenderos-light p-2">
           {!requirement.matchedDocumentId ? (
-            <button type="button" disabled={isPending || !canEdit} onClick={handleCreateDocument} className="w-fit rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50">
+            <Button
+              type="button"
+              disabled={isPending || !canEdit}
+              onClick={handleCreateDocument}
+              className="w-fit"
+              variant="primary"
+              size="sm"
+            >
               Créer la pièce
-            </button>
+            </Button>
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <select value={selectedDocumentId} onChange={(e) => setSelectedDocumentId(e.target.value)} className="rounded border border-neutral-300 px-2 py-1 text-xs" aria-label="Document déjà téléversé à attacher">
+                <Select
+                  value={selectedDocumentId}
+                  onChange={(e) => setSelectedDocumentId(e.target.value)}
+                  aria-label="Document déjà téléversé à attacher"
+                >
                   <option value="">Choisir un document déjà téléversé…</option>
                   {availableDocuments.map((doc) => (
                     <option key={doc.id} value={doc.id}>
                       {doc.title}
                     </option>
                   ))}
-                </select>
-                <button type="button" disabled={isPending || !canEdit || !selectedDocumentId} onClick={handleAttach} className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50">
+                </Select>
+                <Button
+                  type="button"
+                  disabled={isPending || !canEdit || !selectedDocumentId}
+                  onClick={handleAttach}
+                  variant="primary"
+                  size="sm"
+                >
                   Attacher
-                </button>
+                </Button>
               </div>
               {latestRevision ? (
-                <div className="flex items-center justify-between gap-2 text-xs text-neutral-700">
+                <div className="flex items-center justify-between gap-2 text-xs text-tenderos-navy">
                   <span>
-                    Révision #{latestRevision.revisionNumber} — {latestRevision.status} {latestRevision.documentFileName ? `(${latestRevision.documentFileName})` : ""}
+                    Révision #{latestRevision.revisionNumber} — {latestRevision.status}{" "}
+                    {latestRevision.documentFileName ? `(${latestRevision.documentFileName})` : ""}
                   </span>
-                  {canValidate && (latestRevision.status === "IN_REVIEW" || latestRevision.status === "DRAFT") && latestRevision.documentId ? (
+                  {canValidate &&
+                  (latestRevision.status === "IN_REVIEW" || latestRevision.status === "DRAFT") &&
+                  latestRevision.documentId ? (
                     <span className="flex gap-2">
-                      <button type="button" disabled={isPending} onClick={() => handleValidate(latestRevision.id)} className="rounded bg-emerald-700 px-2 py-1 text-xs font-medium text-white disabled:opacity-50">
+                      <Button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => handleValidate(latestRevision.id)}
+                        variant="ghost"
+                        size="sm"
+                      >
                         Valider
-                      </button>
-                      <button type="button" disabled={isPending} onClick={() => handleReject(latestRevision.id)} className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-700 disabled:opacity-50">
+                      </Button>
+                      <Button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => handleReject(latestRevision.id)}
+                        variant="secondary"
+                        size="sm"
+                      >
                         Rejeter
-                      </button>
+                      </Button>
                     </span>
                   ) : null}
                 </div>
               ) : null}
               {document ? (
-                <div className="flex flex-wrap items-center gap-2 border-t border-neutral-200 pt-2 text-xs text-neutral-700">
+                <div className="flex flex-wrap items-center gap-2 border-t border-tenderos-navy/10 pt-2 text-xs text-tenderos-navy">
                   <span>
-                    Signature : <span className="font-medium">{ADMINISTRATIVE_SIGNATURE_MODE_LABELS[document.signatureMode] ?? document.signatureMode}</span> —{" "}
-                    {ADMINISTRATIVE_SIGNATURE_STATUS_LABELS[document.signatureStatus] ?? document.signatureStatus}
+                    Signature :{" "}
+                    <span className="font-medium">
+                      {ADMINISTRATIVE_SIGNATURE_MODE_LABELS[document.signatureMode] ??
+                        document.signatureMode}
+                    </span>{" "}
+                    —{" "}
+                    {ADMINISTRATIVE_SIGNATURE_STATUS_LABELS[document.signatureStatus] ??
+                      document.signatureStatus}
                   </span>
                   {canEdit && document.signatureMode === "NOT_REQUIRED" ? (
-                    <button type="button" disabled={isPending} onClick={() => handleSetSignatureMode("MANUAL")} className="rounded border border-neutral-300 px-2 py-1 text-xs">
+                    <Button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => handleSetSignatureMode("MANUAL")}
+                      variant="secondary"
+                      size="sm"
+                    >
                       Exiger une signature manuelle
-                    </button>
+                    </Button>
                   ) : null}
                   {canEdit && document.signatureStatus === "PENDING" ? (
-                    <button type="button" disabled={isPending} onClick={handleRecordSignature} className="rounded bg-emerald-700 px-2 py-1 text-xs font-medium text-white disabled:opacity-50">
+                    <Button
+                      type="button"
+                      disabled={isPending}
+                      onClick={handleRecordSignature}
+                      variant="ghost"
+                      size="sm"
+                    >
                       Enregistrer la signature
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               ) : null}
@@ -270,7 +381,7 @@ function ChecklistLineRow({
       ) : null}
 
       {error ? (
-        <p role="alert" className="text-xs text-red-700">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
@@ -311,7 +422,12 @@ export function AdministrativeChecklistSection({
     }
     setIsCreating(true);
     setCreateError(undefined);
-    const result = await createAdministrativeRequirementAction(tenderId, { title, requirementType: "DOCUMENT", expectedDocumentType: documentType, required });
+    const result = await createAdministrativeRequirementAction(tenderId, {
+      title,
+      requirementType: "DOCUMENT",
+      expectedDocumentType: documentType,
+      required,
+    });
     setIsCreating(false);
     if (result.error) setCreateError(result.error);
     else {
@@ -325,33 +441,43 @@ export function AdministrativeChecklistSection({
   return (
     <div className="flex flex-col gap-6">
       {capabilities.canEdit ? (
-        <section className="rounded border border-neutral-200 p-3">
-          <h2 className="mb-2 text-sm font-semibold text-neutral-900">Ajouter une exigence</h2>
+        <section className="rounded border border-tenderos-navy/10 p-3">
+          <h2 className="mb-2 text-sm font-semibold text-tenderos-navy">Ajouter une exigence</h2>
           <div className="flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-1 text-xs text-neutral-600">
+            <label className="flex flex-col gap-1 text-xs text-tenderos-slate">
               Titre
-              <input value={title} onChange={(e) => setTitle(e.target.value)} className="rounded border border-neutral-300 px-2 py-1 text-sm" />
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-neutral-600">
+            <label className="flex flex-col gap-1 text-xs text-tenderos-slate">
               Type de pièce attendu
-              <select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="rounded border border-neutral-300 px-2 py-1 text-sm">
+              <Select value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
                 {documentTypes.map((type) => (
                   <option key={type.code} value={type.code}>
                     {type.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
-            <label className="flex items-center gap-1.5 text-xs text-neutral-600">
-              <input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} />
+            <label className="flex items-center gap-1.5 text-xs text-tenderos-slate">
+              <input
+                type="checkbox"
+                checked={required}
+                onChange={(e) => setRequired(e.target.checked)}
+              />
               Obligatoire
             </label>
-            <button type="button" disabled={isCreating} onClick={handleCreateRequirement} className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+            <Button
+              type="button"
+              disabled={isCreating}
+              onClick={handleCreateRequirement}
+              variant="primary"
+              size="sm"
+            >
               Ajouter
-            </button>
+            </Button>
           </div>
           {createError ? (
-            <p role="alert" className="mt-1 text-xs text-red-700">
+            <p role="alert" className="mt-1 text-xs text-danger-fg">
               {createError}
             </p>
           ) : null}
@@ -359,19 +485,31 @@ export function AdministrativeChecklistSection({
       ) : null}
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-neutral-900">Exigences en attente de confirmation</h2>
+        <h2 className="mb-2 text-sm font-semibold text-tenderos-navy">
+          Exigences en attente de confirmation
+        </h2>
         <ul className="flex flex-col gap-2">
           {requirements
             .filter((r) => r.validationStatus === "SUGGESTED")
             .map((requirement) => (
-              <RequirementRow key={requirement.id} tenderId={tenderId} requirement={requirement} canValidate={capabilities.canValidate} onChanged={onChanged} />
+              <RequirementRow
+                key={requirement.id}
+                tenderId={tenderId}
+                requirement={requirement}
+                canValidate={capabilities.canValidate}
+                onChanged={onChanged}
+              />
             ))}
-          {requirements.filter((r) => r.validationStatus === "SUGGESTED").length === 0 ? <p className="text-sm text-neutral-500">Aucune exigence en attente.</p> : null}
+          {requirements.filter((r) => r.validationStatus === "SUGGESTED").length === 0 ? (
+            <p className="text-sm text-tenderos-slate">Aucune exigence en attente.</p>
+          ) : null}
         </ul>
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-neutral-900">Checklist ({checklist.completionPercentage}%)</h2>
+        <h2 className="mb-2 text-sm font-semibold text-tenderos-navy">
+          Checklist ({checklist.completionPercentage}%)
+        </h2>
         <ul className="flex flex-col gap-2">
           {checklist.lines.map((line) => {
             const requirement = requirementsByLine.get(line.requirementId);
@@ -389,7 +527,11 @@ export function AdministrativeChecklistSection({
               />
             );
           })}
-          {checklist.lines.length === 0 ? <p className="text-sm text-neutral-500">Aucune exigence confirmée pour l&apos;instant.</p> : null}
+          {checklist.lines.length === 0 ? (
+            <p className="text-sm text-tenderos-slate">
+              Aucune exigence confirmée pour l&apos;instant.
+            </p>
+          ) : null}
         </ul>
       </section>
     </div>

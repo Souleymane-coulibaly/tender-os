@@ -16,8 +16,18 @@ import {
   COMPLIANCE_COVERAGE_STATUS_LABELS,
   type DeliverableSummary,
 } from "../../../../../../../lib/deliverable-types";
+import { Button } from "../../../../../../../components/ui/button";
+import { Input } from "../../../../../../../components/ui/input";
+import { Select } from "../../../../../../../components/ui/select";
 
-type ComplianceEntry = { id: string; source: string; mandatory: boolean; criticality: string; coverageStatus: string; response?: string };
+type ComplianceEntry = {
+  id: string;
+  source: string;
+  mandatory: boolean;
+  criticality: string;
+  coverageStatus: string;
+  response?: string;
+};
 type ChecklistEntry = { id: string; name: string; mandatory: boolean; status: string };
 type AnnexEntry = { id: string; label: string; status: string };
 type DocumentEntry = { id: string; title: string };
@@ -46,20 +56,58 @@ export function OverlayDeliverable({
 }) {
   const canEdit = canManageDeliverable(actorRole);
 
-  if (deliverable.type === "COMPLIANCE_MATRIX") return <ComplianceMatrixView tenderId={tenderId} deliverableId={deliverable.id} canEdit={canEdit} entries={complianceEntries ?? []} />;
+  if (deliverable.type === "COMPLIANCE_MATRIX")
+    return (
+      <ComplianceMatrixView
+        tenderId={tenderId}
+        deliverableId={deliverable.id}
+        canEdit={canEdit}
+        entries={complianceEntries ?? []}
+      />
+    );
   if (deliverable.type === "CHECKLIST")
-    return <ChecklistView tenderId={tenderId} deliverableId={deliverable.id} canEdit={canEdit} entries={checklistEntries ?? []} documents={availableDocuments ?? []} />;
-  return <AnnexesView tenderId={tenderId} deliverableId={deliverable.id} canEdit={canEdit} entries={annexEntries ?? []} documents={availableDocuments ?? []} />;
+    return (
+      <ChecklistView
+        tenderId={tenderId}
+        deliverableId={deliverable.id}
+        canEdit={canEdit}
+        entries={checklistEntries ?? []}
+        documents={availableDocuments ?? []}
+      />
+    );
+  return (
+    <AnnexesView
+      tenderId={tenderId}
+      deliverableId={deliverable.id}
+      canEdit={canEdit}
+      entries={annexEntries ?? []}
+      documents={availableDocuments ?? []}
+    />
+  );
 }
 
-function ComplianceMatrixView({ tenderId, deliverableId, canEdit, entries }: { tenderId: string; deliverableId: string; canEdit: boolean; entries: ComplianceEntry[] }) {
+function ComplianceMatrixView({
+  tenderId,
+  deliverableId,
+  canEdit,
+  entries,
+}: {
+  tenderId: string;
+  deliverableId: string;
+  canEdit: boolean;
+  entries: ComplianceEntry[];
+}) {
   const router = useRouter();
   const [source, setSource] = useState("");
   const [error, setError] = useState<string | undefined>();
 
   async function addEntry() {
     if (!source.trim()) return;
-    const result = await createComplianceMatrixEntryAction(tenderId, deliverableId, { source: source.trim(), mandatory: true, criticality: "MEDIUM" });
+    const result = await createComplianceMatrixEntryAction(tenderId, deliverableId, {
+      source: source.trim(),
+      mandatory: true,
+      criticality: "MEDIUM",
+    });
     if (result.error) setError(result.error);
     else {
       setSource("");
@@ -68,13 +116,17 @@ function ComplianceMatrixView({ tenderId, deliverableId, canEdit, entries }: { t
   }
 
   async function updateResponse(entryId: string, response: string) {
-    const result = await updateComplianceMatrixEntryAction(tenderId, deliverableId, entryId, { response });
+    const result = await updateComplianceMatrixEntryAction(tenderId, deliverableId, entryId, {
+      response,
+    });
     if (result.error) setError(result.error);
     else router.refresh();
   }
 
   async function updateCoverage(entryId: string, coverageStatus: string) {
-    const result = await updateComplianceMatrixEntryAction(tenderId, deliverableId, entryId, { coverageStatus });
+    const result = await updateComplianceMatrixEntryAction(tenderId, deliverableId, entryId, {
+      coverageStatus,
+    });
     if (result.error) setError(result.error);
     else router.refresh();
   }
@@ -83,16 +135,21 @@ function ComplianceMatrixView({ tenderId, deliverableId, canEdit, entries }: { t
     <div className="flex flex-col gap-3">
       {canEdit ? (
         <div className="flex gap-2">
-          <input value={source} onChange={(e) => setSource(e.target.value)} placeholder="Exigence (ex. CCTP art. 3.2)" className="flex-1 rounded border border-neutral-300 px-3 py-2 text-sm" />
-          <button type="button" onClick={addEntry} className="rounded bg-neutral-900 px-3 py-2 text-sm font-medium text-white">
+          <Input
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            placeholder="Exigence (ex. CCTP art. 3.2)"
+            className="flex-1"
+          />
+          <Button type="button" onClick={addEntry} variant="primary" size="sm">
             Ajouter
-          </button>
+          </Button>
         </div>
       ) : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-danger-fg">{error}</p> : null}
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-neutral-200 text-left text-neutral-500">
+          <tr className="border-b border-tenderos-navy/10 text-left text-tenderos-slate">
             <th className="py-2 pr-4">Exigence</th>
             <th className="py-2 pr-4">Réponse</th>
             <th className="py-2 pr-4">Couverture</th>
@@ -100,32 +157,34 @@ function ComplianceMatrixView({ tenderId, deliverableId, canEdit, entries }: { t
         </thead>
         <tbody>
           {entries.map((entry) => (
-            <tr key={entry.id} className="border-b border-neutral-100">
-              <td className="py-2 pr-4 text-neutral-700">{entry.source}</td>
+            <tr key={entry.id} className="border-b border-tenderos-navy/10">
+              <td className="py-2 pr-4 text-tenderos-navy">{entry.source}</td>
               <td className="py-2 pr-4">
                 {canEdit ? (
-                  <input
+                  <Input
                     defaultValue={entry.response ?? ""}
-                    onBlur={(e) => (e.target.value !== entry.response ? updateResponse(entry.id, e.target.value) : undefined)}
-                    className="w-full rounded border border-neutral-300 px-2 py-1"
+                    onBlur={(e) =>
+                      e.target.value !== entry.response
+                        ? updateResponse(entry.id, e.target.value)
+                        : undefined
+                    }
                   />
                 ) : (
                   entry.response
                 )}
               </td>
-              <td className="py-2 pr-4 text-neutral-600">
+              <td className="py-2 pr-4 text-tenderos-slate">
                 {canEdit ? (
-                  <select
+                  <Select
                     value={entry.coverageStatus}
                     onChange={(e) => updateCoverage(entry.id, e.target.value)}
-                    className="rounded border border-neutral-300 px-2 py-1"
                   >
                     {COMPLIANCE_COVERAGE_STATUSES.map((status) => (
                       <option key={status} value={status}>
                         {COMPLIANCE_COVERAGE_STATUS_LABELS[status]}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 ) : (
                   (COMPLIANCE_COVERAGE_STATUS_LABELS[entry.coverageStatus] ?? entry.coverageStatus)
                 )}
@@ -157,7 +216,10 @@ function ChecklistView({
 
   async function addEntry() {
     if (!name.trim()) return;
-    const result = await createChecklistPieceEntryAction(tenderId, deliverableId, { name: name.trim(), mandatory: true });
+    const result = await createChecklistPieceEntryAction(tenderId, deliverableId, {
+      name: name.trim(),
+      mandatory: true,
+    });
     if (result.error) setError(result.error);
     else {
       setName("");
@@ -169,16 +231,28 @@ function ChecklistView({
     <div className="flex flex-col gap-3">
       {canEdit ? (
         <div className="flex gap-2">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Pièce (ex. attestation fiscale)" className="flex-1 rounded border border-neutral-300 px-3 py-2 text-sm" />
-          <button type="button" onClick={addEntry} className="rounded bg-neutral-900 px-3 py-2 text-sm font-medium text-white">
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Pièce (ex. attestation fiscale)"
+            className="flex-1"
+          />
+          <Button type="button" onClick={addEntry} variant="primary" size="sm">
             Ajouter
-          </button>
+          </Button>
         </div>
       ) : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-danger-fg">{error}</p> : null}
       <ul className="flex flex-col gap-2">
         {entries.map((entry) => (
-          <ChecklistRow key={entry.id} tenderId={tenderId} deliverableId={deliverableId} canEdit={canEdit} entry={entry} documents={documents} />
+          <ChecklistRow
+            key={entry.id}
+            tenderId={tenderId}
+            deliverableId={deliverableId}
+            canEdit={canEdit}
+            entry={entry}
+            documents={documents}
+          />
         ))}
       </ul>
     </div>
@@ -210,43 +284,52 @@ function ChecklistRow({
   async function attach() {
     if (!documentId) return;
     setIsPending(true);
-    const result = await updateChecklistPieceEntryAction(tenderId, deliverableId, entry.id, { documentId });
+    const result = await updateChecklistPieceEntryAction(tenderId, deliverableId, entry.id, {
+      documentId,
+    });
     setIsPending(false);
     if (result.error) setError(result.error);
     else router.refresh();
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded border border-neutral-200 px-3 py-2 text-sm">
+    <li className="flex flex-col gap-2 rounded border border-tenderos-navy/10 px-3 py-2 text-sm">
       <div className="flex items-center justify-between">
         <span>{entry.name}</span>
-        <span className="text-xs text-neutral-500">{entry.status}</span>
+        <span className="text-xs text-tenderos-slate">{entry.status}</span>
       </div>
       {canEdit && entry.status === "MISSING" ? (
         documents.length > 0 ? (
           <div className="flex gap-2">
-            <select value={documentId} onChange={(e) => setDocumentId(e.target.value)} className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs">
+            <Select
+              value={documentId}
+              onChange={(e) => setDocumentId(e.target.value)}
+              className="flex-1"
+            >
               <option value="">Choisir un document déjà déposé…</option>
               {documents.map((doc) => (
                 <option key={doc.id} value={doc.id}>
                   {doc.title}
                 </option>
               ))}
-            </select>
-            <button
+            </Select>
+            <Button
               type="button"
               onClick={attach}
               disabled={!documentId || isPending}
-              className="rounded border border-neutral-300 px-2 py-1 text-xs font-medium hover:bg-neutral-100 disabled:opacity-50"
+              variant="secondary"
+              size="sm"
             >
               {isPending ? "Attachement..." : "Attacher"}
-            </button>
+            </Button>
           </div>
         ) : (
-          <p className="text-xs text-neutral-500">Aucun document disponible — déposez-en un dans Documents.</p>
+          <p className="text-xs text-tenderos-slate">
+            Aucun document disponible — déposez-en un dans Documents.
+          </p>
         )
       ) : null}
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      {error ? <p className="text-xs text-danger-fg">{error}</p> : null}
     </li>
   );
 }
@@ -270,7 +353,9 @@ function AnnexesView({
 
   async function addEntry() {
     if (!label.trim()) return;
-    const result = await createDeliverableAnnexAction(tenderId, deliverableId, { label: label.trim() });
+    const result = await createDeliverableAnnexAction(tenderId, deliverableId, {
+      label: label.trim(),
+    });
     if (result.error) setError(result.error);
     else {
       setLabel("");
@@ -282,16 +367,28 @@ function AnnexesView({
     <div className="flex flex-col gap-3">
       {canEdit ? (
         <div className="flex gap-2">
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Annexe (ex. CV chef de projet)" className="flex-1 rounded border border-neutral-300 px-3 py-2 text-sm" />
-          <button type="button" onClick={addEntry} className="rounded bg-neutral-900 px-3 py-2 text-sm font-medium text-white">
+          <Input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Annexe (ex. CV chef de projet)"
+            className="flex-1"
+          />
+          <Button type="button" onClick={addEntry} variant="primary" size="sm">
             Ajouter
-          </button>
+          </Button>
         </div>
       ) : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-danger-fg">{error}</p> : null}
       <ul className="flex flex-col gap-2">
         {entries.map((entry) => (
-          <AnnexRow key={entry.id} tenderId={tenderId} deliverableId={deliverableId} canEdit={canEdit} entry={entry} documents={documents} />
+          <AnnexRow
+            key={entry.id}
+            tenderId={tenderId}
+            deliverableId={deliverableId}
+            canEdit={canEdit}
+            entry={entry}
+            documents={documents}
+          />
         ))}
       </ul>
     </div>
@@ -323,43 +420,52 @@ function AnnexRow({
   async function attach() {
     if (!documentId) return;
     setIsPending(true);
-    const result = await updateDeliverableAnnexAction(tenderId, deliverableId, entry.id, { documentId });
+    const result = await updateDeliverableAnnexAction(tenderId, deliverableId, entry.id, {
+      documentId,
+    });
     setIsPending(false);
     if (result.error) setError(result.error);
     else router.refresh();
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded border border-neutral-200 px-3 py-2 text-sm">
+    <li className="flex flex-col gap-2 rounded border border-tenderos-navy/10 px-3 py-2 text-sm">
       <div className="flex items-center justify-between">
         <span>{entry.label}</span>
-        <span className="text-xs text-neutral-500">{entry.status}</span>
+        <span className="text-xs text-tenderos-slate">{entry.status}</span>
       </div>
       {canEdit && entry.status === "PENDING" ? (
         documents.length > 0 ? (
           <div className="flex gap-2">
-            <select value={documentId} onChange={(e) => setDocumentId(e.target.value)} className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs">
+            <Select
+              value={documentId}
+              onChange={(e) => setDocumentId(e.target.value)}
+              className="flex-1"
+            >
               <option value="">Choisir un document déjà déposé…</option>
               {documents.map((doc) => (
                 <option key={doc.id} value={doc.id}>
                   {doc.title}
                 </option>
               ))}
-            </select>
-            <button
+            </Select>
+            <Button
               type="button"
               onClick={attach}
               disabled={!documentId || isPending}
-              className="rounded border border-neutral-300 px-2 py-1 text-xs font-medium hover:bg-neutral-100 disabled:opacity-50"
+              variant="secondary"
+              size="sm"
             >
               {isPending ? "Attachement..." : "Attacher"}
-            </button>
+            </Button>
           </div>
         ) : (
-          <p className="text-xs text-neutral-500">Aucun document disponible — déposez-en un dans Documents.</p>
+          <p className="text-xs text-tenderos-slate">
+            Aucun document disponible — déposez-en un dans Documents.
+          </p>
         )
       ) : null}
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      {error ? <p className="text-xs text-danger-fg">{error}</p> : null}
     </li>
   );
 }

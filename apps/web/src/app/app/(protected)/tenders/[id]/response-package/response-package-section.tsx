@@ -12,8 +12,17 @@ import {
   generateResponsePackageZipAction,
   validateResponsePackageVersionAction,
 } from "../../../../response-package-actions";
-import { approveApprovalAction, fetchApprovals, rejectApprovalAction, requestApprovalAction } from "../../../../workspace-actions";
-import { APPROVAL_STATUS_LABELS, type ApprovalRequest, type TenderParticipant } from "../../../../../../lib/workspace-types";
+import {
+  approveApprovalAction,
+  fetchApprovals,
+  rejectApprovalAction,
+  requestApprovalAction,
+} from "../../../../workspace-actions";
+import {
+  APPROVAL_STATUS_LABELS,
+  type ApprovalRequest,
+  type TenderParticipant,
+} from "../../../../../../lib/workspace-types";
 import {
   APPLICABILITY_LABELS,
   CATEGORY_LABELS,
@@ -31,6 +40,9 @@ import {
   type ResponsePackageFreshnessResult,
   type ResponsePackageVersion,
 } from "../../../../../../lib/response-package-types";
+import { Button } from "../../../../../../components/ui/button";
+import { Input } from "../../../../../../components/ui/input";
+import { Select } from "../../../../../../components/ui/select";
 
 type DetailState = {
   responsePackage: ResponsePackage;
@@ -39,7 +51,15 @@ type DetailState = {
   completeness: PackageCompleteness | undefined;
 };
 
-function CreatePackageForm({ tenderId, lots, onCreated }: { tenderId: string; lots: { id: string; lotNumber: string; title: string }[]; onCreated: (pkg: ResponsePackage) => void }) {
+function CreatePackageForm({
+  tenderId,
+  lots,
+  onCreated,
+}: {
+  tenderId: string;
+  lots: { id: string; lotNumber: string; title: string }[];
+  onCreated: (pkg: ResponsePackage) => void;
+}) {
   const [lotId, setLotId] = useState<string>("");
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -57,104 +77,139 @@ function CreatePackageForm({ tenderId, lots, onCreated }: { tenderId: string; lo
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded border border-neutral-200 p-3">
+    <div className="flex flex-wrap items-end gap-3 rounded border border-tenderos-navy/10 p-3">
       <div className="flex flex-col gap-1">
-        <label htmlFor="lot-select" className="text-xs font-medium text-neutral-600">
+        <label htmlFor="lot-select" className="text-xs font-medium text-tenderos-slate">
           Lot
         </label>
-        <select id="lot-select" value={lotId} onChange={(event) => setLotId(event.target.value)} className="rounded border border-neutral-300 px-2 py-1.5 text-sm">
+        <Select id="lot-select" value={lotId} onChange={(event) => setLotId(event.target.value)}>
           <option value="">Tous lots (dossier global)</option>
           {lots.map((lot) => (
             <option key={lot.id} value={lot.id}>
               Lot {lot.lotNumber} — {lot.title}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
-      <button type="button" onClick={handleCreate} disabled={isPending} className="rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+      <Button type="button" onClick={handleCreate} disabled={isPending} variant="primary" size="sm">
         {isPending ? "Création…" : "Créer le dossier de réponse"}
-      </button>
-      {error ? <p className="text-xs text-red-700">{error}</p> : null}
+      </Button>
+      {error ? <p className="text-xs text-danger-fg">{error}</p> : null}
     </div>
   );
 }
 
 function CompletenessSummary({ completeness }: { completeness: PackageCompleteness | undefined }) {
   if (!completeness) return null;
-  const ratioLabel = completeness.requiredCompletenessRatio === undefined ? "—" : `${Math.round(completeness.requiredCompletenessRatio * 100)}%`;
+  const ratioLabel =
+    completeness.requiredCompletenessRatio === undefined
+      ? "—"
+      : `${Math.round(completeness.requiredCompletenessRatio * 100)}%`;
   return (
-    <div className="rounded border border-neutral-200 p-3">
+    <div className="rounded border border-tenderos-navy/10 p-3">
       <h3 className="text-sm font-semibold">Complétude — {ratioLabel}</h3>
       <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-        <div className="rounded bg-neutral-50 p-2">
+        <div className="rounded bg-tenderos-light p-2">
           <div className="font-medium">Obligatoires</div>
           <div>
             {completeness.requiredAvailable} / {completeness.requiredApplicableTotal}
           </div>
         </div>
-        <div className="rounded bg-neutral-50 p-2">
+        <div className="rounded bg-tenderos-light p-2">
           <div className="font-medium">Facultatifs</div>
           <div>
             {completeness.optionalAvailable} / {completeness.optionalApplicableTotal}
           </div>
         </div>
-        <div className="rounded bg-neutral-50 p-2">
+        <div className="rounded bg-tenderos-light p-2">
           <div className="font-medium">Non applicables</div>
           <div>{completeness.notApplicableTotal}</div>
         </div>
-        <div className="rounded bg-neutral-50 p-2">
+        <div className="rounded bg-tenderos-light p-2">
           <div className="font-medium">À vérifier</div>
           <div>{completeness.needsReviewTotal}</div>
         </div>
       </div>
       {!completeness.ready && completeness.requiredMissingLabels.length > 0 ? (
-        <p className="mt-2 text-xs text-red-700">Manquant(s) : {completeness.requiredMissingLabels.join(", ")}</p>
+        <p className="mt-2 text-xs text-danger-fg">
+          Manquant(s) : {completeness.requiredMissingLabels.join(", ")}
+        </p>
       ) : null}
     </div>
   );
 }
 
-function ItemRow({ tenderId, responsePackageId, item, editable, onUpdated }: { tenderId: string; responsePackageId: string; item: PackageItem; editable: boolean; onUpdated: () => void }) {
-  const [requirementType, setRequirementType] = useState<PackageItemRequirementType>(item.requirementType);
-  const [applicabilityStatus, setApplicabilityStatus] = useState<PackageItemApplicabilityStatus>(item.applicabilityStatus);
+function ItemRow({
+  tenderId,
+  responsePackageId,
+  item,
+  editable,
+  onUpdated,
+}: {
+  tenderId: string;
+  responsePackageId: string;
+  item: PackageItem;
+  editable: boolean;
+  onUpdated: () => void;
+}) {
+  const [requirementType, setRequirementType] = useState<PackageItemRequirementType>(
+    item.requirementType,
+  );
+  const [applicabilityStatus, setApplicabilityStatus] = useState<PackageItemApplicabilityStatus>(
+    item.applicabilityStatus,
+  );
   const [isPending, setIsPending] = useState(false);
   const badge = packageItemStatusBadge(item.status);
 
   async function handleSave(): Promise<void> {
     setIsPending(true);
-    await correctPackageItemQualificationAction(tenderId, responsePackageId, item.id, { requirementType, applicabilityStatus });
+    await correctPackageItemQualificationAction(tenderId, responsePackageId, item.id, {
+      requirementType,
+      applicabilityStatus,
+    });
     setIsPending(false);
     onUpdated();
   }
 
-  const changed = requirementType !== item.requirementType || applicabilityStatus !== item.applicabilityStatus;
+  const changed =
+    requirementType !== item.requirementType || applicabilityStatus !== item.applicabilityStatus;
 
   return (
-    <tr className="border-t border-neutral-100">
-      <td className="px-3 py-2 text-xs text-neutral-500">{CATEGORY_LABELS[item.category]}</td>
+    <tr className="border-t border-tenderos-navy/10">
+      <td className="px-3 py-2 text-xs text-tenderos-slate">{CATEGORY_LABELS[item.category]}</td>
       <td className="px-3 py-2 text-sm">{item.label}</td>
       <td className="px-3 py-2">
         {editable ? (
-          <select value={requirementType} onChange={(event) => setRequirementType(event.target.value as PackageItemRequirementType)} className="rounded border border-neutral-300 px-1.5 py-1 text-xs">
+          <Select
+            value={requirementType}
+            onChange={(event) =>
+              setRequirementType(event.target.value as PackageItemRequirementType)
+            }
+          >
             {Object.entries(REQUIREMENT_TYPE_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
+          </Select>
         ) : (
           <span className="text-xs">{REQUIREMENT_TYPE_LABELS[item.requirementType]}</span>
         )}
       </td>
       <td className="px-3 py-2">
         {editable ? (
-          <select value={applicabilityStatus} onChange={(event) => setApplicabilityStatus(event.target.value as PackageItemApplicabilityStatus)} className="rounded border border-neutral-300 px-1.5 py-1 text-xs">
+          <Select
+            value={applicabilityStatus}
+            onChange={(event) =>
+              setApplicabilityStatus(event.target.value as PackageItemApplicabilityStatus)
+            }
+          >
             {Object.entries(APPLICABILITY_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
+          </Select>
         ) : (
           <span className="text-xs">{APPLICABILITY_LABELS[item.applicabilityStatus]}</span>
         )}
@@ -164,9 +219,15 @@ function ItemRow({ tenderId, responsePackageId, item, editable, onUpdated }: { t
       </td>
       <td className="px-3 py-2">
         {editable && changed ? (
-          <button type="button" onClick={handleSave} disabled={isPending} className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50">
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={isPending}
+            variant="primary"
+            size="sm"
+          >
             {isPending ? "…" : "Enregistrer"}
-          </button>
+          </Button>
         ) : null}
       </td>
     </tr>
@@ -202,7 +263,9 @@ function FinalApprovalPanel({
 
   async function refresh(): Promise<void> {
     const all = await fetchApprovals(tenderId);
-    const forThisVersion = all.filter((a) => a.entityType === "RESPONSE_PACKAGE_VERSION" && a.entityId === versionId);
+    const forThisVersion = all.filter(
+      (a) => a.entityType === "RESPONSE_PACKAGE_VERSION" && a.entityId === versionId,
+    );
     // La plus récente prévaut (mission §39 "stale approval" — une V antérieure ne doit jamais
     // masquer la demande active de CETTE version précise, mais une version ne porte jamais deux
     // demandes actives simultanées côté backend).
@@ -218,14 +281,18 @@ function FinalApprovalPanel({
     return null;
   }
 
-  const canValidateResponsePackage = ["OWNER", "ORGANIZATION_ADMIN", "BID_MANAGER"].includes(actorRole ?? "");
+  const canValidateResponsePackage = ["OWNER", "ORGANIZATION_ADMIN", "BID_MANAGER"].includes(
+    actorRole ?? "",
+  );
 
   return (
     <div className="flex flex-col gap-2 rounded border border-blue-200 bg-blue-50 p-3">
-      <h4 className="text-xs font-semibold text-blue-900">Validation finale avant dépôt</h4>
-      <p className="text-xs text-blue-800">Validation interne TenderOS — ce n&apos;est pas une signature électronique.</p>
+      <h4 className="text-xs font-semibold text-tenderos-blue">Validation finale avant dépôt</h4>
+      <p className="text-xs text-info-fg">
+        Validation interne TenderOS — ce n&apos;est pas une signature électronique.
+      </p>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
@@ -236,33 +303,49 @@ function FinalApprovalPanel({
             event.preventDefault();
             setIsPending(true);
             setError(undefined);
-            const result = await requestApprovalAction(tenderId, { entityType: "RESPONSE_PACKAGE_VERSION", entityId: versionId, reviewerId });
+            const result = await requestApprovalAction(tenderId, {
+              entityType: "RESPONSE_PACKAGE_VERSION",
+              entityId: versionId,
+              reviewerId,
+            });
             setIsPending(false);
             if (result.error) setError(result.error);
             else await refresh();
           }}
         >
-          <select aria-label="Approbateur final" value={reviewerId} onChange={(event) => setReviewerId(event.target.value)} required className="rounded border border-blue-300 px-2 py-1 text-xs">
+          <Select
+            aria-label="Approbateur final"
+            value={reviewerId}
+            onChange={(event) => setReviewerId(event.target.value)}
+            required
+            className="border-blue-300"
+          >
             <option value="">Choisir l&apos;approbateur…</option>
             {participants.map((p) => (
               <option key={p.userId} value={p.userId}>
                 {members.find((m) => m.userId === p.userId)?.displayName ?? p.userId}
               </option>
             ))}
-          </select>
-          <button type="submit" disabled={isPending || !reviewerId} className="rounded bg-blue-700 px-3 py-1 text-xs font-medium text-white disabled:opacity-50">
+          </Select>
+          <Button type="submit" disabled={isPending || !reviewerId} variant="ghost" size="sm">
             Demander la validation finale
-          </button>
+          </Button>
         </form>
       ) : (
         <div className="flex flex-col gap-1.5">
-          <span className={`self-start rounded px-2 py-0.5 text-xs ${approval.status === "APPROVED" ? "bg-green-100 text-green-800" : approval.status === "REJECTED" ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"}`}>
+          <span
+            className={`self-start rounded px-2 py-0.5 text-xs ${approval.status === "APPROVED" ? "bg-success-bg text-success-fg" : approval.status === "REJECTED" ? "bg-danger-bg text-danger-fg" : "bg-info-bg text-info-fg"}`}
+          >
             {APPROVAL_STATUS_LABELS[approval.status]}
           </span>
-          {approval.comment ? <p className="text-xs italic text-blue-800">{approval.comment}</p> : null}
-          {approval.status === "PENDING" && canValidateResponsePackage && approval.reviewerId === actorId ? (
+          {approval.comment ? (
+            <p className="text-xs italic text-info-fg">{approval.comment}</p>
+          ) : null}
+          {approval.status === "PENDING" &&
+          canValidateResponsePackage &&
+          approval.reviewerId === actorId ? (
             <div className="flex flex-wrap items-center gap-2">
-              <button
+              <Button
                 type="button"
                 disabled={isPending}
                 onClick={async () => {
@@ -272,25 +355,30 @@ function FinalApprovalPanel({
                   if (result.error) setError(result.error);
                   else await refresh();
                 }}
-                className="rounded border border-green-300 bg-green-50 px-2 py-1 text-xs text-green-800 hover:bg-green-100 disabled:opacity-50"
+                variant="primary"
+                size="sm"
               >
                 Approuver
-              </button>
+              </Button>
               {showReject ? (
                 <>
-                  <input
+                  <Input
                     aria-label="Raison du rejet"
                     value={rejectReason}
                     onChange={(event) => setRejectReason(event.target.value)}
                     placeholder="Raison (obligatoire)"
-                    className="rounded border border-red-300 px-2 py-1 text-xs"
+                    className="border-red-300"
                   />
-                  <button
+                  <Button
                     type="button"
                     disabled={isPending || rejectReason.trim().length === 0}
                     onClick={async () => {
                       setIsPending(true);
-                      const result = await rejectApprovalAction(tenderId, approval.id, rejectReason);
+                      const result = await rejectApprovalAction(
+                        tenderId,
+                        approval.id,
+                        rejectReason,
+                      );
                       setIsPending(false);
                       if (result.error) setError(result.error);
                       else {
@@ -299,15 +387,21 @@ function FinalApprovalPanel({
                         await refresh();
                       }
                     }}
-                    className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-800 hover:bg-red-100 disabled:opacity-50"
+                    variant="danger"
+                    size="sm"
                   >
                     Confirmer le rejet
-                  </button>
+                  </Button>
                 </>
               ) : (
-                <button type="button" onClick={() => setShowReject(true)} className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-800 hover:bg-red-100">
+                <Button
+                  type="button"
+                  onClick={() => setShowReject(true)}
+                  variant="danger"
+                  size="sm"
+                >
                   Rejeter
-                </button>
+                </Button>
               )}
             </div>
           ) : null}
@@ -372,7 +466,11 @@ function PackageDetail({
     if (!currentVersion) return;
     setIsValidating(true);
     setActionError(undefined);
-    const result = await validateResponsePackageVersionAction(tenderId, responsePackage.id, currentVersion.id);
+    const result = await validateResponsePackageVersionAction(
+      tenderId,
+      responsePackage.id,
+      currentVersion.id,
+    );
     setIsValidating(false);
     if (result.error) {
       setActionError(result.error);
@@ -385,7 +483,11 @@ function PackageDetail({
     if (!currentVersion) return;
     setIsGenerating(true);
     setActionError(undefined);
-    const result = await generateResponsePackageZipAction(tenderId, responsePackage.id, currentVersion.id);
+    const result = await generateResponsePackageZipAction(
+      tenderId,
+      responsePackage.id,
+      currentVersion.id,
+    );
     setIsGenerating(false);
     if (result.error) {
       setActionError(result.error);
@@ -395,14 +497,22 @@ function PackageDetail({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded border border-neutral-200 p-4">
+    <div className="flex flex-col gap-4 rounded border border-tenderos-navy/10 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold">Dossier de réponse</h3>
-          <p className="text-xs text-neutral-500">{currentVersion ? `Version ${currentVersion.versionNumber}` : "Aucune version construite pour l'instant"}</p>
+          <p className="text-xs text-tenderos-slate">
+            {currentVersion
+              ? `Version ${currentVersion.versionNumber}`
+              : "Aucune version construite pour l'instant"}
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`rounded px-2 py-1 text-xs ${responsePackageStatusBadgeClass(responsePackage.status)}`}>{RESPONSE_PACKAGE_STATUS_LABELS[responsePackage.status]}</span>
+          <span
+            className={`rounded px-2 py-1 text-xs ${responsePackageStatusBadgeClass(responsePackage.status)}`}
+          >
+            {RESPONSE_PACKAGE_STATUS_LABELS[responsePackage.status]}
+          </span>
           {freshness && freshness.currentVersionId ? (
             <span
               className={`rounded px-2 py-1 text-xs ${responsePackageFreshnessBadgeClass(freshness.freshness)}`}
@@ -415,14 +525,25 @@ function PackageDetail({
       </div>
 
       {actionError ? (
-        <p role="alert" className="rounded bg-red-50 p-2 text-xs text-red-700">
+        <p role="alert" className="rounded bg-red-50 p-2 text-xs text-danger-fg">
           {actionError}
         </p>
       ) : null}
 
-      <button type="button" onClick={handleBuild} disabled={isBuilding} className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
-        {isBuilding ? "Construction…" : currentVersion ? "Reconstruire une nouvelle version" : "Construire le dossier depuis la Checklist"}
-      </button>
+      <Button
+        type="button"
+        onClick={handleBuild}
+        disabled={isBuilding}
+        className="self-start"
+        variant="primary"
+        size="sm"
+      >
+        {isBuilding
+          ? "Construction…"
+          : currentVersion
+            ? "Reconstruire une nouvelle version"
+            : "Construire le dossier depuis la Checklist"}
+      </Button>
 
       {currentVersion ? (
         <>
@@ -431,7 +552,7 @@ function PackageDetail({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left">
               <thead>
-                <tr className="text-xs font-medium text-neutral-500">
+                <tr className="text-xs font-medium text-tenderos-slate">
                   <th className="px-3 py-2">Catégorie</th>
                   <th className="px-3 py-2">Pièce</th>
                   <th className="px-3 py-2">Obligation</th>
@@ -442,25 +563,47 @@ function PackageDetail({
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <ItemRow key={item.id} tenderId={tenderId} responsePackageId={responsePackage.id} item={item} editable={!isValidated} onUpdated={() => void onRefresh()} />
+                  <ItemRow
+                    key={item.id}
+                    tenderId={tenderId}
+                    responsePackageId={responsePackage.id}
+                    item={item}
+                    editable={!isValidated}
+                    onUpdated={() => void onRefresh()}
+                  />
                 ))}
               </tbody>
             </table>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 border-t border-neutral-100 pt-3">
+          <div className="flex flex-wrap items-center gap-3 border-t border-tenderos-navy/10 pt-3">
             {!isValidated ? (
-              <button type="button" onClick={handleValidate} disabled={isValidating} className="rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+              <Button
+                type="button"
+                onClick={handleValidate}
+                disabled={isValidating}
+                variant="primary"
+                size="sm"
+              >
                 {isValidating ? "Validation…" : "Valider le dossier"}
-              </button>
+              </Button>
             ) : (
               <>
-                <span className="text-xs text-green-700">Version validée — immuable.</span>
-                <button type="button" onClick={handleGenerate} disabled={isGenerating} className="rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                <span className="text-xs text-success-fg">Version validée — immuable.</span>
+                <Button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                  variant="primary"
+                  size="sm"
+                >
                   {isGenerating ? "Génération…" : "Générer le package final"}
-                </button>
+                </Button>
                 {responsePackage.status === "EXPORTED" ? (
-                  <Link href={`/app/response-packages/${responsePackage.id}/versions/${currentVersion.id}/download`} className="text-sm font-medium text-blue-700 underline">
+                  <Link
+                    href={`/app/response-packages/${responsePackage.id}/versions/${currentVersion.id}/download`}
+                    className="text-sm font-medium text-tenderos-blue underline"
+                  >
                     Télécharger le ZIP
                   </Link>
                 ) : null}
@@ -468,17 +611,29 @@ function PackageDetail({
             )}
           </div>
 
-          {isValidated ? <FinalApprovalPanel tenderId={tenderId} versionId={currentVersion.id} participants={participants} members={members} actorId={actorId} actorRole={actorRole} /> : null}
+          {isValidated ? (
+            <FinalApprovalPanel
+              tenderId={tenderId}
+              versionId={currentVersion.id}
+              participants={participants}
+              members={members}
+              actorId={actorId}
+              actorRole={actorRole}
+            />
+          ) : null}
         </>
       ) : null}
 
       {versions.length > 0 ? (
-        <div className="border-t border-neutral-100 pt-3">
-          <h4 className="text-xs font-semibold text-neutral-600">Historique des versions</h4>
-          <ul className="mt-1 flex flex-col gap-1 text-xs text-neutral-500">
+        <div className="border-t border-tenderos-navy/10 pt-3">
+          <h4 className="text-xs font-semibold text-tenderos-slate">Historique des versions</h4>
+          <ul className="mt-1 flex flex-col gap-1 text-xs text-tenderos-slate">
             {versions.map((v) => (
               <li key={v.id}>
-                V{v.versionNumber} — {v.status} {v.validatedAt ? `— validée le ${new Date(v.validatedAt).toLocaleDateString("fr-FR")}` : ""}
+                V{v.versionNumber} — {v.status}{" "}
+                {v.validatedAt
+                  ? `— validée le ${new Date(v.validatedAt).toLocaleDateString("fr-FR")}`
+                  : ""}
               </li>
             ))}
           </ul>
@@ -514,12 +669,27 @@ export function ResponsePackageSection({
     setIsLoading(true);
     setSelectedId(responsePackageId);
     const result = await fetchResponsePackage(responsePackageId);
-    const currentVersion = result.versions.find((v) => v.id === result.responsePackage.currentVersionId);
+    const currentVersion = result.versions.find(
+      (v) => v.id === result.responsePackage.currentVersionId,
+    );
     if (currentVersion) {
-      const [full, completeness] = await Promise.all([fetchResponsePackage(responsePackageId, currentVersion.id), fetchPackageCompleteness(responsePackageId, currentVersion.id).catch(() => undefined)]);
-      setDetail({ responsePackage: result.responsePackage, versions: result.versions, items: full.items, completeness });
+      const [full, completeness] = await Promise.all([
+        fetchResponsePackage(responsePackageId, currentVersion.id),
+        fetchPackageCompleteness(responsePackageId, currentVersion.id).catch(() => undefined),
+      ]);
+      setDetail({
+        responsePackage: result.responsePackage,
+        versions: result.versions,
+        items: full.items,
+        completeness,
+      });
     } else {
-      setDetail({ responsePackage: result.responsePackage, versions: result.versions, items: [], completeness: undefined });
+      setDetail({
+        responsePackage: result.responsePackage,
+        versions: result.versions,
+        items: [],
+        completeness: undefined,
+      });
     }
     setIsLoading(false);
   }
@@ -534,7 +704,9 @@ export function ResponsePackageSection({
       <CreatePackageForm tenderId={tenderId} lots={lots} onCreated={handleCreated} />
 
       {packages.length === 0 ? (
-        <p className="rounded border border-neutral-200 p-4 text-sm text-neutral-500">Aucun dossier de réponse pour l&apos;instant.</p>
+        <p className="rounded border border-tenderos-navy/10 p-4 text-sm text-tenderos-slate">
+          Aucun dossier de réponse pour l&apos;instant.
+        </p>
       ) : (
         <div className="flex flex-col gap-4 lg:flex-row">
           <div className="flex w-full flex-col gap-2 lg:w-64">
@@ -542,25 +714,41 @@ export function ResponsePackageSection({
             {packages.map((pkg) => {
               const lot = lots.find((l) => l.id === pkg.lotId);
               return (
-                <button
+                <Button
                   key={pkg.id}
                   type="button"
                   onClick={() => void loadDetail(pkg.id)}
-                  className={`rounded border p-3 text-left text-sm ${selectedId === pkg.id ? "border-neutral-900 bg-neutral-50" : "border-neutral-200 hover:bg-neutral-50"}`}
+                  className={`rounded border p-3 text-left text-sm ${selectedId === pkg.id ? "border-tenderos-navy bg-tenderos-light" : "border-tenderos-navy/10 hover:bg-tenderos-light"}`}
+                  variant="ghost"
+                  size="sm"
                 >
                   <div className="font-medium">{lot ? `Lot ${lot.lotNumber}` : "Tous lots"}</div>
-                  <span className={`mt-1 inline-block rounded px-2 py-0.5 text-xs ${responsePackageStatusBadgeClass(pkg.status)}`}>{RESPONSE_PACKAGE_STATUS_LABELS[pkg.status]}</span>
-                </button>
+                  <span
+                    className={`mt-1 inline-block rounded px-2 py-0.5 text-xs ${responsePackageStatusBadgeClass(pkg.status)}`}
+                  >
+                    {RESPONSE_PACKAGE_STATUS_LABELS[pkg.status]}
+                  </span>
+                </Button>
               );
             })}
           </div>
           <div className="flex-1">
             {isLoading ? (
-              <p className="text-sm text-neutral-500">Chargement…</p>
+              <p className="text-sm text-tenderos-slate">Chargement…</p>
             ) : detail && detail.responsePackage.id === selectedId ? (
-              <PackageDetail tenderId={tenderId} detail={detail} onRefresh={() => loadDetail(detail.responsePackage.id)} participants={participants} members={members} actorId={actorId} actorRole={actorRole} />
+              <PackageDetail
+                tenderId={tenderId}
+                detail={detail}
+                onRefresh={() => loadDetail(detail.responsePackage.id)}
+                participants={participants}
+                members={members}
+                actorId={actorId}
+                actorRole={actorRole}
+              />
             ) : (
-              <p className="text-sm text-neutral-500">Sélectionnez un dossier pour afficher son détail.</p>
+              <p className="text-sm text-tenderos-slate">
+                Sélectionnez un dossier pour afficher son détail.
+              </p>
             )}
           </div>
         </div>

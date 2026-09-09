@@ -1,3 +1,5 @@
+import type { AlertTone } from "../components/ui/alert";
+import type { BadgeTone } from "../components/ui/badge";
 /** Mission Sprint 8A.2 — Cockpit Bid Manager : synthèse calculée EXCLUSIVEMENT côté backend
  *  (`GetTenderCockpitUseCase`), jamais reconstruite ici — ce fichier ne porte que les libellés
  *  français associés aux codes stables renvoyés par l'API. */
@@ -54,18 +56,21 @@ export const COCKPIT_MODULE_STATUS_LABELS: Record<string, string> = {
   NOT_APPLICABLE: "Non concerné",
 };
 
-export function cockpitModuleStatusBadgeClass(status: string): string {
+/**
+ * Design System — renvoie desormais un TON semantique et non des classes Tailwind ecrites a la
+ * main. `Badge` porte la correspondance ton -> couleur ; en garder une seconde ici reviendrait a
+ * maintenir deux palettes qui divergeraient au premier ajustement. Valeurs visuelles identiques.
+ */
+export function cockpitModuleStatusTone(status: string): BadgeTone {
   switch (status) {
     case "DONE":
-      return "bg-green-100 text-green-800";
+      return "success";
     case "IN_PROGRESS":
-      return "bg-blue-100 text-blue-800";
+      return "info";
     case "ATTENTION":
-      return "bg-amber-100 text-amber-800";
-    case "NOT_APPLICABLE":
-      return "bg-neutral-100 text-neutral-500";
+      return "warning";
     default:
-      return "bg-neutral-100 text-neutral-600";
+      return "neutral";
   }
 }
 
@@ -102,13 +107,14 @@ export const COCKPIT_ALERT_LABELS: Record<string, string> = {
   VALIDATION_WARNINGS: "La dernière validation contient des avertissements.",
 };
 
-export function cockpitAlertBadgeClass(level: string): string {
+/** Design System — meme raison que ci-dessus : `Alert` porte la palette, pas ce module. */
+export function cockpitAlertTone(level: string): AlertTone {
   switch (level) {
     case "BLOCKER":
-      return "border-red-200 bg-red-50 text-red-800";
+      return "danger";
     case "WARNING":
-      return "border-amber-200 bg-amber-50 text-amber-800";
+      return "warning";
     default:
-      return "border-blue-200 bg-blue-50 text-blue-800";
+      return "info";
   }
 }

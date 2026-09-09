@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Button } from "../../../../../components/ui/button";
+import { Input } from "../../../../../components/ui/input";
 import { archiveTenderAction, type FormActionState } from "../../../actions";
 
 const INITIAL_STATE: FormActionState = {};
@@ -12,45 +14,34 @@ export function ArchiveButton({ tenderId }: { tenderId: string }) {
 
   if (!confirming) {
     return (
-      <button
-        type="button"
-        onClick={() => setConfirming(true)}
-        className="rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
-      >
+      <Button type="button" variant="danger" size="sm" onClick={() => setConfirming(true)}>
         Archiver
-      </button>
+      </Button>
     );
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-2 rounded border border-red-200 p-3">
-      <p className="text-sm font-medium text-red-800">
-        Confirmer l&apos;archivage de cet appel d&apos;offres ? Il ne pourra plus etre modifie normalement.
+    <form
+      action={formAction}
+      className="flex flex-col gap-2 rounded-lg border border-red-200 bg-danger-bg p-3"
+    >
+      <p className="text-sm font-medium text-danger-fg">
+        Confirmer l&apos;archivage de cet appel d&apos;offres ? Il ne pourra plus etre modifie
+        normalement.
       </p>
-      <label htmlFor="reason" className="text-xs text-neutral-600">
-        Motif (facultatif)
-      </label>
-      <input id="reason" name="reason" type="text" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
+      <Input name="reason" type="text" label="Motif (facultatif)" />
       {state.error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {state.error}
         </p>
       ) : null}
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {isPending ? "Archivage..." : "Confirmer l'archivage"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setConfirming(false)}
-          className="rounded px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100"
-        >
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" variant="danger" size="sm" loading={isPending}>
+          Confirmer l&apos;archivage
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)}>
           Annuler
-        </button>
+        </Button>
       </div>
     </form>
   );

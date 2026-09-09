@@ -29,28 +29,47 @@ async function fetchOrNull<T>(path: string): Promise<T | null> {
   }
 }
 
-export default async function AdministrativeStructuredPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AdministrativeStructuredPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id: tenderId } = await params;
 
   try {
-    const [capabilities, consortium, dc1, dc2, dume, subcontractors, engagementAct, signingPowers] = await Promise.all([
-      appApiFetch<AdministrativeDossierCapabilities>(`/api/v1/tenders/${tenderId}/administrative-dossier/capabilities`),
-      fetchOrNull<ConsortiumSummary | null>(`/api/v1/tenders/${tenderId}/administrative-consortium`),
-      fetchOrNull<Dc1DeclarationSummary | null>(`/api/v1/tenders/${tenderId}/administrative-dc1`),
-      fetchOrNull<Dc2DeclarationWithVersions | null>(`/api/v1/tenders/${tenderId}/administrative-dc2`),
-      fetchOrNull<DumeDeclarationWithVersions | null>(`/api/v1/tenders/${tenderId}/administrative-dume`),
-      appApiFetch<SubcontractorDeclarationSummary[]>(`/api/v1/tenders/${tenderId}/administrative-subcontractors`),
-      fetchOrNull<EngagementActSummary | null>(`/api/v1/tenders/${tenderId}/administrative-engagement-act`),
-      appApiFetch<SigningPowerSummary[]>(`/api/v1/tenders/${tenderId}/administrative-signing-powers`),
-    ]);
+    const [capabilities, consortium, dc1, dc2, dume, subcontractors, engagementAct, signingPowers] =
+      await Promise.all([
+        appApiFetch<AdministrativeDossierCapabilities>(
+          `/api/v1/tenders/${tenderId}/administrative-dossier/capabilities`,
+        ),
+        fetchOrNull<ConsortiumSummary | null>(
+          `/api/v1/tenders/${tenderId}/administrative-consortium`,
+        ),
+        fetchOrNull<Dc1DeclarationSummary | null>(`/api/v1/tenders/${tenderId}/administrative-dc1`),
+        fetchOrNull<Dc2DeclarationWithVersions | null>(
+          `/api/v1/tenders/${tenderId}/administrative-dc2`,
+        ),
+        fetchOrNull<DumeDeclarationWithVersions | null>(
+          `/api/v1/tenders/${tenderId}/administrative-dume`,
+        ),
+        appApiFetch<SubcontractorDeclarationSummary[]>(
+          `/api/v1/tenders/${tenderId}/administrative-subcontractors`,
+        ),
+        fetchOrNull<EngagementActSummary | null>(
+          `/api/v1/tenders/${tenderId}/administrative-engagement-act`,
+        ),
+        appApiFetch<SigningPowerSummary[]>(
+          `/api/v1/tenders/${tenderId}/administrative-signing-powers`,
+        ),
+      ]);
 
     return (
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-xl font-semibold">Dossier structuré</h1>
-          <p className="text-sm text-neutral-600">
-            Groupement, DC1, DC2, DUME, sous-traitance, acte d&apos;engagement et pouvoirs de signature — TenderOS assiste la saisie, la
-            vérification finale reste humaine.
+          <p className="text-sm text-tenderos-slate">
+            Groupement, DC1, DC2, DUME, sous-traitance, acte d&apos;engagement et pouvoirs de
+            signature — TenderOS assiste la saisie, la vérification finale reste humaine.
           </p>
         </div>
         <AdministrativeStructuredSection

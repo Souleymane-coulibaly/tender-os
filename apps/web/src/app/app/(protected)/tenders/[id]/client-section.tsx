@@ -1,6 +1,10 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Button } from "../../../../../components/ui/button";
+import { Card } from "../../../../../components/ui/card";
+import { Input } from "../../../../../components/ui/input";
+import { Select } from "../../../../../components/ui/select";
 import { changeTenderClientAction, type FormActionState } from "../../../actions";
 import { canOfferClientChange, type TenderStatus } from "../../../../../lib/tenders-types";
 
@@ -44,68 +48,65 @@ export function ClientSection({
   const offerChange = canChange && canOfferClientChange(status) && otherClients.length > 0;
 
   return (
-    <section className="flex flex-col gap-2 rounded border border-neutral-200 p-4">
-      <h2 className="text-sm font-semibold text-neutral-700">Client</h2>
-      <p className="text-sm text-neutral-900">{currentClientName}</p>
+    <Card title="Client">
+      <div className="flex min-w-0 flex-col gap-2">
+        <p className="text-sm text-tenderos-navy">{currentClientName}</p>
 
-      {offerChange ? (
-        open ? (
-          <form action={formAction} className="mt-2 flex flex-col gap-2 rounded border border-amber-200 bg-amber-50 p-3">
-            <label htmlFor="candidate-clientAccountId" className="text-xs font-medium text-amber-900">
-              Nouveau client
-            </label>
-            <select
-              id="candidate-clientAccountId"
-              name="clientAccountId"
-              required
-              defaultValue=""
-              className="rounded border border-neutral-300 px-2 py-1 text-sm"
+        {offerChange ? (
+          open ? (
+            <form
+              action={formAction}
+              className="mt-2 flex w-full min-w-0 flex-col gap-2 rounded-lg border border-amber-200 bg-warning-bg p-3"
             >
-              <option value="" disabled>
-                Selectionner...
-              </option>
-              {otherClients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
-            <label htmlFor="candidate-reason" className="text-xs text-amber-900">
-              Motif (facultatif)
-            </label>
-            <input id="candidate-reason" name="reason" type="text" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
-            {state.error ? (
-              <p role="alert" className="text-xs text-red-600">
-                {state.error}
-              </p>
-            ) : null}
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={isPending}
-                className="rounded bg-amber-800 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+              <Select
+                name="clientAccountId"
+                label="Nouveau client"
+                required
+                defaultValue=""
+                className="truncate"
               >
-                {isPending ? "Changement..." : "Confirmer le changement"}
-              </button>
-              <button type="button" onClick={() => setOpen(false)} className="rounded px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-100">
-                Annuler
-              </button>
-            </div>
-          </form>
+                <option value="" disabled>
+                  Selectionner...
+                </option>
+                {otherClients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </Select>
+              <Input name="reason" type="text" label="Motif (facultatif)" />
+              {state.error ? (
+                <p role="alert" className="text-xs text-danger-fg">
+                  {state.error}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" variant="primary" size="sm" loading={isPending}>
+                  Confirmer le changement
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                  Annuler
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <Button
+              type="button"
+              variant="link"
+              className="self-start"
+              onClick={() => setOpen(true)}
+            >
+              Changer de client
+            </Button>
+          )
         ) : (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="self-start text-xs font-medium text-neutral-700 underline hover:text-neutral-900"
-          >
-            Changer de client
-          </button>
-        )
-      ) : (
-        <p className="text-xs text-neutral-500">
-          {canChange ? "Le changement de client n'est plus possible une fois la preparation de la reponse commencee." : null}
-        </p>
-      )}
-    </section>
+          <p className="text-xs text-tenderos-slate">
+            {canChange
+              ? "Le changement de client n'est plus possible une fois la preparation de la reponse commencee."
+              : null}
+          </p>
+        )}
+      </div>
+    </Card>
   );
 }

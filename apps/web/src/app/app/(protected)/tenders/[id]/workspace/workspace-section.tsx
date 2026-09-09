@@ -32,10 +32,21 @@ import {
   type TenderCollaborativeRole,
   type TenderParticipant,
 } from "../../../../../../lib/workspace-types";
+import { Button } from "../../../../../../components/ui/button";
+import { Input } from "../../../../../../components/ui/input";
+import { Select } from "../../../../../../components/ui/select";
 
 type Member = { userId: string; email: string; displayName: string };
 
-const ROLES: TenderCollaborativeRole[] = ["TENDER_MANAGER", "ADMINISTRATIVE_RESPONSIBLE", "TECHNICAL_WRITER", "FINANCIAL_RESPONSIBLE", "REVIEWER", "SIGNATORY", "VIEWER"];
+const ROLES: TenderCollaborativeRole[] = [
+  "TENDER_MANAGER",
+  "ADMINISTRATIVE_RESPONSIBLE",
+  "TECHNICAL_WRITER",
+  "FINANCIAL_RESPONSIBLE",
+  "REVIEWER",
+  "SIGNATORY",
+  "VIEWER",
+];
 const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "DONE", "CANCELLED"];
 const PRIORITIES: TaskPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 
@@ -48,30 +59,63 @@ function useMemberNames(members: Member[]) {
   };
 }
 
-function SummaryHeader({ participants, tasks, approvals }: { participants: TenderParticipant[]; tasks: Task[]; approvals: ApprovalRequest[] }) {
+function SummaryHeader({
+  participants,
+  tasks,
+  approvals,
+}: {
+  participants: TenderParticipant[];
+  tasks: Task[];
+  approvals: ApprovalRequest[];
+}) {
   const todo = tasks.filter((t) => t.status === "TODO").length;
   const inProgress = tasks.filter((t) => t.status === "IN_PROGRESS").length;
   const inReview = tasks.filter((t) => t.status === "IN_REVIEW").length;
   const done = tasks.filter((t) => t.status === "DONE").length;
   const now = Date.now();
-  const dueSoon = tasks.filter((t) => t.dueDate && !["DONE", "CANCELLED"].includes(t.status) && new Date(t.dueDate).getTime() - now < 3 * 24 * 60 * 60 * 1000).length;
+  const dueSoon = tasks.filter(
+    (t) =>
+      t.dueDate &&
+      !["DONE", "CANCELLED"].includes(t.status) &&
+      new Date(t.dueDate).getTime() - now < 3 * 24 * 60 * 60 * 1000,
+  ).length;
   const pendingApprovals = approvals.filter((a) => a.status === "PENDING").length;
 
   return (
-    <div className="flex flex-wrap items-center gap-4 rounded border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-700">
-      <span className="font-semibold text-neutral-900">Équipe : {participants.length} membre(s)</span>
+    <div className="flex flex-wrap items-center gap-4 rounded border border-tenderos-navy/10 bg-tenderos-light p-3 text-xs text-tenderos-navy">
+      <span className="font-semibold text-tenderos-navy">
+        Équipe : {participants.length} membre(s)
+      </span>
       <span>Tâches : {tasks.length}</span>
       <span>À faire : {todo}</span>
       <span>En cours : {inProgress}</span>
       <span>En relecture : {inReview}</span>
       <span>Terminées : {done}</span>
-      {dueSoon > 0 ? <span className="font-medium text-amber-700">{dueSoon} échéance(s) proche(s)</span> : null}
-      {pendingApprovals > 0 ? <span className="font-medium text-blue-700">{pendingApprovals} validation(s) en attente</span> : null}
+      {dueSoon > 0 ? (
+        <span className="font-medium text-warning-fg">{dueSoon} échéance(s) proche(s)</span>
+      ) : null}
+      {pendingApprovals > 0 ? (
+        <span className="font-medium text-tenderos-blue">
+          {pendingApprovals} validation(s) en attente
+        </span>
+      ) : null}
     </div>
   );
 }
 
-function ParticipantsPanel({ tenderId, participants, members, canManage, getName }: { tenderId: string; participants: TenderParticipant[]; members: Member[]; canManage: boolean; getName: (id: string | undefined) => string }) {
+function ParticipantsPanel({
+  tenderId,
+  participants,
+  members,
+  canManage,
+  getName,
+}: {
+  tenderId: string;
+  participants: TenderParticipant[];
+  members: Member[];
+  canManage: boolean;
+  getName: (id: string | undefined) => string;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | undefined>();
   const [isPending, setIsPending] = useState(false);
@@ -80,22 +124,27 @@ function ParticipantsPanel({ tenderId, participants, members, canManage, getName
   const candidates = members.filter((m) => !activeUserIds.has(m.userId));
 
   return (
-    <section className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-      <h2 className="text-sm font-semibold text-neutral-700">Équipe</h2>
+    <section className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3">
+      <h2 className="text-sm font-semibold text-tenderos-navy">Équipe</h2>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
       <ul className="flex flex-col gap-1">
         {participants.map((participant) => (
-          <li key={participant.id} className="flex items-center justify-between gap-2 border-b border-neutral-100 py-1.5 text-sm">
+          <li
+            key={participant.id}
+            className="flex items-center justify-between gap-2 border-b border-tenderos-navy/10 py-1.5 text-sm"
+          >
             <div className="flex flex-col">
-              <span className="font-medium text-neutral-900">{getName(participant.userId)}</span>
-              <span className="text-xs text-neutral-500">{TENDER_COLLABORATIVE_ROLE_LABELS[participant.role]}</span>
+              <span className="font-medium text-tenderos-navy">{getName(participant.userId)}</span>
+              <span className="text-xs text-tenderos-slate">
+                {TENDER_COLLABORATIVE_ROLE_LABELS[participant.role]}
+              </span>
             </div>
             {canManage ? (
-              <button
+              <Button
                 type="button"
                 disabled={isPending}
                 onClick={async () => {
@@ -105,14 +154,17 @@ function ParticipantsPanel({ tenderId, participants, members, canManage, getName
                   setError(result.error);
                   if (!result.error) router.refresh();
                 }}
-                className="rounded border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
+                variant="secondary"
+                size="sm"
               >
                 Retirer
-              </button>
+              </Button>
             ) : null}
           </li>
         ))}
-        {participants.length === 0 ? <p className="text-sm text-neutral-500">Aucun participant pour l&apos;instant.</p> : null}
+        {participants.length === 0 ? (
+          <p className="text-sm text-tenderos-slate">Aucun participant pour l&apos;instant.</p>
+        ) : null}
       </ul>
       {canManage && candidates.length > 0 ? (
         <form
@@ -128,30 +180,42 @@ function ParticipantsPanel({ tenderId, participants, members, canManage, getName
           }}
           className="flex flex-wrap items-end gap-2"
         >
-          <select name="userId" required className="rounded border border-neutral-300 px-2 py-1 text-xs">
+          <Select name="userId" required>
             {candidates.map((member) => (
               <option key={member.userId} value={member.userId}>
                 {member.displayName} ({member.email})
               </option>
             ))}
-          </select>
-          <select name="role" defaultValue="TECHNICAL_WRITER" className="rounded border border-neutral-300 px-2 py-1 text-xs">
+          </Select>
+          <Select name="role" defaultValue="TECHNICAL_WRITER">
             {ROLES.map((role) => (
               <option key={role} value={role}>
                 {TENDER_COLLABORATIVE_ROLE_LABELS[role]}
               </option>
             ))}
-          </select>
-          <button type="submit" disabled={isPending} className="rounded border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50">
+          </Select>
+          <Button type="submit" disabled={isPending} variant="secondary" size="sm">
             Ajouter
-          </button>
+          </Button>
         </form>
       ) : null}
     </section>
   );
 }
 
-function TaskRow({ tenderId, task, participants, canManage, getName }: { tenderId: string; task: Task; participants: TenderParticipant[]; canManage: boolean; getName: (id: string | undefined) => string }) {
+function TaskRow({
+  tenderId,
+  task,
+  participants,
+  canManage,
+  getName,
+}: {
+  tenderId: string;
+  task: Task;
+  participants: TenderParticipant[];
+  canManage: boolean;
+  getName: (id: string | undefined) => string;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | undefined>();
   const [isPending, setIsPending] = useState(false);
@@ -162,18 +226,24 @@ function TaskRow({ tenderId, task, participants, canManage, getName }: { tenderI
   const [comments, setComments] = useState<Comment[] | undefined>();
 
   return (
-    <li className="flex flex-col gap-1.5 border-b border-neutral-100 py-2 text-sm">
+    <li className="flex flex-col gap-1.5 border-b border-tenderos-navy/10 py-2 text-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col gap-0.5">
-          <span className="font-medium text-neutral-900">{task.title}</span>
-          <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600">
-            <span className="rounded bg-neutral-100 px-1.5 py-0.5">{task.priority}</span>
+          <span className="font-medium text-tenderos-navy">{task.title}</span>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-tenderos-slate">
+            <span className="rounded bg-tenderos-light px-1.5 py-0.5">{task.priority}</span>
             <span>Responsable : {getName(task.assigneeId)}</span>
-            {task.dueDate ? <span>Échéance : {new Date(task.dueDate).toLocaleDateString("fr-FR")}</span> : null}
-            {task.checklistItemId ? <span className="rounded bg-purple-100 px-1.5 py-0.5 text-purple-800">Depuis la checklist</span> : null}
+            {task.dueDate ? (
+              <span>Échéance : {new Date(task.dueDate).toLocaleDateString("fr-FR")}</span>
+            ) : null}
+            {task.checklistItemId ? (
+              <span className="rounded bg-purple-100 px-1.5 py-0.5 text-purple-800">
+                Depuis la checklist
+              </span>
+            ) : null}
           </div>
         </div>
-        <select
+        <Select
           aria-label="Statut de la tâche"
           value={status}
           disabled={isPending || !canManage}
@@ -186,34 +256,36 @@ function TaskRow({ tenderId, task, participants, canManage, getName }: { tenderI
             setError(result.error);
             if (!result.error) router.refresh();
           }}
-          className="rounded border border-neutral-300 px-2 py-1 text-xs"
         >
           {STATUSES.map((value) => (
             <option key={value} value={value}>
               {TASK_STATUS_LABELS[value]}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
       {canManage ? (
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <Select
             aria-label="Responsable de la tâche"
             defaultValue={task.assigneeId ?? ""}
             disabled={isPending}
             onChange={async (event) => {
               setIsPending(true);
-              const result = await assignTaskAction(tenderId, task.id, event.target.value || undefined);
+              const result = await assignTaskAction(
+                tenderId,
+                task.id,
+                event.target.value || undefined,
+              );
               setIsPending(false);
               setError(result.error);
               if (!result.error) router.refresh();
             }}
-            className="rounded border border-neutral-300 px-2 py-1 text-xs"
           >
             <option value="">Non assignée</option>
             {participants.map((participant) => (
@@ -221,8 +293,8 @@ function TaskRow({ tenderId, task, participants, canManage, getName }: { tenderI
                 {getName(participant.userId)}
               </option>
             ))}
-          </select>
-          <button
+          </Select>
+          <Button
             type="button"
             onClick={async () => {
               const next = !showComment;
@@ -231,28 +303,36 @@ function TaskRow({ tenderId, task, participants, canManage, getName }: { tenderI
                 setComments(await fetchComments(tenderId, "TASK", task.id));
               }
             }}
-            className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100"
+            variant="secondary"
+            size="sm"
           >
             Commenter
-          </button>
+          </Button>
         </div>
       ) : null}
       {showComment ? (
-        <div className="flex flex-col gap-1.5 rounded border border-neutral-200 bg-neutral-50 p-2">
+        <div className="flex flex-col gap-1.5 rounded border border-tenderos-navy/10 bg-tenderos-light p-2">
           {comments && comments.length > 0 ? (
             <ul className="flex flex-col gap-1">
               {comments.map((comment) => (
-                <li key={comment.id} className="text-xs text-neutral-700">
-                  <span className="font-medium text-neutral-900">{getName(comment.authorId)}</span> — {comment.body}
+                <li key={comment.id} className="text-xs text-tenderos-navy">
+                  <span className="font-medium text-tenderos-navy">
+                    {getName(comment.authorId)}
+                  </span>{" "}
+                  — {comment.body}
                   {comment.mentionedUserIds.length > 0 ? (
-                    <span className="ml-1 text-purple-700">{comment.mentionedUserIds.map((id) => `@${getName(id)}`).join(" ")}</span>
+                    <span className="ml-1 text-purple-700">
+                      {comment.mentionedUserIds.map((id) => `@${getName(id)}`).join(" ")}
+                    </span>
                   ) : null}
-                  <span className="ml-1 text-neutral-400">{new Date(comment.createdAt).toLocaleString("fr-FR")}</span>
+                  <span className="ml-1 text-tenderos-slate">
+                    {new Date(comment.createdAt).toLocaleString("fr-FR")}
+                  </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-neutral-500">Aucun commentaire pour l&apos;instant.</p>
+            <p className="text-xs text-tenderos-slate">Aucun commentaire pour l&apos;instant.</p>
           )}
           <form
             className="flex flex-wrap items-center gap-2"
@@ -274,20 +354,19 @@ function TaskRow({ tenderId, task, participants, canManage, getName }: { tenderI
               }
             }}
           >
-            <input
+            <Input
               value={commentBody}
               onChange={(event) => setCommentBody(event.target.value)}
               placeholder="Nouveau commentaire..."
-              className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
+              className="flex-1"
             />
             {/* Mentionne uniquement un participant réel de ce Tender — jamais un texte libre "@Jean"
                 (mission §22/§23). Le backend revalide et refuse la mention ENTIÈRE du commentaire si
                 la personne n'est plus autorisée entre-temps. */}
-            <select
+            <Select
               aria-label="Mentionner un participant"
               value={mentionedUserId}
               onChange={(event) => setMentionedUserId(event.target.value)}
-              className="rounded border border-neutral-300 px-2 py-1 text-xs"
             >
               <option value="">Mentionner (optionnel)</option>
               {participants.map((participant) => (
@@ -295,10 +374,15 @@ function TaskRow({ tenderId, task, participants, canManage, getName }: { tenderI
                   @{getName(participant.userId)}
                 </option>
               ))}
-            </select>
-            <button type="submit" disabled={isPending || commentBody.trim().length === 0} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50">
+            </Select>
+            <Button
+              type="submit"
+              disabled={isPending || commentBody.trim().length === 0}
+              variant="secondary"
+              size="sm"
+            >
               Envoyer
-            </button>
+            </Button>
           </form>
         </div>
       ) : null}
@@ -306,7 +390,19 @@ function TaskRow({ tenderId, task, participants, canManage, getName }: { tenderI
   );
 }
 
-function TasksPanel({ tenderId, tasks, participants, canManage, getName }: { tenderId: string; tasks: Task[]; participants: TenderParticipant[]; canManage: boolean; getName: (id: string | undefined) => string }) {
+function TasksPanel({
+  tenderId,
+  tasks,
+  participants,
+  canManage,
+  getName,
+}: {
+  tenderId: string;
+  tasks: Task[];
+  participants: TenderParticipant[];
+  canManage: boolean;
+  getName: (id: string | undefined) => string;
+}) {
   const [error, setError] = useState<string | undefined>();
   const [isPending, setIsPending] = useState(false);
   const [filter, setFilter] = useState<"ALL" | TaskStatus>("ALL");
@@ -314,32 +410,42 @@ function TasksPanel({ tenderId, tasks, participants, canManage, getName }: { ten
   const filteredTasks = filter === "ALL" ? tasks : tasks.filter((t) => t.status === filter);
 
   return (
-    <section className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
+    <section className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-neutral-700">Tâches</h2>
-        <label className="flex items-center gap-1 text-xs text-neutral-600">
+        <h2 className="text-sm font-semibold text-tenderos-navy">Tâches</h2>
+        <label className="flex items-center gap-1 text-xs text-tenderos-slate">
           Filtrer
-          <select value={filter} onChange={(event) => setFilter(event.target.value as "ALL" | TaskStatus)} className="rounded border border-neutral-300 px-1 py-0.5">
+          <Select
+            value={filter}
+            onChange={(event) => setFilter(event.target.value as "ALL" | TaskStatus)}
+          >
             <option value="ALL">Toutes</option>
             {STATUSES.map((status) => (
               <option key={status} value={status}>
                 {TASK_STATUS_LABELS[status]}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
       {filteredTasks.length === 0 ? (
-        <p className="text-sm text-neutral-500">Aucune tâche.</p>
+        <p className="text-sm text-tenderos-slate">Aucune tâche.</p>
       ) : (
         <ul>
           {filteredTasks.map((task) => (
-            <TaskRow key={task.id} tenderId={tenderId} task={task} participants={participants} canManage={canManage} getName={getName} />
+            <TaskRow
+              key={task.id}
+              tenderId={tenderId}
+              task={task}
+              participants={participants}
+              canManage={canManage}
+              getName={getName}
+            />
           ))}
         </ul>
       )}
@@ -359,25 +465,25 @@ function TasksPanel({ tenderId, tasks, participants, canManage, getName }: { ten
           }}
           className="flex flex-wrap items-end gap-2"
         >
-          <input name="title" required placeholder="Nouvelle tâche..." className="rounded border border-neutral-300 px-2 py-1 text-sm" />
-          <select name="priority" defaultValue="MEDIUM" className="rounded border border-neutral-300 px-2 py-1 text-xs">
+          <Input name="title" required placeholder="Nouvelle tâche..." />
+          <Select name="priority" defaultValue="MEDIUM">
             {PRIORITIES.map((priority) => (
               <option key={priority} value={priority}>
                 {priority}
               </option>
             ))}
-          </select>
-          <select name="assigneeId" defaultValue="" className="rounded border border-neutral-300 px-2 py-1 text-xs">
+          </Select>
+          <Select name="assigneeId" defaultValue="">
             <option value="">Non assignée</option>
             {participants.map((participant) => (
               <option key={participant.userId} value={participant.userId}>
                 {getName(participant.userId)}
               </option>
             ))}
-          </select>
-          <button type="submit" disabled={isPending} className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50">
+          </Select>
+          <Button type="submit" disabled={isPending} variant="secondary" size="sm">
             Ajouter
-          </button>
+          </Button>
         </form>
       ) : null}
     </section>
@@ -387,15 +493,15 @@ function TasksPanel({ tenderId, tasks, participants, canManage, getName }: { ten
 function approvalStatusBadgeClass(status: ApprovalRequest["status"]): string {
   switch (status) {
     case "APPROVED":
-      return "bg-green-100 text-green-800";
+      return "bg-success-bg text-success-fg";
     case "REJECTED":
-      return "bg-red-100 text-red-800";
+      return "bg-danger-bg text-danger-fg";
     case "CHANGES_REQUESTED":
-      return "bg-amber-100 text-amber-800";
+      return "bg-warning-bg text-warning-fg";
     case "CANCELLED":
-      return "bg-neutral-200 text-neutral-500";
+      return "bg-tenderos-light text-tenderos-slate";
     default:
-      return "bg-blue-100 text-blue-800";
+      return "bg-info-bg text-info-fg";
   }
 }
 
@@ -427,31 +533,43 @@ function ApprovalsPanel({
   const [rejectReason, setRejectReason] = useState("");
 
   return (
-    <section className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-      <h2 className="text-sm font-semibold text-neutral-700">Validations</h2>
+    <section className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3">
+      <h2 className="text-sm font-semibold text-tenderos-navy">Validations</h2>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
       {approvals.length === 0 ? (
-        <p className="text-sm text-neutral-500">Aucune demande de validation.</p>
+        <p className="text-sm text-tenderos-slate">Aucune demande de validation.</p>
       ) : (
         <ul>
           {approvals.map((approval) => (
-            <li key={approval.id} className="flex flex-col gap-1 border-b border-neutral-100 py-2 text-sm">
+            <li
+              key={approval.id}
+              className="flex flex-col gap-1 border-b border-tenderos-navy/10 py-2 text-sm"
+            >
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-700">{APPROVAL_ENTITY_TYPE_LABELS[approval.entityType]}</span>
-                <span className="text-xs text-neutral-600">
-                  Demandé par {getName(approval.requestedBy)} — Approbateur : {getName(approval.reviewerId)}
+                <span className="rounded bg-tenderos-light px-1.5 py-0.5 text-xs text-tenderos-navy">
+                  {APPROVAL_ENTITY_TYPE_LABELS[approval.entityType]}
                 </span>
-                <span className={`rounded px-1.5 py-0.5 text-xs ${approvalStatusBadgeClass(approval.status)}`}>{APPROVAL_STATUS_LABELS[approval.status]}</span>
+                <span className="text-xs text-tenderos-slate">
+                  Demandé par {getName(approval.requestedBy)} — Approbateur :{" "}
+                  {getName(approval.reviewerId)}
+                </span>
+                <span
+                  className={`rounded px-1.5 py-0.5 text-xs ${approvalStatusBadgeClass(approval.status)}`}
+                >
+                  {APPROVAL_STATUS_LABELS[approval.status]}
+                </span>
               </div>
-              {approval.comment ? <p className="text-xs italic text-neutral-500">{approval.comment}</p> : null}
+              {approval.comment ? (
+                <p className="text-xs italic text-tenderos-slate">{approval.comment}</p>
+              ) : null}
               {/* Jamais présenté comme "signé" — validation interne uniquement (mission §47). */}
               {approval.status === "PENDING" && canValidate && approval.reviewerId === actorId ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
+                  <Button
                     type="button"
                     disabled={isPending}
                     onClick={async () => {
@@ -461,11 +579,12 @@ function ApprovalsPanel({
                       setError(result.error);
                       if (!result.error) router.refresh();
                     }}
-                    className="rounded border border-green-300 bg-green-50 px-2 py-1 text-xs text-green-800 hover:bg-green-100 disabled:opacity-50"
+                    variant="primary"
+                    size="sm"
                   >
                     Valider
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
                     disabled={isPending}
                     onClick={async () => {
@@ -475,25 +594,30 @@ function ApprovalsPanel({
                       setError(result.error);
                       if (!result.error) router.refresh();
                     }}
-                    className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                    variant="ghost"
+                    size="sm"
                   >
                     Demander des modifications
-                  </button>
+                  </Button>
                   {rejectingId === approval.id ? (
                     <>
-                      <input
+                      <Input
                         aria-label="Raison du rejet"
                         value={rejectReason}
                         onChange={(event) => setRejectReason(event.target.value)}
                         placeholder="Raison du rejet (obligatoire)"
-                        className="rounded border border-red-300 px-2 py-1 text-xs"
+                        className="border-red-300"
                       />
-                      <button
+                      <Button
                         type="button"
                         disabled={isPending || rejectReason.trim().length === 0}
                         onClick={async () => {
                           setIsPending(true);
-                          const result = await rejectApprovalAction(tenderId, approval.id, rejectReason);
+                          const result = await rejectApprovalAction(
+                            tenderId,
+                            approval.id,
+                            rejectReason,
+                          );
                           setIsPending(false);
                           setError(result.error);
                           if (!result.error) {
@@ -502,20 +626,22 @@ function ApprovalsPanel({
                             router.refresh();
                           }
                         }}
-                        className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-800 hover:bg-red-100 disabled:opacity-50"
+                        variant="danger"
+                        size="sm"
                       >
                         Confirmer le rejet
-                      </button>
+                      </Button>
                     </>
                   ) : (
-                    <button
+                    <Button
                       type="button"
                       disabled={isPending}
                       onClick={() => setRejectingId(approval.id)}
-                      className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-800 hover:bg-red-100 disabled:opacity-50"
+                      variant="danger"
+                      size="sm"
                     >
                       Rejeter
-                    </button>
+                    </Button>
                   )}
                 </div>
               ) : null}
@@ -524,7 +650,15 @@ function ApprovalsPanel({
         </ul>
       )}
       {hasApprovalWorkflowsEntitlement ? (
-        <RequestApprovalForm tenderId={tenderId} tasks={tasks} participants={participants} getName={getName} onError={setError} setPending={setIsPending} isPending={isPending} />
+        <RequestApprovalForm
+          tenderId={tenderId}
+          tasks={tasks}
+          participants={participants}
+          getName={getName}
+          onError={setError}
+          setPending={setIsPending}
+          isPending={isPending}
+        />
       ) : (
         <EntitlementUpgradeNotice featureLabel="Les workflows de validation" />
       )}
@@ -550,7 +684,11 @@ function RequestApprovalForm({
   isPending: boolean;
 }) {
   if (tasks.length === 0) {
-    return <p className="text-xs text-neutral-500">Aucune tâche à soumettre à validation pour l&apos;instant.</p>;
+    return (
+      <p className="text-xs text-tenderos-slate">
+        Aucune tâche à soumettre à validation pour l&apos;instant.
+      </p>
+    );
   }
 
   return (
@@ -570,39 +708,51 @@ function RequestApprovalForm({
     >
       {/* Sélection par titre, jamais un identifiant technique saisi à la main — cohérent avec le
           reste du Workspace (mission "toujours privilégier la simplicité"). */}
-      <select name="entityId" required className="rounded border border-neutral-300 px-2 py-1 text-xs">
+      <Select name="entityId" required>
         {tasks.map((task) => (
           <option key={task.id} value={task.id}>
             {task.title}
           </option>
         ))}
-      </select>
-      <select name="reviewerId" required className="rounded border border-neutral-300 px-2 py-1 text-xs">
+      </Select>
+      <Select name="reviewerId" required>
         {participants.map((participant) => (
           <option key={participant.userId} value={participant.userId}>
             {getName(participant.userId)}
           </option>
         ))}
-      </select>
-      <button type="submit" disabled={isPending} className="rounded border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50">
+      </Select>
+      <Button type="submit" disabled={isPending} variant="secondary" size="sm">
         Demander une validation
-      </button>
+      </Button>
     </form>
   );
 }
 
-function ActivityPanel({ activity, getName }: { activity: TenderActivityPage; getName: (id: string | undefined) => string }) {
+function ActivityPanel({
+  activity,
+  getName,
+}: {
+  activity: TenderActivityPage;
+  getName: (id: string | undefined) => string;
+}) {
   return (
-    <section className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-      <h2 className="text-sm font-semibold text-neutral-700">Activité récente</h2>
+    <section className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3">
+      <h2 className="text-sm font-semibold text-tenderos-navy">Activité récente</h2>
       {activity.items.length === 0 ? (
-        <p className="text-sm text-neutral-500">Aucune activité pour l&apos;instant.</p>
+        <p className="text-sm text-tenderos-slate">Aucune activité pour l&apos;instant.</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {activity.items.map((item) => (
-            <li key={item.id} className="border-b border-neutral-100 py-1.5 text-xs text-neutral-700">
-              <span className="font-medium text-neutral-900">{getName(item.actorId)}</span> — {item.summary}{" "}
-              <span className="text-neutral-400">{new Date(item.createdAt).toLocaleString("fr-FR")}</span>
+            <li
+              key={item.id}
+              className="border-b border-tenderos-navy/10 py-1.5 text-xs text-tenderos-navy"
+            >
+              <span className="font-medium text-tenderos-navy">{getName(item.actorId)}</span> —{" "}
+              {item.summary}{" "}
+              <span className="text-tenderos-slate">
+                {new Date(item.createdAt).toLocaleString("fr-FR")}
+              </span>
             </li>
           ))}
         </ul>
@@ -640,9 +790,19 @@ export function WorkspaceSection({
 
   return (
     <div className="flex flex-col gap-4">
-      <SummaryHeader participants={initialParticipants} tasks={initialTasks} approvals={initialApprovals} />
+      <SummaryHeader
+        participants={initialParticipants}
+        tasks={initialTasks}
+        approvals={initialApprovals}
+      />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <ParticipantsPanel tenderId={tenderId} participants={initialParticipants} members={members} canManage={canManage} getName={getName} />
+        <ParticipantsPanel
+          tenderId={tenderId}
+          participants={initialParticipants}
+          members={members}
+          canManage={canManage}
+          getName={getName}
+        />
         <ApprovalsPanel
           tenderId={tenderId}
           approvals={initialApprovals}
@@ -654,7 +814,13 @@ export function WorkspaceSection({
           getName={getName}
         />
       </div>
-      <TasksPanel tenderId={tenderId} tasks={initialTasks} participants={initialParticipants} canManage={canManage} getName={getName} />
+      <TasksPanel
+        tenderId={tenderId}
+        tasks={initialTasks}
+        participants={initialParticipants}
+        canManage={canManage}
+        getName={getName}
+      />
       <ActivityPanel activity={initialActivity} getName={getName} />
     </div>
   );

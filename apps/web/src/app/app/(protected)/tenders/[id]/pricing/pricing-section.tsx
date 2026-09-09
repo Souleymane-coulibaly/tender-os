@@ -18,6 +18,8 @@ import {
   type TenderCostSummary,
 } from "../../../../../../lib/pricing-types";
 import { EstimateComparisonPanel } from "./estimate-comparison-panel";
+import { Button } from "../../../../../../components/ui/button";
+import { Input } from "../../../../../../components/ui/input";
 
 function canManagePricing(actorRole: string | undefined): boolean {
   // Vérification UI uniquement, jamais l'autorité — le backend revalide systématiquement via
@@ -26,22 +28,32 @@ function canManagePricing(actorRole: string | undefined): boolean {
   return actorRole !== "READ_ONLY" && actorRole !== undefined;
 }
 
-function CostAggregateCard({ title, aggregate }: { title: string; aggregate: CostAggregateSummary }) {
+function CostAggregateCard({
+  title,
+  aggregate,
+}: {
+  title: string;
+  aggregate: CostAggregateSummary;
+}) {
   const currencies = Object.entries(aggregate.totalsByCurrency);
   return (
-    <div className="flex flex-col gap-1 rounded border border-neutral-200 p-3">
-      <span className="text-xs font-medium text-neutral-500">{title}</span>
+    <div className="flex flex-col gap-1 rounded border border-tenderos-navy/10 p-3">
+      <span className="text-xs font-medium text-tenderos-slate">{title}</span>
       {currencies.length === 0 ? (
-        <span className="text-sm text-neutral-500">Coût non disponible</span>
+        <span className="text-sm text-tenderos-slate">Coût non disponible</span>
       ) : (
         currencies.map(([currency, amount]) => (
-          <span key={currency} className="text-lg font-semibold text-neutral-900">
+          <span key={currency} className="text-lg font-semibold text-tenderos-navy">
             {amount} {currency}
           </span>
         ))
       )}
-      {aggregate.mixedCurrencies ? <p className="text-xs text-amber-700">Plusieurs devises détectées — totaux affichés séparément.</p> : null}
-      <div className="flex gap-3 text-xs text-neutral-500">
+      {aggregate.mixedCurrencies ? (
+        <p className="text-xs text-warning-fg">
+          Plusieurs devises détectées — totaux affichés séparément.
+        </p>
+      ) : null}
+      <div className="flex gap-3 text-xs text-tenderos-slate">
         <span>{aggregate.calculatedCount} réel(s)</span>
         <span>{aggregate.partialCount} partiel(s)</span>
         <span>{aggregate.unknownCount} inconnu(s)</span>
@@ -50,7 +62,15 @@ function CostAggregateCard({ title, aggregate }: { title: string; aggregate: Cos
   );
 }
 
-export function PricingSection({ tenderId, initialSummary, actorRole }: { tenderId: string; initialSummary: TenderCostSummary; actorRole: string | undefined }) {
+export function PricingSection({
+  tenderId,
+  initialSummary,
+  actorRole,
+}: {
+  tenderId: string;
+  initialSummary: TenderCostSummary;
+  actorRole: string | undefined;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | undefined>();
   const [isPending, setIsPending] = useState(false);
@@ -78,9 +98,15 @@ export function PricingSection({ tenderId, initialSummary, actorRole }: { tender
       hourlyRate: hourlyRate || undefined,
       headcount: headcount ? Number(headcount) : undefined,
       additionalFeesAmount: additionalFeesAmount || undefined,
-      estimatedGenerationsCount: estimatedGenerationsCount ? Number(estimatedGenerationsCount) : undefined,
-      estimatedInputTokensPerGeneration: estimatedInputTokensPerGeneration ? Number(estimatedInputTokensPerGeneration) : undefined,
-      estimatedOutputTokensPerGeneration: estimatedOutputTokensPerGeneration ? Number(estimatedOutputTokensPerGeneration) : undefined,
+      estimatedGenerationsCount: estimatedGenerationsCount
+        ? Number(estimatedGenerationsCount)
+        : undefined,
+      estimatedInputTokensPerGeneration: estimatedInputTokensPerGeneration
+        ? Number(estimatedInputTokensPerGeneration)
+        : undefined,
+      estimatedOutputTokensPerGeneration: estimatedOutputTokensPerGeneration
+        ? Number(estimatedOutputTokensPerGeneration)
+        : undefined,
     };
   }
 
@@ -96,9 +122,15 @@ export function PricingSection({ tenderId, initialSummary, actorRole }: { tender
     setPreviewError(undefined);
     const result = await previewGenerationCostAction(tenderId, {
       taskType,
-      ...(estimatedGenerationsCount ? { estimatedGenerationsCount: Number(estimatedGenerationsCount) } : {}),
-      ...(estimatedInputTokensPerGeneration ? { estimatedInputTokensPerGeneration: Number(estimatedInputTokensPerGeneration) } : {}),
-      ...(estimatedOutputTokensPerGeneration ? { estimatedOutputTokensPerGeneration: Number(estimatedOutputTokensPerGeneration) } : {}),
+      ...(estimatedGenerationsCount
+        ? { estimatedGenerationsCount: Number(estimatedGenerationsCount) }
+        : {}),
+      ...(estimatedInputTokensPerGeneration
+        ? { estimatedInputTokensPerGeneration: Number(estimatedInputTokensPerGeneration) }
+        : {}),
+      ...(estimatedOutputTokensPerGeneration
+        ? { estimatedOutputTokensPerGeneration: Number(estimatedOutputTokensPerGeneration) }
+        : {}),
     });
     setIsPreviewing(false);
     if (result.error) setPreviewError(result.error);
@@ -108,7 +140,11 @@ export function PricingSection({ tenderId, initialSummary, actorRole }: { tender
   async function handleCreate() {
     setIsPending(true);
     setError(undefined);
-    const result = await createPricingEstimateAction(tenderId, taskType || undefined, buildAssumptions());
+    const result = await createPricingEstimateAction(
+      tenderId,
+      taskType || undefined,
+      buildAssumptions(),
+    );
     setIsPending(false);
     if (result.error) setError(result.error);
     else {
@@ -121,7 +157,13 @@ export function PricingSection({ tenderId, initialSummary, actorRole }: { tender
     if (!estimate) return;
     setIsPending(true);
     setError(undefined);
-    const result = await recalculatePricingEstimateAction(tenderId, estimate.id, undefined, buildAssumptions(), recalcReason);
+    const result = await recalculatePricingEstimateAction(
+      tenderId,
+      estimate.id,
+      undefined,
+      buildAssumptions(),
+      recalcReason,
+    );
     setIsPending(false);
     if (result.error) setError(result.error);
     else {
@@ -145,182 +187,267 @@ export function PricingSection({ tenderId, initialSummary, actorRole }: { tender
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <CostAggregateCard title="Coût IA réel (Tender)" aggregate={initialSummary.technicalCost} />
         {Object.entries(initialSummary.byTaskType).map(([taskType, aggregate]) => (
-          <CostAggregateCard key={taskType} title={`Coût IA réel — ${taskType}`} aggregate={aggregate} />
+          <CostAggregateCard
+            key={taskType}
+            title={`Coût IA réel — ${taskType}`}
+            aggregate={aggregate}
+          />
         ))}
       </div>
 
-      <p role="note" className="rounded border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
+      <p
+        role="note"
+        className="rounded border border-tenderos-navy/10 bg-tenderos-light p-3 text-xs text-tenderos-slate"
+      >
         {ESTIMATE_DISCLAIMER_TEXT}
       </p>
 
       {estimate ? (
-        <div className="flex flex-col gap-3 rounded border border-neutral-200 p-4">
+        <div className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-neutral-900">Estimation active (v{estimate.currentVersionNumber})</h2>
-            <span className={`rounded px-2 py-0.5 text-xs font-medium ${pricingStatusBadgeClass(estimate.status)}`}>
+            <h2 className="text-sm font-semibold text-tenderos-navy">
+              Estimation active (v{estimate.currentVersionNumber})
+            </h2>
+            <span
+              className={`rounded px-2 py-0.5 text-xs font-medium ${pricingStatusBadgeClass(estimate.status)}`}
+            >
               {PRICING_STATUS_LABELS[estimate.status] ?? estimate.status}
             </span>
           </div>
-          <p className="text-2xl font-semibold text-neutral-900">
+          <p className="text-2xl font-semibold text-tenderos-navy">
             {estimate.currentVersion.amount} {estimate.currentVersion.currency}
-            <span className="ml-2 text-xs font-normal text-neutral-500">Prévision indicative</span>
+            <span className="ml-2 text-xs font-normal text-tenderos-slate">
+              Prévision indicative
+            </span>
           </p>
           <table className="w-full text-sm">
             <tbody>
               {estimate.currentVersion.breakdown.map((line) => (
-                <tr key={line.type} className="border-t border-neutral-100">
-                  <td className="py-1 text-neutral-700">{line.label}</td>
-                  <td className="py-1 text-right text-neutral-900">
+                <tr key={line.type} className="border-t border-tenderos-navy/10">
+                  <td className="py-1 text-tenderos-navy">{line.label}</td>
+                  <td className="py-1 text-right text-tenderos-navy">
                     {line.amount} {line.currency}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="text-xs text-neutral-500">{estimate.currentVersion.disclaimerText}</p>
+          <p className="text-xs text-tenderos-slate">{estimate.currentVersion.disclaimerText}</p>
 
           <EstimateComparisonPanel estimateId={estimate.id} />
 
           {canManage && estimate.status !== "ARCHIVED" ? (
             <div className="flex flex-wrap gap-2">
               {!isRecalculating ? (
-                <button type="button" onClick={() => setIsRecalculating(true)} className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700">
+                <Button
+                  type="button"
+                  onClick={() => setIsRecalculating(true)}
+                  variant="secondary"
+                  size="sm"
+                >
                   Recalculer
-                </button>
+                </Button>
               ) : null}
-              <button
+              <Button
                 type="button"
                 disabled={isPending}
                 onClick={handleArchive}
-                className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700 disabled:opacity-50"
+                variant="danger"
+                size="sm"
               >
                 Archiver
-              </button>
+              </Button>
             </div>
           ) : null}
 
           {isRecalculating ? (
-            <div className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-              <label htmlFor="recalc-reason" className="text-sm font-medium text-neutral-700">
+            <div className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3">
+              <label htmlFor="recalc-reason" className="text-sm font-medium text-tenderos-navy">
                 Raison du recalcul *
               </label>
-              <input id="recalc-reason" value={recalcReason} onChange={(e) => setRecalcReason(e.target.value)} className="rounded border border-neutral-300 px-3 py-2 text-sm" />
+              <Input
+                id="recalc-reason"
+                value={recalcReason}
+                onChange={(e) => setRecalcReason(e.target.value)}
+              />
               <div className="flex gap-2">
-                <button type="button" disabled={isPending} onClick={handleRecalculate} className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+                <Button
+                  type="button"
+                  disabled={isPending}
+                  onClick={handleRecalculate}
+                  variant="primary"
+                  size="sm"
+                >
                   Confirmer le recalcul
-                </button>
-                <button type="button" onClick={() => setIsRecalculating(false)} className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700">
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setIsRecalculating(false)}
+                  variant="secondary"
+                  size="sm"
+                >
                   Annuler
-                </button>
+                </Button>
               </div>
             </div>
           ) : null}
         </div>
       ) : canManage ? (
-        <div className="flex flex-col gap-3 rounded border border-neutral-200 p-4">
-          <h2 className="text-sm font-semibold text-neutral-900">Créer une estimation prévisionnelle</h2>
+        <div className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
+          <h2 className="text-sm font-semibold text-tenderos-navy">
+            Créer une estimation prévisionnelle
+          </h2>
           {!isCreating ? (
-            <button type="button" onClick={() => setIsCreating(true)} className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white">
+            <Button
+              type="button"
+              onClick={() => setIsCreating(true)}
+              className="self-start"
+              variant="primary"
+              size="sm"
+            >
               Nouvelle estimation
-            </button>
+            </Button>
           ) : (
             <div className="flex flex-col gap-2">
-              <label htmlFor="task-type" className="text-sm font-medium text-neutral-700">
+              <label htmlFor="task-type" className="text-sm font-medium text-tenderos-navy">
                 Type de tâche IA (pour le coût IA prévisionnel)
               </label>
-              <input id="task-type" value={taskType} onChange={(e) => setTaskType(e.target.value)} placeholder="EXECUTIVE_SUMMARY" className="rounded border border-neutral-300 px-3 py-2 text-sm" />
-              <label htmlFor="est-generations" className="text-sm font-medium text-neutral-700">
+              <Input
+                id="task-type"
+                value={taskType}
+                onChange={(e) => setTaskType(e.target.value)}
+                placeholder="EXECUTIVE_SUMMARY"
+              />
+              <label htmlFor="est-generations" className="text-sm font-medium text-tenderos-navy">
                 Nombre de générations estimées
               </label>
-              <input
+              <Input
                 id="est-generations"
                 type="number"
                 min="0"
                 value={estimatedGenerationsCount}
                 onChange={(e) => setEstimatedGenerationsCount(e.target.value)}
-                className="rounded border border-neutral-300 px-3 py-2 text-sm"
               />
-              <label htmlFor="est-input-tokens" className="text-sm font-medium text-neutral-700">
+              <label htmlFor="est-input-tokens" className="text-sm font-medium text-tenderos-navy">
                 Tokens d&apos;entrée estimés (par génération)
               </label>
-              <input
+              <Input
                 id="est-input-tokens"
                 type="number"
                 min="0"
                 value={estimatedInputTokensPerGeneration}
                 onChange={(e) => setEstimatedInputTokensPerGeneration(e.target.value)}
-                className="rounded border border-neutral-300 px-3 py-2 text-sm"
               />
-              <label htmlFor="est-output-tokens" className="text-sm font-medium text-neutral-700">
+              <label htmlFor="est-output-tokens" className="text-sm font-medium text-tenderos-navy">
                 Tokens de sortie estimés (par génération)
               </label>
-              <input
+              <Input
                 id="est-output-tokens"
                 type="number"
                 min="0"
                 value={estimatedOutputTokensPerGeneration}
                 onChange={(e) => setEstimatedOutputTokensPerGeneration(e.target.value)}
-                className="rounded border border-neutral-300 px-3 py-2 text-sm"
               />
               <div className="flex gap-2">
-                <button type="button" disabled={isPreviewing} onClick={handlePreview} className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 disabled:opacity-50">
+                <Button
+                  type="button"
+                  disabled={isPreviewing}
+                  onClick={handlePreview}
+                  variant="secondary"
+                  size="sm"
+                >
                   {isPreviewing ? "Prévisualisation..." : "Prévisualiser"}
-                </button>
+                </Button>
               </div>
               {previewError ? (
-                <p role="alert" className="text-sm text-red-600">
+                <p role="alert" className="text-sm text-danger-fg">
                   {previewError}
                 </p>
               ) : null}
               {previewResult ? (
-                <div className="flex flex-col gap-1 rounded border border-neutral-200 bg-neutral-50 p-3">
-                  <span className="text-xs font-medium text-neutral-500">Aperçu (non enregistré)</span>
+                <div className="flex flex-col gap-1 rounded border border-tenderos-navy/10 bg-tenderos-light p-3">
+                  <span className="text-xs font-medium text-tenderos-slate">
+                    Aperçu (non enregistré)
+                  </span>
                   {previewResult.amount ? (
-                    <span className="text-lg font-semibold text-neutral-900">
+                    <span className="text-lg font-semibold text-tenderos-navy">
                       {previewResult.amount} {previewResult.currency}
                     </span>
                   ) : (
-                    <span className="text-sm text-neutral-500">Coût non disponible</span>
+                    <span className="text-sm text-tenderos-slate">Coût non disponible</span>
                   )}
-                  <span className="text-xs text-neutral-600">{costDataStatusLabel(previewResult.status)}</span>
-                  <p className="text-xs text-neutral-500">{previewResult.disclaimerText}</p>
+                  <span className="text-xs text-tenderos-slate">
+                    {costDataStatusLabel(previewResult.status)}
+                  </span>
+                  <p className="text-xs text-tenderos-slate">{previewResult.disclaimerText}</p>
                 </div>
               ) : null}
 
-              <label htmlFor="work-hours" className="text-sm font-medium text-neutral-700">
+              <label htmlFor="work-hours" className="text-sm font-medium text-tenderos-navy">
                 Temps de préparation (heures)
               </label>
-              <input id="work-hours" type="number" min="0" value={workHours} onChange={(e) => setWorkHours(e.target.value)} className="rounded border border-neutral-300 px-3 py-2 text-sm" />
-              <label htmlFor="hourly-rate" className="text-sm font-medium text-neutral-700">
+              <Input
+                id="work-hours"
+                type="number"
+                min="0"
+                value={workHours}
+                onChange={(e) => setWorkHours(e.target.value)}
+              />
+              <label htmlFor="hourly-rate" className="text-sm font-medium text-tenderos-navy">
                 Taux horaire (€)
               </label>
-              <input id="hourly-rate" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} className="rounded border border-neutral-300 px-3 py-2 text-sm" />
-              <label htmlFor="headcount" className="text-sm font-medium text-neutral-700">
+              <Input
+                id="hourly-rate"
+                value={hourlyRate}
+                onChange={(e) => setHourlyRate(e.target.value)}
+              />
+              <label htmlFor="headcount" className="text-sm font-medium text-tenderos-navy">
                 Nombre de personnes
               </label>
-              <input id="headcount" type="number" min="0" value={headcount} onChange={(e) => setHeadcount(e.target.value)} className="rounded border border-neutral-300 px-3 py-2 text-sm" />
-              <label htmlFor="fees" className="text-sm font-medium text-neutral-700">
+              <Input
+                id="headcount"
+                type="number"
+                min="0"
+                value={headcount}
+                onChange={(e) => setHeadcount(e.target.value)}
+              />
+              <label htmlFor="fees" className="text-sm font-medium text-tenderos-navy">
                 Frais additionnels (€)
               </label>
-              <input id="fees" value={additionalFeesAmount} onChange={(e) => setAdditionalFeesAmount(e.target.value)} className="rounded border border-neutral-300 px-3 py-2 text-sm" />
-              <p className="text-xs text-neutral-500">{ESTIMATE_DISCLAIMER_TEXT}</p>
+              <Input
+                id="fees"
+                value={additionalFeesAmount}
+                onChange={(e) => setAdditionalFeesAmount(e.target.value)}
+              />
+              <p className="text-xs text-tenderos-slate">{ESTIMATE_DISCLAIMER_TEXT}</p>
               <div className="flex gap-2">
-                <button type="button" disabled={isPending} onClick={handleCreate} className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+                <Button
+                  type="button"
+                  disabled={isPending}
+                  onClick={handleCreate}
+                  variant="primary"
+                  size="sm"
+                >
                   {isPending ? "Calcul..." : "Calculer et enregistrer"}
-                </button>
-                <button type="button" onClick={() => setIsCreating(false)} className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700">
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setIsCreating(false)}
+                  variant="secondary"
+                  size="sm"
+                >
                   Annuler
-                </button>
+                </Button>
               </div>
             </div>
           )}
         </div>
       ) : (
-        <p className="text-sm text-neutral-600">Aucune estimation active pour ce Tender.</p>
+        <p className="text-sm text-tenderos-slate">Aucune estimation active pour ce Tender.</p>
       )}
 
       {error ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger-fg">
           {error}
         </p>
       ) : null}
