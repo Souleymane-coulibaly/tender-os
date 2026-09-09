@@ -72,13 +72,13 @@ export function AlertsSection({ tenderId, alerts }: { tenderId: string; alerts: 
           ))}
         </ul>
       )}
-      <form action={formAction} className="flex items-end gap-2">
+      <form action={formAction} className="flex flex-wrap items-end gap-2">
         <input
           name="message"
           type="text"
           required
           placeholder="Nouvelle alerte..."
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
         />
         <select name="severity" defaultValue="WARNING" className="rounded border border-neutral-300 px-2 py-1 text-sm">
           {SEVERITIES.map((value) => (

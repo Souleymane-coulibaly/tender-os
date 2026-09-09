@@ -47,19 +47,25 @@ export function RequestedDocumentsSection({
           ))}
         </ul>
       )}
-      <form action={formAction} className="flex items-end gap-2">
+      {/* H.3-b — cette ligne debordait de sa colonne, pas du document : deux `input` sans plancher
+          ni autorisation de retrecir (270 + 270 px), plus la case a cocher et le bouton, dans une
+          piste `md:grid-cols-2` en `minmax(0, 1fr)` dont la largeur est plafonnee. Le trop-plein se
+          deversait DANS la colonne voisine, recouvrant « Ajouter » — invisible pour un controle de
+          `document.scrollWidth`, qui ne voyait aucune largeur totale supplementaire. Mesure : +8 px
+          a 1512, +48 px a 1280, +176 px a 1024. */}
+      <form action={formAction} className="flex flex-wrap items-end gap-2">
         <input
           name="name"
           type="text"
           required
           placeholder="Nom de la piece..."
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
         />
         <input
           name="category"
           type="text"
           placeholder="Categorie"
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          className="min-w-[8rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
         />
         <label className="flex items-center gap-1 text-xs text-neutral-600">
           <input name="required" type="checkbox" /> obligatoire

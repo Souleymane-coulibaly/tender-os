@@ -69,13 +69,13 @@ export function MilestonesSection({ tenderId, milestones }: { tenderId: string; 
           ))}
         </ul>
       )}
-      <form action={formAction} className="flex items-end gap-2">
+      <form action={formAction} className="flex flex-wrap items-end gap-2">
         <input
           name="title"
           type="text"
           required
           placeholder="Titre..."
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
         />
         <input name="date" type="date" required className="rounded border border-neutral-300 px-2 py-1 text-sm" />
         <select name="type" defaultValue="CUSTOM" className="rounded border border-neutral-300 px-2 py-1 text-sm">

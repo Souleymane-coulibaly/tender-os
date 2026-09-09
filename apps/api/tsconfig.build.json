@@ -1,0 +1,28 @@
+{
+  // Checkpoint TENDEROS-2.1-FINAL-TNR-BLOCKER-API-BUILD — configuration de COMPILATION du livrable.
+  //
+  // Ce fichier manquait. Nest CLI le cherche par convention et, à défaut, se rabat sur
+  // `tsconfig.json` — lequel inclut `src/**/*.ts`, donc les 695 fichiers de test du module. Le
+  // livrable produit contenait ainsi l'intégralité de la suite de tests : 695 `.spec.js`, leurs
+  // source maps, leurs fixtures et leurs valeurs sentinelles, pour 5 829 fichiers et 36 Mo.
+  //
+  // Deux conséquences, la seconde ayant bloqué la TNR finale :
+  //  1. le paquet déployé embarquait du code de test — jamais souhaitable, et porteur de données de
+  //     fixture qui n'ont rien à faire en production ;
+  //  2. `nest build` compilait ~2 900 fichiers en SILENCE pendant près de quatre minutes, sans
+  //     aucune sortie entre sa bannière et sa fin. Un observateur — humain ou automate — ne peut pas
+  //     distinguer cette attente d'un blocage, et l'interrompt.
+  //
+  // `tsconfig.json` reste inchangé : le contrôle de types (`tsc --noEmit -p tsconfig.json`) doit
+  // continuer de couvrir les tests. Seule la COMPILATION du livrable est restreinte.
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    // Doublures et fabriques réservées aux tests. Vérifié : aucun fichier de production ne les
+    // importe, l'exclusion ne peut donc casser aucun chemin d'exécution.
+    "src/**/test-support/**"
+  ]
+}

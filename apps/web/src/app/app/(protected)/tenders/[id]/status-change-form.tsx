@@ -19,7 +19,7 @@ export function StatusChangeForm({ tenderId, status }: { tenderId: string; statu
   }
 
   return (
-    <form action={formAction} className="flex items-end gap-2">
+    <form action={formAction} className="flex flex-wrap items-end gap-2">
       <div className="flex flex-col gap-1">
         <label htmlFor="status" className="text-xs text-neutral-600">
           Changer le statut

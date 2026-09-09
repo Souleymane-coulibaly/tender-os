@@ -296,8 +296,8 @@ function ZipImportControl({ tenderId, onSettled }: { tenderId: string; onSettled
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col items-start gap-2">
-      <div className="flex items-end gap-2">
-        <input name="archive" type="file" accept=".zip" className="text-xs" />
+      <div className="flex flex-wrap items-end gap-2">
+        <input name="archive" type="file" accept=".zip" className="min-w-0 max-w-full text-xs" />
         <Button type="submit" disabled={isSubmitting || isRunning}>
           Importer une archive ZIP
         </Button>
@@ -424,8 +424,8 @@ export function DceSection({
           {canManage ? (
             <div className="flex flex-col gap-3 border-t border-tenderos-navy/10 pt-3">
               <form action={importFilesFormAction} className="flex flex-col items-start gap-2">
-                <div className="flex items-end gap-2">
-                  <input name="files" type="file" multiple className="text-xs" />
+                <div className="flex flex-wrap items-end gap-2">
+                  <input name="files" type="file" multiple className="min-w-0 max-w-full text-xs" />
                   <Button type="submit" disabled={isImportingFiles}>
                     Importer
                   </Button>

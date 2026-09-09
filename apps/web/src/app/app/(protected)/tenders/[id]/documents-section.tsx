@@ -95,18 +95,23 @@ export function DocumentsSection({
               laterale devenant statique a ce point de bascule. Un champ de type `file` a une largeur
               intrinseque importante : sans autorisation de retrecir NI de passer a la ligne, la
               ligne imposait sa largeur au document entier.
-              `flex-wrap` laisse les controles s'empiler quand la colonne est etroite ; `min-w-0`
-              autorise les champs texte a retrecir. Aucun masquage d'overflow : le contenu reste
-              accessible, il se reorganise. */}
+              `flex-wrap` laisse les controles s'empiler quand la colonne est etroite ; une largeur
+              minimale autorise les champs texte a retrecir. Aucun masquage d'overflow : le contenu
+              reste accessible, il se reorganise.
+
+              H.3-b — la borne etait `min-w-0`, sans plancher : les champs descendaient a ~45 px,
+              largeur ou ils ne debordent plus mais ne servent plus a rien. Le defaut changeait de
+              nature au lieu de disparaitre. Un plancher explicite les fait passer A LA LIGNE au lieu
+              de s'ecraser, ce que `flex-wrap` etait justement la pour permettre. */}
           <form action={uploadFormAction} className="flex flex-wrap items-end gap-2">
             <input
               name="title"
               type="text"
               required
               placeholder="Titre du document..."
-              className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
+              className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
             />
-            <input name="category" type="text" placeholder="Categorie" className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-sm" />
+            <input name="category" type="text" placeholder="Categorie" className="min-w-[8rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-sm" />
             <input name="file" type="file" required className="min-w-0 max-w-full text-xs" />
             <button
               type="submit"
@@ -127,7 +132,7 @@ export function DocumentsSection({
               name="documentId"
               type="text"
               placeholder="ID d'un document existant..."
-              className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
+              className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
             />
             <button
               type="submit"

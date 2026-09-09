@@ -225,7 +225,7 @@ export function LotsSection({
         </ul>
       )}
       {canManage ? (
-        <form action={formAction} className="flex items-end gap-2">
+        <form action={formAction} className="flex flex-wrap items-end gap-2">
           <input
             name="lotNumber"
             type="text"
@@ -238,7 +238,7 @@ export function LotsSection({
             type="text"
             required
             placeholder="Titre du lot..."
-            className="rounded border border-neutral-300 px-2 py-1 text-sm"
+            className="min-w-[10rem] flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
           />
           <button
             type="submit"
