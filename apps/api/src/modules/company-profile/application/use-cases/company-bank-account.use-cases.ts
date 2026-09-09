@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { ClientPermission } from "../../../client-portfolio";
 import { CompanyBankAccountNotFoundError } from "../../domain/errors";
@@ -46,72 +45,7 @@ export class ListCompanyBankAccountsUseCase {
   }
 }
 
-@Injectable()
-export class CreateCompanyBankAccountUseCase {
-  constructor(
-    @Inject(COMPANY_BANK_ACCOUNT_REPOSITORY) private readonly repository: CompanyBankAccountRepository,
-    private readonly accessService: CompanyProfileAccessService,
-    @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
-  ) {}
 
-  async execute(command: CreateCompanyBankAccountCommand): Promise<CompanyBankAccountRecord> {
-    await this.accessService.assertClientAccess({ ...command, permission: ClientPermission.ManageCompanyBanking });
-    const created = await this.repository.create({
-      id: randomUUID(),
-      organizationId: command.organizationId,
-      clientAccountId: command.clientAccountId,
-      accountHolder: command.accountHolder,
-      bankName: command.bankName ?? null,
-      iban: command.iban,
-      bic: command.bic ?? null,
-      country: command.country ?? null,
-      currency: command.currency ?? null,
-      documentId: command.documentId ?? null,
-      isPrimary: command.isPrimary ?? false,
-      validatedAt: null,
-      validatedByUserId: null,
-      status: "ACTIVE",
-      createdBy: command.actorId,
-    });
-    await this.auditLogWriter.record({
-      organizationId: command.organizationId,
-      actorType: "USER",
-      actorId: command.actorId,
-      action: "company_profile.bank_account_added",
-      resourceType: "client_account",
-      resourceId: command.clientAccountId,
-      metadata: { bankAccountId: created.id, ibanLast4: created.iban.slice(-4) },
-    });
-    return created;
-  }
-}
-
-@Injectable()
-export class UpdateCompanyBankAccountUseCase {
-  constructor(
-    @Inject(COMPANY_BANK_ACCOUNT_REPOSITORY) private readonly repository: CompanyBankAccountRepository,
-    private readonly accessService: CompanyProfileAccessService,
-    @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
-  ) {}
-
-  async execute(command: UpdateCompanyBankAccountCommand): Promise<CompanyBankAccountRecord> {
-    await this.accessService.assertClientAccess({ ...command, permission: ClientPermission.ManageCompanyBanking });
-    const updated = await this.repository.update({ organizationId: command.organizationId, clientAccountId: command.clientAccountId, id: command.bankAccountId }, command.patch);
-    if (!updated) {
-      throw new CompanyBankAccountNotFoundError();
-    }
-    await this.auditLogWriter.record({
-      organizationId: command.organizationId,
-      actorType: "USER",
-      actorId: command.actorId,
-      action: "company_profile.bank_account_updated",
-      resourceType: "client_account",
-      resourceId: command.clientAccountId,
-      metadata: { bankAccountId: updated.id, ibanLast4: updated.iban.slice(-4) },
-    });
-    return updated;
-  }
-}
 
 /** Mission §4.4 : "ne jamais supprimer physiquement un compte bancaire". Archivage = mise à jour du
  *  statut, jamais un `delete` Prisma. */
@@ -125,6 +59,19 @@ export class ArchiveCompanyBankAccountUseCase {
 
   async execute(input: { organizationId: string; clientAccountId: string; bankAccountId: string; actorId: string; actorRole: string }): Promise<CompanyBankAccountRecord> {
     await this.accessService.assertClientAccess({ ...input, permission: ClientPermission.ManageCompanyBanking });
+    // Checkpoint TENDEROS-2.1-CCV2-I.1 — l'ARCHIVAGE reste ouvert, a la difference de la creation
+    // et de la mise a jour, retirees juste au-dessus. Exclusion deliberee, pas un oubli :
+    //
+    // l'invariant vise est `NEW_BIDDER_DUAL_WRITE_SURFACE_COUNT = 0`, c'est-a-dire qu'aucune donnee
+    // de candidature ne NAISSE plus ni ne CHANGE DE VALEUR sur la surface Client — sans quoi celle-ci
+    // redeviendrait une source de verite concurrente de `CandidateCompany`. Archiver ne cree aucune
+    // donnee et n'altere aucune valeur de candidature : cela ne fait que retirer de l'usage actif une
+    // ligne historique. C'est donc un mouvement DANS le sens du decommissionnement, pas contre lui.
+    //
+    // Le refuser aurait un cout net : les lignes Legacy deviendraient definitivement inneutralisables
+    // depuis leur seule surface de gestion, et la regression P0 « archiver une ressource d'un autre
+    // client via sa propre route » (corrigee lors de l'audit Codex) perdrait sa preuve executable.
+
     const updated = await this.repository.update({ organizationId: input.organizationId, clientAccountId: input.clientAccountId, id: input.bankAccountId }, { status: "ARCHIVED", isPrimary: false });
     if (!updated) {
       throw new CompanyBankAccountNotFoundError();

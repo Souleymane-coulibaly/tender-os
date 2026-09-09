@@ -54,24 +54,5 @@ export class PrismaCompanyLegalIdentityRepository implements CompanyLegalIdentit
     return row ? toRecord(row) : null;
   }
 
-  async findDuplicateSiretInOrganization(input: { organizationId: string; siret: string; excludeClientAccountId: string }): Promise<CompanyLegalIdentityRecord | null> {
-    const row = await this.prisma.companyLegalIdentity.findFirst({
-      where: {
-        organizationId: input.organizationId,
-        siretPrincipal: input.siret,
-        clientAccountId: { not: input.excludeClientAccountId },
-      },
-    });
-    return row ? toRecord(row) : null;
-  }
 
-  async upsert(input: Omit<CompanyLegalIdentityRecord, "id" | "createdAt" | "updatedAt"> & { id?: string; updatedAt: Date }): Promise<CompanyLegalIdentityRecord> {
-    const { id, ...data } = input;
-    const row = await this.prisma.companyLegalIdentity.upsert({
-      where: id ? { id } : { clientAccountId_organizationId: { clientAccountId: input.clientAccountId, organizationId: input.organizationId } },
-      create: { ...data },
-      update: { ...data },
-    });
-    return toRecord(row);
-  }
 }

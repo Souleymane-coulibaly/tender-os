@@ -19,18 +19,15 @@ import {
   DOCUMENT_CLIENT_ACCOUNT_ASSOCIATION_REPOSITORY,
 } from "./application/ports/company-satellite.repository";
 
-import { ArchiveCompanyBankAccountUseCase, CreateCompanyBankAccountUseCase, ListCompanyBankAccountsUseCase, UpdateCompanyBankAccountUseCase } from "./application/use-cases/company-bank-account.use-cases";
-import { CreateCompanyCertificationUseCase, ListCompanyCertificationsUseCase, UpdateCompanyCertificationUseCase } from "./application/use-cases/company-certification.use-cases";
-import { CreateCompanyHumanResourceUseCase, ListCompanyHumanResourcesUseCase, UpdateCompanyHumanResourceUseCase } from "./application/use-cases/company-human-resource.use-cases";
-import { CreateCompanyInsuranceUseCase, ListCompanyInsurancesUseCase, UpdateCompanyInsuranceUseCase } from "./application/use-cases/company-insurance.use-cases";
-import { GetCompanyLegalIdentityUseCase, UpsertCompanyLegalIdentityUseCase } from "./application/use-cases/company-legal-identity.use-cases";
-import { CreateCompanyMaterialResourceUseCase, ListCompanyMaterialResourcesUseCase, UpdateCompanyMaterialResourceUseCase } from "./application/use-cases/company-material-resource.use-cases";
+import { ArchiveCompanyBankAccountUseCase, ListCompanyBankAccountsUseCase } from "./application/use-cases/company-bank-account.use-cases";
+import { ListCompanyCertificationsUseCase } from "./application/use-cases/company-certification.use-cases";
+import { ListCompanyHumanResourcesUseCase } from "./application/use-cases/company-human-resource.use-cases";
+import { ListCompanyInsurancesUseCase } from "./application/use-cases/company-insurance.use-cases";
+import { GetCompanyLegalIdentityUseCase } from "./application/use-cases/company-legal-identity.use-cases";
+import { ListCompanyMaterialResourcesUseCase } from "./application/use-cases/company-material-resource.use-cases";
 import {
-  AttachDocumentToCompanyReferenceUseCase,
-  CreateCompanyReferenceUseCase,
   ListCompanyReferenceDocumentsUseCase,
   ListCompanyReferencesUseCase,
-  UpdateCompanyReferenceUseCase,
 } from "./application/use-cases/company-reference.use-cases";
 import { CreateCompanyRepresentativeUseCase, ListCompanyRepresentativesUseCase, UpdateCompanyRepresentativeUseCase } from "./application/use-cases/company-representative.use-cases";
 import { AttachDocumentToClientAccountUseCase, ListClientAccountDocumentAssociationsUseCase } from "./application/use-cases/document-client-account-association.use-cases";
@@ -50,6 +47,38 @@ import { PrismaCompanyRepresentativeRepository } from "./infrastructure/prisma-c
 import { PrismaDocumentClientAccountAssociationRepository } from "./infrastructure/prisma-document-client-account-association.repository";
 
 import { CompanyProfileController } from "./interfaces/http/company-profile.controller";
+// Checkpoint CCV2-C — surface candidate. `CandidateCompanyModule` est importé ici (jamais
+// l'inverse : le cycle réel est CompanyProfile -> Documents -> Tenders -> CandidateCompany).
+import { CandidateCompanyModule } from "../candidate-company";
+import { CandidateCapabilitiesController } from "./interfaces/http/candidate-capabilities.controller";
+import { CandidateBankAccountsController } from "./interfaces/http/candidate-bank-accounts.controller";
+import { CandidateDocumentsController } from "./interfaces/http/candidate-documents.controller";
+import { ResolveCandidateCapabilitiesUseCase } from "./application/use-cases/resolve-candidate-capabilities.use-case";
+import { PrismaDocumentCandidateCompanyAssociationRepository } from "./infrastructure/prisma-document-candidate-company-association.repository";
+import { DOCUMENT_CANDIDATE_COMPANY_ASSOCIATION_REPOSITORY } from "./application/ports/company-satellite.repository";
+import {
+  AttachCandidateDocumentUseCase,
+  DetachCandidateDocumentUseCase,
+  DownloadCandidateDocumentUseCase,
+  GetCandidateDocumentUseCase,
+  ListCandidateDocumentsUseCase,
+  ListCandidateDocumentVersionsUseCase,
+  UpdateCandidateDocumentUseCase,
+} from "./application/use-cases/candidate-document.use-cases";
+import {
+  ArchiveCandidateBankAccountUseCase,
+  CreateCandidateBankAccountUseCase,
+  ListCandidateBankAccountsUseCase,
+  UpdateCandidateBankAccountUseCase,
+} from "./application/use-cases/candidate-bank-account.use-cases";
+import { CandidateCapabilityAccessService } from "./application/services/candidate-capability-access.service";
+import {
+  ArchiveCandidateCapabilityUseCase,
+  CandidateCapabilityRegistry,
+  CreateCandidateCapabilityUseCase,
+  ListCandidateCapabilitiesUseCase,
+  UpdateCandidateCapabilityUseCase,
+} from "./application/use-cases/candidate-capability.use-cases";
 
 /**
  * Module `company-profile` (mission V2 Sprint 2) — importe `ClientPortfolioModule`/`DocumentsModule`
@@ -64,46 +93,51 @@ import { CompanyProfileController } from "./interfaces/http/company-profile.cont
  * directement dans le profil entreprise.
  */
 @Module({
-  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, DocumentsModule, OutboxWriterModule],
-  controllers: [CompanyProfileController],
-  exports: [GetCompanyProfileUseCase],
+  imports: [IdentityModule, MembershipsModule, ClientPortfolioModule, DocumentsModule, OutboxWriterModule, CandidateCompanyModule],
+  controllers: [CompanyProfileController, CandidateCapabilitiesController, CandidateBankAccountsController, CandidateDocumentsController],
+  exports: [GetCompanyProfileUseCase, ResolveCandidateCapabilitiesUseCase],
   providers: [
     CompanyProfileAccessService,
+    CandidateCapabilityAccessService,
+    CandidateCapabilityRegistry,
+    ListCandidateCapabilitiesUseCase,
+    CreateCandidateCapabilityUseCase,
+    UpdateCandidateCapabilityUseCase,
+    ArchiveCandidateCapabilityUseCase,
+    ListCandidateBankAccountsUseCase,
+    CreateCandidateBankAccountUseCase,
+    UpdateCandidateBankAccountUseCase,
+    ArchiveCandidateBankAccountUseCase,
+    { provide: DOCUMENT_CANDIDATE_COMPANY_ASSOCIATION_REPOSITORY, useClass: PrismaDocumentCandidateCompanyAssociationRepository },
+    ListCandidateDocumentsUseCase,
+    AttachCandidateDocumentUseCase,
+    GetCandidateDocumentUseCase,
+    DownloadCandidateDocumentUseCase,
+    UpdateCandidateDocumentUseCase,
+    DetachCandidateDocumentUseCase,
+    ListCandidateDocumentVersionsUseCase,
+    ResolveCandidateCapabilitiesUseCase,
 
     GetCompanyProfileUseCase,
     GetCompanyLegalIdentityUseCase,
-    UpsertCompanyLegalIdentityUseCase,
 
     ListCompanyRepresentativesUseCase,
     CreateCompanyRepresentativeUseCase,
     UpdateCompanyRepresentativeUseCase,
 
     ListCompanyBankAccountsUseCase,
-    CreateCompanyBankAccountUseCase,
-    UpdateCompanyBankAccountUseCase,
     ArchiveCompanyBankAccountUseCase,
 
     ListCompanyInsurancesUseCase,
-    CreateCompanyInsuranceUseCase,
-    UpdateCompanyInsuranceUseCase,
 
     ListCompanyCertificationsUseCase,
-    CreateCompanyCertificationUseCase,
-    UpdateCompanyCertificationUseCase,
 
     ListCompanyReferencesUseCase,
-    CreateCompanyReferenceUseCase,
-    UpdateCompanyReferenceUseCase,
-    AttachDocumentToCompanyReferenceUseCase,
     ListCompanyReferenceDocumentsUseCase,
 
     ListCompanyHumanResourcesUseCase,
-    CreateCompanyHumanResourceUseCase,
-    UpdateCompanyHumanResourceUseCase,
 
     ListCompanyMaterialResourcesUseCase,
-    CreateCompanyMaterialResourceUseCase,
-    UpdateCompanyMaterialResourceUseCase,
 
     ListClientAccountDocumentAssociationsUseCase,
     AttachDocumentToClientAccountUseCase,

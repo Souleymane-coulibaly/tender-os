@@ -9,7 +9,7 @@ import { canGenerateGoNoGoReport, canRecordGoNoGoDecision, type GoNoGoDecision, 
 import type { TenderCockpit } from "../../../../../lib/cockpit-types";
 import { canUploadOrEditDocument, type DocumentSummary } from "../../../../../lib/documents-types";
 import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../../lib/client-portfolio-types";
-import { fetchCandidateCompanies, fetchCandidateCompanyOrNull } from "../../../candidate-company-actions";
+import { fetchCandidateCompanies, resolveCandidateCompany } from "../../../candidate-company-actions";
 import type { CandidateCompanySummary } from "../../../../../lib/candidate-company-types";
 import {
   TENDER_STATUS_LABELS,
@@ -141,7 +141,8 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   // Checkpoint 2.1-A5 — best-effort, jamais bloquant (même discipline que ResolveCandidateIdentityUseCase
   // côté backend) : un Tender legacy (candidateCompanyId absent) ou une CandidateCompany depuis
   // archivée ne doit jamais faire échouer l'affichage de la fiche Tender.
-  const currentCandidateCompany = tender.candidateCompanyId ? await fetchCandidateCompanyOrNull(tender.candidateCompanyId) : null;
+  // Checkpoint CCV2-G.1 — tri-état : « aucune » et « illisible » ne sont plus le même cas.
+  const candidateResolution = await resolveCandidateCompany(tender.candidateCompanyId);
 
   const navTabs = buildTenderNavTabs(tender.id);
 
@@ -181,7 +182,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         <CandidateCompanySection
           tenderId={tender.id}
           status={tender.status}
-          currentCandidateCompany={currentCandidateCompany}
+          resolution={candidateResolution}
           availableCandidateCompanies={availableCandidateCompanies}
           canChange={canChangeTenderCandidateCompany(role)}
         />

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { assertClientBidderWriteRetired, ClientBidderDomain, isLegalAuthorityRepresentativeType } from "../../domain/client-bidder-write-retirement";
 import { Inject, Injectable } from "@nestjs/common";
 import { ClientPermission } from "../../../client-portfolio";
 import { CompanyRepresentativeNotFoundError } from "../../domain/errors";
@@ -56,10 +57,28 @@ export class CreateCompanyRepresentativeUseCase {
 
   async execute(command: CreateCompanyRepresentativeCommand): Promise<CompanyRepresentativeRecord> {
     await this.accessService.assertClientAccess({ ...command, permission: ClientPermission.ManageCompanyProfile });
+
+    // Checkpoint TENDEROS-2.1-CCV2-I.1 — la surface CLIENT ne cree plus de representant LEGAL.
+    // Un contact commercial (administratif/commercial/technique) y reste parfaitement legitime :
+    // c'est la nature du role, et non la table, qui trace la frontiere. Seconde barriere,
+    // independante du schema HTTP : un appelant interne ne la contourne pas non plus.
+    //
+    // Checkpoint TENDEROS-2.1-H.1 — deplacee APRES la verification d'acces (constat
+    // `P2-I-FINAL-AUTHORIZATION-ORDER`). Evaluee avant, cette regle metier repondait a un acteur
+    // qui n'avait aucun droit sur ce client : en faisant varier la seule validite de sa charge
+    // utile, il observait le traitement que le produit AURAIT reserve a sa requete. L'autorisation
+    // passe donc toujours en premier, et la regle metier ne s'applique qu'a qui est deja autorise.
+    if (command.type !== undefined && isLegalAuthorityRepresentativeType(command.type)) {
+      assertClientBidderWriteRetired(ClientBidderDomain.LegalRepresentative);
+    }
+
     const created = await this.repository.create({
       id: randomUUID(),
       organizationId: command.organizationId,
       clientAccountId: command.clientAccountId,
+      // CCV2-C — création par le chemin LEGACY : propriétaire ClientAccount uniquement. Le
+      // rattachement candidate est posé par le backfill CCV2-B ou par l'API candidate, jamais ici.
+      candidateCompanyId: null,
       firstName: command.firstName,
       lastName: command.lastName,
       type: command.type,
@@ -97,6 +116,21 @@ export class UpdateCompanyRepresentativeUseCase {
 
   async execute(command: UpdateCompanyRepresentativeCommand): Promise<CompanyRepresentativeRecord> {
     await this.accessService.assertClientAccess({ ...command, permission: ClientPermission.ManageCompanyProfile });
+
+    // Checkpoint TENDEROS-2.1-CCV2-I.1 — la surface CLIENT ne cree plus de representant LEGAL.
+    // Un contact commercial (administratif/commercial/technique) y reste parfaitement legitime :
+    // c'est la nature du role, et non la table, qui trace la frontiere. Seconde barriere,
+    // independante du schema HTTP : un appelant interne ne la contourne pas non plus.
+    //
+    // Checkpoint TENDEROS-2.1-H.1 — deplacee APRES la verification d'acces (constat
+    // `P2-I-FINAL-AUTHORIZATION-ORDER`). Evaluee avant, cette regle metier repondait a un acteur
+    // qui n'avait aucun droit sur ce client : en faisant varier la seule validite de sa charge
+    // utile, il observait le traitement que le produit AURAIT reserve a sa requete. L'autorisation
+    // passe donc toujours en premier, et la regle metier ne s'applique qu'a qui est deja autorise.
+    if (command.patch.type !== undefined && isLegalAuthorityRepresentativeType(command.patch.type)) {
+      assertClientBidderWriteRetired(ClientBidderDomain.LegalRepresentative);
+    }
+
     const updated = await this.repository.update(
       { organizationId: command.organizationId, clientAccountId: command.clientAccountId, id: command.representativeId },
       { ...command.patch, updatedBy: command.actorId },

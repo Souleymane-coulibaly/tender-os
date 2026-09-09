@@ -76,6 +76,9 @@ export class CreateDocumentWithFirstVersionUseCase {
       sizeBytes: validated.sizeBytes,
     });
 
+    /** Vrai des que la transaction Document + premiere version est VALIDEE (voir catch). */
+    let persisted = false;
+
     try {
       const document = Document.create({
         id: documentId,
@@ -108,6 +111,10 @@ export class CreateDocumentWithFirstVersionUseCase {
       document.promoteVersion({ versionId, versionNumber: 1, occurredAt });
 
       await this.documentRepository.createWithInitialVersion({ document, version });
+      // Checkpoint TENDEROS-2.1-H.5 — a partir d'ICI, la transaction est VALIDEE : le Document et sa
+      // premiere version existent durablement en base, et le fichier depose est la seule copie du
+      // contenu qu'ils decrivent.
+      persisted = true;
 
       await this.auditLogWriter.record({
         organizationId: command.organizationId,
@@ -137,7 +144,19 @@ export class CreateDocumentWithFirstVersionUseCase {
 
       return toDocumentSummary(document, version);
     } catch (error) {
-      await this.storageProvider.delete(storageKey).catch(() => undefined);
+      // Checkpoint TENDEROS-2.1-H.5 — la compensation ne s'applique QU'AVANT la validation de la
+      // transaction (conception §R : « si la transaction echoue apres un upload reussi, le fichier
+      // physique est supprime »).
+      //
+      // Elle s'executait auparavant pour TOUTE erreur, y compris survenue APRES le commit — une
+      // panne du journal d'audit ou de l'Outbox detruisait alors le fichier tout en laissant le
+      // Document et sa version engages. Reproduit par injection : `documentSurvit: true`,
+      // `storageDeleteAppele: 1`. Le resultat etait pire qu'un Document sans version : un document
+      // d'apparence parfaitement valide, dont le contenu n'existait plus — perte silencieuse, que
+      // rien dans la base ne signalait.
+      if (!persisted) {
+        await this.storageProvider.delete(storageKey).catch(() => undefined);
+      }
       throw error;
     }
   }

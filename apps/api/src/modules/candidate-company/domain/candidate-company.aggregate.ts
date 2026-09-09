@@ -8,6 +8,13 @@ export type CandidateCompanyProps = {
   name: string;
   nameNormalized: string;
   legalName?: string | undefined;
+  /// Checkpoint TENDEROS-2.1-CCV2-F.2 — nom COMMERCIAL/d'usage, strictement distinct de `legalName`
+  /// (raison sociale). La colonne existe depuis CCV2-B (backfillée depuis
+  /// `CompanyLegalIdentity.tradeName`) mais n'était portée ni par l'agrégat ni par le mapper : la
+  /// donnée était donc écrite par la migration puis inaccessible. Elle devient ici lisible et
+  /// maintenable. AUCUN consommateur n'est repointé pour autant (le DC1 continue de servir
+  /// `legalName ?? name` — décision CCV2-B §16, hors périmètre de ce checkpoint).
+  tradeName?: string | undefined;
   siren?: string | undefined;
   vatNumber?: string | undefined;
   legalForm?: string | undefined;
@@ -37,6 +44,7 @@ export class CandidateCompany {
     organizationId: string;
     name: string;
     legalName?: string | undefined;
+    tradeName?: string | undefined;
     siren?: string | undefined;
     vatNumber?: string | undefined;
     legalForm?: string | undefined;
@@ -50,6 +58,7 @@ export class CandidateCompany {
       name: input.name,
       nameNormalized: normalizeCandidateCompanyName(input.name),
       legalName: input.legalName,
+      tradeName: input.tradeName,
       siren: input.siren,
       vatNumber: input.vatNumber,
       legalForm: input.legalForm,
@@ -94,6 +103,63 @@ export class CandidateCompany {
     this.props.updatedAt = occurredAt;
   }
 
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-F.2 — mise à jour de l'IDENTITÉ JURIDIQUE, native CandidateCompany.
+   *
+   * LISTE BLANCHE EXPLICITE, jamais un étalement de DTO : seuls les six champs ci-dessous sont
+   * mutables. `organizationId`, `sourceClientAccountId`, `status`, `createdBy`/`createdAt`,
+   * `archivedAt` et `nameNormalized` ne peuvent structurellement PAS être atteints par un appelant —
+   * ils ne figurent pas dans le type du patch, donc aucune valeur hostile ne peut les toucher, même
+   * si elle traversait la validation HTTP.
+   *
+   * `nameNormalized` est RECALCULÉ depuis `name`, jamais accepté de l'extérieur : il porte
+   * l'unicité `(organizationId, nameNormalized)` en base, le laisser diverger du nom romprait cette
+   * garantie sans qu'aucune contrainte ne s'en aperçoive.
+   *
+   * Sémantique `undefined` vs `null` : `undefined` = "champ non fourni, ne pas toucher" ;
+   * `null` = "effacer explicitement". Sans cette distinction il serait impossible de vider un
+   * champ optionnel une fois renseigné.
+   *
+   * Une entreprise candidate ARCHIVÉE n'est jamais mutée — même règle que l'ajout d'établissement.
+   */
+  updateIdentity(
+    patch: {
+      name?: string | undefined;
+      legalName?: string | null | undefined;
+      tradeName?: string | null | undefined;
+      siren?: string | null | undefined;
+      vatNumber?: string | null | undefined;
+      legalForm?: string | null | undefined;
+    },
+    actorId: string,
+    occurredAt: Date,
+  ): void {
+    this.assertNotArchived();
+
+    if (patch.name !== undefined) {
+      this.props.name = patch.name;
+      this.props.nameNormalized = normalizeCandidateCompanyName(patch.name);
+    }
+    if (patch.legalName !== undefined) {
+      this.props.legalName = patch.legalName ?? undefined;
+    }
+    if (patch.tradeName !== undefined) {
+      this.props.tradeName = patch.tradeName ?? undefined;
+    }
+    if (patch.siren !== undefined) {
+      this.props.siren = patch.siren ?? undefined;
+    }
+    if (patch.vatNumber !== undefined) {
+      this.props.vatNumber = patch.vatNumber ?? undefined;
+    }
+    if (patch.legalForm !== undefined) {
+      this.props.legalForm = patch.legalForm ?? undefined;
+    }
+
+    this.props.updatedBy = actorId;
+    this.props.updatedAt = occurredAt;
+  }
+
   /** Un établissement ne peut être ajouté qu'à une entreprise candidate active. */
   assertCanAddEstablishment(): void {
     this.assertNotArchived();
@@ -113,6 +179,9 @@ export class CandidateCompany {
   }
   get legalName(): string | undefined {
     return this.props.legalName;
+  }
+  get tradeName(): string | undefined {
+    return this.props.tradeName;
   }
   get siren(): string | undefined {
     return this.props.siren;

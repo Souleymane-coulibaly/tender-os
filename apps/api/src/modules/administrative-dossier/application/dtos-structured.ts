@@ -126,6 +126,11 @@ export function toSubcontractorDeclarationSummary(sub: SubcontractorDeclaration)
 export type EngagementActSummary = {
   id: string;
   tenderId: string;
+  /** Checkpoint CCV2-E.2 — instantané immuable du candidat pour lequel cet acte a été renseigné. */
+  candidateCompanyId?: string | undefined;
+  /** Péremption CALCULÉE à la lecture contre le candidat courant du Tender, jamais persistée.
+   *  `undefined` lorsque l'appelant ne fournit pas le candidat courant (lecture hors contexte). */
+  candidateStale?: boolean | undefined;
   reference?: string | undefined;
   lotReference?: string | undefined;
   object?: string | undefined;
@@ -149,6 +154,7 @@ export function toEngagementActSummary(act: EngagementAct): EngagementActSummary
   return {
     id: act.id,
     tenderId: act.tenderId,
+    candidateCompanyId: act.candidateCompanyId,
     reference: act.reference,
     lotReference: act.lotReference,
     object: act.object,
@@ -203,4 +209,23 @@ export function toSigningPowerSummary(power: SigningPower, now: Date): SigningPo
     createdAt: power.createdAt.toISOString(),
     updatedAt: power.updatedAt.toISOString(),
   };
+}
+
+/**
+ * Checkpoint TENDEROS-2.1-CCV2-E.2 — SEUL point de calcul de l'applicabilité candidate d'un Acte
+ * d'engagement, jamais dupliqué entre les consommateurs. Miroir exact de
+ * `withGoNoGoCandidateStaleness` (Checkpoint 2.1-A6.2).
+ *
+ * Un acte SANS instantané (`candidateCompanyId === undefined`) est antérieur à ce checkpoint : il
+ * n'est jamais déclaré périmé rétroactivement — on ne sait pas pour quel candidat il a été écrit,
+ * et l'inventer serait pire que de l'ignorer.
+ */
+export function withEngagementActCandidateStaleness(
+  summary: EngagementActSummary,
+  currentCandidateCompanyId: string | undefined,
+): EngagementActSummary {
+  if (summary.candidateCompanyId === undefined) {
+    return { ...summary, candidateStale: false };
+  }
+  return { ...summary, candidateStale: summary.candidateCompanyId !== currentCandidateCompanyId };
 }

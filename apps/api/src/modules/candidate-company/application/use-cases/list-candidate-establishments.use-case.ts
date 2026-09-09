@@ -1,9 +1,15 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { assertHasCandidatePermission, CandidatePermission } from "../../domain/candidate-permission";
 import { CandidateCompanyNotFoundError } from "../../domain/errors";
 import { toCandidateEstablishmentSummary, type CandidateEstablishmentSummary } from "../dtos";
 import { CANDIDATE_COMPANY_REPOSITORY, type CandidateCompanyRepository } from "../ports/candidate-company.repository";
 
-export type ListCandidateEstablishmentsQuery = Readonly<{ organizationId: string; candidateCompanyId: string }>;
+export type ListCandidateEstablishmentsQuery = Readonly<{
+  organizationId: string;
+  candidateCompanyId: string;
+  /** Rôle d'ORGANISATION de l'acteur (`MembershipContext.role`), jamais un rôle client. */
+  actorRole: string;
+}>;
 
 /**
  * Checkpoint 2.1-A6.4 (DEFERRED-BE-04) — listing canonique des établissements d'une entreprise
@@ -19,6 +25,9 @@ export class ListCandidateEstablishmentsUseCase {
   constructor(@Inject(CANDIDATE_COMPANY_REPOSITORY) private readonly candidateCompanyRepository: CandidateCompanyRepository) {}
 
   async execute(query: ListCandidateEstablishmentsQuery): Promise<readonly CandidateEstablishmentSummary[]> {
+    // CCV2-A — la permission est évaluée sur le SEUL rôle de l'acteur, AVANT toute lecture : un
+    // acteur d'un autre tenant obtient donc 404 (jamais 403) et n'apprend rien sur l'existence.
+    assertHasCandidatePermission(query.actorRole, CandidatePermission.Read);
     const company = await this.candidateCompanyRepository.findById({
       organizationId: query.organizationId,
       candidateCompanyId: query.candidateCompanyId,

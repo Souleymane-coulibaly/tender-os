@@ -97,12 +97,25 @@ describe("Administrative Dossier — V2 Sprint 11B DC2 real official form fill (
   async function createClientWithLegalIdentity(input: { tradeName: string; siret: string }): Promise<string> {
     const suffix = randomUUID();
     const clientAccount = await prisma.clientAccount.create({ data: { id: randomUUID(), organizationId: orgId, name: `Client DC2 ${suffix}`, nameNormalized: `client dc2 ${suffix}`, status: "ACTIVE", createdBy: ownerUserId } });
-    const res = await fetch(`${baseUrl}/api/v1/clients/${clientAccount.id}/legal-identity`, {
-      method: "PATCH",
-      headers: jsonHeaders(tokenOwner),
-      body: JSON.stringify({ legalName: input.tradeName, tradeName: input.tradeName, siren: input.siret.slice(0, 9), siretPrincipal: input.siret, addressLine: "1 rue du Test", postalCode: "75001", city: "Paris", confirmDuplicate: true }),
+    // Checkpoint TENDEROS-2.1-CCV2-I.1 — identité juridique du CLIENT amorcée DIRECTEMENT en base.
+    // `PATCH /clients/:id/legal-identity` est retiré (409 `CLIENT_BIDDER_WRITE_RETIRED`), mais cette
+    // ligne doit continuer d'exister : c'est le LEURRE dont ces tests prouvent qu'il n'est JAMAIS lu
+    // à la place de l'entreprise candidate. La supprimer affaiblirait la preuve au lieu de l'adapter.
+    await prisma.companyLegalIdentity.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        clientAccountId: clientAccount.id,
+        legalName: input.tradeName,
+        tradeName: input.tradeName,
+        siren: input.siret.slice(0, 9),
+        siretPrincipal: input.siret,
+        addressLine: "1 rue du Test",
+        postalCode: "75001",
+        city: "Paris",
+        createdBy: ownerUserId,
+      },
     });
-    expect(res.status).toBe(200);
     return clientAccount.id;
   }
 
@@ -168,9 +181,65 @@ describe("Administrative Dossier — V2 Sprint 11B DC2 real official form fill (
     await prisma.$disconnect();
   }, 60000);
 
+
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.2 — l'identite d'un formulaire officiel vient desormais
+   * EXCLUSIVEMENT de l'entreprise candidate. Ce helper cree donc, pour les tests qui n'en avaient
+   * pas, une entreprise candidate portant EXACTEMENT les memes valeurs que le profil client qu'ils
+   * renseignaient : leurs assertions restent inchangees, et prouvent maintenant la nouvelle SOT.
+   *
+   * Le SIRET est distinct a chaque appel : `candidate_establishments` impose l'unicite
+   * `(organization_id, siret)` (regle de domaine CCV2-B), la ou le profil client tolere le doublon.
+   */
+  let g2SiretCounter = 0;
+  function nextCandidateSiret(): string {
+    g2SiretCounter += 1;
+    const base = `9100000000${String(g2SiretCounter).padStart(3, "0")}`;
+    const digits = base.split("").map(Number);
+    let sum = 0;
+    for (let index = 0; index < digits.length; index += 1) {
+      const position = digits.length - index;
+      const doubled = position % 2 === 0 ? (digits[index] as number) * 2 : (digits[index] as number);
+      sum += doubled > 9 ? doubled - 9 : doubled;
+    }
+    return `${base}${(10 - (sum % 10)) % 10}`;
+  }
+
+  async function createCandidateFor(tradeName: string, createdBy: string): Promise<{ id: string; siret: string }> {
+    const suffix = randomUUID();
+    const siret = nextCandidateSiret();
+    const candidate = await prisma.candidateCompany.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        name: tradeName,
+        nameNormalized: `${tradeName.toLowerCase()} ${suffix}`,
+        legalName: tradeName,
+        siren: siret.slice(0, 9),
+        status: "ACTIVE",
+        createdBy,
+      },
+    });
+    await prisma.candidateEstablishment.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        candidateCompanyId: candidate.id,
+        siret,
+        isPrincipal: true,
+        addressLine: "12 rue de la Republique",
+        postalCode: "75001",
+        city: "Paris",
+        createdBy,
+      },
+    });
+    return { id: candidate.id, siret };
+  }
+
   it("individual candidate — readiness + real DOCX generation from real data, zero side effect on preview", async () => {
     const clientAccountId = await createClientWithLegalIdentity({ tradeName: "Menuiserie Corentin SARL", siret: "35600000000048" });
-    const tender = await prisma.tender.create({ data: { id: randomUUID(), organizationId: orgId, clientAccountId, title: "Marche DC2 - individuel", status: "DRAFT", tags: [], createdBy: ownerUserId } });
+    const candidate = await createCandidateFor("Menuiserie Corentin SARL", ownerUserId);
+    const tender = await prisma.tender.create({ data: { id: randomUUID(), organizationId: orgId, clientAccountId, candidateCompanyId: candidate.id, title: "Marche DC2 - individuel", status: "DRAFT", tags: [], createdBy: ownerUserId } });
 
     const countBefore = await prisma.generatedDocument.count({ where: { organizationId: orgId } });
     const readinessRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/official-forms/dc2/candidate/readiness`, { headers: jsonHeaders(tokenOwner) });
@@ -224,6 +293,65 @@ describe("Administrative Dossier — V2 Sprint 11B DC2 real official form fill (
     const xml = await zip.file("word/document.xml")?.async("string");
     expect(xml).toContain("Candidate Moderne SARL");
     expect(xml).not.toContain("Client Legacy Legal SAS");
+  });
+
+  it("H.6 — SENTINELLES : le champ officiel porte la dénomination sociale ET le nom commercial, jamais une identité client", async () => {
+    // Valeurs volontairement TOUTES DIFFÉRENTES : une sentinelle partagée rendrait indétectable la
+    // substitution même que ce test interdit. Chaque chaîne n'existe qu'à un seul endroit du modèle.
+    const clientAccountId = await createClientWithLegalIdentity({ tradeName: "LEGACY-CLIENT-COMMERCIAL", siret: "35600000000048" });
+    const tender = await prisma.tender.create({
+      data: { id: randomUUID(), organizationId: orgId, clientAccountId, title: "Marche DC2 - sentinelles H6", status: "DRAFT", tags: [], createdBy: ownerUserId },
+    });
+
+    const candidateCompany = await prisma.candidateCompany.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        name: "CANDIDATE-DISPLAY",
+        nameNormalized: "candidate-display",
+        legalName: "CANDIDATE-LEGAL-SA",
+        tradeName: "CANDIDATE-TRADE",
+        siren: "732829320",
+        legalForm: "SA",
+        status: "ACTIVE",
+        createdBy: ownerUserId,
+      },
+    });
+    // SIREN/SIRET propres à ce test : `candidate_establishments` impose l'unicité
+    // `(organization_id, siret)`, et les autres tests du fichier occupent déjà leurs valeurs.
+    await prisma.candidateEstablishment.create({
+      data: { id: randomUUID(), organizationId: orgId, candidateCompanyId: candidateCompany.id, siret: "73282932000009", isPrincipal: true, addressLine: "3 rue du Candidat", postalCode: "13000", city: "Marseille", country: "FR", createdBy: ownerUserId },
+    });
+    // Contact CRM du CLIENT : il ne doit apparaître dans AUCUN champ du formulaire officiel — c'est
+    // la frontière posée par CCV2-I entre contact commercial et représentant légal.
+    await prisma.companyRepresentative.create({
+      data: { id: randomUUID(), organizationId: orgId, clientAccountId, firstName: "CLIENT-COMMERCIAL", lastName: "CONTACT", type: "COMMERCIAL_CONTACT", status: "ACTIVE", createdBy: ownerUserId },
+    });
+    await prisma.tender.update({ where: { id_organizationId: { id: tender.id, organizationId: orgId } }, data: { candidateCompanyId: candidateCompany.id } });
+
+    const readinessRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/official-forms/dc2/candidate/readiness`, { headers: jsonHeaders(tokenOwner) });
+    expect(readinessRes.status).toBe(200);
+    const readiness = (await readinessRes.json()) as { fields: { fieldKey: string; status: string; value?: unknown }[] };
+
+    // §21 — la preuve porte sur le MAPPING de champ, pas sur une chaîne trouvée quelque part : le
+    // champ officiel DC2 P37 réclame « nom commercial / dénomination sociale », les deux.
+    expect(readiness.fields.find((f) => f.fieldKey === "candidate.tradeName")).toMatchObject({
+      status: "AVAILABLE",
+      value: "CANDIDATE-LEGAL-SA (CANDIDATE-TRADE)",
+    });
+
+    const generateRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/official-forms/dc2/candidate/generate`, { method: "POST", headers: jsonHeaders(tokenOwner) });
+    expect(generateRes.status).toBe(201);
+    const generated = (await generateRes.json()) as { revisions: { artifactDocumentId?: string }[] };
+    const downloadRes = await fetch(`${baseUrl}/api/v1/documents/${generated.revisions[0]!.artifactDocumentId}/download`, { headers: jsonHeaders(tokenOwner) });
+    const zip = await JSZip.loadAsync(Buffer.from(await downloadRes.arrayBuffer()));
+    const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+
+    // §22 — preuve sur la SORTIE réellement générée, pas seulement sur le contexte.
+    expect(xml, "la dénomination sociale doit figurer au document").toContain("CANDIDATE-LEGAL-SA");
+    expect(xml, "le nom commercial demandé par le champ officiel doit y figurer aussi").toContain("CANDIDATE-TRADE");
+    expect(xml, "aucune identité du client commercial ne doit atteindre un champ candidat").not.toContain("LEGACY-CLIENT-COMMERCIAL");
+    expect(xml, "aucun contact CRM ne doit tenir lieu de représentant légal").not.toContain("CLIENT-COMMERCIAL");
   });
 
   it("BLOCKING (mission §54) — groupement 2 membres: each DC2 generation uses ONLY its own member's data, never contaminated by the other member or the candidate", async () => {
@@ -286,11 +414,15 @@ describe("Administrative Dossier — V2 Sprint 11B DC2 real official form fill (
   // administrative-dossier-official-form-fill-http.integration.spec.ts.
 
   it("BLOCKING (mission §41 multi-candidate) — a DIFFERENT tender's DC2 never resolves to the wrong candidate's data", async () => {
+    // Checkpoint CCV2-G.2 — l'isolation porte desormais sur deux ENTREPRISES CANDIDATES distinctes,
+    // puisque ce sont elles qui font autorite. L'intention du test est identique.
     const clientA = await createClientWithLegalIdentity({ tradeName: "Candidat A SARL", siret: "35600000000048" });
-    await prisma.tender.create({ data: { id: randomUUID(), organizationId: orgId, clientAccountId: clientA, title: "Marche A", status: "DRAFT", tags: [], createdBy: ownerUserId } });
+    const candidateA = await createCandidateFor("Candidat A SARL", ownerUserId);
+    await prisma.tender.create({ data: { id: randomUUID(), organizationId: orgId, clientAccountId: clientA, candidateCompanyId: candidateA.id, title: "Marche A", status: "DRAFT", tags: [], createdBy: ownerUserId } });
 
     const clientB = await createClientWithLegalIdentity({ tradeName: "Candidat B SARL", siret: "35600000000048" });
-    const tenderB = await prisma.tender.create({ data: { id: randomUUID(), organizationId: orgId, clientAccountId: clientB, title: "Marche B", status: "DRAFT", tags: [], createdBy: ownerUserId } });
+    const candidateB = await createCandidateFor("Candidat B SARL", ownerUserId);
+    const tenderB = await prisma.tender.create({ data: { id: randomUUID(), organizationId: orgId, clientAccountId: clientB, candidateCompanyId: candidateB.id, title: "Marche B", status: "DRAFT", tags: [], createdBy: ownerUserId } });
 
     const readinessBRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderB.id}/official-forms/dc2/candidate/readiness`, { headers: jsonHeaders(tokenOwner) });
     const readinessB = (await readinessBRes.json()) as { fields: { fieldKey: string; value?: unknown }[] };
@@ -313,13 +445,16 @@ describe("Administrative Dossier — V2 Sprint 11B DC2 real official form fill (
 
   it("BLOCKING (mission §39/§58 history) — generating twice for the SAME operator appends revision #2 to the SAME lineage, R1 snapshot stays frozen", async () => {
     const clientAccountId = await createClientWithLegalIdentity({ tradeName: "Charpente Duval SAS", siret: "35600000000048" });
-    const tender = await prisma.tender.create({ data: { id: randomUUID(), organizationId: orgId, clientAccountId, title: "Marche DC2 - historique", status: "DRAFT", tags: [], createdBy: ownerUserId } });
+    const historyCandidate = await createCandidateFor("Charpente Duval SAS", ownerUserId);
+    const tender = await prisma.tender.create({ data: { id: randomUUID(), organizationId: orgId, clientAccountId, candidateCompanyId: historyCandidate.id, title: "Marche DC2 - historique", status: "DRAFT", tags: [], createdBy: ownerUserId } });
 
     const firstRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/official-forms/dc2/candidate/generate`, { method: "POST", headers: jsonHeaders(tokenOwner) });
     const first = (await firstRes.json()) as { id: string; revisions: { revisionNumber: number }[] };
     expect(first.revisions.map((r) => r.revisionNumber)).toEqual([1]);
 
-    await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/legal-identity`, { method: "PATCH", headers: jsonHeaders(tokenOwner), body: JSON.stringify({ tradeName: "Charpente Duval SAS (v2)", confirmDuplicate: true }) });
+    // Checkpoint CCV2-G.2 — la source mutee est l'ENTREPRISE CANDIDATE (route native CCV2-F.2) :
+    // c'est elle qui alimente le formulaire. L'intention du test — R1 fige, R2 a jour — est intacte.
+    await fetch(`${baseUrl}/api/v1/candidate-companies/${historyCandidate.id}`, { method: "PATCH", headers: jsonHeaders(tokenOwner), body: JSON.stringify({ legalName: "Charpente Duval SAS (v2)" }) });
 
     const secondRes = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/official-forms/dc2/candidate/generate`, { method: "POST", headers: jsonHeaders(tokenOwner) });
     const second = (await secondRes.json()) as { id: string; revisions: { revisionNumber: number }[] };

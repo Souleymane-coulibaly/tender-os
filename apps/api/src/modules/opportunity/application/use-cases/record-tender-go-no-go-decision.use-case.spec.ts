@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GetCandidateCompanyUseCase } from "../../../candidate-company";
+import { CandidateCompany } from "../../../candidate-company/domain/candidate-company.aggregate";
 import { InMemoryCandidateCompanyRepository } from "../../../candidate-company/test-support/fakes";
 import { ClientAccountNotFoundError } from "../../../client-portfolio";
 import { CreateTenderUseCase, GetTenderUseCase, TenderPermissionMissingError } from "../../../tenders";
@@ -20,6 +21,20 @@ async function buildHarness() {
   const clock = new FixedClock();
   const clientPortfolio = await createClientPortfolioTestFixture(ORG);
 
+  // Checkpoint TENDEROS-2.1-CCV2-G.1 (POLICY A) — un Tender exploitable ne nait plus sans
+  // entreprise candidate. Le harnais en cree donc une VRAIE, plutot que de contourner la regle :
+  // ces tests portent sur la decision GO/NO-GO, pas sur la creation, et doivent s'appuyer sur un
+  // Tender legitime.
+  const candidateCompanyRepository = new InMemoryCandidateCompanyRepository();
+  const harnessCandidate = CandidateCompany.create({
+    id: "candidate-harness-1",
+    organizationId: ORG,
+    name: "Candidat du harnais SAS",
+    createdBy: "user-1",
+    occurredAt: clock.now(),
+  });
+  await candidateCompanyRepository.create(harnessCandidate);
+
   const createTenderUseCase = new CreateTenderUseCase(
     tenderRepository,
     buyerRepository,
@@ -30,7 +45,7 @@ async function buildHarness() {
     new FakeAtomicTransactionRunner(),
     clientPortfolio.getClientAccountUseCase,
     clientPortfolio.assertClientAccessUseCase,
-    new GetCandidateCompanyUseCase(new InMemoryCandidateCompanyRepository()),
+    new GetCandidateCompanyUseCase(candidateCompanyRepository),
   );
   const getTenderUseCase = new GetTenderUseCase(tenderRepository, clientPortfolio.assertClientAccessUseCase);
 
@@ -50,6 +65,7 @@ async function buildHarness() {
     actorId: "user-1",
     actorRole: "BID_MANAGER",
     clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+    candidateCompanyId: harnessCandidate.id,
     title: "Marché de nettoyage",
   });
 

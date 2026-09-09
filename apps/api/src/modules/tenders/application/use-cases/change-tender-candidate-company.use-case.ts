@@ -6,6 +6,7 @@ import { AssertClientAccessUseCase } from "../../../client-portfolio";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { TenderPermission } from "../../domain/tender-permission";
 import { toTenderSummary, type TenderSummary } from "../dtos";
+import { ATOMIC_TRANSACTION_RUNNER, type AtomicTransactionRunner } from "../ports/atomic-transaction-runner";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
 import { assertHasTenderPermission } from "../policies/tender-authorization.policy";
@@ -53,6 +54,7 @@ export class ChangeTenderCandidateCompanyUseCase {
     @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
     private readonly getCandidateCompanyUseCase: GetCandidateCompanyUseCase,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
+    @Inject(ATOMIC_TRANSACTION_RUNNER) private readonly atomicTransactionRunner: AtomicTransactionRunner,
   ) {}
 
   async execute(command: ChangeTenderCandidateCompanyCommand): Promise<ChangeTenderCandidateCompanyResult> {
@@ -70,32 +72,62 @@ export class ChangeTenderCandidateCompanyUseCase {
       throw new CandidateCompanyArchivedError();
     }
 
+    // Checkpoint TENDEROS-2.1-H.2 — changement SANS EFFET : le candidat demande est deja celui du
+    // Tender. Place APRES la validation du candidat fourni, afin de preserver exactement le contrat
+    // existant (un candidat inexistant ou archive reste refuse, meme s'il est deja le courant).
+    //
+    // Mesure avant correction : la version passait de 1 a 2, une entree d'audit
+    // « tender.candidate_company_changed » etait ecrite et un evenement de domaine emis — pour une
+    // operation qui n'avait rien change. Un journal d'audit qui rapporte des changements qui n'ont
+    // pas eu lieu est un journal auquel on ne peut plus se fier ; et l'evenement poussait les
+    // consommateurs a retraiter un Tender inchange.
+    //
+    // Effet de bord recherche : deux requetes A->B concurrentes ne produisent plus qu'un seul
+    // changement observable, la seconde devenant un no-op. L'idempotence OBSERVABLE du changement de
+    // candidat decoule ainsi d'une regle metier vraie, et non d'un mecanisme de deduplication ajoute.
+    if (previousCandidateCompanyId === command.candidateCompanyId) {
+      return toTenderSummary(tender);
+    }
+
     const occurredAt = this.clock.now();
     tender.changeCandidateCompany(command.candidateCompanyId, occurredAt);
 
-    await this.tenderRepository.save(tender);
+    // Checkpoint TENDEROS-2.1-H.2 — les TROIS ecritures obligatoires sont regroupees dans UNE
+    // transaction, exactement comme `CreateTenderUseCase` le fait deja depuis l'origine.
+    //
+    // Elles etaient auparavant trois `await` sequentiels sans transaction. L'injection de panne l'a
+    // montre : une defaillance du journal d'audit ou de l'Outbox laissait le Tender AVEC SON NOUVEAU
+    // CANDIDAT, mais sans trace d'audit ni evenement de domaine. Deux consequences, toutes deux
+    // silencieuses : un changement d'entite juridique candidate invisible pour l'audit, et des
+    // consommateurs restes sur l'ancien candidat sans que rien ne signale l'anomalie.
+    //
+    // Le changement de candidat n'est pas une mutation anodine — il decide quelle personne morale
+    // repond a l'appel d'offres. Il merite la meme garantie que la creation.
+    await this.atomicTransactionRunner.run(async () => {
+      await this.tenderRepository.save(tender);
 
-    await this.auditLogWriter.record({
-      organizationId: command.organizationId,
-      actorId: command.actorId,
-      action: "tender.candidate_company_changed",
-      resourceType: "tender",
-      resourceId: tender.id.value,
-      requestId: command.requestId,
-      metadata: { previousCandidateCompanyId, newCandidateCompanyId: command.candidateCompanyId, reason: command.reason },
-    });
+      await this.auditLogWriter.record({
+        organizationId: command.organizationId,
+        actorId: command.actorId,
+        action: "tender.candidate_company_changed",
+        resourceType: "tender",
+        resourceId: tender.id.value,
+        requestId: command.requestId,
+        metadata: { previousCandidateCompanyId, newCandidateCompanyId: command.candidateCompanyId, reason: command.reason },
+      });
 
-    await this.outboxWriter.write({
-      organizationId: command.organizationId,
-      events: [
-        {
-          eventType: "TenderCandidateCompanyChanged",
-          aggregateType: "Tender",
-          aggregateId: tender.id.value,
-          payload: { tenderId: tender.id.value, previousCandidateCompanyId, newCandidateCompanyId: command.candidateCompanyId },
-          occurredAt,
-        },
-      ],
+      await this.outboxWriter.write({
+        organizationId: command.organizationId,
+        events: [
+          {
+            eventType: "TenderCandidateCompanyChanged",
+            aggregateType: "Tender",
+            aggregateId: tender.id.value,
+            payload: { tenderId: tender.id.value, previousCandidateCompanyId, newCandidateCompanyId: command.candidateCompanyId },
+            occurredAt,
+          },
+        ],
+      });
     });
 
     return toTenderSummary(tender);

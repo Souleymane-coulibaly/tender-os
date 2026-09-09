@@ -38,7 +38,14 @@ export type CompanyLegalIdentityRecord = Readonly<{
 export type CompanyRepresentativeRecord = Readonly<{
   id: string;
   organizationId: string;
-  clientAccountId: string;
+  /** Checkpoint CCV2-B/C — propriétaire Legacy. Nullable depuis CCV2-C : une capacité créée
+   *  directement pour une CandidateCompany NATIVE (sans `sourceClientAccountId`) n'a aucun
+   *  ClientAccount. La base garantit qu'au moins un des deux propriétaires est présent
+   *  (CHECK `*_owner_present_check`). */
+  clientAccountId: string | null;
+  /** Checkpoint CCV2-B — propriétaire métier V2. Quand il est renseigné, `CandidateCompany` fait
+   *  autorité et `clientAccountId` n'est plus qu'un pointeur de lignage. */
+  candidateCompanyId: string | null;
   firstName: string;
   lastName: string;
   type: string;
@@ -59,7 +66,14 @@ export type CompanyRepresentativeRecord = Readonly<{
 export type CompanyBankAccountRecord = Readonly<{
   id: string;
   organizationId: string;
-  clientAccountId: string;
+  /** Checkpoint CCV2-B/C — propriétaire Legacy. Nullable depuis CCV2-C : une capacité créée
+   *  directement pour une CandidateCompany NATIVE (sans `sourceClientAccountId`) n'a aucun
+   *  ClientAccount. La base garantit qu'au moins un des deux propriétaires est présent
+   *  (CHECK `*_owner_present_check`). */
+  clientAccountId: string | null;
+  /** Checkpoint CCV2-B — propriétaire métier V2. Quand il est renseigné, `CandidateCompany` fait
+   *  autorité et `clientAccountId` n'est plus qu'un pointeur de lignage. */
+  candidateCompanyId: string | null;
   accountHolder: string;
   bankName: string | null;
   iban: string;
@@ -79,7 +93,14 @@ export type CompanyBankAccountRecord = Readonly<{
 export type CompanyInsuranceRecord = Readonly<{
   id: string;
   organizationId: string;
-  clientAccountId: string;
+  /** Checkpoint CCV2-B/C — propriétaire Legacy. Nullable depuis CCV2-C : une capacité créée
+   *  directement pour une CandidateCompany NATIVE (sans `sourceClientAccountId`) n'a aucun
+   *  ClientAccount. La base garantit qu'au moins un des deux propriétaires est présent
+   *  (CHECK `*_owner_present_check`). */
+  clientAccountId: string | null;
+  /** Checkpoint CCV2-B — propriétaire métier V2. Quand il est renseigné, `CandidateCompany` fait
+   *  autorité et `clientAccountId` n'est plus qu'un pointeur de lignage. */
+  candidateCompanyId: string | null;
   type: string;
   otherTypeLabel: string | null;
   insurer: string | null;
@@ -100,7 +121,14 @@ export type CompanyInsuranceRecord = Readonly<{
 export type CompanyCertificationRecord = Readonly<{
   id: string;
   organizationId: string;
-  clientAccountId: string;
+  /** Checkpoint CCV2-B/C — propriétaire Legacy. Nullable depuis CCV2-C : une capacité créée
+   *  directement pour une CandidateCompany NATIVE (sans `sourceClientAccountId`) n'a aucun
+   *  ClientAccount. La base garantit qu'au moins un des deux propriétaires est présent
+   *  (CHECK `*_owner_present_check`). */
+  clientAccountId: string | null;
+  /** Checkpoint CCV2-B — propriétaire métier V2. Quand il est renseigné, `CandidateCompany` fait
+   *  autorité et `clientAccountId` n'est plus qu'un pointeur de lignage. */
+  candidateCompanyId: string | null;
   name: string;
   issuer: string | null;
   number: string | null;
@@ -118,7 +146,14 @@ export type CompanyCertificationRecord = Readonly<{
 export type CompanyReferenceRecord = Readonly<{
   id: string;
   organizationId: string;
-  clientAccountId: string;
+  /** Checkpoint CCV2-B/C — propriétaire Legacy. Nullable depuis CCV2-C : une capacité créée
+   *  directement pour une CandidateCompany NATIVE (sans `sourceClientAccountId`) n'a aucun
+   *  ClientAccount. La base garantit qu'au moins un des deux propriétaires est présent
+   *  (CHECK `*_owner_present_check`). */
+  clientAccountId: string | null;
+  /** Checkpoint CCV2-B — propriétaire métier V2. Quand il est renseigné, `CandidateCompany` fait
+   *  autorité et `clientAccountId` n'est plus qu'un pointeur de lignage. */
+  candidateCompanyId: string | null;
   projectName: string;
   referenceClientName: string | null;
   sector: string | null;
@@ -153,7 +188,14 @@ export type CompanyReferenceDocumentRecord = Readonly<{
 export type CompanyHumanResourceRecord = Readonly<{
   id: string;
   organizationId: string;
-  clientAccountId: string;
+  /** Checkpoint CCV2-B/C — propriétaire Legacy. Nullable depuis CCV2-C : une capacité créée
+   *  directement pour une CandidateCompany NATIVE (sans `sourceClientAccountId`) n'a aucun
+   *  ClientAccount. La base garantit qu'au moins un des deux propriétaires est présent
+   *  (CHECK `*_owner_present_check`). */
+  clientAccountId: string | null;
+  /** Checkpoint CCV2-B — propriétaire métier V2. Quand il est renseigné, `CandidateCompany` fait
+   *  autorité et `clientAccountId` n'est plus qu'un pointeur de lignage. */
+  candidateCompanyId: string | null;
   category: string;
   title: string;
   headcount: number;
@@ -172,7 +214,14 @@ export type CompanyHumanResourceRecord = Readonly<{
 export type CompanyMaterialResourceRecord = Readonly<{
   id: string;
   organizationId: string;
-  clientAccountId: string;
+  /** Checkpoint CCV2-B/C — propriétaire Legacy. Nullable depuis CCV2-C : une capacité créée
+   *  directement pour une CandidateCompany NATIVE (sans `sourceClientAccountId`) n'a aucun
+   *  ClientAccount. La base garantit qu'au moins un des deux propriétaires est présent
+   *  (CHECK `*_owner_present_check`). */
+  clientAccountId: string | null;
+  /** Checkpoint CCV2-B — propriétaire métier V2. Quand il est renseigné, `CandidateCompany` fait
+   *  autorité et `clientAccountId` n'est plus qu'un pointeur de lignage. */
+  candidateCompanyId: string | null;
   category: string;
   name: string;
   description: string | null;
@@ -196,6 +245,24 @@ export type DocumentClientAccountAssociationRecord = Readonly<{
   category: string;
   issuedAt: Date | null;
   expiresAt: Date | null;
+  createdByUserId: string;
+  createdAt: Date;
+}>;
+
+/** Checkpoint TENDEROS-2.1-CCV2-D — association d'un Document à une entreprise candidate. Le
+ *  FICHIER reste intégralement porté par `Document`/`DocumentVersion` : cette ligne ne contient
+ *  aucun contenu, aucune clé de stockage, aucun checksum — uniquement l'appartenance métier et ses
+ *  métadonnées de validité. */
+export type DocumentCandidateCompanyAssociationRecord = Readonly<{
+  id: string;
+  organizationId: string;
+  documentId: string;
+  candidateCompanyId: string;
+  category: string;
+  label: string | null;
+  issuedAt: Date | null;
+  validFrom: Date | null;
+  validUntil: Date | null;
   createdByUserId: string;
   createdAt: Date;
 }>;

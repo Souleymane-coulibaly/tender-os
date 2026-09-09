@@ -80,21 +80,28 @@ function buildAssembler(input: {
   /** `null` = CandidateCompany introuvable (course bénigne) ; objet = trouvée, avec ou sans lien legacy. */
   candidateCompany?: { sourceClientAccountId?: string | undefined } | null;
   profiles?: Record<string, ProfileFixture>;
+  /** Checkpoint CCV2-E — capacités de la SOT `CandidateCompany`. Vides par défaut : un candidat
+   *  sans capacité doit produire un contexte SANS capacité, jamais un emprunt au profil client. */
+  candidateCapabilities?: Partial<{ certifications: unknown[]; insurances: unknown[]; references: unknown[]; humanResources: unknown[]; materialResources: unknown[] }> | undefined;
 }): TechnicalMemoSectionContextAssembler {
-  const profiles = input.profiles ?? {};
+  const resolveCandidateCapabilitiesUseCase = {
+    execute: async () => ({
+      source: "CANDIDATE_COMPANY",
+      representatives: [],
+      insurances: input.candidateCapabilities?.insurances ?? [],
+      certifications: input.candidateCapabilities?.certifications ?? [],
+      references: input.candidateCapabilities?.references ?? [],
+      humanResources: input.candidateCapabilities?.humanResources ?? [],
+      materialResources: input.candidateCapabilities?.materialResources ?? [],
+      documents: [],
+    }),
+  };
   const getTenderUseCase = { execute: async () => ({ candidateCompanyId: input.tenderCandidateCompanyId }) };
   const resolveCandidateIdentityUseCase = { execute: async () => input.candidateIdentity };
   const getCandidateCompanyUseCase = {
     execute: async () => {
       if (input.candidateCompany === null || input.candidateCompany === undefined) throw new Error("CandidateCompany not found (test fixture)");
       return { id: input.tenderCandidateCompanyId, sourceClientAccountId: input.candidateCompany.sourceClientAccountId };
-    },
-  };
-  const getCompanyProfileUseCase = {
-    execute: async (query: { clientAccountId: string }) => {
-      const fixture = profiles[query.clientAccountId];
-      if (!fixture) throw new Error(`No company-profile fixture for clientAccountId=${query.clientAccountId} (test fixture)`);
-      return emptyProfile(fixture);
     },
   };
 
@@ -106,9 +113,9 @@ function buildAssembler(input: {
     NEVER_CALLED_EFFECTIVE_ANALYSIS as never,
     EMPTY_KNOWLEDGE_SEARCH as never,
     { execute: async () => ({}) } as never,
-    getCompanyProfileUseCase as never,
     getTenderUseCase as never,
     resolveCandidateIdentityUseCase as never,
+    resolveCandidateCapabilitiesUseCase as never,
     getCandidateCompanyUseCase as never,
   );
 }
@@ -140,17 +147,23 @@ describe("TechnicalMemoSectionContextAssembler — candidate identity NEW/LEGACY
     expect(context.contextBlock).not.toContain("Client Legacy Legal SARL");
   });
 
-  it("LEGACY FLOW — Tender.candidateCompanyId absent → identity falls back entirely to company-profile.legalIdentity, exactly as before A4", async () => {
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.2 — CONTRAT INVERSÉ. Ce test encodait le repli que la mission
+   * supprime : sans entreprise candidate, l'identité ou les capacités du CLIENT commercial étaient
+   * servies comme si elles étaient celles du candidat. La MOITIÉ essentielle de l'ancienne règle
+   * survit : le client n'est JAMAIS présenté comme le candidat. Ce qui change, c'est qu'on refuse
+   * désormais au lieu de substituer.
+   */
+  it("BLOQUANT (CCV2-G.2) — sans entreprise candidate, l'assemblage du contexte est REFUSÉ au lieu de servir le client", async () => {
     const assembler = buildAssembler({
       tenderCandidateCompanyId: undefined,
       candidateIdentity: { source: CandidateIdentitySource.None },
       profiles: { "client-1": emptyProfile({ legalIdentity: { legalName: "Client Legacy Legal SARL", tradeName: "Client Legacy Legal SARL", siretPrincipal: "35600000000048" } }) },
     });
-
-    const context = await assembler.assemble({ organizationId: ORG_ID, actorId: "user-1", actorRole: "OWNER", memo: buildMemo("client-1"), section });
-
-    expect(context.contextBlock).toContain("Client Legacy Legal SARL");
-    expect(context.contextBlock).not.toContain("ALPHA-SERVICES");
+  
+    await expect(
+      assembler.assemble({ organizationId: ORG_ID, actorId: "user-1", actorRole: "OWNER", memo: buildMemo("client-1"), section }),
+    ).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_REQUIRED" });
   });
 });
 
@@ -186,19 +199,22 @@ describe("TechnicalMemoSectionContextAssembler — candidate CAPABILITIES (Check
     expect(context.contextBlock).not.toContain("Référence");
   });
 
-  it("TEST LEGACY CAPABILITY FALLBACK (mission §52) — a CandidateCompany migrated from its OWN ClientAccount (sourceClientAccountId) surfaces that ClientAccount's real capacities, explicitly labeled as a legacy fallback, never as unqualified Candidate data", async () => {
+  it("Checkpoint CCV2-E (remplace TEST LEGACY CAPABILITY FALLBACK §52) — les capacités proviennent de la SOT CandidateCompany elle-même, plus d'un ClientAccount migré, et jamais du Client du Tender", async () => {
     const assembler = buildAssembler({
       tenderCandidateCompanyId: "candidate-alpha",
       candidateIdentity: CANDIDATE_ALPHA_IDENTITY,
       candidateCompany: { sourceClientAccountId: "alpha-legacy-client" },
+      // Capacités réellement portées par la CandidateCompany (satellites CCV2-B/C).
+      candidateCapabilities: {
+        certifications: [{ id: "cert-alpha", name: "ISO-ALPHA", temporalStatus: "NO_EXPIRY" }],
+        references: [{ id: "ref-alpha", projectName: "Hôpital A", sector: "Santé" }],
+      },
       profiles: {
-        // The Tender's own Client — must never be consulted for capacities here.
+        // Le Client du Tender ET l'ancien ClientAccount d'origine portent des données PIÈGES :
+        // aucune des deux ne doit apparaître, y compris celle du `sourceClientAccountId`, dont le
+        // repli a été supprimé par CCV2-E.
         "client-x": emptyProfile({ certifications: [{ id: "cert-client-x", name: "ISO-CLIENT-X" }] }),
-        // ALPHA's own migrated legacy profile — the legitimate fallback source.
-        "alpha-legacy-client": emptyProfile({
-          certifications: [{ id: "cert-alpha", name: "ISO-ALPHA" }],
-          references: [{ id: "ref-alpha", projectName: "Hôpital A", sector: "Santé" }],
-        }),
+        "alpha-legacy-client": emptyProfile({ certifications: [{ id: "cert-legacy", name: "ISO-LEGACY-PIEGE" }] }),
       },
     });
 
@@ -208,8 +224,9 @@ describe("TechnicalMemoSectionContextAssembler — candidate CAPABILITIES (Check
     expect(context.contextBlock).toContain("ISO-ALPHA");
     expect(context.contextBlock).toContain("Hôpital A");
     expect(context.contextBlock).not.toContain("ISO-CLIENT-X");
-    // Mission §15 — la source doit être explicite, jamais un mélange ambigu.
-    expect(context.contextBlock).toContain("fallback legacy");
+    expect(context.contextBlock).not.toContain("ISO-LEGACY-PIEGE");
+    // Plus aucun qualificatif de repli : la donnée n'est plus empruntée, elle appartient au candidat.
+    expect(context.contextBlock).not.toContain("fallback legacy");
   });
 
   it("TEST NO LEGACY PROFILE (mission §53) — a CandidateCompany with no sourceClientAccountId and no company-profile at all still yields the Candidate identity; missing capabilities are absent, never a Client substitution", async () => {
@@ -241,36 +258,43 @@ describe("TechnicalMemoSectionContextAssembler — candidate CAPABILITIES (Check
     expect(context.contextBlock).not.toContain("ISO-CLIENT-X");
   });
 
-  it("LEGACY FLOW capacities (mission §53 baseline) — unchanged since A4: no CandidateCompany at all, capacities come from company-profile via memo.clientAccountId exactly as before A6.3", async () => {
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.2 — CONTRAT INVERSÉ. Ce test encodait le repli que la mission
+   * supprime : sans entreprise candidate, les capacités du CLIENT commercial étaient servies comme
+   * si elles étaient celles du candidat. La MOITIÉ essentielle de l'ancienne règle survit : le
+   * client n'est JAMAIS présenté comme le candidat. Ce qui change, c'est le refus au lieu de la
+   * substitution.
+   */
+  it("BLOQUANT (CCV2-G.2) — sans entreprise candidate, aucune capacité du client n'est servie : l'assemblage est refusé", async () => {
     const assembler = buildAssembler({
       tenderCandidateCompanyId: undefined,
       candidateIdentity: { source: CandidateIdentitySource.None },
-      profiles: { "client-1": emptyProfile({ certifications: [{ id: "cert-legacy", name: "ISO-LEGACY" }] }) },
+      profiles: { "client-1": emptyProfile({}) },
     });
-
-    const context = await assembler.assemble({ organizationId: ORG_ID, actorId: "user-1", actorRole: "OWNER", memo: buildMemo("client-1"), section });
-
-    expect(context.contextBlock).toContain("ISO-LEGACY");
-    expect(context.contextBlock).not.toContain("fallback legacy");
+  
+    await expect(
+      assembler.assemble({ organizationId: ORG_ID, actorId: "user-1", actorRole: "OWNER", memo: buildMemo("client-1"), section }),
+    ).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_REQUIRED" });
   });
 
-  it("TEST MULTI-CANDIDATE (mission §54) — two Tenders resolving two different CandidateCompanies (with their own legacy capacities) never cross-contaminate each other's context", async () => {
+  it("TEST MULTI-CANDIDATE (mission §54, source CandidateCompany depuis CCV2-E) — two Tenders resolving two different CandidateCompanies never cross-contaminate each other's context", async () => {
     const alphaAssembler = buildAssembler({
       tenderCandidateCompanyId: "candidate-alpha",
       candidateIdentity: CANDIDATE_ALPHA_IDENTITY,
       candidateCompany: { sourceClientAccountId: "alpha-legacy-client" },
-      profiles: {
-        "alpha-legacy-client": emptyProfile({ certifications: [{ id: "cert-alpha", name: "ISO-ALPHA" }], references: [{ id: "ref-alpha", projectName: "Hôpital A" }] }),
-        "beta-legacy-client": emptyProfile({ certifications: [{ id: "cert-beta", name: "ISO-BETA" }], references: [{ id: "ref-beta", projectName: "Aéroport B" }] }),
+      // Checkpoint CCV2-E — capacités portées par la CandidateCompany elle-même.
+      candidateCapabilities: {
+        certifications: [{ id: "cert-alpha", name: "ISO-ALPHA", temporalStatus: "NO_EXPIRY" }],
+        references: [{ id: "ref-alpha", projectName: "Hôpital A" }],
       },
     });
     const betaAssembler = buildAssembler({
       tenderCandidateCompanyId: "candidate-beta",
       candidateIdentity: { ...CANDIDATE_ALPHA_IDENTITY, candidateCompanyId: "candidate-beta", displayName: "BETA-SERVICES-SAS", legalName: "BETA-SERVICES-SAS" },
       candidateCompany: { sourceClientAccountId: "beta-legacy-client" },
-      profiles: {
-        "alpha-legacy-client": emptyProfile({ certifications: [{ id: "cert-alpha", name: "ISO-ALPHA" }], references: [{ id: "ref-alpha", projectName: "Hôpital A" }] }),
-        "beta-legacy-client": emptyProfile({ certifications: [{ id: "cert-beta", name: "ISO-BETA" }], references: [{ id: "ref-beta", projectName: "Aéroport B" }] }),
+      candidateCapabilities: {
+        certifications: [{ id: "cert-beta", name: "ISO-BETA", temporalStatus: "NO_EXPIRY" }],
+        references: [{ id: "ref-beta", projectName: "Aéroport B" }],
       },
     });
 
@@ -294,10 +318,13 @@ describe("TechnicalMemoSectionContextAssembler — candidate CAPABILITIES (Check
       "candidate-alpha": CANDIDATE_ALPHA_IDENTITY,
       "candidate-beta": { ...CANDIDATE_ALPHA_IDENTITY, candidateCompanyId: "candidate-beta", displayName: "BETA-SERVICES-SAS", legalName: "BETA-SERVICES-SAS" },
     };
-    const sourceClientAccountIds: Record<string, string> = { "candidate-alpha": "alpha-legacy-client", "candidate-beta": "beta-legacy-client" };
-    const profiles: Record<string, ProfileFixture> = {
-      "alpha-legacy-client": emptyProfile({ certifications: [{ id: "cert-alpha", name: "ISO-ALPHA" }] }),
-      "beta-legacy-client": emptyProfile({ certifications: [{ id: "cert-beta", name: "ISO-BETA" }] }),
+    // Checkpoint CCV2-E — les capacités viennent désormais du résolveur CANDIDATE, plus du repli
+    // par `sourceClientAccountId` (supprimé). La propriété prouvée est INCHANGÉE et même renforcée :
+    // deux entreprises candidates distinctes ne partagent jamais leurs capacités, et la source est
+    // maintenant leur propre SOT au lieu d'un profil client emprunté.
+    const capabilitiesByCandidate: Record<string, unknown> = {
+      "candidate-alpha": { source: "CANDIDATE_COMPANY", representatives: [], insurances: [], certifications: [{ id: "cert-alpha", name: "ISO-ALPHA", temporalStatus: "NO_EXPIRY" }], references: [], humanResources: [], materialResources: [], documents: [] },
+      "candidate-beta": { source: "CANDIDATE_COMPANY", representatives: [], insurances: [], certifications: [{ id: "cert-beta", name: "ISO-BETA", temporalStatus: "NO_EXPIRY" }], references: [], humanResources: [], materialResources: [], documents: [] },
     };
 
     const assembler = new TechnicalMemoSectionContextAssembler(
@@ -308,10 +335,12 @@ describe("TechnicalMemoSectionContextAssembler — candidate CAPABILITIES (Check
       NEVER_CALLED_EFFECTIVE_ANALYSIS as never,
       EMPTY_KNOWLEDGE_SEARCH as never,
       { execute: async () => ({}) } as never,
-      { execute: async (query: { clientAccountId: string }) => emptyProfile(profiles[query.clientAccountId]) } as never,
+      // Le profil du CLIENT est délibérément vide : en NEW FLOW il n'est jamais consulté, et le
+      // laisser vide garantit qu'aucune assertion ci-dessous ne peut réussir grâce à lui.
       { execute: async () => ({ candidateCompanyId: currentCandidateCompanyId }) } as never,
       { execute: async () => identities[currentCandidateCompanyId] } as never,
-      { execute: async () => ({ sourceClientAccountId: sourceClientAccountIds[currentCandidateCompanyId] }) } as never,
+      { execute: async () => capabilitiesByCandidate[currentCandidateCompanyId] } as never,
+      { execute: async () => ({ sourceClientAccountId: undefined }) } as never,
     );
 
     const firstGeneration = await assembler.assemble({ organizationId: ORG_ID, actorId: "user-1", actorRole: "OWNER", memo: buildMemo("client-1"), section });

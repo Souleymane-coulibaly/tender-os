@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { login, readFixture } from "./fixtures";
+import { ensureLoggedIn, login, readFixture } from "./fixtures";
 
 /**
  * V2 Sprint 15 (Dashboard opérationnel) — preuve Playwright bout-en-bout contre les vraies
@@ -16,6 +16,12 @@ import { login, readFixture } from "./fixtures";
 test.describe.serial("Dashboard Premium — flux principal", () => {
   test("mission §25.54-§25.68 — affiche l'en-tête, les 4 KPI et les widgets premium, puis navigue vers un dossier depuis les échéances", async ({ page }) => {
     const fixture = readFixture();
+    // Checkpoint TENDEROS-2.1-H.4 — ce PREMIER test conserve deliberement un login REEL : la
+    // strategie de session ne doit pas faire disparaitre la preuve que l'authentification fonctionne.
+    // Les tests suivants reutilisent la session (`ensureLoggedIn`) — sept connexions reelles dans un
+    // meme fichier epuisaient le bucket `auth` (10/60 s), et les deux derniers tests echouaient sur
+    // un vrai 429 sans aucun rapport avec ce qu'ils verifiaient. Le throttle PRODUIT reste inchange :
+    // c'est le test qui cesse de le solliciter inutilement.
     await login(page, fixture);
 
     await page.goto("/app");
@@ -37,7 +43,7 @@ test.describe.serial("Dashboard Premium — flux principal", () => {
 
   test("mission §25.61 — le widget Mon utilisation affiche les crédits AO réels", async ({ page }) => {
     const fixture = readFixture();
-    await login(page, fixture);
+    await ensureLoggedIn(page, fixture);
 
     await page.goto("/app");
     const usageHeading = page.getByRole("heading", { name: "Mon utilisation" });
@@ -49,7 +55,7 @@ test.describe.serial("Dashboard Premium — flux principal", () => {
   test("responsive mobile (390px) — aucun débordement horizontal, l'en-tête et les KPI restent visibles sans scroll excessif (mission §10/§107/§114/§25.98)", async ({ page }) => {
     const fixture = readFixture();
     await page.setViewportSize({ width: 390, height: 844 });
-    await login(page, fixture);
+    await ensureLoggedIn(page, fixture);
 
     await page.goto("/app");
     await expect(page.getByRole("heading", { name: /^Bonjour/ })).toBeVisible();
@@ -64,7 +70,7 @@ test.describe.serial("Dashboard Premium — flux principal", () => {
   test("desktop (1440px) — grille riche, Mes dossiers prioritaires et Échéances côte à côte (mission §25.98)", async ({ page }) => {
     const fixture = readFixture();
     await page.setViewportSize({ width: 1440, height: 900 });
-    await login(page, fixture);
+    await ensureLoggedIn(page, fixture);
 
     await page.goto("/app");
     const priorityHeading = page.getByRole("heading", { name: "Mes dossiers prioritaires" });
@@ -84,7 +90,7 @@ test.describe.serial("Dashboard Premium — flux principal", () => {
 
   test("mission §25.108 — Org A ne voit jamais les dossiers prioritaires/échéances d'une Org B", async ({ page }) => {
     const fixture = readFixture();
-    await login(page, fixture);
+    await ensureLoggedIn(page, fixture);
 
     await page.goto("/app");
     await expect(page.getByRole("heading", { name: /^Bonjour/ })).toBeVisible();
@@ -103,7 +109,7 @@ test.describe.serial("Dashboard Premium — flux principal", () => {
 test.describe("Checklist d'activation — Dashboard", () => {
   test("mission §25.69/§25.71 — affiche la progression sous forme sobre \"N / 7 étapes terminées\", jamais de gamification (points/badges)", async ({ page }) => {
     const fixture = readFixture();
-    await login(page, fixture);
+    await ensureLoggedIn(page, fixture);
 
     await page.goto("/app");
     const checklistHeading = page.getByRole("heading", { name: "Votre checklist d'activation" });
@@ -118,7 +124,7 @@ test.describe("Checklist d'activation — Dashboard", () => {
 
   test("mission §25.70 — \"Importer le premier DCE\" est coché pour une organisation qui a déjà au moins un Tender (dérivé de l'état réel, jamais un second état manuel)", async ({ page }) => {
     const fixture = readFixture();
-    await login(page, fixture);
+    await ensureLoggedIn(page, fixture);
 
     await page.goto("/app");
     const checklistHeading = page.getByRole("heading", { name: "Votre checklist d'activation" });

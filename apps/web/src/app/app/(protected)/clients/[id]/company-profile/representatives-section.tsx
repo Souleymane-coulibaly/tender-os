@@ -6,6 +6,7 @@ import { REPRESENTATIVE_TYPES, REPRESENTATIVE_TYPE_LABELS, type CompanyRepresent
 
 const INITIAL_STATE: FormActionState = {};
 
+
 /** Mission §4.3 — aucun signataire ici n'est sélectionné automatiquement pour un Tender : ce sont
  *  des contacts déclarés au niveau entreprise, `SigningPower` (module administratif) reste le seul
  *  pouvoir de signature réel et opposable. */

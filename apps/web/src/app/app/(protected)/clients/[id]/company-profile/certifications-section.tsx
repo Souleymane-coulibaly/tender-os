@@ -1,15 +1,18 @@
 "use client";
 
-import { useActionState } from "react";
-import { createCertificationAction, type FormActionState } from "../../../../company-profile-actions";
+/**
+ * Checkpoint TENDEROS-2.1-CCV2-I.4 — rubrique en LECTURE SEULE.
+ *
+ * Le formulaire de creation a ete retire : sa route refusait tout depuis CCV2-I.1 et n'existe plus.
+ * Cette donnee appartient desormais a `CandidateCompany`. La LISTE reste affichee — des lignes
+ * Legacy subsistent chez les clients sans entreprise candidate (registre CCV2-I.2) et rien d'autre
+ * ne les montre : les masquer reviendrait a les faire disparaitre du produit.
+ */
 import { TEMPORAL_VALIDITY_LABELS, temporalValidityTone, type CompanyCertification } from "../../../../../../lib/company-profile-types";
 import { Badge } from "../../../../../../components/ui";
 
-const INITIAL_STATE: FormActionState = {};
 
-export function CertificationsSection({ clientId, certifications }: { clientId: string; certifications: CompanyCertification[] }) {
-  const boundAction = createCertificationAction.bind(null, clientId);
-  const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
+export function CertificationsSection({ certifications }: { clientId: string; certifications: CompanyCertification[] }) {
 
   return (
     <div className="flex flex-col gap-4">
@@ -43,44 +46,6 @@ export function CertificationsSection({ clientId, certifications }: { clientId: 
           </table>
         </div>
       )}
-
-      <form action={formAction} className="flex flex-col gap-3 rounded border border-neutral-200 p-3">
-        <h3 className="text-sm font-semibold text-neutral-900">Ajouter une certification</h3>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="name" className="text-xs text-neutral-600">
-              Nom *
-            </label>
-            <input id="name" name="name" required className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="issuer" className="text-xs text-neutral-600">
-              Organisme
-            </label>
-            <input id="issuer" name="issuer" className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="number" className="text-xs text-neutral-600">
-              N° certificat
-            </label>
-            <input id="number" name="number" className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="expiresAt" className="text-xs text-neutral-600">
-            Date d&apos;échéance (facultative)
-          </label>
-          <input id="expiresAt" name="expiresAt" type="date" className="w-48 rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-        </div>
-        {state.error ? (
-          <p role="alert" className="text-sm text-red-600">
-            {state.error}
-          </p>
-        ) : null}
-        <button type="submit" disabled={isPending} className="self-start rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-          {isPending ? "Ajout..." : "Ajouter"}
-        </button>
-      </form>
     </div>
   );
 }

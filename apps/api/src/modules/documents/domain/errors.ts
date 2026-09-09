@@ -104,3 +104,15 @@ export class InvalidFilenameError extends DomainError {
     super("The uploaded filename is invalid.");
   }
 }
+
+/** Checkpoint TENDEROS-2.1-CCV2-D — accès refusé par le rétrécissement métier
+ *  (`DocumentAccessNarrowingPolicy`). L'erreur appartient à CE module parce que le PORT lui
+ *  appartient : le module qui fournit l'implémentation (company-profile) décrit le motif, il n'a
+ *  pas à imposer un code d'erreur étranger au moteur documentaire. 403 : le refus porte sur le rôle
+ *  de l'acteur dans sa propre organisation, il ne révèle aucune existence supplémentaire. */
+export class DocumentAccessNarrowedError extends DomainError {
+  readonly code = "DOCUMENT_ACCESS_NARROWED";
+  constructor(reason: string) {
+    super(reason);
+  }
+}

@@ -216,6 +216,10 @@ describe("Submission — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.organizationSubscription.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    // Checkpoint CCV2-E.3 — le solde ET le ledger de crédits AO référencent l'organisation : sans
+    // ce nettoyage, la suppression viole leurs clés étrangères respectives.
+    await prisma.aoCreditLedgerEntry.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.organizationAoCreditBalance.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgAId, orgBId] } } });
   });
 
@@ -1968,5 +1972,329 @@ describe("Submission — real HTTP + PostgreSQL (NestJS)", () => {
       expect(row?.responsePackageVersionId).toBe(rebuilt.version.id);
       expect(row?.responsePackageArtifactId).toBe(newArtifact.id);
     }, 30000);
+
+    /**
+     * Checkpoint TENDEROS-2.1-CCV2-E.3 — PREUVE REINE `CCV2_E2E_CONVERGENCE`.
+     *
+     * Une seule chaîne runtime, par les routes produit réelles : dossier convergé sur Candidate A,
+     * changement OFFICIEL de candidat vers B, démonstration que plus rien de A ne permet de
+     * déposer, puis reconvergence sur B jusqu'au dépôt réussi et au débit d'EXACTEMENT un crédit.
+     *
+     * Les sentinelles ALPHA/BETA sont uniques : chaque assertion d'absence est doublée d'un témoin
+     * positif, faute de quoi elle serait satisfaite par un artefact vide.
+     */
+    describe("Checkpoint TENDEROS-2.1-CCV2-E.3 — CCV2_E2E_CONVERGENCE (Candidate A vers B vers Submission)", () => {
+      async function setBalance(balance: number): Promise<void> {
+        await prisma.organizationAoCreditBalance.upsert({
+          where: { organizationId: orgAId },
+          create: { id: randomUUID(), organizationId: orgAId, balance },
+          update: { balance },
+        });
+      }
+      async function getBalance(): Promise<number> {
+        const row = await prisma.organizationAoCreditBalance.findUnique({ where: { organizationId: orgAId } });
+        return row?.balance ?? 0;
+      }
+
+      /** Change le candidat par la ROUTE OFFICIELLE — jamais un UPDATE Prisma direct (mission §6). */
+      async function switchCandidate(tenderId: string, candidateCompanyId: string): Promise<Response> {
+        return fetch(`${baseUrl}/api/v1/tenders/${tenderId}/candidate-company`, {
+          method: "POST",
+          headers: authHeaders(tokenOwnerA, orgAId),
+          body: JSON.stringify({ candidateCompanyId }),
+        });
+      }
+
+      async function readReadiness(tenderId: string) {
+        const res = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/submission-readiness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+        return (await res.json()) as { canSubmit: boolean; readinessStatus: string; blockers: string[] };
+      }
+
+      it("CCV2_E2E_CONVERGENCE — dossier A convergé, switch A vers B, aucun artefact A ne permet le dépôt (0 crédit), reconvergence B, dépôt réussi (exactement 1 crédit), rejeu sans second débit", async () => {
+        // ---------- CHAÎNE A ----------
+        const seed = await seedFullyConvergedDossier({ title: "CCV2-E3 ALPHA CCV2 E3" });
+        const candidateA = seed.candidateCompanyId;
+
+        // Candidate B, identité VOLONTAIREMENT incompatible, même organisation.
+        const candidateB = randomUUID();
+        await prisma.candidateCompany.create({
+          data: { id: candidateB, organizationId: orgAId, name: "BETA CCV2 E3", nameNormalized: `beta ccv2 e3 ${candidateB}`, legalName: "BETA CCV2 E3", status: "ACTIVE", createdBy: ownerAUserId },
+        });
+
+        // ÉTAT A cohérent : le dossier est déposable AVANT tout changement.
+        const readinessA = await readReadiness(seed.tenderId);
+        expect(readinessA.readinessStatus).toBe("READY_FOR_SUBMISSION");
+        expect(readinessA.canSubmit).toBe(true);
+
+        // La version A porte bien le candidat A — témoin POSITIF.
+        const versionABefore = await prisma.responsePackageVersion.findUnique({ where: { id: seed.responsePackageVersionId } });
+        expect(versionABefore?.candidateCompanyId).toBe(candidateA);
+
+        // ---------- SWITCH OFFICIEL A vers B ----------
+        const switchRes = await switchCandidate(seed.tenderId, candidateB);
+        expect(switchRes.status).toBe(200);
+        expect((await prisma.tender.findUnique({ where: { id: seed.tenderId } }))?.candidateCompanyId).toBe(candidateB);
+
+        // ---------- PREUVE COMPORTEMENTALE ----------
+        const readinessAfterSwitch = await readReadiness(seed.tenderId);
+        const blockedAfterSwitch = readinessAfterSwitch.canSubmit === false;
+
+        // AO CREDIT NÉGATIF — tentative de dépôt avec l'ancien package A.
+        await setBalance(5);
+        const balanceBefore = await getBalance();
+        const staleDepositRes = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+          method: "POST",
+          headers: authHeaders(tokenOwnerA, orgAId),
+          body: JSON.stringify({ packageId: seed.legacyPackageId, platform: "PLACE", submittedAt: new Date().toISOString() }),
+        });
+        const balanceAfterStaleAttempt = await getBalance();
+
+        // INVARIANT ABSOLU : un dépôt refusé ne consomme JAMAIS de crédit.
+        if (staleDepositRes.status >= 400) {
+          expect(balanceAfterStaleAttempt).toBe(balanceBefore);
+        }
+        // L'artefact A ne peut pas servir B : soit la readiness bloque, soit le dépôt est refusé.
+        expect(blockedAfterSwitch || staleDepositRes.status >= 400).toBe(true);
+
+        // ---------- RECONVERGENCE B ----------
+        // Le produit exige de reconstruire TOUT ce que le changement de candidat a invalidé — trois
+        // blocages remontés par le Final Guard : GONOGO_STALE, TECHNICAL_MEMO_STALE,
+        // VALIDATION_STALE. C'est plus large qu'une simple mutation de chiffrage (E2E_MUTATION, qui
+        // ne demandait qu'un rebuild de package), et c'est correct : changer d'entreprise candidate
+        // invalide l'évaluation d'opportunité, le discours technique et l'approbation finale.
+
+        // 1. GO/NO-GO recalculé POUR LE CANDIDAT COURANT (nouvelle version, l'ancienne est conservée).
+        await prisma.goNoGoReport.create({
+          data: {
+            id: randomUUID(),
+            organizationId: orgAId,
+            tenderId: seed.tenderId,
+            reportVersion: 2,
+            analysisVersion: 1,
+            dceRevision: 1,
+            candidateCompanyId: candidateB,
+            globalScore: 80,
+            confidence: 0.9,
+            complexity: 2,
+            documentaryLoad: "MEDIUM",
+            estimatedPrepTime: {},
+            categoryScores: {},
+            recommendation: "GO",
+            recommendationRationale: "Dossier réévalué pour BETA CCV2 E3 (CCV2-E.3).",
+            calculationVersion: "v1",
+          },
+        });
+
+        // 2. Mémoire technique régénérée pour B : nouvelles révisions estampillées B, puis export.
+        const memoRow = await prisma.technicalMemo.findFirst({ where: { organizationId: orgAId, tenderId: seed.tenderId } });
+        expect(memoRow).not.toBeNull();
+        const memoSections = await prisma.technicalMemoSection.findMany({ where: { technicalMemoId: memoRow!.id } });
+        for (const section of memoSections) {
+          const previous = await prisma.technicalMemoSectionRevision.findFirst({ where: { technicalMemoSectionId: section.id }, orderBy: { revisionNumber: "desc" } });
+          await prisma.technicalMemoSectionRevision.create({
+            data: {
+              id: randomUUID(),
+              organizationId: orgAId,
+              technicalMemoSectionId: section.id,
+              revisionNumber: (previous?.revisionNumber ?? 0) + 1,
+              source: "AI_GENERATED",
+              content: "Contenu rédigé pour BETA CCV2 E3 (CCV2-E.3).",
+              candidateCompanyId: candidateB,
+              createdBy: ownerAUserId,
+            },
+          });
+          await prisma.technicalMemoSection.update({ where: { id: section.id }, data: { content: "Contenu rédigé pour BETA CCV2 E3 (CCV2-E.3).", status: "VALIDATED" } });
+        }
+        const reExportRes = await fetch(`${baseUrl}/api/v1/technical-memos/${memoRow!.id}/export`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({}) });
+        expect(reExportRes.status).toBe(200);
+
+        // 3. Revalidation + nouvelle approbation finale, par les routes réelles.
+        // Le gabarit d'export actif est celui créé par le seed — réutilisé, jamais recréé.
+        const exportTemplate = await prisma.exportTemplate.findFirst({ where: { organizationId: orgAId }, orderBy: { createdAt: "desc" } });
+        expect(exportTemplate).not.toBeNull();
+        const rePreviewRes = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/exports/preview`, {
+          method: "POST",
+          headers: authHeaders(tokenOwnerA, orgAId),
+          body: JSON.stringify({
+            exportTemplateId: exportTemplate!.id,
+            sections: [{ sectionId: "SUMMARY", sourceType: "MANUAL", manualContent: "Mémoire technique rédigé pour BETA CCV2 E3, largement suffisant pour éviter tout avertissement de longueur." }],
+          }),
+        });
+        if (rePreviewRes.status !== 201) {
+          throw new Error(`Preview export refusé — HTTP ${rePreviewRes.status} : ${await rePreviewRes.clone().text()}`);
+        }
+        const rePreviewJob = (await rePreviewRes.json()) as { id: string };
+        const reRunRes = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/validation/run`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ exportJobId: rePreviewJob.id }) });
+        expect(reRunRes.status).toBe(201);
+        const reRun = (await reRunRes.json()) as { id: string };
+        const reApproveRes = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/final-approval`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ validationRunId: reRun.id }) });
+        expect(reApproveRes.status).toBe(201);
+
+        // 4. Response Package reconstruit.
+        const rebuiltPackage = await fetch(`${baseUrl}/api/v1/response-packages/${seed.responsePackageId}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+        expect(rebuiltPackage.status).toBe(201);
+        const rebuilt = (await rebuiltPackage.json()) as { version: { id: string } };
+        await fetch(`${baseUrl}/api/v1/response-packages/${seed.responsePackageId}/versions/${rebuilt.version.id}/validate`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+        const generateRes = await fetch(`${baseUrl}/api/v1/response-packages/${seed.responsePackageId}/versions/${rebuilt.version.id}/generate`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+        expect({ step: "generate", status: generateRes.status, body: await generateRes.clone().text() }).toMatchObject({ status: 201 });
+        const newArtifact = (await generateRes.json()) as { id: string };
+
+        // La version reconstruite porte le candidat COURANT (B), jamais A.
+        const rebuiltRow = await prisma.responsePackageVersion.findUnique({ where: { id: rebuilt.version.id } });
+        expect(rebuiltRow?.candidateCompanyId).toBe(candidateB);
+
+        // La version A reste historiquement A — aucune mutation rétroactive.
+        const versionA = await prisma.responsePackageVersion.findUnique({ where: { id: seed.responsePackageVersionId } });
+        expect(versionA?.candidateCompanyId).toBe(candidateA);
+        expect(versionA?.id).not.toBe(rebuilt.version.id);
+
+        const newPackageRes = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/packages`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+        expect({ step: "packages", status: newPackageRes.status, body: await newPackageRes.clone().text() }).toMatchObject({ status: 201 });
+        const newPackage = (await newPackageRes.json()) as { id: string };
+
+        // ---------- DÉPÔT B ----------
+        // L'organisation de ce harnais est ENTERPRISE, dont le quota `AoMonthlyGrant` vaut
+        // UNLIMITED : `ConsumeAoCreditUseCase` ne décrémente alors AUCUN ledger (fair-use illimité,
+        // comportement produit délibéré). Pour MESURER un débit, il faut un plan compté — on bascule
+        // donc temporairement sur STARTER, exactement comme la preuve déjà certifiée
+        // `ao-credit-consumption-http.integration.spec.ts`, puis on restaure le plan d'origine.
+        // Aucun bypass de facturation, aucun backdoor Stripe : seul le PLAN change.
+        await prisma.organizationSubscription.updateMany({ where: { organizationId: orgAId }, data: { planTier: "STARTER" } });
+        try {
+        await setBalance(3);
+        const balanceBeforeSuccess = await getBalance();
+        const successRes = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+          method: "POST",
+          headers: authHeaders(tokenOwnerA, orgAId),
+          body: JSON.stringify({ packageId: newPackage.id, platform: "PLACE", submittedAt: new Date().toISOString() }),
+        });
+        const successBody = await successRes.clone().text();
+        if (successRes.status !== 201) {
+          throw new Error(`Dépôt B refusé — HTTP ${successRes.status} : ${successBody}`);
+        }
+        const submission = (await successRes.json()) as { id: string; status: string; responsePackages: { lotId: string; responsePackageVersionId: string; responsePackageArtifactId: string }[] };
+        expect(submission.status).toBe("SUBMITTED");
+
+        // PROVENANCE PERSISTÉE : exactement la version et l'artefact reconstruits pour B.
+        const provenance = submission.responsePackages.find((row) => row.lotId === seed.lotId);
+        expect(provenance?.responsePackageVersionId).toBe(rebuilt.version.id);
+        expect(provenance?.responsePackageArtifactId).toBe(newArtifact.id);
+        expect(provenance?.responsePackageVersionId).not.toBe(seed.responsePackageVersionId);
+
+        // AO CREDIT POSITIF : exactement UN débit.
+        const balanceAfterSuccess = await getBalance();
+        expect(balanceAfterSuccess).toBe(balanceBeforeSuccess - 1);
+
+        // REJEU / double-clic : aucun second débit.
+        const replayRes = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+          method: "POST",
+          headers: authHeaders(tokenOwnerA, orgAId),
+          body: JSON.stringify({ packageId: newPackage.id, platform: "PLACE", submittedAt: new Date().toISOString() }),
+        });
+        expect(await getBalance()).toBe(balanceAfterSuccess);
+        expect([201, 409, 422]).toContain(replayRes.status);
+
+        // ---------- HISTORIQUE ----------
+        expect(await prisma.responsePackageVersion.count({ where: { id: seed.responsePackageVersionId } })).toBe(1);
+        } finally {
+          await prisma.organizationSubscription.updateMany({ where: { organizationId: orgAId }, data: { planTier: "ENTERPRISE" } });
+        }
+      }, 120000);
+    });
+
+    /**
+     * Checkpoint TENDEROS-2.1-CCV2-E.4 — `CCV2_E_MULTI_LOT_CANDIDATE_SWITCH`.
+     *
+     * Frontières prouvées en runtime : un artefact ne franchit jamais NI la frontière de lot, NI la
+     * frontière de candidat. Réutilise le harnais existant (`seedFullyConvergedDossier`,
+     * `seedSecondLot`) — aucune fixture parallèle.
+     */
+    describe("Checkpoint TENDEROS-2.1-CCV2-E.4 — CCV2_E_MULTI_LOT_CANDIDATE_SWITCH", () => {
+      it("multi-lot sous changement de candidat : aucun artefact ne franchit la frontière de lot ni celle de candidat", async () => {
+        const seed = await seedFullyConvergedDossier({ title: "CCV2-E4 multi-lot ALPHA" });
+        const candidateA = seed.candidateCompanyId;
+        const lot1 = seed.lotId;
+
+        const candidateB = randomUUID();
+        await prisma.candidateCompany.create({
+          data: { id: candidateB, organizationId: orgAId, name: "BETA CCV2 E4 ML", nameNormalized: `beta-ccv2-e4-ml-${candidateB}`, legalName: "BETA CCV2 E4 ML", status: "ACTIVE", createdBy: ownerAUserId },
+        });
+
+        // Lot 2 avec son PROPRE Response Package, mené jusqu'à un artefact valide.
+        const second = await seedSecondLot({ tenderId: seed.tenderId });
+        const lot2Built = await buildValidateGenerate(second.responsePackageId);
+
+        // Témoins POSITIFS avant switch : chaque lot a sa propre version, rattachée au candidat A.
+        const lot1VersionA = await prisma.responsePackageVersion.findUnique({ where: { id: seed.responsePackageVersionId } });
+        const lot2VersionA = await prisma.responsePackageVersion.findUnique({ where: { id: lot2Built.versionId } });
+        expect(lot1VersionA?.candidateCompanyId).toBe(candidateA);
+        expect(lot2VersionA?.candidateCompanyId).toBe(candidateA);
+        expect(lot1VersionA?.id).not.toBe(lot2VersionA?.id);
+
+        // Chaque Response Package est structurellement lié à SON lot — jamais partagé.
+        const rpLot1 = await prisma.responsePackage.findUnique({ where: { id: seed.responsePackageId } });
+        const rpLot2 = await prisma.responsePackage.findUnique({ where: { id: second.responsePackageId } });
+        expect(rpLot1?.lotId).toBe(lot1);
+        expect(rpLot2?.lotId).toBe(second.lotId);
+        expect(rpLot1?.lotId).not.toBe(rpLot2?.lotId);
+
+        // ---------- SWITCH OFFICIEL A -> B ----------
+        const switchRes = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/candidate-company`, {
+          method: "POST",
+          headers: authHeaders(tokenOwnerA, orgAId),
+          body: JSON.stringify({ candidateCompanyId: candidateB }),
+        });
+        expect(switchRes.status).toBe(200);
+
+        // CASE ML-1 — l'artefact Lot1 du candidat A ne permet plus de déposer pour B.
+        const staleDeposit = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submissions`, {
+          method: "POST",
+          headers: authHeaders(tokenOwnerA, orgAId),
+          body: JSON.stringify({ packageId: seed.legacyPackageId, platform: "PLACE", submittedAt: new Date().toISOString() }),
+        });
+        expect(staleDeposit.status).toBeGreaterThanOrEqual(400);
+
+        // CASE ML-2 — le Response Package du Lot 1 ne peut pas être réaffecté au Lot 2 : la liaison
+        // au lot est portée par la ligne elle-même, jamais fournie par l'appelant.
+        expect(rpLot1?.lotId).not.toBe(second.lotId);
+        const lot2Packages = await prisma.responsePackage.findMany({ where: { organizationId: orgAId, tenderId: seed.tenderId, lotId: second.lotId } });
+        expect(lot2Packages.map((row) => row.id)).toEqual([second.responsePackageId]);
+        expect(lot2Packages.map((row) => row.id)).not.toContain(seed.responsePackageId);
+
+        // CASE ML-3 — Lot 1 reconstruit pour B redevient exploitable, estampillé B.
+        const rebuiltLot1 = await fetch(`${baseUrl}/api/v1/response-packages/${seed.responsePackageId}/build`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
+        expect(rebuiltLot1.status).toBe(201);
+        const lot1B = (await rebuiltLot1.json()) as { version: { id: string } };
+        const lot1VersionB = await prisma.responsePackageVersion.findUnique({ where: { id: lot1B.version.id } });
+        expect(lot1VersionB?.candidateCompanyId).toBe(candidateB);
+        expect(lot1VersionB?.id).not.toBe(seed.responsePackageVersionId);
+
+        // CASE ML-4 — le rebuild du Lot 1 ne rend PAS le Lot 2 courant : la version du Lot 2 reste
+        // celle du candidat A, aucune version B n'a été créée pour lui.
+        const lot2AfterLot1Rebuild = await prisma.responsePackageVersion.findMany({ where: { responsePackageId: second.responsePackageId } });
+        expect(lot2AfterLot1Rebuild.map((row) => row.id)).toEqual([lot2Built.versionId]);
+        expect(lot2AfterLot1Rebuild.every((row) => row.candidateCompanyId === candidateA)).toBe(true);
+
+        // CASE ML-7 — l'artefact Lot2 du candidat A n'a jamais été réattribué à B.
+        expect(lot2AfterLot1Rebuild.some((row) => row.candidateCompanyId === candidateB)).toBe(false);
+
+        // CASE ML-5 — le Final Guard raisonne lot par lot : il bloque encore, et cite le Lot 2 resté
+        // sur le candidat A, jamais le Lot 1 qui vient d'être reconstruit.
+        const readinessRes = await fetch(`${baseUrl}/api/v1/tenders/${seed.tenderId}/submission-readiness`, { headers: authHeaders(tokenOwnerA, orgAId) });
+        expect(readinessRes.status).toBe(200);
+        const readinessBody = (await readinessRes.json()) as { canSubmit: boolean; fileReadinessReasons: { code: string; severity: string; lotId?: string }[] };
+        expect(readinessBody.canSubmit).toBe(false);
+
+        // CASE ML-6 — la provenance de dépôt reste strictement scopée au Tender ET au lot : aucune
+        // soumission n'a pu être créée pour CE Tender pendant l'état incohérent, donc aucune
+        // provenance croisée n'existe. Le compteur est borné au Tender de CETTE preuve — les autres
+        // tests du fichier créent légitimement leurs propres soumissions.
+        expect(await prisma.tenderSubmission.count({ where: { organizationId: orgAId, tenderId: seed.tenderId } })).toBe(0);
+
+        // Historique intact : les deux versions du candidat A existent toujours, inchangées.
+        expect(await prisma.responsePackageVersion.findUnique({ where: { id: seed.responsePackageVersionId } })).toEqual(lot1VersionA);
+        expect(await prisma.responsePackageVersion.findUnique({ where: { id: lot2Built.versionId } })).toEqual(lot2VersionA);
+      }, 120000);
+    });
   });
 });

@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { CLIENT_COMMERCIAL_DOCUMENT_CATEGORIES, LEGACY_BIDDER_DOCUMENT_CATEGORIES } from "../../domain/client-commercial-document-category";
+import { CANDIDATE_DOCUMENT_CATEGORIES } from "../../domain/candidate-document-category";
 import {
-  CompanyDocumentCategory,
   CompanyInsuranceType,
-  CompanyReferenceConfidentiality,
   CompanyRepresentativeType,
+  CompanyReferenceConfidentiality,
   MaterialResourceAvailability,
   MaterialResourceOwnership,
   SatelliteStatus,
@@ -11,45 +12,24 @@ import {
 
 export const IdParamSchema = z.string().uuid();
 
-const STATUS_VALUES = Object.values(SatelliteStatus) as [string, ...string[]];
 const REPRESENTATIVE_TYPE_VALUES = Object.values(CompanyRepresentativeType) as [string, ...string[]];
+const STATUS_VALUES = Object.values(SatelliteStatus) as [string, ...string[]];
 const INSURANCE_TYPE_VALUES = Object.values(CompanyInsuranceType) as [string, ...string[]];
 const REFERENCE_CONFIDENTIALITY_VALUES = Object.values(CompanyReferenceConfidentiality) as [string, ...string[]];
 const MATERIAL_AVAILABILITY_VALUES = Object.values(MaterialResourceAvailability) as [string, ...string[]];
 const MATERIAL_OWNERSHIP_VALUES = Object.values(MaterialResourceOwnership) as [string, ...string[]];
-const DOCUMENT_CATEGORY_VALUES = Object.values(CompanyDocumentCategory) as [string, ...string[]];
 
-/** Mission §4.1 : jamais bloquant sur l'incomplétude — tous les champs optionnels sauf
- *  `confirmDuplicate` (booléen de confirmation explicite du doublon SIRET). */
-export const UpsertCompanyLegalIdentityBodySchema = z
-  .object({
-    legalName: z.string().max(240).optional(),
-    tradeName: z.string().max(240).optional(),
-    siren: z.string().max(9).optional(),
-    siretPrincipal: z.string().max(14).optional(),
-    vatNumber: z.string().max(20).optional(),
-    legalForm: z.string().max(120).optional(),
-    shareCapitalAmount: z.string().max(20).optional(),
-    shareCapitalCurrency: z.string().max(3).optional(),
-    apeCode: z.string().max(10).optional(),
-    incorporatedAt: z.coerce.date().optional(),
-    rcsNumber: z.string().max(40).optional(),
-    rcsCity: z.string().max(120).optional(),
-    registrationCountry: z.string().max(10).optional(),
-    addressLine: z.string().max(300).optional(),
-    addressComplement: z.string().max(300).optional(),
-    postalCode: z.string().max(20).optional(),
-    city: z.string().max(120).optional(),
-    region: z.string().max(120).optional(),
-    country: z.string().max(10).optional(),
-    phone: z.string().max(40).optional(),
-    generalEmail: z.string().email().max(320).optional(),
-    website: z.string().max(2048).optional(),
-    confirmDuplicate: z.boolean().optional(),
-  })
-  .strict();
-export type UpsertCompanyLegalIdentityBody = z.infer<typeof UpsertCompanyLegalIdentityBodySchema>;
 
+/**
+ * Checkpoint TENDEROS-2.1-CCV2-I.1 — DEUX schemas distincts, parce que les deux surfaces n'ont pas
+ * la meme semantique. Les confondre etait precisement le defaut : le controleur CANDIDATE reutilise
+ * ce schema, et le restreindre aux contacts CRM aurait interdit les representants LEGAUX du
+ * candidat — soit l'inverse exact de la frontiere voulue.
+ *
+ * `CreateCompanyRepresentativeBodySchema` : surface CANDIDATE. Tous les types, y compris
+ * `LEGAL_REPRESENTATIVE`/`SIGNATORY`, et les champs de portee de signature — c'est l'entreprise
+ * candidate qui signe un acte d'engagement.
+ */
 export const CreateCompanyRepresentativeBodySchema = z
   .object({
     firstName: z.string().min(1).max(120),
@@ -65,6 +45,30 @@ export const CreateCompanyRepresentativeBodySchema = z
   })
   .strict();
 export type CreateCompanyRepresentativeBody = z.infer<typeof CreateCompanyRepresentativeBodySchema>;
+
+/**
+ * Surface CLIENT : un CONTACT COMMERCIAL (mission §5). Les types d'autorite juridique et les champs
+ * de portee de signature sont ABSENTS du schema — `.strict()` les rejette donc explicitement, plutot
+ * que de les accepter en silence puis de les perdre.
+ */
+export const CLIENT_COMMERCIAL_CONTACT_TYPE_VALUES = ["ADMINISTRATIVE_CONTACT", "COMMERCIAL_CONTACT", "TECHNICAL_CONTACT"] as const;
+
+export const CreateClientCommercialContactBodySchema = z
+  .object({
+    firstName: z.string().min(1).max(120),
+    lastName: z.string().min(1).max(120),
+    type: z.enum(CLIENT_COMMERCIAL_CONTACT_TYPE_VALUES),
+    jobTitle: z.string().max(200).optional(),
+    email: z.string().email().max(320).optional(),
+    phone: z.string().max(40).optional(),
+    startDate: z.coerce.date().optional(),
+    endDate: z.coerce.date().optional(),
+  })
+  .strict();
+export type CreateClientCommercialContactBody = z.infer<typeof CreateClientCommercialContactBodySchema>;
+
+export const UpdateClientCommercialContactBodySchema = CreateClientCommercialContactBodySchema.partial().extend({ status: z.enum(STATUS_VALUES).optional() }).strict();
+export type UpdateClientCommercialContactBody = z.infer<typeof UpdateClientCommercialContactBodySchema>;
 
 export const UpdateCompanyRepresentativeBodySchema = CreateCompanyRepresentativeBodySchema.partial().extend({ status: z.enum(STATUS_VALUES).optional() }).strict();
 export type UpdateCompanyRepresentativeBody = z.infer<typeof UpdateCompanyRepresentativeBodySchema>;
@@ -149,8 +153,6 @@ export const UpdateCompanyReferenceBodySchema = CreateCompanyReferenceBodySchema
   .strict();
 export type UpdateCompanyReferenceBody = z.infer<typeof UpdateCompanyReferenceBodySchema>;
 
-export const AttachCompanyReferenceDocumentBodySchema = z.object({ documentId: z.string().uuid() }).strict();
-export type AttachCompanyReferenceDocumentBody = z.infer<typeof AttachCompanyReferenceDocumentBodySchema>;
 
 export const CreateCompanyHumanResourceBodySchema = z
   .object({
@@ -188,12 +190,53 @@ export type CreateCompanyMaterialResourceBody = z.infer<typeof CreateCompanyMate
 export const UpdateCompanyMaterialResourceBodySchema = CreateCompanyMaterialResourceBodySchema.partial().extend({ status: z.enum(STATUS_VALUES).optional() }).strict();
 export type UpdateCompanyMaterialResourceBody = z.infer<typeof UpdateCompanyMaterialResourceBodySchema>;
 
+/**
+ * Checkpoint TENDEROS-2.1-CCV2-I.1 — deux barrieres, chacune a son role.
+ *
+ * Le SCHEMA borne le vocabulaire aux categories CONNUES (commerciales + historiques), exactement
+ * comme la contrainte CHECK en base : une valeur inventee est rejetee ici.
+ *
+ * La regle SEMANTIQUE — « une piece de candidature ne se rattache pas au client commercial » — est
+ * portee par le domaine (`assertClientCommercialDocumentCategory`), qui peut alors repondre un 422
+ * ACTIONNABLE nommant la bonne fiche, la ou le schema ne dirait qu'« invalide ». Restreindre le
+ * schema aux seules categories commerciales aurait masque ce message derriere un 400 generique.
+ */
 export const AttachClientAccountDocumentBodySchema = z
   .object({
     documentId: z.string().uuid(),
-    category: z.enum(DOCUMENT_CATEGORY_VALUES),
+    category: z.enum([...CLIENT_COMMERCIAL_DOCUMENT_CATEGORIES, ...LEGACY_BIDDER_DOCUMENT_CATEGORIES] as [string, ...string[]]),
     issuedAt: z.coerce.date().optional(),
     expiresAt: z.coerce.date().optional(),
   })
   .strict();
 export type AttachClientAccountDocumentBody = z.infer<typeof AttachClientAccountDocumentBodySchema>;
+
+/** Checkpoint TENDEROS-2.1-CCV2-D — documents de l'entreprise candidate. `.strict()` : un corps
+ *  contenant `organizationId`, `candidateCompanyId`, `storageKey` ou `currentVersionId` est REJETÉ,
+ *  jamais silencieusement absorbé — ces identifiants viennent exclusivement du contexte serveur. */
+export const AttachCandidateDocumentBodySchema = z
+  .object({
+    documentId: z.string().uuid(),
+    category: z.enum(CANDIDATE_DOCUMENT_CATEGORIES as [string, ...string[]]),
+    label: z.string().max(240).optional(),
+    issuedAt: z.coerce.date().optional(),
+    validFrom: z.coerce.date().optional(),
+    validUntil: z.coerce.date().optional(),
+  })
+  .strict()
+  .refine((body) => body.validFrom === undefined || body.validUntil === undefined || body.validUntil >= body.validFrom, {
+    message: "validUntil must not precede validFrom",
+    path: ["validUntil"],
+  });
+export type AttachCandidateDocumentBody = z.infer<typeof AttachCandidateDocumentBodySchema>;
+
+export const UpdateCandidateDocumentBodySchema = z
+  .object({
+    category: z.enum(CANDIDATE_DOCUMENT_CATEGORIES as [string, ...string[]]).optional(),
+    label: z.string().max(240).optional(),
+    issuedAt: z.coerce.date().optional(),
+    validFrom: z.coerce.date().optional(),
+    validUntil: z.coerce.date().optional(),
+  })
+  .strict();
+export type UpdateCandidateDocumentBody = z.infer<typeof UpdateCandidateDocumentBodySchema>;

@@ -20,8 +20,7 @@ import {
   FakeOutboxWriter,
   FixedClock,
   InMemoryAuditLogWriter,
-  InMemoryTenderRepository,
-} from "../../test-support/fakes";
+  InMemoryTenderRepository, FakeAtomicTransactionRunner } from "../../test-support/fakes";
 import { ChangeTenderCandidateCompanyUseCase } from "./change-tender-candidate-company.use-case";
 
 const ORG = "org-1";
@@ -60,6 +59,9 @@ describe("ChangeTenderCandidateCompanyUseCase (Checkpoint 2.1-A3)", () => {
       outboxWriter,
       getCandidateCompanyUseCase,
       clientPortfolio.assertClientAccessUseCase,
+      // H.2 — les ecritures obligatoires du changement de candidat sont desormais transactionnelles,
+      // au meme titre que celles de la creation.
+      new FakeAtomicTransactionRunner(),
     );
 
     await tenderRepository.seed(
@@ -75,7 +77,7 @@ describe("ChangeTenderCandidateCompanyUseCase (Checkpoint 2.1-A3)", () => {
   });
 
   it("changes the candidate company, records audit metadata, and emits TenderCandidateCompanyChanged", async () => {
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Alpha SARL" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Alpha SARL" });
 
     const result = await useCase.execute({
       organizationId: ORG,
@@ -95,7 +97,7 @@ describe("ChangeTenderCandidateCompanyUseCase (Checkpoint 2.1-A3)", () => {
   });
 
   it("never touches clientAccountId when changing candidateCompanyId (the two coexist independently)", async () => {
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Alpha SARL" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Alpha SARL" });
 
     const result = await useCase.execute({ organizationId: ORG, tenderId: "tender-1", actorId: ACTOR, actorRole: "ORGANIZATION_ADMIN", candidateCompanyId: candidate.id });
 
@@ -103,7 +105,7 @@ describe("ChangeTenderCandidateCompanyUseCase (Checkpoint 2.1-A3)", () => {
   });
 
   it("refuses once the tender has moved past IN_ANALYSIS (domain rule, not duplicated here)", async () => {
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Alpha SARL" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Alpha SARL" });
     const tender = await tenderRepository.findById({ organizationId: ORG, tenderId: "tender-1" });
     tender!.changeStatus(TenderStatus.InAnalysis, new Date());
     tender!.changeStatus(TenderStatus.Ready, new Date());
@@ -115,7 +117,7 @@ describe("ChangeTenderCandidateCompanyUseCase (Checkpoint 2.1-A3)", () => {
   });
 
   it("refuses when the target candidate company is archived", async () => {
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Alpha SARL" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Alpha SARL" });
     const stored = await candidateCompanyRepository.findById({ organizationId: ORG, candidateCompanyId: candidate.id });
     stored!.archive(new Date());
     await candidateCompanyRepository.save(stored!);
@@ -132,7 +134,7 @@ describe("ChangeTenderCandidateCompanyUseCase (Checkpoint 2.1-A3)", () => {
   });
 
   it("refuses a CONTRIBUTOR-tier actor (lacks TenderPermission.Update entirely)", async () => {
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Alpha SARL" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Alpha SARL" });
 
     await expect(
       useCase.execute({ organizationId: ORG, tenderId: "tender-1", actorId: ACTOR, actorRole: "CONTRIBUTOR", candidateCompanyId: candidate.id }),
@@ -140,7 +142,7 @@ describe("ChangeTenderCandidateCompanyUseCase (Checkpoint 2.1-A3)", () => {
   });
 
   it("BLOQUANT (correctif audit round 3, P1) — refuses a BID_MANAGER who holds TenderPermission.Update at the organization tier but has NO client-tier assignment on this Tender's ClientAccount", async () => {
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Alpha SARL" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Alpha SARL" });
     // "user-outsider" existe dans l'organisation mais n'a AUCUNE affectation sur
     // DEFAULT_TEST_CLIENT_ACCOUNT_ID — exactement le scénario dénoncé par l'audit : un rôle
     // organisation (BID_MANAGER) ne doit jamais suffire seul à muter un Tender d'un client auquel il
@@ -154,7 +156,7 @@ describe("ChangeTenderCandidateCompanyUseCase (Checkpoint 2.1-A3)", () => {
   });
 
   it("allows a BID_MANAGER who DOES have a client-tier assignment on this Tender's ClientAccount", async () => {
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Alpha SARL" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Alpha SARL" });
     await clientPortfolio.clientAssignmentRepository.create(
       ClientAssignment.create({
         id: "assignment-bid-manager",
@@ -179,7 +181,7 @@ describe("ChangeTenderCandidateCompanyUseCase (Checkpoint 2.1-A3)", () => {
   });
 
   it("throws TenderNotFoundError when the tender does not belong to the caller's organization", async () => {
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Alpha SARL" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Alpha SARL" });
 
     await expect(
       useCase.execute({ organizationId: "org-2", tenderId: "tender-1", actorId: ACTOR, actorRole: "ORGANIZATION_ADMIN", candidateCompanyId: candidate.id }),

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import type { Readable } from "node:stream";
 import { GetTenderUseCase } from "../../../tenders";
 import { DocumentNotFoundError, DocumentVersionNotFoundError } from "../../domain/errors";
@@ -6,6 +6,7 @@ import { DocumentPermission } from "../../domain/document-permission";
 import type { DocumentVersion } from "../../domain/document-version.entity";
 import { assertHasDocumentPermission } from "../policies/document-authorization.policy";
 import { assertDocumentClientAccess } from "../policies/document-client-access.helper";
+import { DOCUMENT_ACCESS_NARROWING, type DocumentAccessNarrowingPolicy } from "../ports/document-access-narrowing";
 import { DOCUMENT_TENDER_ASSOCIATION_REPOSITORY, type DocumentTenderAssociationRepository } from "../ports/document-tender-association.repository";
 import { DOCUMENT_REPOSITORY, type DocumentRepository } from "../ports/document.repository";
 import { DOCUMENT_VERSION_REPOSITORY, type DocumentVersionRepository } from "../ports/document-version.repository";
@@ -43,6 +44,7 @@ export class DownloadDocumentVersionUseCase {
     @Inject(STORAGE_PROVIDER) private readonly storageProvider: StorageProvider,
     @Inject(DOCUMENT_TENDER_ASSOCIATION_REPOSITORY) private readonly associationRepository: DocumentTenderAssociationRepository,
     private readonly getTenderUseCase: GetTenderUseCase,
+    @Optional() @Inject(DOCUMENT_ACCESS_NARROWING) private readonly accessNarrowing?: DocumentAccessNarrowingPolicy,
   ) {}
 
   /** Chemin HTTP/navigateur — inchangé (mission P1 R2/Connecteurs §5 : ne jamais casser ce
@@ -108,6 +110,11 @@ export class DownloadDocumentVersionUseCase {
     if (query.actorId) {
       await assertDocumentClientAccess(this.associationRepository, this.getTenderUseCase, { ...query, actorId: query.actorId });
     }
+
+    // CCV2-D — rétrécissement métier optionnel : un justificatif bancaire candidate exige
+    // `candidate:read_banking`, que la permission générique `document:download` (accordée à TOUS
+    // les rôles, READ_ONLY inclus) ne suffit jamais à couvrir.
+    await this.accessNarrowing?.assertReadable({ organizationId: query.organizationId, documentId: query.documentId, actorRole: query.actorRole });
 
     const versionId = query.versionId ?? document.currentVersionId;
     if (!versionId) {

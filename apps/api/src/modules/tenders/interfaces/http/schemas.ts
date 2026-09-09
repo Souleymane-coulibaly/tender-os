@@ -76,7 +76,11 @@ const TenderDetailsBodySchema = z
 // V2 Sprint 26 (Checkpoint 2.1-A3) — `candidateCompanyId` optionnel à la création (mission §16 "ne
 // pas inventer le moment où elle devient obligatoire"), jamais modifiable ensuite via `PATCH`
 // (même discipline que `clientAccountId` — voir `ChangeTenderCandidateCompanyBodySchema` ci-dessous).
-export const CreateTenderBodySchema = TenderDetailsBodySchema.extend({ clientAccountId: z.string().uuid(), candidateCompanyId: z.string().uuid().optional() });
+// Checkpoint TENDEROS-2.1-CCV2-G.1 — POLICY A : `candidateCompanyId` devient OBLIGATOIRE à la
+// création. Le schéma est la première barrière (400 si absent) ; le use case en pose une seconde,
+// indépendante (`CandidateCompanyRequiredError` → 422), pour tout appelant interne qui ne
+// passerait pas par HTTP. Aucune des deux ne repose sur l'autre.
+export const CreateTenderBodySchema = TenderDetailsBodySchema.extend({ clientAccountId: z.string().uuid(), candidateCompanyId: z.string().uuid() });
 export type CreateTenderBody = z.infer<typeof CreateTenderBodySchema>;
 
 export const UpdateTenderBodySchema = TenderDetailsBodySchema.partial();

@@ -4,6 +4,9 @@ import { DomainError } from "../../../../shared-kernel/domain-error";
 import type { RequestWithId } from "../../../../shared-kernel/request-id.middleware";
 
 const STATUS_BY_CODE: Record<string, number> = {
+  // Checkpoint CCV2-I.1 — surface d'ecriture candidature retiree cote ClientAccount.
+  CLIENT_BIDDER_WRITE_RETIRED: HttpStatus.CONFLICT,
+  CLIENT_COMMERCIAL_DOCUMENT_CATEGORY_INVALID: HttpStatus.UNPROCESSABLE_ENTITY,
   // Erreurs cross-module déléguées à Client Portfolio/Documents — mêmes codes que leurs propres
   // error filters (même motif que AdministrativeDossierErrorFilter).
   CLIENT_ACCOUNT_NOT_FOUND: HttpStatus.NOT_FOUND,

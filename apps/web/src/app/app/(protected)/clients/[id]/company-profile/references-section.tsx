@@ -1,14 +1,17 @@
 "use client";
 
-import { useActionState } from "react";
-import { createReferenceAction, type FormActionState } from "../../../../company-profile-actions";
+/**
+ * Checkpoint TENDEROS-2.1-CCV2-I.4 — rubrique en LECTURE SEULE.
+ *
+ * Le formulaire de creation a ete retire : sa route refusait tout depuis CCV2-I.1 et n'existe plus.
+ * Cette donnee appartient desormais a `CandidateCompany`. La LISTE reste affichee — des lignes
+ * Legacy subsistent chez les clients sans entreprise candidate (registre CCV2-I.2) et rien d'autre
+ * ne les montre : les masquer reviendrait a les faire disparaitre du produit.
+ */
 import type { CompanyReference } from "../../../../../../lib/company-profile-types";
 
-const INITIAL_STATE: FormActionState = {};
 
-export function ReferencesSection({ clientId, references }: { clientId: string; references: CompanyReference[] }) {
-  const boundAction = createReferenceAction.bind(null, clientId);
-  const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
+export function ReferencesSection({ references }: { clientId: string; references: CompanyReference[] }) {
 
   return (
     <div className="flex flex-col gap-4">
@@ -42,55 +45,6 @@ export function ReferencesSection({ clientId, references }: { clientId: string; 
           </table>
         </div>
       )}
-
-      <form action={formAction} className="flex flex-col gap-3 rounded border border-neutral-200 p-3">
-        <h3 className="text-sm font-semibold text-neutral-900">Ajouter une référence</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="projectName" className="text-xs text-neutral-600">
-              Nom du projet *
-            </label>
-            <input id="projectName" name="projectName" required className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="referenceClientName" className="text-xs text-neutral-600">
-              Client
-            </label>
-            <input id="referenceClientName" name="referenceClientName" className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="sector" className="text-xs text-neutral-600">
-              Secteur
-            </label>
-            <input id="sector" name="sector" className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="amountValue" className="text-xs text-neutral-600">
-              Montant
-            </label>
-            <input id="amountValue" name="amountValue" inputMode="decimal" className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="confidentiality" className="text-xs text-neutral-600">
-              Confidentialité
-            </label>
-            <select id="confidentiality" name="confidentiality" defaultValue="STANDARD" className="rounded border border-neutral-300 px-2 py-1.5 text-sm">
-              <option value="STANDARD">Standard</option>
-              <option value="CONFIDENTIAL">Confidentielle</option>
-            </select>
-          </div>
-        </div>
-        {state.error ? (
-          <p role="alert" className="text-sm text-red-600">
-            {state.error}
-          </p>
-        ) : null}
-        <button type="submit" disabled={isPending} className="self-start rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-          {isPending ? "Ajout..." : "Ajouter"}
-        </button>
-      </form>
     </div>
   );
 }

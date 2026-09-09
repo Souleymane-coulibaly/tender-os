@@ -14,7 +14,7 @@ import {
 } from "../../../../../lib/opportunity-types";
 import { fetchOpportunityDecisions, fetchOpportunityQuickScore } from "../../../opportunity-actions";
 import { canManageCandidateCompany, type CandidateCompanySummary } from "../../../../../lib/candidate-company-types";
-import { fetchCandidateCompanies, fetchCandidateCompanyOrNull } from "../../../candidate-company-actions";
+import { fetchCandidateCompanies, resolveCandidateCompany } from "../../../candidate-company-actions";
 import { ApiErrorState } from "../../api-error-state";
 import { ArchiveOpportunityButton } from "./archive-opportunity-button";
 import { OpportunityCandidateCompanySection } from "./candidate-company-section";
@@ -46,8 +46,12 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     return <ApiErrorState error={error} />;
   }
 
-  // Checkpoint 2.1-A5 — best-effort, jamais bloquant (voir la même discipline sur la fiche Tender).
-  const currentCandidateCompany = opportunity.candidateCompanyId ? await fetchCandidateCompanyOrNull(opportunity.candidateCompanyId) : null;
+  // Checkpoint CCV2-G.1 — meme resolution tri-etat que la fiche Tender. L'Opportunity n'exige PAS
+  // encore d'entreprise candidate (c'est un objet de qualification, pas un Tender exploitable) :
+  // seule la PROMOTION l'exige. On distingue neanmoins « aucune » d'« illisible », pour ne jamais
+  // proposer d'ecraser une attribution valide a cause d'une panne passagere.
+  const candidateResolution = await resolveCandidateCompany(opportunity.candidateCompanyId);
+  const currentCandidateCompany = candidateResolution.kind === "loaded" ? candidateResolution.company : null;
 
   const canManage = canManageOpportunity(role);
   const canDecide = canRecordGoNoGoDecision(role);
@@ -138,7 +142,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
       </div>
 
       {canPromote ? (
-        <PromoteOpportunityButton opportunityId={opportunity.id} />
+        <PromoteOpportunityButton opportunityId={opportunity.id} hasCandidateCompany={Boolean(opportunity.candidateCompanyId)} />
       ) : opportunity.status === "GO" || opportunity.status === "GO_CONDITIONAL" ? (
         <p className="text-xs text-neutral-500">La promotion en appel d&apos;offres est réservée aux rôles OWNER / ADMIN / BID_MANAGER.</p>
       ) : null}

@@ -5,7 +5,8 @@ import { CANDIDATE_COMPANY_REPOSITORY, type CandidateCompanyRepository } from ".
  * TenderOS 2.1-A4 (Checkpoint "Candidate Context") — point d'accès canonique UNIQUE pour résoudre
  * l'identité juridique de l'entreprise candidate d'un Tender, réutilisable par tout consumer qui a
  * besoin de "quelle entreprise répond ?" (administratif, GO/NO-GO, checklist, mémoire technique...).
- * Volontairement PAS un "God Service" (mission A4 §10) : ne résout QUE l'identité (nom légal, SIREN,
+ * Volontairement PAS un "God Service" (mission A4 §10) : ne résout QUE l'identité (dénomination
+ * sociale, nom commercial, SIREN,
  * établissement principal — SIRET/adresse) déjà portée par `CandidateCompany`/`CandidateEstablishment`
  * (A1). Ne recrée jamais un second système de contact/représentants/certifications — ces données
  * n'existent PAS encore sur `CandidateCompany` (satellites `company-profile` non migrés, mission A4
@@ -32,10 +33,21 @@ export type CandidateIdentitySource = (typeof CandidateIdentitySource)[keyof typ
 export type CandidateIdentitySummary = Readonly<{
   source: CandidateIdentitySource;
   candidateCompanyId?: string | undefined;
-  /** Nom d'usage — `CandidateCompany` ne porte pas de "nom commercial" distinct (mission A1 §6,
-   *  minimalisme des champs) ; `legalName` sert de nom d'usage lorsque renseigné, sinon `name`. */
+  /**
+   * Nom d'usage, destine a un AFFICHAGE : `legalName` lorsqu'il est renseigne, sinon `name`.
+   *
+   * Checkpoint TENDEROS-2.1-H.6 — le commentaire precedent affirmait que `CandidateCompany` ne
+   * portait pas de nom commercial distinct. C'etait vrai en A1 ; ce ne l'est plus depuis CCV2-F.1,
+   * qui a ajoute `tradeName` et l'a rendu editable en F.2. Le champ est donc desormais expose
+   * ci-dessous, et ce libelle n'est plus une identite juridique deguisee : `displayName` reste un
+   * LIBELLE D'AFFICHAGE, `legalName` la denomination sociale, `tradeName` le nom commercial.
+   */
   displayName?: string | undefined;
+  /** Denomination sociale — identite JURIDIQUE de la personne morale qui candidate. */
   legalName?: string | undefined;
+  /** Nom commercial, lorsqu'il differe de la denomination sociale. Jamais une identite juridique :
+   *  il ne peut pas se substituer a `legalName` dans un champ qui exige la denomination sociale. */
+  tradeName?: string | undefined;
   siren?: string | undefined;
   legalForm?: string | undefined;
   vatNumber?: string | undefined;
@@ -86,6 +98,7 @@ export class ResolveCandidateIdentityUseCase {
       candidateCompanyId: company.id,
       displayName: company.legalName ?? company.name,
       legalName: company.legalName,
+      tradeName: company.tradeName,
       siren: company.siren,
       legalForm: company.legalForm,
       vatNumber: company.vatNumber,

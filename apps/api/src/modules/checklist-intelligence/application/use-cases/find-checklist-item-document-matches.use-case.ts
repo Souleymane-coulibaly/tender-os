@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { CandidateIdentitySource, ResolveCandidateIdentityUseCase } from "../../../candidate-company";
-import { GetCompanyProfileUseCase, type CompanyProfileSummary } from "../../../company-profile";
+import { CandidateCompanyRequiredError, CandidateIdentitySource, ResolveCandidateIdentityUseCase } from "../../../candidate-company";
+import { ResolveCandidateCapabilitiesUseCase } from "../../../company-profile";
 import { ListTenderDocumentsUseCase } from "../../../documents";
 import { ListSubcontractorCertificationsUseCase, ListSubcontractorInsurancesUseCase } from "../../../subcontractors";
 import {
@@ -49,8 +49,8 @@ export class FindChecklistItemDocumentMatchesUseCase {
   constructor(
     @Inject(CHECKLIST_ITEM_REPOSITORY) private readonly checklistRepository: ChecklistItemRepository,
     private readonly listTenderDocumentsUseCase: ListTenderDocumentsUseCase,
-    private readonly getCompanyProfileUseCase: GetCompanyProfileUseCase,
     private readonly resolveCandidateIdentityUseCase: ResolveCandidateIdentityUseCase,
+    private readonly resolveCandidateCapabilitiesUseCase: ResolveCandidateCapabilitiesUseCase,
     private readonly listSubcontractorCertificationsUseCase: ListSubcontractorCertificationsUseCase,
     private readonly listSubcontractorInsurancesUseCase: ListSubcontractorInsurancesUseCase,
   ) {}
@@ -63,15 +63,25 @@ export class FindChecklistItemDocumentMatchesUseCase {
     const candidateIdentity = await this.resolveCandidateIdentityUseCase.execute({ organizationId: query.organizationId, candidateCompanyId: query.candidateCompanyId });
     const usesCandidateCompany = candidateIdentity.source === CandidateIdentitySource.CandidateCompany;
 
-    const [tenderDocuments, companyProfile] = await Promise.all([
+    // Checkpoint TENDEROS-2.1-CCV2-G.2 — POLICY A, appliquée SELON LE SUJET de l'item.
+    //
+    // Un item dont le sujet est le CANDIDAT exige une entreprise candidate : proposer les
+    // certifications du CLIENT commercial comme preuve de conformité du candidat serait une
+    // substitution de personne morale. Le repli `CompanyProfile` est donc SUPPRIMÉ.
+    //
+    // Les items dont le sujet est un SOUS-TRAITANT, un LOT ou le TENDER lui-même ne dépendent
+    // d'aucune entreprise candidate : ils continuent de fonctionner à l'identique. Exiger un
+    // candidat pour eux serait un durcissement gratuit que la mission (§8) n'ordonne pas.
+    if (item.subjectType === ChecklistSubjectType.Candidate && !query.candidateCompanyId) {
+      throw new CandidateCompanyRequiredError();
+    }
+
+    const [tenderDocuments, candidateCapabilities] = await Promise.all([
       this.listTenderDocumentsUseCase.execute({ organizationId: query.organizationId, tenderId: query.tenderId, actorId: query.actorId, actorRole: query.actorRole }),
-      // NEW FLOW — CandidateCompany fait autorité et ne porte aucune capacité : jamais un repli
-      // silencieux sur les certifications/assurances du CLIENT (mission A6.1 §9).
-      usesCandidateCompany
-        ? Promise.resolve(undefined)
-        : this.getCompanyProfileUseCase
-            .execute({ organizationId: query.organizationId, clientAccountId: query.clientAccountId, actorId: query.actorId, actorRole: query.actorRole })
-            .catch((): CompanyProfileSummary | undefined => undefined),
+      // NEW FLOW (CCV2-E, fermeture de DEFERRED-BE-01) — les capacités et la bibliothèque
+      // documentaire viennent désormais de la SOT `CandidateCompany`. Elles n'étaient pas
+      // « indisponibles » : elles n'existaient pas encore côté candidate avant CCV2-C/D.
+      this.resolveCandidateCapabilitiesUseCase.execute({ organizationId: query.organizationId, candidateCompanyId: query.candidateCompanyId }),
     ]);
 
     let subcontractorCertifications: Awaited<ReturnType<ListSubcontractorCertificationsUseCase["execute"]>> = [];
@@ -87,7 +97,9 @@ export class FindChecklistItemDocumentMatchesUseCase {
     return matchChecklistItemDocuments({
       item,
       tenderDocuments,
-      companyProfile,
+      // `companyProfile` n'est plus jamais fourni : le paramètre reste sur le matcher pour les
+      // artefacts historiques et les tests de régression, mais aucun appelant courant ne l'alimente.
+      candidateCapabilities: usesCandidateCompany ? candidateCapabilities : undefined,
       subcontractorCertifications,
       subcontractorInsurances,
     });

@@ -167,15 +167,56 @@ describe("Administrative Dossier — V2 Sprint 11 DC4 real official form fill (r
     const clientAccount = await prisma.clientAccount.create({
       data: { id: randomUUID(), organizationId: orgId, name: `Client DC4 ${randomUUID()}`, nameNormalized: "client dc4", status: "ACTIVE", createdBy: userIds[0]! },
     });
+    // Checkpoint TENDEROS-2.1-CCV2-G.2 — le TITULAIRE du DC4 est desormais l'entreprise candidate.
+    // On la cree avec exactement les memes valeurs que le profil client renseigne ci-dessous : les
+    // assertions du test restent identiques, et prouvent maintenant la nouvelle source de verite.
+    const titulaireCandidate = await prisma.candidateCompany.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        name: "Titulaire SAS",
+        nameNormalized: `titulaire sas ${randomUUID()}`,
+        legalName: "Titulaire SAS",
+        siren: "356000000",
+        status: "ACTIVE",
+        createdBy: userIds[0]!,
+      },
+    });
+    await prisma.candidateEstablishment.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        candidateCompanyId: titulaireCandidate.id,
+        siret: "35600000000048",
+        isPrincipal: true,
+        addressLine: "1 rue du Titulaire",
+        postalCode: "75001",
+        city: "Paris",
+        createdBy: userIds[0]!,
+      },
+    });
     const tender = await prisma.tender.create({
-      data: { id: randomUUID(), organizationId: orgId, clientAccountId: clientAccount.id, title: "Marche DC4 - travaux", buyerName: "Commune de Test", status: "DRAFT", tags: [], createdBy: userIds[0]! },
+      data: { id: randomUUID(), organizationId: orgId, clientAccountId: clientAccount.id, candidateCompanyId: titulaireCandidate.id, title: "Marche DC4 - travaux", buyerName: "Commune de Test", status: "DRAFT", tags: [], createdBy: userIds[0]! },
     });
-    const legalIdentityRes = await fetch(`${baseUrl}/api/v1/clients/${clientAccount.id}/legal-identity`, {
-      method: "PATCH",
-      headers: jsonHeaders(tokenOwner),
-      body: JSON.stringify({ legalName: "Titulaire SAS", tradeName: "Titulaire SAS", siren: "356000000", siretPrincipal: "35600000000048", addressLine: "1 rue du Titulaire", postalCode: "75001", city: "Paris", confirmDuplicate: true }),
+    // Checkpoint TENDEROS-2.1-CCV2-I.1 — identité juridique du CLIENT amorcée DIRECTEMENT en base.
+    // `PATCH /clients/:id/legal-identity` est retiré (409 `CLIENT_BIDDER_WRITE_RETIRED`), mais cette
+    // ligne doit continuer d'exister : c'est le LEURRE dont ces tests prouvent qu'il n'est JAMAIS lu
+    // à la place de l'entreprise candidate. La supprimer affaiblirait la preuve au lieu de l'adapter.
+    await prisma.companyLegalIdentity.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        clientAccountId: clientAccount.id,
+        legalName: "Titulaire SAS",
+        tradeName: "Titulaire SAS",
+        siren: "356000000",
+        siretPrincipal: "35600000000048",
+        addressLine: "1 rue du Titulaire",
+        postalCode: "75001",
+        city: "Paris",
+        createdBy: userIds[0]!,
+      },
     });
-    expect(legalIdentityRes.status).toBe(200);
 
     // Sous-traitant réutilisable (répertoire organisationnel).
     const profileRes = await fetch(`${baseUrl}/api/v1/subcontractor-profiles`, {
@@ -247,12 +288,25 @@ describe("Administrative Dossier — V2 Sprint 11 DC4 real official form fill (r
     const tender = await prisma.tender.create({
       data: { id: randomUUID(), organizationId: orgId, clientAccountId: clientAccount.id, title: "Marche DC4 - candidate moderne", buyerName: "Commune de Test", status: "DRAFT", tags: [], createdBy: userIds[0]! },
     });
-    const legalIdentityRes = await fetch(`${baseUrl}/api/v1/clients/${clientAccount.id}/legal-identity`, {
-      method: "PATCH",
-      headers: jsonHeaders(tokenOwner),
-      body: JSON.stringify({ legalName: "Client Legacy Legal SAS", tradeName: "Client Legacy Legal SAS", siren: "356000000", siretPrincipal: "35600000000048", addressLine: "1 rue du Titulaire", postalCode: "75001", city: "Paris", confirmDuplicate: true }),
+    // Checkpoint TENDEROS-2.1-CCV2-I.1 — identité juridique du CLIENT amorcée DIRECTEMENT en base.
+    // `PATCH /clients/:id/legal-identity` est retiré (409 `CLIENT_BIDDER_WRITE_RETIRED`), mais cette
+    // ligne doit continuer d'exister : c'est le LEURRE dont ces tests prouvent qu'il n'est JAMAIS lu
+    // à la place de l'entreprise candidate. La supprimer affaiblirait la preuve au lieu de l'adapter.
+    await prisma.companyLegalIdentity.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        clientAccountId: clientAccount.id,
+        legalName: "Client Legacy Legal SAS",
+        tradeName: "Client Legacy Legal SAS",
+        siren: "356000000",
+        siretPrincipal: "35600000000048",
+        addressLine: "1 rue du Titulaire",
+        postalCode: "75001",
+        city: "Paris",
+        createdBy: userIds[0]!,
+      },
     });
-    expect(legalIdentityRes.status).toBe(200);
 
     const candidateCompany = await prisma.candidateCompany.create({
       data: { id: randomUUID(), organizationId: orgId, name: "Titulaire Moderne SAS", nameNormalized: "titulaire moderne sas", legalName: "Titulaire Moderne SAS", siren: "321000000", legalForm: "SAS", status: "ACTIVE", createdBy: userIds[0]! },

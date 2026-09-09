@@ -4,7 +4,8 @@ import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { AssertClientAccessUseCase, ClientAccountArchivedError, ClientPermission, GetClientAccountUseCase } from "../../../client-portfolio";
-import { CandidateCompanyArchivedError, GetCandidateCompanyUseCase } from "../../../candidate-company";
+import { CandidateCompanyArchivedError,
+  CandidateCompanyRequiredError, GetCandidateCompanyUseCase } from "../../../candidate-company";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { TenderPermission } from "../../domain/tender-permission";
 import { Tender } from "../../domain/tender.aggregate";
@@ -115,14 +116,22 @@ export class CreateTenderUseCase {
     // l'organisation, et ne pas être archivé — jamais fait confiance directement (même motif que
     // `clientAccountId` ci-dessus). Organization-isolation-only (mission A1 §20) : aucune vérification
     // d'accès supplémentaire au-delà de `TenderPermission.Create` déjà vérifiée ci-dessus.
-    if (command.candidateCompanyId !== undefined) {
-      const candidateCompany = await this.getCandidateCompanyUseCase.execute({
-        organizationId: command.organizationId,
-        candidateCompanyId: command.candidateCompanyId,
-      });
-      if (candidateCompany.status === "ARCHIVED") {
-        throw new CandidateCompanyArchivedError();
-      }
+    // Checkpoint TENDEROS-2.1-CCV2-G.1 — POLICY A : l'entreprise candidate est désormais OBLIGATOIRE
+    // à la création. Le contrôle vit ICI, à la frontière applicative, et non dans l'agrégat
+    // `Tender.create` : la persistance doit rester capable de reconstruire un Tender HISTORIQUE sans
+    // candidat (rehydratation, migrations, fixtures), sans quoi une règle produit casserait
+    // l'infrastructure — exactement ce que la mission §11 interdit.
+    if (command.candidateCompanyId === undefined) {
+      throw new CandidateCompanyRequiredError();
+    }
+    // Jamais fait confiance à l'identifiant fourni : il doit exister DANS CETTE organisation
+    // (sinon 404 anti-énumération) et ne pas être archivé.
+    const candidateCompany = await this.getCandidateCompanyUseCase.execute({
+      organizationId: command.organizationId,
+      candidateCompanyId: command.candidateCompanyId,
+    });
+    if (candidateCompany.status === "ARCHIVED") {
+      throw new CandidateCompanyArchivedError();
     }
 
     // V2 Sprint 3 §5 — un `buyerId` fourni doit exister et appartenir à l'organisation, jamais

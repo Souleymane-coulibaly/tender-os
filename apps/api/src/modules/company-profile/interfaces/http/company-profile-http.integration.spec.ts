@@ -10,9 +10,23 @@ import { OrganizationRole } from "../../../memberships/domain/organization-role"
 import { PrismaMembershipRepository } from "../../../memberships/infrastructure/prisma-membership.repository";
 
 /**
- * Mission V2 Sprint 2 §13 — parcours réel HTTP + PostgreSQL : identité légale (upsert, doublon
- * SIRET, format invalide), permissions (CONTRIBUTOR sans affectation client refusé, VIEWER avec
- * affectation mais sans droit bancaire refusé), masquage IBAN en liste, isolation multi-tenant.
+ * Mission V2 Sprint 2 §13 — parcours réel HTTP + PostgreSQL : identité légale, permissions
+ * (CONTRIBUTOR sans affectation client refusé, VIEWER avec affectation mais sans droit bancaire
+ * refusé), masquage IBAN en liste, isolation multi-tenant.
+ *
+ * CONTRATS D'ÉCRITURE VOLONTAIREMENT INVERSÉS — Checkpoint TENDEROS-2.1-CCV2-I.1. La CRÉATION et la
+ * MISE À JOUR de données de candidature via `/clients/:id/*` sont retirées : leur source de vérité
+ * inscriptible est désormais `CandidateCompany`. Les tests qui les exerçaient assertent maintenant
+ * le refus `409 CLIENT_BIDDER_WRITE_RETIRED` — le produit a changé, les tests le disent.
+ *
+ * CE QUI N'A PAS CHANGÉ, ET RESTE PROUVÉ ICI À L'IDENTIQUE — c'est la moitié essentielle de ces
+ * tests, et elle survit intacte parce que les propriétés visées sont des propriétés de LECTURE et de
+ * SÉCURITÉ, indépendantes de la façon dont la ligne est née : masquage IBAN en liste, archivage
+ * jamais destructif, cloisonnement inter-clients (P0 audit Codex), 404 anti-énumération inter-org,
+ * complétude par catégorie, VIEWER lecteur mais non gestionnaire. Ces lignes sont donc AMORCÉES
+ * directement en base — exactement l'état d'une donnée historique après I.1 — plutôt que créées par
+ * une route désormais fermée. Supprimer ces tests aurait fait disparaître des garanties de sécurité
+ * toujours actives.
  */
 describe("Company Profile — real HTTP + PostgreSQL (NestJS)", () => {
   let app: INestApplication;
@@ -25,6 +39,11 @@ describe("Company Profile — real HTTP + PostgreSQL (NestJS)", () => {
   const secondClientAccountId = randomUUID();
   const otherOrgClientAccountId = randomUUID();
   const userIds: string[] = [];
+  // Lignes HISTORIQUES amorcées directement (voir en-tête) : elles représentent l'état d'un client
+  // dont le profil candidature a été renseigné AVANT le retrait de la surface d'écriture.
+  const legacyMaskedBankAccountId = randomUUID();
+  const legacyArchivableBankAccountId = randomUUID();
+  const legacyClientBBankAccountId = randomUUID();
   let tokenOwner: string;
   let tokenNoAssignment: string;
   let tokenViewer: string;
@@ -109,6 +128,31 @@ describe("Company Profile — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.clientAssignment.create({
       data: { id: randomUUID(), organizationId: orgId, clientAccountId, userId: clientManagerA.userId, role: "CLIENT_MANAGER", createdBy: owner.userId },
     });
+
+    // Identité juridique HISTORIQUE, complète sur les six champs de `computeIdentityStatus`.
+    await prisma.companyLegalIdentity.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        clientAccountId,
+        legalName: "Entreprise Test SAS",
+        siren: "356000000",
+        siretPrincipal: "35600000000048",
+        addressLine: "12 rue de la République",
+        postalCode: "75001",
+        city: "Paris",
+        createdBy: owner.userId,
+      },
+    });
+    // Trois comptes bancaires HISTORIQUES, un par propriété prouvée — jamais partagés entre tests,
+    // pour qu'un archivage ne rende pas le masquage dépendant de l'ordre d'exécution.
+    await prisma.companyBankAccount.createMany({
+      data: [
+        { id: legacyMaskedBankAccountId, organizationId: orgId, clientAccountId, accountHolder: "Entreprise Test SAS", iban: "FR7630006000011234567890189", status: "ACTIVE", createdBy: owner.userId },
+        { id: legacyArchivableBankAccountId, organizationId: orgId, clientAccountId: secondClientAccountId, accountHolder: "Autre Entreprise", iban: "FR7630006000011234567890189", status: "ACTIVE", createdBy: owner.userId },
+        { id: legacyClientBBankAccountId, organizationId: orgId, clientAccountId: secondClientAccountId, accountHolder: "Client B Holder", iban: "FR7630006000011234567890189", status: "ACTIVE", createdBy: owner.userId },
+      ],
+    });
   }, 60000);
 
   afterAll(async () => {
@@ -134,53 +178,62 @@ describe("Company Profile — real HTTP + PostgreSQL (NestJS)", () => {
     await app.close();
   });
 
-  it("PATCH .../legal-identity upserts, rejects an invalid SIREN format, then accepts a valid one", async () => {
+  it("CCV2-I.4 — PATCH .../legal-identity n'existe plus (404), et l'identité historique reste intacte", async () => {
+    // La règle de FORMAT du SIREN n'a pas disparu du produit : elle est appliquée à sa nouvelle
+    // source de vérité, `CandidateCompany` (prouvé en CCV2-G.1/F.1 par `isValidSiren`). Ici, le
+    // refus intervient plus tôt — inutile de valider la forme d'une donnée qu'on n'écrira pas.
     const invalid = await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/legal-identity`, {
       method: "PATCH",
       headers: authHeaders(tokenOwner),
       body: JSON.stringify({ siren: "123" }),
     });
-    expect(invalid.status).toBe(422);
+    expect(invalid.status).toBe(404);
 
     const valid = await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/legal-identity`, {
       method: "PATCH",
       headers: authHeaders(tokenOwner),
-      body: JSON.stringify({
-        legalName: "Entreprise Test SAS",
-        siren: "356000000",
-        siretPrincipal: "35600000000048",
-        addressLine: "12 rue de la République",
-        postalCode: "75001",
-        city: "Paris",
-      }),
+      body: JSON.stringify({ legalName: "Renommage Interdit", siren: "356000000" }),
     });
-    expect(valid.status).toBe(200);
-    const body = (await valid.json()) as { legalName: string; siretPrincipal: string };
-    expect(body.legalName).toBe("Entreprise Test SAS");
-    expect(body.siretPrincipal).toBe("35600000000048");
+    expect(valid.status).toBe(404);
+
+    // Le refus est TOTAL : aucune écriture partielle avant la levée.
+    const stored = await prisma.companyLegalIdentity.findFirst({ where: { organizationId: orgId, clientAccountId } });
+    expect(stored?.legalName, "l'identité historique n'a pas été altérée").toBe("Entreprise Test SAS");
   });
 
-  it("PATCH .../legal-identity rejects a duplicate SIRET across two ClientAccounts of the SAME organization, unless confirmDuplicate=true", async () => {
+  it("CCV2-I.1 — le doublon SIRET inter-clients n'est plus arbitré ici : l'écriture est refusée en amont", async () => {
+    // L'arbitrage `confirmDuplicate` existait parce que DEUX ClientAccounts commerciaux pouvaient
+    // légitimement désigner la même société réelle. Cette ambiguïté est précisément ce que la
+    // frontière CRM/candidat supprime : le SIRET appartient à `CandidateEstablishment`, où il est
+    // contraint par un index unique `(organization_id, siret)` — une garantie de base, plus forte
+    // que l'arbitrage applicatif qu'elle remplace.
     const duplicate = await fetch(`${baseUrl}/api/v1/clients/${secondClientAccountId}/legal-identity`, {
       method: "PATCH",
       headers: authHeaders(tokenOwner),
       body: JSON.stringify({ legalName: "Autre Entreprise", siretPrincipal: "35600000000048" }),
     });
-    expect(duplicate.status).toBe(409);
+    expect(duplicate.status).toBe(404);
 
+    // `confirmDuplicate` ne rouvre aucun contournement : le refus ne dépend pas du corps envoyé.
     const confirmed = await fetch(`${baseUrl}/api/v1/clients/${secondClientAccountId}/legal-identity`, {
       method: "PATCH",
       headers: authHeaders(tokenOwner),
       body: JSON.stringify({ legalName: "Autre Entreprise", siretPrincipal: "35600000000048", confirmDuplicate: true }),
     });
-    expect(confirmed.status).toBe(200);
+    expect(confirmed.status).toBe(404);
+    expect(await prisma.companyLegalIdentity.findFirst({ where: { organizationId: orgId, clientAccountId: secondClientAccountId } })).toBeNull();
   });
 
-  it("rejects mass assignment — an unknown field in the body is a validation error (422), never silently ignored", async () => {
-    const res = await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/legal-identity`, {
-      method: "PATCH",
+  it("rejects mass assignment — an unknown field in the body is a validation error, never silently ignored", async () => {
+    // CCV2-I.4 — l'invariant est DÉPLACÉ, jamais perdu : sa route d'origine (`PATCH
+    // .../legal-identity`) a été retirée, mais la protection anti-mass-assignment reste une garantie
+    // vivante du produit. Elle est donc vérifiée sur une route CRM survivante, dont le schéma est
+    // également `.strict()`. Supprimer ce test avec sa route aurait fait disparaître une couverture
+    // de sécurité toujours active.
+    const res = await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/representatives`, {
+      method: "POST",
       headers: authHeaders(tokenOwner),
-      body: JSON.stringify({ legalName: "X", organizationId: randomUUID() }),
+      body: JSON.stringify({ firstName: "Jean", lastName: "Dupont", type: "COMMERCIAL_CONTACT", organizationId: randomUUID() }),
     });
     expect(res.status).toBe(400);
   });
@@ -194,10 +247,13 @@ describe("Company Profile — real HTTP + PostgreSQL (NestJS)", () => {
     const readRes = await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/legal-identity`, { headers: authHeaders(tokenViewer) });
     expect(readRes.status).toBe(200);
 
-    const writeRes = await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/legal-identity`, {
-      method: "PATCH",
+    // CCV2-I.4 — la moitié ÉCRITURE de cette preuve est portée par une route CRM survivante : le
+    // RBAC testé ici (`VIEWER` lecteur mais non gestionnaire) reste une règle active du produit, et
+    // la disparition de son ancienne route ne doit pas la faire disparaître de la couverture.
+    const writeRes = await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/representatives`, {
+      method: "POST",
       headers: authHeaders(tokenViewer),
-      body: JSON.stringify({ legalName: "Should Be Denied" }),
+      body: JSON.stringify({ firstName: "Refuse", lastName: "Viewer", type: "COMMERCIAL_CONTACT" }),
     });
     expect(writeRes.status).toBe(403);
   });
@@ -207,62 +263,54 @@ describe("Company Profile — real HTTP + PostgreSQL (NestJS)", () => {
     expect(res.status).toBe(403);
   });
 
-  it("bank accounts are created with a full IBAN but returned MASKED in the list view", async () => {
-    const create = await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/bank-accounts`, {
-      method: "POST",
-      headers: authHeaders(tokenOwner),
-      body: JSON.stringify({ accountHolder: "Entreprise Test SAS", iban: "FR7630006000011234567890189" }),
-    });
-    expect(create.status).toBe(201);
-
+  it("un IBAN stocké en clair est toujours retourné MASQUÉ dans la vue liste", async () => {
+    // Propriété de LECTURE, inchangée par I.1 : la ligne est désormais historique (amorcée), mais
+    // le masquage doit s'appliquer exactement comme avant — c'est même là qu'il compte le plus,
+    // puisque ces lignes ne peuvent plus être supprimées en les recréant proprement ailleurs.
     const list = await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/bank-accounts`, { headers: authHeaders(tokenOwner) });
     expect(list.status).toBe(200);
-    const accounts = (await list.json()) as { iban: string }[];
-    expect(accounts.length).toBeGreaterThan(0);
-    expect(accounts[0]!.iban).not.toBe("FR7630006000011234567890189");
-    expect(accounts[0]!.iban.endsWith("0189")).toBe(true);
-    expect(accounts[0]!.iban).toContain("•");
+    const accounts = (await list.json()) as { id: string; iban: string }[];
+    const masked = accounts.find((account) => account.id === legacyMaskedBankAccountId);
+
+    expect(masked, "le compte historique reste listé").toBeDefined();
+    expect(masked!.iban).not.toBe("FR7630006000011234567890189");
+    expect(masked!.iban.endsWith("0189")).toBe(true);
+    expect(masked!.iban).toContain("•");
+    // La donnée complète, elle, n'a pas été tronquée en base : le masquage est un fait de présentation.
+    expect((await prisma.companyBankAccount.findUnique({ where: { id: legacyMaskedBankAccountId } }))?.iban).toBe("FR7630006000011234567890189");
   });
 
-  it("a bank account is archived, never physically deleted, and is excluded from active usage but still listed", async () => {
-    const create = await fetch(`${baseUrl}/api/v1/clients/${secondClientAccountId}/bank-accounts`, {
+  it("un compte bancaire est archivé, jamais physiquement supprimé, et reste listé", async () => {
+    // L'ARCHIVAGE reste ouvert après I.1 alors que création et mise à jour sont retirées : il ne fait
+    // naître aucune donnée de candidature et n'altère aucune valeur — il retire une ligne historique
+    // de l'usage actif, donc va DANS le sens du décommissionnement. Le refuser aurait rendu les
+    // lignes Legacy définitivement inneutralisables depuis leur seule surface de gestion.
+    const before = await prisma.companyBankAccount.findUnique({ where: { id: legacyArchivableBankAccountId } });
+    expect(before?.status).toBe("ACTIVE");
+
+    const archive = await fetch(`${baseUrl}/api/v1/clients/${secondClientAccountId}/bank-accounts/${legacyArchivableBankAccountId}/archive`, {
       method: "POST",
       headers: authHeaders(tokenOwner),
-      body: JSON.stringify({ accountHolder: "Autre Entreprise", iban: "FR7630006000011234567890189" }),
     });
-    const created = (await create.json()) as { id: string; status: string };
-    expect(created.status).toBe("ACTIVE");
-
-    const archive = await fetch(`${baseUrl}/api/v1/clients/${secondClientAccountId}/bank-accounts/${created.id}/archive`, { method: "POST", headers: authHeaders(tokenOwner) });
     expect(archive.status).toBe(200);
-    const archived = (await archive.json()) as { status: string };
-    expect(archived.status).toBe("ARCHIVED");
+    expect(((await archive.json()) as { status: string }).status).toBe("ARCHIVED");
 
-    const stillInDb = await prisma.companyBankAccount.findUnique({ where: { id: created.id } });
-    expect(stillInDb).not.toBeNull();
+    const stillInDb = await prisma.companyBankAccount.findUnique({ where: { id: legacyArchivableBankAccountId } });
+    expect(stillInDb, "archiver ne supprime jamais la ligne").not.toBeNull();
+    expect(stillInDb?.status).toBe("ARCHIVED");
   });
 
   it("correctif audit Codex P0 — a CLIENT_MANAGER authorized on Client A cannot mutate a Client B resource of the SAME org by supplying its id under Client A's route", async () => {
-    // Compte bancaire créé sous le Client B (secondClientAccountId), auquel clientManagerA n'a
-    // AUCUNE affectation.
-    const createOnClientB = await fetch(`${baseUrl}/api/v1/clients/${secondClientAccountId}/bank-accounts`, {
-      method: "POST",
-      headers: authHeaders(tokenOwner),
-      body: JSON.stringify({ accountHolder: "Client B Holder", iban: "FR7630006000011234567890189" }),
-    });
-    expect(createOnClientB.status).toBe(201);
-    const clientBAccount = (await createOnClientB.json()) as { id: string };
-
-    // clientManagerA EST autorisé (CLIENT_MANAGER) sur `clientAccountId` (Client A) — la route
-    // passe donc le contrôle d'accès de la policy centralisée — mais fournit l'id d'une ressource
-    // appartenant au Client B. Avant le correctif, la mutation aboutissait quand même (P0).
-    const attack = await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/bank-accounts/${clientBAccount.id}/archive`, {
+    // Compte bancaire HISTORIQUE du Client B (`secondClientAccountId`), auquel clientManagerA n'a
+    // AUCUNE affectation. Amorcé en base plutôt que créé par HTTP : la régression visée porte sur
+    // le contrôle d'accès de la mutation, pas sur la façon dont la ligne est apparue.
+    const attack = await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/bank-accounts/${legacyClientBBankAccountId}/archive`, {
       method: "POST",
       headers: authHeaders(tokenClientManagerA),
     });
     expect(attack.status).toBe(404);
 
-    const stillActive = await prisma.companyBankAccount.findUnique({ where: { id: clientBAccount.id } });
+    const stillActive = await prisma.companyBankAccount.findUnique({ where: { id: legacyClientBBankAccountId } });
     expect(stillActive?.status).toBe("ACTIVE");
     expect(stillActive?.clientAccountId).toBe(secondClientAccountId);
   });

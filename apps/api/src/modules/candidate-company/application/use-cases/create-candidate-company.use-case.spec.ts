@@ -20,39 +20,39 @@ describe("CreateCandidateCompanyUseCase", () => {
   });
 
   it("creates an ACTIVE candidate company", async () => {
-    const result = await useCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Acme Travaux Publics" });
+    const result = await useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Acme Travaux Publics" });
     expect(result.status).toBe("ACTIVE");
     expect(result.name).toBe("Acme Travaux Publics");
   });
 
   it("accepts a valid SIREN", async () => {
-    const result = await useCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Acme", siren: "356000000" });
+    const result = await useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Acme", siren: "356000000" });
     expect(result.siren).toBe("356000000");
   });
 
   it("rejects an invalid SIREN (fails Luhn checksum)", async () => {
-    await expect(useCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Acme", siren: "356000001" })).rejects.toBeInstanceOf(InvalidSirenError);
+    await expect(useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Acme", siren: "356000001" })).rejects.toBeInstanceOf(InvalidSirenError);
   });
 
   it("rejects a duplicate name within the same organization, case/space-insensitive", async () => {
-    await useCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Acme Travaux Publics" });
-    await expect(useCase.execute({ organizationId: ORG, actorId: ACTOR, name: "  ACME   Travaux Publics " })).rejects.toBeInstanceOf(
+    await useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Acme Travaux Publics" });
+    await expect(useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "  ACME   Travaux Publics " })).rejects.toBeInstanceOf(
       DuplicateCandidateCompanyNameError,
     );
   });
 
   it("allows the same name in a DIFFERENT organization", async () => {
-    await useCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Acme Travaux Publics" });
-    await expect(useCase.execute({ organizationId: randomUUID(), actorId: ACTOR, name: "Acme Travaux Publics" })).resolves.toBeDefined();
+    await useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Acme Travaux Publics" });
+    await expect(useCase.execute({ organizationId: randomUUID(), actorId: ACTOR, actorRole: "OWNER", name: "Acme Travaux Publics" })).resolves.toBeDefined();
   });
 
   it("records an audit log entry", async () => {
-    await useCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Acme" });
+    await useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Acme" });
     expect(auditLogWriter.entries.map((e) => e.action)).toContain("candidate_company.created");
   });
 
   it("never persists sourceClientAccountId unless explicitly provided (no implicit ClientAccount coupling)", async () => {
-    const result = await useCase.execute({ organizationId: ORG, actorId: ACTOR, name: "Acme" });
+    const result = await useCase.execute({ organizationId: ORG, actorId: ACTOR, actorRole: "OWNER", name: "Acme" });
     expect(result.sourceClientAccountId).toBeUndefined();
   });
 });

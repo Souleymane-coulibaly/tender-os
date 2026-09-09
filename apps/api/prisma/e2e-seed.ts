@@ -51,7 +51,38 @@ async function createOrgWithOwnerAndTender(input: { runId: string; label: string
     data: { id: tenderId, organizationId, clientAccountId, title: `Marché Playwright ${label} ${runId}`, status: "DRAFT", tags: [], createdBy: userId },
   });
 
-  return { email, password, organizationId, userId, clientAccountId, tenderId };
+  // Checkpoint TENDEROS-2.1-CCV2-F.1 — entreprise candidate réelle de CETTE organisation. Créée
+  // dans le helper partagé, donc l'organisation `other` en possède une aussi : c'est exactement la
+  // cible dont les preuves d'isolation inter-organisation (gaps F4/F5) ont besoin.
+  const candidateCompanyId = randomUUID();
+  await prisma.candidateCompany.create({
+    data: {
+      id: candidateCompanyId,
+      organizationId,
+      name: `Candidate E2E ${label} ${runId}`,
+      nameNormalized: `candidate e2e ${label} ${runId}`,
+      legalName: `CANDIDATE E2E ${label.toUpperCase()} SAS`,
+      siren: "356000000",
+      legalForm: "SAS",
+      status: "ACTIVE",
+      createdBy: userId,
+    },
+  });
+  await prisma.candidateEstablishment.create({
+    data: {
+      id: randomUUID(),
+      organizationId,
+      candidateCompanyId,
+      siret: "35600000000048",
+      isPrincipal: true,
+      addressLine: `1 rue ${label} ${runId}`,
+      postalCode: "75001",
+      city: "Paris",
+      createdBy: userId,
+    },
+  });
+
+  return { email, password, organizationId, userId, clientAccountId, tenderId, candidateCompanyId };
 }
 
 async function main(): Promise<void> {
@@ -151,6 +182,112 @@ async function main(): Promise<void> {
       data: { id: tenderInOtherClientId, organizationId, clientAccountId: otherClientAccountId, title: `Marché Playwright Client B ${runId}`, status: "DRAFT", tags: [], createdBy: userId },
     });
 
+    // Checkpoint CCV2-F.1 — entreprise candidate PRINCIPALE de l'organisation principale. Créée
+    // ici et non par le helper : l'organisation principale est montée en ligne dans `main`.
+    const candidateCompanyId = randomUUID();
+    await prisma.candidateCompany.create({
+      data: {
+        id: candidateCompanyId,
+        organizationId,
+        name: `Candidate E2E ALPHA ${runId}`,
+        nameNormalized: `candidate e2e alpha ${runId}`,
+        legalName: "CANDIDATE E2E ALPHA SAS",
+        siren: "356000000",
+        legalForm: "SAS",
+        status: "ACTIVE",
+        createdBy: userId,
+      },
+    });
+    await prisma.candidateEstablishment.create({
+      data: {
+        id: randomUUID(),
+        organizationId,
+        candidateCompanyId,
+        siret: "35600000000048",
+        isPrincipal: true,
+        addressLine: `1 rue Alpha ${runId}`,
+        postalCode: "75001",
+        city: "Paris",
+        createdBy: userId,
+      },
+    });
+
+    // Checkpoint TENDEROS-2.1-CCV2-F.2 — sentinelle BANCAIRE de l'organisation principale. Le gap
+    // F2-03 exige de prouver qu'après changement d'organisation, AUCUNE trace bancaire de
+    // l'organisation précédente ne subsiste : il faut donc une valeur unique et reconnaissable.
+    await prisma.companyBankAccount.create({
+      data: {
+        id: randomUUID(),
+        organizationId,
+        candidateCompanyId,
+        accountHolder: `CANDIDATE E2E ALPHA ${runId}`,
+        bankName: "Banque Sentinelle",
+        iban: "FR7630006000011234567890189",
+        bic: "AGRIFRPP",
+        currency: "EUR",
+        isPrimary: true,
+        status: "ACTIVE",
+        createdBy: userId,
+      },
+    });
+
+    // Checkpoint TENDEROS-2.1-CCV2-F.2 — le Tender principal PORTE déjà l'entreprise candidate ALPHA.
+    // Sans cela, la preuve du gap F2-01 ne pourrait prouver qu'une PREMIÈRE sélection, jamais un
+    // CHANGEMENT réel A → B, qui est exactement ce que la mission exige.
+    await prisma.tender.update({ where: { id: tenderId }, data: { candidateCompanyId } });
+
+    // Checkpoint CCV2-F.1 — SECONDE entreprise candidate de la MÊME organisation. Le gap F3
+    // (changement de candidat) ne se prouve qu'avec deux fiches dont les données diffèrent : si
+    // l'une affichait les valeurs de l'autre après navigation, ce serait invisible sur une fiche
+    // unique. Un représentant propre à chacune sert de sentinelle.
+    const secondCandidateCompanyId = randomUUID();
+    await prisma.candidateCompany.create({
+      data: {
+        id: secondCandidateCompanyId,
+        organizationId,
+        name: `Candidate E2E BETA ${runId}`,
+        nameNormalized: `candidate e2e beta ${runId}`,
+        legalName: `CANDIDATE E2E BETA SARL`,
+        siren: "552100554",
+        legalForm: "SARL",
+        status: "ACTIVE",
+        createdBy: userId,
+      },
+    });
+    await prisma.companyRepresentative.create({
+      data: {
+        id: randomUUID(),
+        organizationId,
+        candidateCompanyId: secondCandidateCompanyId,
+        firstName: "Sentinelle",
+        lastName: `BETA ${runId}`,
+        type: "LEGAL_REPRESENTATIVE",
+        status: "ACTIVE",
+        createdBy: userId,
+      },
+    });
+    await prisma.companyRepresentative.create({
+      data: {
+        id: randomUUID(),
+        organizationId,
+        candidateCompanyId,
+        firstName: "Sentinelle",
+        lastName: `ALPHA ${runId}`,
+        type: "LEGAL_REPRESENTATIVE",
+        status: "ACTIVE",
+        createdBy: userId,
+      },
+    });
+
+    // Checkpoint TENDEROS-2.1-CCV2-G.1 — Tender HISTORIQUE sans entreprise candidate, insere
+    // DIRECTEMENT en persistance. C'est exactement l'etat qu'aucune route produit ne peut plus
+    // creer, et que la transition explicite (§13/§14) doit savoir traiter. Il n'est JAMAIS
+    // backfille : sa valeur reste NULL tant qu'un utilisateur autorise n'a pas choisi.
+    const legacyTenderId = randomUUID();
+    await prisma.tender.create({
+      data: { id: legacyTenderId, organizationId, clientAccountId, title: `Marché legacy sans candidat ${runId}`, status: "DRAFT", tags: [], createdBy: userId },
+    });
+
     const other = await createOrgWithOwnerAndTender({ runId, label: "other", passwordHasher, userRepository, membershipRepository, prisma });
 
     // V2 Sprint 5 (GO/NO-GO IA) — un second Tender de la MÊME organisation, avec une analyse IA du
@@ -247,6 +384,9 @@ async function main(): Promise<void> {
         collaboratorUserId,
         tenderInOtherClientId,
         otherClientAccountId,
+        candidateCompanyId,
+        secondCandidateCompanyId,
+        legacyTenderId,
         other,
       }),
     );

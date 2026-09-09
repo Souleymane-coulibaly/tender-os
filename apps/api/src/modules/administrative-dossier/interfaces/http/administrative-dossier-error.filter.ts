@@ -4,6 +4,12 @@ import { DomainError } from "../../../../shared-kernel/domain-error";
 import type { RequestWithId } from "../../../../shared-kernel/request-id.middleware";
 
 const STATUS_BY_CODE: Record<string, number> = {
+  // Checkpoint TENDEROS-2.1-CCV2-G.2 — sans cette entree, la suppression du repli Legacy
+  // transformerait un refus METIER parfaitement legitime (« aucune entreprise candidate n'est
+  // designee ») en 500 : une panne serveur apparente la ou l'utilisateur a simplement une action a
+  // faire. 422, comme partout ailleurs pour ce meme code (§9 : une seule erreur, mappee
+  // uniformement).
+  CANDIDATE_COMPANY_REQUIRED: HttpStatus.UNPROCESSABLE_ENTITY,
   // Erreurs cross-module déléguées à Tenders/Client Portfolio/Documents — mêmes codes que leurs
   // propres error filters (même motif que DeliverableErrorFilter).
   TENDER_NOT_FOUND: HttpStatus.NOT_FOUND,

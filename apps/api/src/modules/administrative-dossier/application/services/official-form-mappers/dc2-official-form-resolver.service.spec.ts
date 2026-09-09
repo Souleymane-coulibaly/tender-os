@@ -8,17 +8,6 @@ const ORGANIZATION_ID = "org-1";
 const TENDER_ID = "tender-1";
 
 /** ClientAccount X — LEGACY, volontairement différent du candidat Y (mission §7 "CLIENT ≠ CANDIDATE TEST"). */
-const CLIENT_X_LEGAL_IDENTITY = {
-  tradeName: "ACME Consulting",
-  legalName: "ACME Consulting SAS",
-  siretPrincipal: "11122233300011",
-  legalForm: "SAS",
-  addressLine: "1 rue du Client",
-  postalCode: "75001",
-  city: "Paris",
-  generalEmail: "contact@acme-consulting.fr",
-  phone: "0100000000",
-};
 
 /** CandidateCompany Y — NEW FLOW, jamais confondue avec X. */
 const CANDIDATE_Y_IDENTITY = {
@@ -32,13 +21,18 @@ const CANDIDATE_Y_IDENTITY = {
   principalEstablishment: { siret: "44455566600029", addressLine: "9 avenue du Candidat", postalCode: "69000", city: "Lyon", country: "FR" },
 };
 
+const EMPTY_CANDIDATE_CAPABILITIES = {
+  /** Checkpoint CCV2-E — capacités candidate vides : les champs de contact restent MISSING comme
+   *  avant, aucune assertion existante ne peut réussir grâce à une donnée fabriquée. */
+  execute: async () => ({ source: "CANDIDATE_COMPANY", representatives: [], insurances: [], certifications: [], references: [], humanResources: [], materialResources: [], documents: [] }),
+};
+
 function buildResolver(input: { tenderCandidateCompanyId: string | undefined; candidateIdentity: unknown }): Dc2OfficialFormResolver {
   const getTenderUseCase = { execute: async () => ({ clientAccountId: "client-x", candidateCompanyId: input.tenderCandidateCompanyId }) };
-  const getCompanyProfileUseCase = { execute: async () => ({ legalIdentity: CLIENT_X_LEGAL_IDENTITY }) };
   const getConsortiumUseCase = { execute: async () => { throw new Error("should never be called for scope CANDIDATE (test fixture)"); } };
   const resolveCandidateIdentityUseCase = { execute: async () => input.candidateIdentity };
 
-  return new Dc2OfficialFormResolver(getTenderUseCase as never, getCompanyProfileUseCase as never, getConsortiumUseCase as never, resolveCandidateIdentityUseCase as never);
+  return new Dc2OfficialFormResolver(getTenderUseCase as never, getConsortiumUseCase as never, resolveCandidateIdentityUseCase as never, EMPTY_CANDIDATE_CAPABILITIES as never);
 }
 
 /** Checkpoint TENDEROS-2.1-P2.2-F3, mission §7/§37/§47 — scope CANDIDATE : même discipline NEW/
@@ -58,15 +52,19 @@ describe("Dc2OfficialFormResolver — CLIENT ≠ CANDIDATE (Checkpoint TENDEROS-
     expect(result.readiness.fields.find((f) => f.fieldKey === "candidate.tradeName")?.source).toBe(FormFieldSource.CandidateCompanyProfile);
   });
 
-  it("LEGACY FLOW — no resolved CandidateCompany: scope CANDIDATE falls back to ClientAccount X's legalIdentity", async () => {
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.2 — CONTRAT INVERSÉ. Ce test encodait le repli que la mission
+   * supprime : sans entreprise candidate, l'identité du CLIENT commercial était servie comme si
+   * elle était celle du candidat. La MOITIÉ essentielle de l'ancienne règle survit et reste
+   * prouvée ailleurs dans ce même fichier : le client n'est JAMAIS présenté comme le candidat.
+   * Ce qui change, c'est qu'on refuse désormais au lieu de substituer.
+   */
+  it("BLOQUANT (CCV2-G.2) — sans entreprise candidate, la résolution est REFUSÉE au lieu de servir le client", async () => {
     const resolver = buildResolver({ tenderCandidateCompanyId: undefined, candidateIdentity: { source: CandidateIdentitySource.None } });
-
-    const result = await resolver.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, scope: { kind: "CANDIDATE" } });
-
-    expect(result.data["candidate.tradeName"]).toBe("ACME Consulting");
-    expect(result.data["candidate.siret"]).toBe("11122233300011");
-    expect(result.data["candidate.legalForm"]).toBe("SAS");
-    expect(result.readiness.fields.find((f) => f.fieldKey === "candidate.tradeName")?.source).toBe(FormFieldSource.ClientProfile);
+  
+    await expect(
+      resolver.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, scope: { kind: "CANDIDATE" } }),
+    ).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_REQUIRED" });
   });
 
   /** Checkpoint TENDEROS-2.1-P2.2-F3.1 (correctif audit Codex P1). */
@@ -82,21 +80,26 @@ describe("Dc2OfficialFormResolver — CLIENT ≠ CANDIDATE (Checkpoint TENDEROS-
     expect(result.readiness.fields.find((f) => f.fieldKey === "candidate.email")?.status).toBe(AdministrativeFormFieldStatus.Missing);
   });
 
-  it("LEGACY FLOW non-regression — candidate.email/phone still resolve from ClientAccount X's legalIdentity", async () => {
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.2 — CONTRAT INVERSÉ. Ce test encodait le repli que la mission
+   * supprime : sans entreprise candidate, l'identité du CLIENT commercial était servie comme si
+   * elle était celle du candidat. La MOITIÉ essentielle de l'ancienne règle survit et reste
+   * prouvée ailleurs dans ce même fichier : le client n'est JAMAIS présenté comme le candidat.
+   * Ce qui change, c'est qu'on refuse désormais au lieu de substituer.
+   */
+  it("BLOQUANT (CCV2-G.2) — sans entreprise candidate, le contact du client n'est JAMAIS servi : la résolution est refusée", async () => {
     const resolver = buildResolver({ tenderCandidateCompanyId: undefined, candidateIdentity: { source: CandidateIdentitySource.None } });
-
-    const result = await resolver.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, scope: { kind: "CANDIDATE" } });
-
-    expect(result.data["candidate.email"]).toBe("contact@acme-consulting.fr");
-    expect(result.data["candidate.phone"]).toBe("0100000000");
+  
+    await expect(
+      resolver.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, scope: { kind: "CANDIDATE" } }),
+    ).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_REQUIRED" });
   });
 
   it("scope MEMBER never touches CandidateCompany/ClientAccount identity at all — resolved exclusively from Consortium.members", async () => {
     const getTenderUseCase = { execute: async () => ({ clientAccountId: "client-x", candidateCompanyId: "candidate-y" }) };
-    const getCompanyProfileUseCase = { execute: async () => { throw new Error("should never be called for scope MEMBER (test fixture)"); } };
     const resolveCandidateIdentityUseCase = { execute: async () => { throw new Error("should never be called for scope MEMBER (test fixture)"); } };
     const getConsortiumUseCase = { execute: async () => ({ members: [{ memberId: "member-1", name: "Gamma Travaux", legalIdentifier: "77788899900011" }] }) };
-    const resolver = new Dc2OfficialFormResolver(getTenderUseCase as never, getCompanyProfileUseCase as never, getConsortiumUseCase as never, resolveCandidateIdentityUseCase as never);
+    const resolver = new Dc2OfficialFormResolver(getTenderUseCase as never, getConsortiumUseCase as never, resolveCandidateIdentityUseCase as never, EMPTY_CANDIDATE_CAPABILITIES as never);
 
     const result = await resolver.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID, scope: { kind: "MEMBER", memberId: "member-1" } });
 

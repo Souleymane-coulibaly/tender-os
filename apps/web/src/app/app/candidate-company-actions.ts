@@ -55,11 +55,32 @@ export async function fetchCandidateEstablishments(candidateCompanyId: string): 
 /** Best-effort — utilisé pour résoudre l'affichage du nom d'une CandidateCompany déjà rattachée à
  *  un Tender/Opportunity sans faire échouer la page si elle a depuis été archivée/introuvable
  *  (même discipline que ResolveCandidateIdentityUseCase côté backend, jamais un throw bloquant). */
-export async function fetchCandidateCompanyOrNull(id: string): Promise<CandidateCompanySummary | null> {
+/**
+ * Checkpoint TENDEROS-2.1-CCV2-G.1 — ferme P2-CANDIDATE-FETCH-ERROR.
+ *
+ * TROIS états distincts, là où il n'y en avait que deux. L'ancienne version renvoyait `null` aussi
+ * bien quand aucune entreprise candidate n'était rattachée que quand sa lecture avait ÉCHOUÉ. Sous
+ * POLICY A cette confusion devient dangereuse : l'interface aurait annoncé « entreprise candidate
+ * requise » et proposé d'en choisir une, invitant l'utilisateur à ÉCRASER une attribution valide
+ * à cause d'une panne réseau passagère.
+ *
+ * `unavailable` porte l'identifiant : le Tender EN A BIEN UNE, elle n'est simplement pas lisible
+ * maintenant. L'erreur est journalisée côté serveur plutôt qu'avalée en silence.
+ */
+export type CandidateCompanyResolution =
+  | { kind: "none" }
+  | { kind: "loaded"; company: CandidateCompanySummary }
+  | { kind: "unavailable"; candidateCompanyId: string };
+
+export async function resolveCandidateCompany(candidateCompanyId: string | undefined | null): Promise<CandidateCompanyResolution> {
+  if (!candidateCompanyId) {
+    return { kind: "none" };
+  }
   try {
-    return await fetchCandidateCompany(id);
-  } catch {
-    return null;
+    return { kind: "loaded", company: await fetchCandidateCompany(candidateCompanyId) };
+  } catch (error) {
+    console.error(`[TenderOS] Lecture de l'entreprise candidate ${candidateCompanyId} impossible :`, error);
+    return { kind: "unavailable", candidateCompanyId };
   }
 }
 

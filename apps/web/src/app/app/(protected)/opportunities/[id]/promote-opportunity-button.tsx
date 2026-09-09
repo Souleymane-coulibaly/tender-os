@@ -7,7 +7,15 @@ import { promoteOpportunityAction } from "../../../opportunity-actions";
 /** Promotion Opportunity -> Tender (mission §20-22) — crée TOUJOURS un nouveau Tender, jamais une
  *  transformation de l'Opportunity elle-même. Idempotente : un second clic après succès redirige
  *  simplement vers le même Tender déjà créé, jamais un second. */
-export function PromoteOpportunityButton({ opportunityId }: { opportunityId: string }) {
+export function PromoteOpportunityButton({
+  opportunityId,
+  hasCandidateCompany,
+}: {
+  opportunityId: string;
+  /** Checkpoint CCV2-G.1 (POLICY A) — une Opportunity sans entreprise candidate ne peut plus
+   *  produire de Tender : `CreateTenderUseCase` refuse desormais (CANDIDATE_COMPANY_REQUIRED). */
+  hasCandidateCompany: boolean;
+}) {
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -31,6 +39,23 @@ export function PromoteOpportunityButton({ opportunityId }: { opportunityId: str
     if (result) {
       router.push(`/app/tenders/${result.tender.id}`);
     }
+  }
+
+  // Checkpoint CCV2-G.1 (POLICY A) — sans entreprise candidate, la promotion echouerait cote API.
+  // On le DIT ici plutot que de laisser l'utilisateur decouvrir un 422 apres coup, et on l'oriente
+  // vers la section de selection DEJA presente sur cette page — jamais une seconde UI candidate.
+  // Le bouton reste neanmoins la garde d'affichage : l'autorite reste le backend.
+  if (!hasCandidateCompany) {
+    return (
+      <section className="flex flex-col gap-2 rounded border border-amber-200 bg-amber-50 p-4">
+        <p className="text-sm font-medium text-amber-900">Entreprise candidate requise</p>
+        <p className="text-sm text-amber-800">
+          Un appel d&apos;offres désigne l&apos;entité juridique qui y répond. Sélectionnez
+          l&apos;entreprise candidate de cette opportunité ci-dessus avant de la promouvoir — elle
+          ne peut jamais être déduite du client.
+        </p>
+      </section>
+    );
   }
 
   return (

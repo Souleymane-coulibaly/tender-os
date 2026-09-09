@@ -35,6 +35,10 @@ describe("CreateTenderUseCase", () => {
   let createCandidateCompanyUseCase: CreateCandidateCompanyUseCase;
   let useCase: CreateTenderUseCase;
 
+  /** Checkpoint CCV2-G.1 — un candidat réel, créé par son propre use case, partagé par les
+   *  scénarios qui ne portent PAS sur l'exigence elle-même. */
+  let defaultCandidateId: string;
+
   beforeEach(async () => {
     tenderRepository = new InMemoryTenderRepository();
     auditLogWriter = new InMemoryAuditLogWriter();
@@ -59,10 +63,13 @@ describe("CreateTenderUseCase", () => {
       clientPortfolio.assertClientAccessUseCase,
       new GetCandidateCompanyUseCase(candidateCompanyRepository),
     );
+    defaultCandidateId = (
+      await createCandidateCompanyUseCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "OWNER", name: "Candidat par defaut SAS" })
+    ).id;
   });
 
   it("accepts a valid, non-archived candidateCompanyId (Checkpoint 2.1-A3)", async () => {
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: "org-1", actorId: "user-1", name: "Alpha SARL" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "OWNER", name: "Alpha SARL" });
 
     const result = await useCase.execute({
       organizationId: "org-1",
@@ -76,16 +83,26 @@ describe("CreateTenderUseCase", () => {
     expect(result.candidateCompanyId).toBe(candidate.id);
   });
 
-  it("creates a Tender without any candidateCompanyId (never required at this stage — Checkpoint 2.1-A3 §16)", async () => {
-    const result = await useCase.execute({
-      organizationId: "org-1",
-      actorId: "user-1",
-      actorRole: "BID_MANAGER",
-      clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
-      title: "Marche de nettoyage",
-    });
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.1 — CONTRAT INVERSE. Ce test encodait la règle 2.1-A3 §16
+   * (« jamais requis à ce stade »), superseded par POLICY A : un Tender exploitable ne peut plus
+   * naître sans entreprise candidate. Il est réécrit pour éprouver la règle ACTUELLE, jamais
+   * supprimé — c'est le point exact où le contrat a changé.
+   */
+  it("BLOQUANT (CCV2-G.1) — refuse une création SANS candidateCompanyId, et n'en devine jamais un", async () => {
+    await expect(
+      useCase.execute({
+        // `candidateCompanyId` VOLONTAIREMENT absent — c'est l'objet même de ce test.
+        organizationId: "org-1",
+        actorId: "user-1",
+        actorRole: "BID_MANAGER",
+        clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+        title: "Marche de nettoyage",
+      }),
+    ).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_REQUIRED" });
 
-    expect(result.candidateCompanyId).toBeUndefined();
+    // Aucun Tender n'a été écrit : le refus précède toute persistance.
+    expect(tenderRepository.snapshot().size).toBe(0);
   });
 
   it("refuses a candidateCompanyId that does not exist", async () => {
@@ -102,7 +119,7 @@ describe("CreateTenderUseCase", () => {
   });
 
   it("refuses an archived candidateCompanyId", async () => {
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: "org-1", actorId: "user-1", name: "Alpha SARL" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: "org-1", actorId: "user-1", actorRole: "OWNER", name: "Alpha SARL" });
     const stored = await candidateCompanyRepository.findById({ organizationId: "org-1", candidateCompanyId: candidate.id });
     stored!.archive(new Date());
     await candidateCompanyRepository.save(stored!);
@@ -120,7 +137,7 @@ describe("CreateTenderUseCase", () => {
   });
 
   it("refuses a candidateCompanyId that belongs to a different organization (cross-tenant)", async () => {
-    const otherOrgCandidate = await createCandidateCompanyUseCase.execute({ organizationId: "org-2", actorId: "user-1", name: "Beta SARL" });
+    const otherOrgCandidate = await createCandidateCompanyUseCase.execute({ organizationId: "org-2", actorId: "user-1", actorRole: "OWNER", name: "Beta SARL" });
 
     await expect(
       useCase.execute({
@@ -140,6 +157,7 @@ describe("CreateTenderUseCase", () => {
       actorId: "user-1",
       actorRole: "BID_MANAGER",
       clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+      candidateCompanyId: defaultCandidateId,
       title: "Marche de nettoyage",
     });
 
@@ -156,6 +174,7 @@ describe("CreateTenderUseCase", () => {
         actorId: "user-1",
         actorRole: "READ_ONLY",
         clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+      candidateCompanyId: defaultCandidateId,
         title: "Marche de nettoyage",
       }),
     ).rejects.toThrow(TenderPermissionMissingError);
@@ -169,6 +188,7 @@ describe("CreateTenderUseCase", () => {
       actorId: "user-1",
       actorRole: "BID_MANAGER",
       clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+      candidateCompanyId: defaultCandidateId,
       title: "Marche de nettoyage",
     });
 
@@ -185,6 +205,7 @@ describe("CreateTenderUseCase", () => {
       actorId: "user-1",
       actorRole: "BID_MANAGER",
       clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+      candidateCompanyId: defaultCandidateId,
       title: "Marche de nettoyage",
       reference: "REF-1",
     });
@@ -200,6 +221,7 @@ describe("CreateTenderUseCase", () => {
       actorId: "user-1",
       actorRole: "BID_MANAGER",
       clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+      candidateCompanyId: defaultCandidateId,
       title: "Cloud hosting framework agreement",
       marketType: "PRIVATE",
       country: "DE",
@@ -226,6 +248,7 @@ describe("CreateTenderUseCase", () => {
         actorId: "user-1",
         actorRole: "BID_MANAGER",
         clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+      candidateCompanyId: defaultCandidateId,
         title: "Marche de nettoyage",
         marketType: "NOT_A_MARKET_TYPE",
       }),
@@ -239,6 +262,7 @@ describe("CreateTenderUseCase", () => {
         actorId: "user-1",
         actorRole: "BID_MANAGER",
         clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+      candidateCompanyId: defaultCandidateId,
         title: "Marche de nettoyage",
         country: "XX",
       }),
@@ -252,6 +276,7 @@ describe("CreateTenderUseCase", () => {
         actorId: "user-1",
         actorRole: "BID_MANAGER",
         clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+      candidateCompanyId: defaultCandidateId,
         title: "Marche de nettoyage",
         language: "zz",
       }),
@@ -264,6 +289,7 @@ describe("CreateTenderUseCase", () => {
       actorId: "user-1",
       actorRole: "BID_MANAGER",
       clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+      candidateCompanyId: defaultCandidateId,
       title: "Marche de nettoyage",
     });
 
@@ -279,6 +305,7 @@ describe("CreateTenderUseCase", () => {
         actorId: "user-1",
         actorRole: "BID_MANAGER",
         clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+      candidateCompanyId: defaultCandidateId,
         title: "Marche de nettoyage",
         source: "NOT_A_SOURCE",
       }),

@@ -54,6 +54,10 @@ const STATUS_BY_CODE: Record<string, number> = {
   // (CreateTenderUseCase/ChangeTenderCandidateCompanyUseCase), même motif que Client Portfolio
   // ci-dessus : ses erreurs remontent telles quelles, jamais retraduites.
   CANDIDATE_COMPANY_NOT_FOUND: HttpStatus.NOT_FOUND,
+  // Checkpoint CCV2-G.1 — 422 et non 404 : l'appelant n'a désigné AUCUNE entreprise candidate.
+  // Un 404 ici laisserait croire qu'une ressource demandée est introuvable, et brouillerait la
+  // convention anti-énumération qui, elle, concerne une entreprise réellement désignée.
+  CANDIDATE_COMPANY_REQUIRED: HttpStatus.UNPROCESSABLE_ENTITY,
   CANDIDATE_COMPANY_ARCHIVED: HttpStatus.CONFLICT,
 
   // V2 Sprint 22B (billing) — CreateTenderUseCase consomme désormais un crédit AO au point de choc

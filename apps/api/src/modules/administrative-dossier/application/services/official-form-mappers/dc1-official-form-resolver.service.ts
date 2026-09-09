@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
-import { CandidateIdentitySource, ResolveCandidateIdentityUseCase } from "../../../../candidate-company";
-import { GetCompanyProfileUseCase } from "../../../../company-profile";
+import { resolveCandidateContact } from "./candidate-contact.resolver";
+import { CandidateCompanyRequiredError, ResolveCandidateIdentityUseCase } from "../../../../candidate-company";
+import { ResolveCandidateCapabilitiesUseCase } from "../../../../company-profile";
 import { GetTenderUseCase } from "../../../../tenders";
 import { Dc1CandidateType } from "../../../domain/dc1-declaration.aggregate";
 import { ConsortiumType } from "../../../domain/consortium.aggregate";
@@ -9,6 +10,7 @@ import { summarizeAdministrativeFormReadiness, type AdministrativeFormFieldReadi
 import { FormFieldSource } from "../../../domain/form-field-source";
 import { GetConsortiumUseCase } from "../../use-cases/consortium.use-cases";
 import { GetDc1DeclarationUseCase } from "../../use-cases/dc1-declaration.use-cases";
+import { buildOfficialCompanyName } from "./official-company-name";
 
 export type Dc1OfficialFormResolution = Readonly<{
   readiness: AdministrativeFormReadiness;
@@ -25,7 +27,7 @@ const DC1_MEMBER_FIELDS_NOT_APPLICABLE_REASON = "Candidat individuel — le grou
  * V2 Sprint 11 — résout les 27 champs (+1 boucle) du template DC1 réel préparé
  * (`assets/dc1-template-v1.docx`, voir `scripts/prepare-dc1-template.ts` pour l'origine exacte de
  * chaque `fieldKey`) depuis les agrégats métier RÉELS déjà existants (`Dc1Declaration`,
- * `Consortium`, `Tender`, `CompanyLegalIdentity` via `GetCompanyProfileUseCase`) — jamais une
+ * `Consortium`, `Tender`, et l'identité de la `CandidateCompany` — jamais une
  * nouvelle copie de ces données, jamais une valeur inventée pour un champ absent (mission §19/§20).
  * Distinct de `mapDc4Form`/`PrepareOfficialFormUseCase` (Sprint 8C.1 — Annexe TenderOS
  * complémentaire) : ce résolveur alimente le remplissage du VRAI formulaire officiel via le moteur
@@ -57,8 +59,8 @@ export class Dc1OfficialFormResolver {
     private readonly getDc1DeclarationUseCase: GetDc1DeclarationUseCase,
     private readonly getConsortiumUseCase: GetConsortiumUseCase,
     private readonly getTenderUseCase: GetTenderUseCase,
-    private readonly getCompanyProfileUseCase: GetCompanyProfileUseCase,
     private readonly resolveCandidateIdentityUseCase: ResolveCandidateIdentityUseCase,
+    private readonly resolveCandidateCapabilitiesUseCase: ResolveCandidateCapabilitiesUseCase,
   ) {}
 
   async resolve(input: { organizationId: string; actorId: string; actorRole: string; tenderId: string }): Promise<Dc1OfficialFormResolution> {
@@ -67,28 +69,39 @@ export class Dc1OfficialFormResolver {
       this.getTenderUseCase.execute({ organizationId: input.organizationId, actorId: input.actorId, actorRole: input.actorRole, tenderId: input.tenderId }),
     ]);
 
-    const [companyProfile, candidateIdentity, consortium] = await Promise.all([
-      this.getCompanyProfileUseCase.execute({ organizationId: input.organizationId, actorId: input.actorId, actorRole: input.actorRole, clientAccountId: tender.clientAccountId }),
+    // Checkpoint TENDEROS-2.1-CCV2-G.2 — POLICY A appliquée à la GÉNÉRATION COURANTE.
+    //
+    // Le repli sur `CompanyProfile` (profil du CLIENT commercial) est SUPPRIMÉ : il décrivait une
+    // autre personne morale que celle qui candidate, et l'imprimer dans un formulaire officiel
+    // revenait à déclarer la mauvaise entreprise à l'acheteur public.
+    //
+    // Un Tender historique sans entreprise candidate reste LISIBLE et ses formulaires déjà générés
+    // restent intacts : seule une RÉSOLUTION NOUVELLE est refusée, explicitement, tant qu'un
+    // utilisateur autorisé n'a pas désigné l'entreprise candidate (contrat officiel CCV2-F.2).
+    //
+    // L'erreur est levée AVANT toute lecture : aucune requête `CompanyProfile` ne part.
+    if (!tender.candidateCompanyId) {
+      throw new CandidateCompanyRequiredError();
+    }
+
+    const [candidateIdentity, candidateCapabilities, consortium] = await Promise.all([
       this.resolveCandidateIdentityUseCase.execute({ organizationId: input.organizationId, candidateCompanyId: tender.candidateCompanyId }),
+      this.resolveCandidateCapabilitiesUseCase.execute({ organizationId: input.organizationId, candidateCompanyId: tender.candidateCompanyId }),
       dc1?.candidateType === Dc1CandidateType.Consortium
         ? this.getConsortiumUseCase.execute({ organizationId: input.organizationId, actorId: input.actorId, actorRole: input.actorRole, tenderId: input.tenderId })
         : Promise.resolve(null),
     ]);
 
-    const legalIdentity = companyProfile.legalIdentity;
     const isConsortium = dc1?.candidateType === Dc1CandidateType.Consortium;
-    const usesCandidateCompany = candidateIdentity.source === CandidateIdentitySource.CandidateCompany;
-    const candidateSource = usesCandidateCompany ? FormFieldSource.CandidateCompanyProfile : FormFieldSource.ClientProfile;
+    // La source est TOUJOURS l'entreprise candidate : le garde ci-dessus l'a rendue obligatoire.
+    const candidateSource = FormFieldSource.CandidateCompanyProfile;
 
-    const candidateTradeName = usesCandidateCompany ? candidateIdentity.displayName : (legalIdentity?.tradeName ?? legalIdentity?.legalName ?? undefined);
-    const candidateSiret = usesCandidateCompany ? candidateIdentity.principalEstablishment?.siret : (legalIdentity?.siretPrincipal ?? undefined);
-    const candidateAddress = usesCandidateCompany
-      ? candidateIdentity.principalEstablishment
-        ? [candidateIdentity.principalEstablishment.addressLine, [candidateIdentity.principalEstablishment.postalCode, candidateIdentity.principalEstablishment.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
-        : undefined
-      : legalIdentity
-        ? [legalIdentity.addressLine, [legalIdentity.postalCode, legalIdentity.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
-        : undefined;
+    // H.6 — champ officiel COMBINE « nom commercial et denomination sociale » (DC1 P46).
+    const candidateTradeName = buildOfficialCompanyName({ legalOrDisplayName: candidateIdentity.displayName, tradeName: candidateIdentity.tradeName });
+    const candidateSiret = candidateIdentity.principalEstablishment?.siret;
+    const candidateAddress = candidateIdentity.principalEstablishment
+      ? [candidateIdentity.principalEstablishment.addressLine, [candidateIdentity.principalEstablishment.postalCode, candidateIdentity.principalEstablishment.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
+      : undefined;
     // Checkpoint TENDEROS-2.1-P2.2-F3.1 (correctif audit Codex P1) — `CandidateCompany` ne porte
     // aucun champ email/téléphone (`CANDIDATE_CONTACT_SOURCE_AUDIT` : aucune SOT candidate-native
     // trouvée ailleurs — `Signatory`/`CompanyRepresentative` restent tous deux scopés
@@ -98,9 +111,14 @@ export class Dc1OfficialFormResolver {
     // (→ statut MISSING via `put`, jamais une valeur fabriquée) tant qu'aucune SOT candidate-native
     // n'existe (`CANDIDATE_CONTACT_MISSING_USES_NEEDS_REVIEW`). En LEGACY FLOW, comportement
     // historique inchangé — `legalIdentity` reste la SOT légitime (candidat == client commercial).
-    const candidateEmail = usesCandidateCompany ? undefined : (legalIdentity?.generalEmail ?? undefined);
-    const candidatePhone = usesCandidateCompany ? undefined : (legalIdentity?.phone ?? undefined);
-    const candidateContactSource = usesCandidateCompany ? undefined : FormFieldSource.ClientProfile;
+    // Checkpoint CCV2-E — ferme CCV2-01/P0-02. En NEW FLOW, le contact vient désormais des
+    // REPRÉSENTANTS de l'entreprise candidate (`CompanyRepresentative` rattaché à
+    // `CandidateCompany` depuis CCV2-B/C), jamais du client commercial. Aucune valeur n'est
+    // fabriquée : sans représentant porteur, le champ reste MISSING comme auparavant.
+    const candidateContact = resolveCandidateContact(candidateCapabilities);
+    const candidateEmail = candidateContact?.email;
+    const candidatePhone = candidateContact?.phone;
+    const candidateContactSource = FormFieldSource.CandidateCompanyProfile;
 
     const fields: AdministrativeFormFieldReadiness[] = [];
     const data: Record<string, unknown> = {};

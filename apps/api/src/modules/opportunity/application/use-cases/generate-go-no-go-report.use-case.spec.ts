@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { CandidateIdentitySource, type CandidateIdentitySummary, type ResolveCandidateIdentityUseCase } from "../../../candidate-company";
-import { TemporalValidityStatus, type CompanyProfileSummary, type GetCompanyProfileUseCase } from "../../../company-profile";
+import { TemporalValidityStatus, type CompanyProfileSummary } from "../../../company-profile";
 import type { DceDocumentSummary } from "../../../dce";
 import { DceNotFoundError, type ListDceDocumentsUseCase } from "../../../dce";
 import type {
@@ -82,6 +82,7 @@ function companyProfileWithValidCertification(): CompanyProfileSummary {
         id: "cert-1",
         organizationId: ORG,
         clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+        candidateCompanyId: null,
         name: "Qualibat",
         issuer: null,
         number: null,
@@ -174,7 +175,11 @@ async function buildHarness(
     id: TenderId.from(options.tenderId ?? TENDER_ID),
     organizationId: ORG,
     clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
-    candidateCompanyId: options.candidateCompanyId,
+    // Checkpoint TENDEROS-2.1-CCV2-G.2 — la generation GO/NO-GO exige desormais une entreprise
+    // candidate. Le harnais en fournit donc une PAR DEFAUT : ces tests portent sur le calcul du
+    // rapport, jamais sur l'absence de candidat (cas couvert par ses deux tests dedies, qui
+    // passent explicitement `candidateCompanyId: undefined`).
+    candidateCompanyId: "candidateCompanyId" in options ? options.candidateCompanyId : "candidate-harness",
     title: "Marché de nettoyage",
     createdBy: "user-1",
     occurredAt: new Date("2026-01-01T00:00:00Z"),
@@ -202,11 +207,13 @@ async function buildHarness(
     new FakeFindingsUseCase() as unknown as ListTenderClausesUseCase,
     new FakeListAiSuggestionsUseCase() as unknown as ListAiSuggestionsUseCase,
     new FakeListDceDocumentsUseCase(options.dce ?? []) as unknown as ListDceDocumentsUseCase,
-    fakeGetCompanyProfileUseCase as unknown as GetCompanyProfileUseCase,
     fakeResolveCandidateIdentityUseCase as unknown as ResolveCandidateIdentityUseCase,
+    { execute: async () => ({ source: "NONE", representatives: [], insurances: [], certifications: [], references: [], humanResources: [], materialResources: [], documents: [] }) } as never,
   );
 
-  return { reportRepository, auditLogWriter, outboxWriter, useCase, fakeGetCompanyProfileUseCase, fakeResolveCandidateIdentityUseCase };
+  // `fakeGetCompanyProfileUseCase` n'est plus INJECTE (CCV2-G.2) mais reste expose : il est le
+  // temoin qui prouve qu'aucun appel n'est emis vers le profil du client.
+  return { reportRepository, auditLogWriter, outboxWriter, useCase, fakeResolveCandidateIdentityUseCase, fakeGetCompanyProfileUseCase };
 }
 
 describe("GenerateGoNoGoReportUseCase", () => {
@@ -262,8 +269,8 @@ describe("GenerateGoNoGoReportUseCase", () => {
   });
 
   describe("Candidate SOT (Checkpoint 2.1-A6.2)", () => {
-    it("BLOQUANT (test SOT critique) — a Tender with a resolved CandidateCompany NEVER calls GetCompanyProfileUseCase, even though clientAccountId is always set", async () => {
-      const { useCase, fakeGetCompanyProfileUseCase, fakeResolveCandidateIdentityUseCase } = await buildHarness({
+    it("BLOQUANT (test SOT critique) — a Tender with a resolved CandidateCompany NEVER calls even though clientAccountId is always set", async () => {
+      const { useCase, fakeResolveCandidateIdentityUseCase, fakeGetCompanyProfileUseCase } = await buildHarness({
         candidateCompanyId: "candidate-alpha",
         candidateIdentity: { source: CandidateIdentitySource.CandidateCompany, candidateCompanyId: "candidate-alpha", legalName: "CANDIDATE-ALPHA" },
       });
@@ -275,30 +282,46 @@ describe("GenerateGoNoGoReportUseCase", () => {
       expect(record.reportVersion).toBe(1);
     });
 
-    it("LEGACY FLOW — a Tender without candidateCompanyId keeps resolving capacities from clientAccountId exactly as before A6.2", async () => {
-      const { useCase, fakeGetCompanyProfileUseCase } = await buildHarness();
+    /**
+     * Checkpoint TENDEROS-2.1-CCV2-G.2 — CONTRAT INVERSÉ. Ces deux tests encodaient le repli que la
+     * mission supprime : sans entreprise candidate, les capacités du CLIENT commercial étaient
+     * chargées et notées comme si elles étaient celles du candidat. Un GO/NO-GO calculé sur la
+     * mauvaise personne morale est une décision d'affaires prise sur de fausses données.
+     *
+     * Ils sont réécrits, jamais supprimés : c'est le point exact où le contrat a changé.
+     */
+    it("BLOQUANT (CCV2-G.2) — un Tender sans entreprise candidate refuse la génération et ne consulte JAMAIS le profil du client", async () => {
+      const { useCase, fakeGetCompanyProfileUseCase } = await buildHarness({ candidateCompanyId: undefined });
 
-      await useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" });
+      await expect(
+        useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" }),
+      ).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_REQUIRED" });
 
-      expect(fakeGetCompanyProfileUseCase.calls).toHaveLength(1);
-      expect(fakeGetCompanyProfileUseCase.calls[0]).toMatchObject({ clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID });
+      // Le refus est levé AVANT toute lecture : aucune requête n'est partie.
+      expect(fakeGetCompanyProfileUseCase.calls).toHaveLength(0);
     });
 
-    it("a candidateCompanyId that fails to resolve (archived/not found) degrades to source=NONE and falls back to clientAccountId — never a hard crash", async () => {
-      const { useCase, fakeGetCompanyProfileUseCase } = await buildHarness({ candidateCompanyId: "candidate-deleted", candidateIdentity: { source: CandidateIdentitySource.None } });
+    it("BLOQUANT (CCV2-G.2) — une entreprise candidate irrésolvable ne bascule jamais sur le client", async () => {
+      const { useCase, fakeGetCompanyProfileUseCase } = await buildHarness({
+        candidateCompanyId: "candidate-deleted",
+        candidateIdentity: { source: CandidateIdentitySource.None },
+      });
 
+      // Le Tender PORTE un candidat : la génération n'est donc pas refusée d'emblée. Ce qui est
+      // prouvé ici est l'absence de bascule vers le profil du client.
       const record = await useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" });
 
-      expect(fakeGetCompanyProfileUseCase.calls).toHaveLength(1);
+      expect(fakeGetCompanyProfileUseCase.calls).toHaveLength(0);
       expect(record.reportVersion).toBe(1);
     });
 
     it("BLOQUANT (F-A6.2-02, divergence CLIENT-X/CANDIDATE-ALPHA) — CLIENT-X's valid certification never inflates the certifications score once CANDIDATE-ALPHA is resolved for this Tender", async () => {
       const clientXProfile = companyProfileWithValidCertification();
 
-      // LEGACY-Z: no candidate at all, company-profile (CLIENT-X) drives the certifications score.
-      const legacy = await buildHarness({ companyProfile: clientXProfile, candidateIdentity: { source: CandidateIdentitySource.None } });
-      const legacyRecord = await legacy.useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" });
+      // Checkpoint TENDEROS-2.1-CCV2-G.2 — la comparaison à un « rapport LEGACY » disparaît : ce
+      // rapport n'existe plus, le profil du CLIENT n'étant plus jamais lu. La PROPRIÉTÉ testée est
+      // désormais garantie STRUCTURELLEMENT, et vérifiée ci-dessous sous sa forme la plus forte :
+      // la certification valide de CLIENT-X existe bel et bien, et n'apparaît nulle part.
 
       // CANDIDATE-ALPHA resolved: same CLIENT-X profile data exists, but must never be used.
       const modern = await buildHarness({
@@ -309,10 +332,20 @@ describe("GenerateGoNoGoReportUseCase", () => {
       const modernRecord = await modern.useCase.execute({ organizationId: ORG, tenderId: TENDER_ID, actorId: "user-1", actorRole: "BID_MANAGER" });
 
       // LEGACY-Z benefits from CLIENT-X's valid certification (score 100, established behavior via
-      // scoreCertificationsFromProfile). CANDIDATE-ALPHA must NOT inherit that score — no profile is
-      // ever consulted for a resolved CandidateCompany, so the category degrades to `!companyProfile` (0).
-      expect(legacyRecord.categoryScores.certifications.score).toBe(100);
-      expect(modernRecord.categoryScores.certifications.score).toBe(0);
+      // scoreCertificationsFromProfile). CANDIDATE-ALPHA must NOT inherit that score.
+      //
+      // Checkpoint CCV2-E — la VALEUR attendue côté candidate passe de 0 à 40, et c'est une
+      // amélioration de justesse, pas un affaiblissement : avant, aucune capacité candidate
+      // n'existait, le rapport disait donc « aucun profil entreprise disponible » (0). Désormais les
+      // capacités de la CandidateCompany sont réellement consultées, et ce candidat n'en déclare
+      // aucune : « aucune certification déclarée » (40). La propriété testée — la certification de
+      // CLIENT-X n'inflate JAMAIS le score du candidat — est inchangée et vérifiée ci-dessous de
+      // façon plus forte, sur la justification et non sur un simple nombre.
+      // Le candidat ne déclare aucune certification : 40 (« aucune certification déclarée »), jamais
+      // 100 (la certification valide de CLIENT-X). Le score reflète le CANDIDAT, jamais le client.
+      expect(modernRecord.categoryScores.certifications.score).toBe(40);
+      expect(modernRecord.categoryScores.certifications.justification).toBe("Aucune certification déclarée.");
+      expect(JSON.stringify(modernRecord), "aucune trace du profil client").not.toContain("CLIENT-X");
     });
 
     it("BLOQUANT (F-A6.2-03, multi-candidate isolation) — two Tenders resolving two different CandidateCompanies never cross-contaminate each other's GO/NO-GO report", async () => {

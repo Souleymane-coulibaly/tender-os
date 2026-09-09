@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { CandidateIdentitySource, GetCandidateCompanyUseCase, ResolveCandidateIdentityUseCase } from "../../../candidate-company";
-import { GetCompanyProfileUseCase, type CompanyProfileSummary } from "../../../company-profile";
+import { CandidateCompanyRequiredError, GetCandidateCompanyUseCase, ResolveCandidateIdentityUseCase } from "../../../candidate-company";
+import { ResolveCandidateCapabilitiesUseCase } from "../../../company-profile";
 import {
   GetEffectiveTenderAnalysisSummaryUseCase,
   ListTenderClausesUseCase,
@@ -50,8 +50,9 @@ export type TechnicalMemoSectionContext = Readonly<{
  * Sécurité (mission §77/§78) : la recherche Knowledge Base réutilise `SearchKnowledgeBaseUseCase`
  * avec `validatedOnly: true` FORCÉ et un scope strictement dérivé de `memo.clientAccountId` (client
  * du mémoire + GLOBAL uniquement) — jamais un autre client, jamais une entrée non validée.
- * `GetCompanyProfileUseCase` est appelé avec ce MÊME `clientAccountId` UNIQUEMENT en LEGACY FLOW (voir
- * Checkpoint 2.1-A6.3 ci-dessous pour le NEW FLOW).
+ * Checkpoint TENDEROS-2.1-CCV2-G.2 — le profil du CLIENT commercial n'est PLUS consulté du tout
+ * ici : l'identité et les capacités du candidat viennent exclusivement de `CandidateCompany`.
+ * `memo.clientAccountId` ne sert donc plus qu'au périmètre Knowledge Base ci-dessus.
  *
  * Checkpoint 2.1-A4 (correctif post-audit, P1-02) — l'IDENTITÉ légale du candidat (nom/SIREN/forme
  * juridique/TVA) préfère désormais la SOT `CandidateCompany` (via `ResolveCandidateIdentityUseCase`)
@@ -80,9 +81,9 @@ export class TechnicalMemoSectionContextAssembler {
     private readonly getEffectiveTenderAnalysisSummaryUseCase: GetEffectiveTenderAnalysisSummaryUseCase,
     private readonly searchKnowledgeBaseUseCase: SearchKnowledgeBaseUseCase,
     private readonly getKnowledgeVersionUseCase: GetKnowledgeVersionUseCase,
-    private readonly getCompanyProfileUseCase: GetCompanyProfileUseCase,
     private readonly getTenderUseCase: GetTenderUseCase,
     private readonly resolveCandidateIdentityUseCase: ResolveCandidateIdentityUseCase,
+    private readonly resolveCandidateCapabilitiesUseCase: ResolveCandidateCapabilitiesUseCase,
     private readonly getCandidateCompanyUseCase: GetCandidateCompanyUseCase,
   ) {}
 
@@ -195,35 +196,50 @@ export class TechnicalMemoSectionContextAssembler {
     // silencieuse : soit l'identité vient entièrement de `CandidateCompany`, soit entièrement de
     // `legalIdentity`, jamais un mélange des deux.
     const tender = await this.getTenderUseCase.execute({ organizationId: input.organizationId, tenderId: input.memo.tenderId, actorId: input.actorId, actorRole: input.actorRole });
-    const candidateIdentity = await this.resolveCandidateIdentityUseCase.execute({ organizationId: input.organizationId, candidateCompanyId: tender.candidateCompanyId });
-    const usesCandidateCompany = candidateIdentity.source === CandidateIdentitySource.CandidateCompany;
+    // Checkpoint TENDEROS-2.1-CCV2-G.2 — POLICY A. Le repli sur le profil du CLIENT commercial est
+    // SUPPRIMé : il décrivait une autre personne morale, et un mémoire technique qui présente les
+    // moyens d'une AUTRE entreprise que celle qui candidate est une fausse déclaration.
+    //
+    // Les révisions de mémoire déjà générées restent intactes ; seule une génération NOUVELLE est
+    // refusée. Les règles de citation (`CITATION EXACTE :`, `TechnicalMemoCitationValidator`) sont
+    // rigoureusement inchangées : ce checkpoint change la SOURCE des capacités, jamais la façon de
+    // les citer.
+    if (!tender.candidateCompanyId) {
+      throw new CandidateCompanyRequiredError();
+    }
 
-    // Checkpoint 2.1-A6.3 — le profil legacy (seule source structurelle des CAPACITÉS aujourd'hui)
-    // n'est JAMAIS résolu via `memo.clientAccountId` en NEW FLOW : ce serait le Client commercial du
-    // Tender, une entité potentiellement distincte de la CandidateCompany résolue (mission A6.3
-    // §6/§14 "CLIENT ≠ CANDIDATE"). Seul `sourceClientAccountId` — le ClientAccount dont CETTE
-    // CandidateCompany a été migrée (A2) — peut servir de fallback, et uniquement s'il existe.
-    const legacyProfile = usesCandidateCompany
-      ? await this.resolveLegacyCapabilityProfile(input, tender.candidateCompanyId)
-      : await this.getCompanyProfileUseCase
-          .execute({ organizationId: input.organizationId, clientAccountId: input.memo.clientAccountId, actorId: input.actorId, actorRole: input.actorRole })
-          .catch(() => undefined);
+    const candidateIdentity = await this.resolveCandidateIdentityUseCase.execute({ organizationId: input.organizationId, candidateCompanyId: tender.candidateCompanyId });
+
+    // LEGACY FLOW uniquement (Tender sans `candidateCompanyId`, jamais rétroactivement rempli).
+    // En NEW FLOW ce profil n'est PLUS jamais chargé : il décrit le Client commercial du Tender,
+    // une entité juridique distincte du candidat (« CLIENT ≠ CANDIDATE »).
+
+    // Checkpoint CCV2-E — en NEW FLOW, les capacités proviennent désormais RÉELLEMENT de la SOT
+    // `CandidateCompany` (satellites CCV2-B/C, bibliothèque documentaire CCV2-D). Le repli
+    // transitoire par `sourceClientAccountId`, introduit en A6.3 faute de capacités candidate, est
+    // SUPPRIMÉ : il n'a plus d'objet et constituait le dernier emprunt à une autre entité juridique.
+    const candidateCapabilities = await this.resolveCandidateCapabilitiesUseCase.execute({
+      organizationId: input.organizationId,
+      candidateCompanyId: tender.candidateCompanyId,
+    });
+
+    /** Une seule source possible désormais : les capacités de l'entreprise candidate. */
+    const capabilities = candidateCapabilities;
+
 
     const lines: string[] = [];
 
-    const identityContent = usesCandidateCompany
-      ? JSON.stringify({
-          legalName: candidateIdentity.legalName,
-          tradeName: candidateIdentity.displayName,
-          siren: candidateIdentity.siren,
-          legalForm: candidateIdentity.legalForm,
-          vatNumber: candidateIdentity.vatNumber,
-          siret: candidateIdentity.principalEstablishment?.siret,
-          address: candidateIdentity.principalEstablishment,
-        })
-      : legacyProfile?.legalIdentity
-        ? JSON.stringify(legacyProfile.legalIdentity)
-        : undefined;
+    // L'identite citee est TOUJOURS celle de l'entreprise candidate. Le contenu reste rigoureusement
+    // le meme objet qu'avant pour le NEW FLOW : la garde de citation verbatim n'est pas affectee.
+    const identityContent = JSON.stringify({
+      legalName: candidateIdentity.legalName,
+      tradeName: candidateIdentity.displayName,
+      siren: candidateIdentity.siren,
+      legalForm: candidateIdentity.legalForm,
+      vatNumber: candidateIdentity.vatNumber,
+      siret: candidateIdentity.principalEstablishment?.siret,
+      address: candidateIdentity.principalEstablishment,
+    });
 
     if (identityContent) {
       const sourceRef = register("CANDIDATE:legalIdentity", {
@@ -239,32 +255,34 @@ export class TechnicalMemoSectionContextAssembler {
     // ligne le déclare EXPLICITEMENT (mission §15 "IDENTITY SOURCE = CandidateCompany, CAPABILITY
     // SOURCE = LegacyCompatibility — éviter un objet ambigu mélangeant silencieusement tout"), jamais
     // présenté au même titre qu'une donnée directement rattachée à la CandidateCompany.
-    const capabilityQualifier = usesCandidateCompany ? " [fallback legacy — profil entreprise migré rattaché à cette entreprise candidate]" : "";
-    if (legacyProfile) {
-      if (legacyProfile.humanResources.length > 0) {
-        const content = JSON.stringify(legacyProfile.humanResources);
+    // Plus aucun qualificatif de repli : la donnée appartient désormais à l'entreprise candidate
+    // elle-même (NEW FLOW) ou au client (LEGACY FLOW), jamais à une entité empruntée.
+    const capabilityQualifier = "";
+    if (capabilities) {
+      if (capabilities.humanResources.length > 0) {
+        const content = JSON.stringify(capabilities.humanResources);
         const sourceRef = register("CANDIDATE:humanResources", { sourceType: TechnicalMemoCitationSourceType.CandidateField, candidateFieldPath: "humanResources", label: `Moyens humains${capabilityQualifier}`, content });
         lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: `Moyens humains${capabilityQualifier}`, content }));
       }
-      if (legacyProfile.materialResources.length > 0) {
-        const content = JSON.stringify(legacyProfile.materialResources);
+      if (capabilities.materialResources.length > 0) {
+        const content = JSON.stringify(capabilities.materialResources);
         const sourceRef = register("CANDIDATE:materialResources", { sourceType: TechnicalMemoCitationSourceType.CandidateField, candidateFieldPath: "materialResources", label: `Moyens techniques${capabilityQualifier}`, content });
         lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: `Moyens techniques${capabilityQualifier}`, content }));
       }
-      if (legacyProfile.certifications.length > 0) {
-        const content = JSON.stringify(legacyProfile.certifications);
+      if (capabilities.certifications.length > 0) {
+        const content = JSON.stringify(capabilities.certifications);
         const sourceRef = register("CANDIDATE:certifications", { sourceType: TechnicalMemoCitationSourceType.CandidateField, candidateFieldPath: "certifications", label: `Certifications${capabilityQualifier}`, content });
         lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: `Certifications${capabilityQualifier}`, content }));
       }
-      if (legacyProfile.insurances.length > 0) {
-        const content = JSON.stringify(legacyProfile.insurances);
+      if (capabilities.insurances.length > 0) {
+        const content = JSON.stringify(capabilities.insurances);
         const sourceRef = register("CANDIDATE:insurances", { sourceType: TechnicalMemoCitationSourceType.CandidateField, candidateFieldPath: "insurances", label: `Assurances${capabilityQualifier}`, content });
         lines.push(renderTechnicalMemoSourceLine(sourceRef, { label: `Assurances${capabilityQualifier}`, content }));
       }
 
       // Mission §26 — TenderOS peut proposer/sélectionner les références les plus pertinentes, mais
       // doit expliquer pourquoi (secteur/technologie/taille similaires) et JAMAIS en inventer une.
-      for (const reference of legacyProfile.references) {
+      for (const reference of capabilities.references) {
         const content = [reference.projectName, reference.sector, reference.description, reference.results].filter(Boolean).join(" — ");
         const sourceRef = register(`REF:${reference.id}`, {
           sourceType: TechnicalMemoCitationSourceType.Reference,
@@ -286,23 +304,7 @@ export class TechnicalMemoSectionContextAssembler {
     };
   }
 
-  /** Checkpoint 2.1-A6.3 — fallback CAPACITÉS explicite, jamais l'identité : résout, si elle existe,
-   *  la company-profile qui appartenait réellement à CETTE CandidateCompany avant sa migration A2
-   *  (`sourceClientAccountId`, jamais un autre `clientAccountId`, jamais le Client du Tender). Aucune
-   *  CandidateCompany trouvée, aucun `sourceClientAccountId`, ou accès refusé sur ce ClientAccount ⇒
-   *  `undefined` (capacités explicitement absentes, mission §53), jamais une exception qui ferait
-   *  échouer la génération de section. */
-  private async resolveLegacyCapabilityProfile(
-    input: { organizationId: string; actorId: string; actorRole: string },
-    candidateCompanyId: string | undefined,
-  ): Promise<CompanyProfileSummary | undefined> {
-    if (!candidateCompanyId) return undefined;
-    const candidateCompany = await this.getCandidateCompanyUseCase.execute({ organizationId: input.organizationId, candidateCompanyId }).catch(() => undefined);
-    if (!candidateCompany?.sourceClientAccountId) return undefined;
-    return this.getCompanyProfileUseCase
-      .execute({ organizationId: input.organizationId, clientAccountId: candidateCompany.sourceClientAccountId, actorId: input.actorId, actorRole: input.actorRole })
-      .catch(() => undefined);
-  }
+
 
   private async buildKnowledgeBlock(
     input: { organizationId: string; actorId: string; actorRole: string; memo: TechnicalMemo; section: TechnicalMemoSection },

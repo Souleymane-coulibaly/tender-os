@@ -11,17 +11,6 @@ const TENDER_ID = "tender-1";
 /** ClientAccount X (compte commercial TenderOS) — donnée LEGACY, volontairement DIFFÉRENTE du
  *  candidat Y ci-dessous, pour prouver qu'aucune valeur de X ne fuite jamais dans le formulaire
  *  quand le NEW FLOW s'applique (mission §7 "CLIENT ≠ CANDIDATE TEST"). */
-const CLIENT_X_LEGAL_IDENTITY = {
-  tradeName: "ACME Consulting",
-  legalName: "ACME Consulting SAS",
-  siretPrincipal: "11122233300011",
-  legalForm: "SAS",
-  addressLine: "1 rue du Client",
-  postalCode: "75001",
-  city: "Paris",
-  generalEmail: "contact@acme-consulting.fr",
-  phone: "0100000000",
-};
 
 /** CandidateCompany Y (entité candidate réelle, NEW FLOW) — jamais la même identité que X. */
 const CANDIDATE_Y_IDENTITY = {
@@ -35,14 +24,25 @@ const CANDIDATE_Y_IDENTITY = {
   principalEstablishment: { siret: "44455566600029", addressLine: "9 avenue du Candidat", postalCode: "69000", city: "Lyon", country: "FR" },
 };
 
-function buildResolver(input: { tenderCandidateCompanyId: string | undefined; candidateIdentity: unknown }): Dc1OfficialFormResolver {
+function buildResolver(input: { tenderCandidateCompanyId: string | undefined; candidateIdentity: unknown; candidateRepresentatives?: unknown[] | undefined }): Dc1OfficialFormResolver {
   const getDc1DeclarationUseCase = { execute: async () => ({ candidateType: Dc1CandidateType.Individual, exclusionAttestation: true }) };
   const getConsortiumUseCase = { execute: async () => { throw new Error("should never be called for an INDIVIDUAL candidate (test fixture)"); } };
   const getTenderUseCase = { execute: async () => ({ buyerName: "Ville de Test", title: "Marché de test", clientAccountId: "client-x", candidateCompanyId: input.tenderCandidateCompanyId }) };
-  const getCompanyProfileUseCase = { execute: async () => ({ legalIdentity: CLIENT_X_LEGAL_IDENTITY }) };
   const resolveCandidateIdentityUseCase = { execute: async () => input.candidateIdentity };
 
-  return new Dc1OfficialFormResolver(getDc1DeclarationUseCase as never, getConsortiumUseCase as never, getTenderUseCase as never, getCompanyProfileUseCase as never, resolveCandidateIdentityUseCase as never);
+  /** Checkpoint CCV2-E — capacités candidate. Vides par défaut : les champs de contact restent
+   *  alors MISSING, exactement comme avant ce checkpoint, ce qui garantit qu'aucune assertion
+   *  existante ne réussit grâce à une donnée fabriquée. Les tests qui prouvent le NOUVEAU
+   *  comportement fournissent explicitement des représentants. */
+  const resolveCandidateCapabilitiesUseCase = {
+    execute: async () => ({
+      source: "CANDIDATE_COMPANY",
+      representatives: input.candidateRepresentatives ?? [],
+      insurances: [], certifications: [], references: [], humanResources: [], materialResources: [], documents: [],
+    }),
+  };
+
+  return new Dc1OfficialFormResolver(getDc1DeclarationUseCase as never, getConsortiumUseCase as never, getTenderUseCase as never, resolveCandidateIdentityUseCase as never, resolveCandidateCapabilitiesUseCase as never);
 }
 
 /** Checkpoint TENDEROS-2.1-P2.2-F3, mission §7/§37/§47 — "CLIENT ≠ CANDIDATE TEST" : ClientAccount
@@ -64,15 +64,19 @@ describe("Dc1OfficialFormResolver — CLIENT ≠ CANDIDATE (Checkpoint TENDEROS-
     expect(tradeNameField?.source).toBe(FormFieldSource.CandidateCompanyProfile);
   });
 
-  it("LEGACY FLOW — Tender without a resolved CandidateCompany: candidate.* falls back to ClientAccount X's legalIdentity, unchanged non-regression behavior", async () => {
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.2 — CONTRAT INVERSÉ. Ce test encodait le repli que la mission
+   * supprime : sans entreprise candidate, l'identité du CLIENT commercial était servie comme si
+   * elle était celle du candidat. La MOITIÉ essentielle de l'ancienne règle survit et reste
+   * prouvée ailleurs dans ce même fichier : le client n'est JAMAIS présenté comme le candidat.
+   * Ce qui change, c'est qu'on refuse désormais au lieu de substituer.
+   */
+  it("BLOQUANT (CCV2-G.2) — sans entreprise candidate, la résolution est REFUSÉE au lieu de servir le client", async () => {
     const resolver = buildResolver({ tenderCandidateCompanyId: undefined, candidateIdentity: { source: CandidateIdentitySource.None } });
-
-    const result = await resolver.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
-
-    expect(result.data["candidate.tradeName"]).toBe("ACME Consulting");
-    expect(result.data["candidate.siret"]).toBe("11122233300011");
-    const tradeNameField = result.readiness.fields.find((f) => f.fieldKey === "candidate.tradeName");
-    expect(tradeNameField?.source).toBe(FormFieldSource.ClientProfile);
+  
+    await expect(
+      resolver.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID }),
+    ).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_REQUIRED" });
   });
 
   /** Checkpoint TENDEROS-2.1-P2.2-F3.1 (correctif audit Codex P1) — `CandidateCompany` ne porte
@@ -89,17 +93,53 @@ describe("Dc1OfficialFormResolver — CLIENT ≠ CANDIDATE (Checkpoint TENDEROS-
     expect(Object.values(result.data)).not.toContain("0100000000");
     const emailField = result.readiness.fields.find((f) => f.fieldKey === "candidate.email");
     expect(emailField?.status).toBe(AdministrativeFormFieldStatus.Missing);
-    expect(emailField?.source).toBeUndefined();
+    // Checkpoint CCV2-E — la SOURCE devient `CandidateCompanyProfile` même lorsque la valeur est
+    // absente, et c'est plus informatif qu'un `undefined` : on sait désormais d'où ce champ DOIT
+    // venir (les représentants de l'entreprise candidate), au lieu de ne rien savoir. La propriété
+    // essentielle du test — aucune donnée du client commercial — reste vérifiée ci-dessus.
+    expect(emailField?.source).toBe(FormFieldSource.CandidateCompanyProfile);
+    expect(emailField?.value).toBeUndefined();
   });
 
-  it("LEGACY FLOW non-regression — candidate.email/phone still resolve from ClientAccount X's legalIdentity, exactly as before F3.1", async () => {
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.2 — CONTRAT INVERSÉ. Ce test encodait le repli que la mission
+   * supprime : sans entreprise candidate, l'identité du CLIENT commercial était servie comme si
+   * elle était celle du candidat. La MOITIÉ essentielle de l'ancienne règle survit et reste
+   * prouvée ailleurs dans ce même fichier : le client n'est JAMAIS présenté comme le candidat.
+   * Ce qui change, c'est qu'on refuse désormais au lieu de substituer.
+   */
+  it("BLOQUANT (CCV2-G.2) — sans entreprise candidate, le contact du client n'est JAMAIS servi : la résolution est refusée", async () => {
     const resolver = buildResolver({ tenderCandidateCompanyId: undefined, candidateIdentity: { source: CandidateIdentitySource.None } });
+  
+    await expect(
+      resolver.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID }),
+    ).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_REQUIRED" });
+  });
 
-    const result = await resolver.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
+  it("Checkpoint CCV2-E (ferme CCV2-01/P0-02) — le contact du candidat vient de SES représentants, jamais du client commercial, et reste MISSING sans représentant porteur", async () => {
+    const withoutRepresentative = buildResolver({ tenderCandidateCompanyId: "candidate-y", candidateIdentity: CANDIDATE_Y_IDENTITY });
+    const before = await withoutRepresentative.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
+    const emailBefore = before.readiness.fields.find((f) => f.fieldKey === "candidate.email");
+    expect(emailBefore?.status).toBe(AdministrativeFormFieldStatus.Missing);
+    // Le courriel du CLIENT existe pourtant dans la fixture : il ne comble jamais ce vide.
+    expect(JSON.stringify(before)).not.toContain("contact@acme-consulting.fr");
 
-    expect(result.data["candidate.email"]).toBe("contact@acme-consulting.fr");
-    expect(result.data["candidate.phone"]).toBe("0100000000");
-    const emailField = result.readiness.fields.find((f) => f.fieldKey === "candidate.email");
-    expect(emailField?.source).toBe(FormFieldSource.ClientProfile);
+    const withRepresentative = buildResolver({
+      tenderCandidateCompanyId: "candidate-y",
+      candidateIdentity: CANDIDATE_Y_IDENTITY,
+      candidateRepresentatives: [
+        // Un signataire porte un courriel, mais un CONTACT ADMINISTRATIF doit primer : l'ordre de
+        // préférence est explicite, jamais « le premier trouvé ».
+        { firstName: "Sig", lastName: "Nataire", type: "SIGNATORY", email: "signataire@candidate-y.test", phone: null },
+        { firstName: "Ada", lastName: "Admin", type: "ADMINISTRATIVE_CONTACT", email: "admin@candidate-y.test", phone: "+33100000000" },
+      ],
+    });
+    const after = await withRepresentative.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
+    const emailAfter = after.readiness.fields.find((f) => f.fieldKey === "candidate.email");
+    const phoneAfter = after.readiness.fields.find((f) => f.fieldKey === "candidate.phone");
+    expect(emailAfter?.status).toBe(AdministrativeFormFieldStatus.Available);
+    expect(emailAfter?.value).toBe("admin@candidate-y.test");
+    expect(phoneAfter?.value).toBe("+33100000000");
+    expect(JSON.stringify(after)).not.toContain("contact@acme-consulting.fr");
   });
 });

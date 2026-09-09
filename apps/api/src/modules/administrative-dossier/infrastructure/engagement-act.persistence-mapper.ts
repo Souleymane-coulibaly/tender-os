@@ -17,6 +17,7 @@ export type PersistedEngagementAct = {
   pricingEstimateId: string | null;
   pricingEstimateVersionNumber: number | null;
   frozenAmountValue: unknown;
+  candidateCompanyId: string | null;
   frozenAmountCurrency: string | null;
   frozenAt: Date | null;
   frozenBy: string | null;
@@ -30,6 +31,7 @@ export function toDomainEngagementAct(record: PersistedEngagementAct): Engagemen
     id: record.id,
     organizationId: record.organizationId,
     tenderId: record.tenderId,
+    candidateCompanyId: record.candidateCompanyId ?? undefined,
     reference: record.reference ?? undefined,
     lotReference: record.lotReference ?? undefined,
     object: record.object ?? undefined,
@@ -57,6 +59,7 @@ export function toEngagementActRow(act: EngagementAct) {
     id: act.id,
     organizationId: act.organizationId,
     tenderId: act.tenderId,
+    candidateCompanyId: act.candidateCompanyId ?? null,
     reference: act.reference ?? null,
     lotReference: act.lotReference ?? null,
     object: act.object ?? null,

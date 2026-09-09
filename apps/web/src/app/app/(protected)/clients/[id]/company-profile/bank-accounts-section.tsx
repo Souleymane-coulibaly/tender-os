@@ -1,18 +1,23 @@
 "use client";
 
-import { useActionState, useState } from "react";
+/**
+ * Checkpoint TENDEROS-2.1-CCV2-I.4 — rubrique en LECTURE SEULE.
+ *
+ * Le formulaire de creation a ete retire : sa route refusait tout depuis CCV2-I.1 et n'existe plus.
+ * Cette donnee appartient desormais a `CandidateCompany`. La LISTE reste affichee — des lignes
+ * Legacy subsistent chez les clients sans entreprise candidate (registre CCV2-I.2) et rien d'autre
+ * ne les montre : les masquer reviendrait a les faire disparaitre du produit.
+ */
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { archiveBankAccountAction, createBankAccountAction, type FormActionState } from "../../../../company-profile-actions";
+import { archiveBankAccountAction } from "../../../../company-profile-actions";
 import type { CompanyBankAccount } from "../../../../../../lib/company-profile-types";
 
-const INITIAL_STATE: FormActionState = {};
 
 /** Mission §4.4/§7 — l'IBAN complet n'est jamais visible ici : l'API masque déjà la liste (droit
  *  bancaire dédié requis même pour la lecture). Archivage uniquement, jamais de suppression. */
 export function BankAccountsSection({ clientId, bankAccounts }: { clientId: string; bankAccounts: CompanyBankAccount[] }) {
   const router = useRouter();
-  const boundAction = createBankAccountAction.bind(null, clientId);
-  const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
   const [archivingId, setArchivingId] = useState<string | undefined>();
   const [archiveError, setArchiveError] = useState<string | undefined>();
 
@@ -70,46 +75,6 @@ export function BankAccountsSection({ clientId, bankAccounts }: { clientId: stri
           {archiveError}
         </p>
       ) : null}
-
-      <form action={formAction} className="flex flex-col gap-3 rounded border border-neutral-200 p-3">
-        <h3 className="text-sm font-semibold text-neutral-900">Ajouter un compte bancaire</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="accountHolder" className="text-xs text-neutral-600">
-              Titulaire *
-            </label>
-            <input id="accountHolder" name="accountHolder" required className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="bankName" className="text-xs text-neutral-600">
-              Banque
-            </label>
-            <input id="bankName" name="bankName" className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="iban" className="text-xs text-neutral-600">
-              IBAN *
-            </label>
-            <input id="iban" name="iban" required maxLength={34} className="rounded border border-neutral-300 px-2 py-1.5 text-sm font-mono" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="bic" className="text-xs text-neutral-600">
-              BIC
-            </label>
-            <input id="bic" name="bic" maxLength={11} className="rounded border border-neutral-300 px-2 py-1.5 text-sm font-mono" />
-          </div>
-        </div>
-        {state.error ? (
-          <p role="alert" className="text-sm text-red-600">
-            {state.error}
-          </p>
-        ) : null}
-        <button type="submit" disabled={isPending} className="self-start rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-          {isPending ? "Ajout..." : "Ajouter"}
-        </button>
-      </form>
     </div>
   );
 }

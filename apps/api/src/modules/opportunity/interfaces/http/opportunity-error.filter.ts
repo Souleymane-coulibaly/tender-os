@@ -41,6 +41,10 @@ const STATUS_BY_CODE: Record<string, number> = {
   // V2 Sprint 26 (Checkpoint 2.1-A3) — Opportunity délègue à `candidate-company`
   // (CreateOpportunityUseCase/UpdateOpportunityUseCase), même motif que Client Portfolio ci-dessus.
   CANDIDATE_COMPANY_NOT_FOUND: HttpStatus.NOT_FOUND,
+  // Checkpoint CCV2-G.1 — 422 et non 404 : l'appelant n'a désigné AUCUNE entreprise candidate.
+  // Un 404 ici laisserait croire qu'une ressource demandée est introuvable, et brouillerait la
+  // convention anti-énumération qui, elle, concerne une entreprise réellement désignée.
+  CANDIDATE_COMPANY_REQUIRED: HttpStatus.UNPROCESSABLE_ENTITY,
   CANDIDATE_COMPANY_ARCHIVED: HttpStatus.CONFLICT,
 };
 

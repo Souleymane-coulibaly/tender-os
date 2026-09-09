@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { createTenderAction, type FormActionState } from "../../../actions";
 import type { ClientAccountSummary } from "../../../../../lib/client-portfolio-types";
+import { candidateCompanyDisplayName, type CandidateCompanySummary } from "../../../../../lib/candidate-company-types";
 import { BuyerQuickCreateForm } from "../buyer-quick-create-form";
 import {
   DEFAULT_TENDER_COUNTRY,
@@ -23,7 +24,25 @@ import {
 
 const INITIAL_STATE: FormActionState = {};
 
-export function CreateTenderForm({ clients, buyers }: { clients: ClientAccountSummary[]; buyers: Buyer[] }) {
+/**
+ * Checkpoint TENDEROS-2.1-CCV2-G.1 — POLICY A : sélection EXPLICITE de l'entreprise candidate.
+ *
+ * Les deux listes ne désignent pas la même chose et ne doivent jamais être confondues :
+ *  - « Client » = `ClientAccount`, la relation commerciale suivie dans TenderOS ;
+ *  - « Entreprise candidate » = `CandidateCompany`, la personne morale qui répond réellement.
+ *
+ * Aucune n'est déduite de l'autre. Rien n'est pré-sélectionné côté candidat : un choix par défaut
+ * serait exactement l'attribution implicite que l'audit CCV2-G interdit.
+ */
+export function CreateTenderForm({
+  clients,
+  buyers,
+  candidateCompanies,
+}: {
+  clients: ClientAccountSummary[];
+  buyers: Buyer[];
+  candidateCompanies: CandidateCompanySummary[];
+}) {
   const [state, formAction, isPending] = useActionState(createTenderAction, INITIAL_STATE);
 
   return (
@@ -45,6 +64,35 @@ export function CreateTenderForm({ clients, buyers }: { clients: ClientAccountSu
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="candidateCompanyId" className="text-sm font-medium text-neutral-700">
+          Entreprise candidate *
+        </label>
+        {/* Volontairement SANS `defaultValue` pré-sélectionné : l'utilisateur désigne, le produit
+            ne devine pas. L'identifiant technique n'est jamais saisi — il n'est que la valeur de
+            l'option, l'utilisateur ne voit que la raison sociale. */}
+        <select
+          id="candidateCompanyId"
+          name="candidateCompanyId"
+          required
+          defaultValue=""
+          aria-describedby="candidateCompanyId-hint"
+          className="rounded border border-neutral-300 px-3 py-2 text-sm"
+        >
+          <option value="" disabled>
+            Sélectionner l&apos;entreprise qui candidate…
+          </option>
+          {candidateCompanies.map((company) => (
+            <option key={company.id} value={company.id}>
+              {candidateCompanyDisplayName(company)}
+            </option>
+          ))}
+        </select>
+        <p id="candidateCompanyId-hint" className="text-xs text-neutral-600">
+          L&apos;entité juridique qui répond à cet appel d&apos;offres — distincte du client ci-dessus.
+        </p>
       </div>
 
       <div className="flex flex-col gap-1">

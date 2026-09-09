@@ -1,12 +1,14 @@
 import { Injectable } from "@nestjs/common";
-import { CandidateIdentitySource, ResolveCandidateIdentityUseCase } from "../../../../candidate-company";
-import { GetCompanyProfileUseCase } from "../../../../company-profile";
+import { resolveCandidateContact } from "./candidate-contact.resolver";
+import { CandidateCompanyRequiredError, ResolveCandidateIdentityUseCase } from "../../../../candidate-company";
+import { ResolveCandidateCapabilitiesUseCase } from "../../../../company-profile";
 import { GetTenderUseCase } from "../../../../tenders";
 import { AdministrativeFormFieldStatus } from "../../../domain/administrative-form-field-status";
 import { summarizeAdministrativeFormReadiness, type AdministrativeFormFieldReadiness, type AdministrativeFormReadiness } from "../../../domain/administrative-form-readiness";
 import { FormFieldSource } from "../../../domain/form-field-source";
 import { ConsortiumMemberNotFoundError } from "../../../domain/errors";
 import { GetConsortiumUseCase } from "../../use-cases/consortium.use-cases";
+import { buildOfficialCompanyName } from "./official-company-name";
 
 /** V2 Sprint 11B — un DC2 concerne toujours UN opérateur économique explicite (mission §9) : soit
  *  le candidat du Tender lui-même (candidature individuelle OU le candidat/mandataire au sein d'un
@@ -30,7 +32,7 @@ export type Dc2OfficialFormResolution = Readonly<{
  * (`dc2.financialCapacity`/`dc2.technicalCapacity`, correctif audit Codex P2 — les zones F1/G1 du
  * DC2 officiel restent honnêtement visibles comme `NEEDS_REVIEW` plutôt qu'invisibles par simple
  * absence du gabarit dérivé). Mission §7/§8/§9 : un candidat individuel réutilise SA fiche
- * (`CompanyLegalIdentity` via `GetCompanyProfileUseCase`, même source que DC1/DC4) ; un membre de
+ * (l'identité de la `CandidateCompany`, même source que DC1/DC4) ; un membre de
  * groupement réutilise UNIQUEMENT les champs réellement portés par `Consortium.members[memberId]`
  * (`name`→tradeName, `legalIdentifier`→siret) — `Consortium.members` est un JSON de valeur SANS
  * coordonnées structurées (adresse/email/téléphone/forme juridique, vérifié dès l'audit Sprint
@@ -51,9 +53,9 @@ export type Dc2OfficialFormResolution = Readonly<{
 export class Dc2OfficialFormResolver {
   constructor(
     private readonly getTenderUseCase: GetTenderUseCase,
-    private readonly getCompanyProfileUseCase: GetCompanyProfileUseCase,
     private readonly getConsortiumUseCase: GetConsortiumUseCase,
     private readonly resolveCandidateIdentityUseCase: ResolveCandidateIdentityUseCase,
+    private readonly resolveCandidateCapabilitiesUseCase: ResolveCandidateCapabilitiesUseCase,
   ) {}
 
   async resolve(input: { organizationId: string; actorId: string; actorRole: string; tenderId: string; scope: Dc2OperatorScope }): Promise<Dc2OfficialFormResolution> {
@@ -72,38 +74,52 @@ export class Dc2OfficialFormResolver {
 
     if (input.scope.kind === "CANDIDATE") {
       subjectId = "candidate";
-      const [companyProfile, candidateIdentity] = await Promise.all([
-        this.getCompanyProfileUseCase.execute({ organizationId: input.organizationId, actorId: input.actorId, actorRole: input.actorRole, clientAccountId: tender.clientAccountId }),
-        this.resolveCandidateIdentityUseCase.execute({ organizationId: input.organizationId, candidateCompanyId: tender.candidateCompanyId }),
-      ]);
-      const legalIdentity = companyProfile.legalIdentity;
-      const usesCandidateCompany = candidateIdentity.source === CandidateIdentitySource.CandidateCompany;
-      const candidateSource = usesCandidateCompany ? FormFieldSource.CandidateCompanyProfile : FormFieldSource.ClientProfile;
+      // Checkpoint TENDEROS-2.1-CCV2-G.2 — POLICY A, appliquée UNIQUEMENT au scope CANDIDAT.
+      //
+      // Le repli sur `CompanyProfile` (profil du CLIENT commercial) est SUPPRIMÉ : il décrivait une
+      // autre personne morale que celle qui candidate. Un Tender historique sans entreprise
+      // candidate reste LISIBLE et ses formulaires déjà générés restent intacts : seule une
+      // RÉSOLUTION NOUVELLE est refusée, avant toute lecture.
+      //
+      // Le scope MEMBRE (co-traitant d'un groupement) tire son identité du membre déclaré, jamais
+      // de l'entreprise candidate : il n'est donc pas concerné par ce garde.
+      if (!tender.candidateCompanyId) {
+        throw new CandidateCompanyRequiredError();
+      }
 
-      const tradeName = usesCandidateCompany ? candidateIdentity.displayName : (legalIdentity?.tradeName ?? legalIdentity?.legalName ?? undefined);
-      const siret = usesCandidateCompany ? candidateIdentity.principalEstablishment?.siret : (legalIdentity?.siretPrincipal ?? undefined);
-      const address = usesCandidateCompany
-        ? candidateIdentity.principalEstablishment
-          ? [candidateIdentity.principalEstablishment.addressLine, [candidateIdentity.principalEstablishment.postalCode, candidateIdentity.principalEstablishment.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
-          : undefined
-        : legalIdentity
-          ? [legalIdentity.addressLine, [legalIdentity.postalCode, legalIdentity.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
-          : undefined;
+      const [candidateIdentity, candidateCapabilities] = await Promise.all([
+        this.resolveCandidateIdentityUseCase.execute({ organizationId: input.organizationId, candidateCompanyId: tender.candidateCompanyId }),
+        this.resolveCandidateCapabilitiesUseCase.execute({ organizationId: input.organizationId, candidateCompanyId: tender.candidateCompanyId }),
+      ]);
+      // La source est TOUJOURS l'entreprise candidate : le garde ci-dessus l'a rendue obligatoire.
+      const candidateSource = FormFieldSource.CandidateCompanyProfile;
+
+      // H.6 — champ officiel COMBINE « nom commercial / denomination sociale » (DC2 P37).
+      const tradeName = buildOfficialCompanyName({ legalOrDisplayName: candidateIdentity.displayName, tradeName: candidateIdentity.tradeName });
+      const siret = candidateIdentity.principalEstablishment?.siret;
+      const address = candidateIdentity.principalEstablishment
+        ? [candidateIdentity.principalEstablishment.addressLine, [candidateIdentity.principalEstablishment.postalCode, candidateIdentity.principalEstablishment.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
+        : undefined;
       operatorLabel = tradeName ?? "Candidat";
       // Checkpoint TENDEROS-2.1-P2.2-F3.1 (correctif audit Codex P1) — même discipline que
       // `Dc1OfficialFormResolver` : `legalIdentity` est le CLIENT COMMERCIAL, jamais utilisé
       // silencieusement comme contact du candidat en NEW FLOW (aucune SOT candidate-native n'existe
       // pour email/téléphone). Reste `MISSING` plutôt qu'inventé ; inchangé en LEGACY FLOW.
-      const candidateEmail = usesCandidateCompany ? undefined : (legalIdentity?.generalEmail ?? undefined);
-      const candidatePhone = usesCandidateCompany ? undefined : (legalIdentity?.phone ?? undefined);
-      const candidateContactSource = usesCandidateCompany ? undefined : FormFieldSource.ClientProfile;
+      // Checkpoint CCV2-E — ferme CCV2-01/P0-02. En NEW FLOW, le contact vient désormais des
+      // REPRÉSENTANTS de l'entreprise candidate (`CompanyRepresentative` rattaché à
+      // `CandidateCompany` depuis CCV2-B/C), jamais du client commercial. Aucune valeur n'est
+      // fabriquée : sans représentant porteur, le champ reste MISSING comme auparavant.
+      const candidateContact = resolveCandidateContact(candidateCapabilities);
+      const candidateEmail = candidateContact?.email;
+      const candidatePhone = candidateContact?.phone;
+      const candidateContactSource = FormFieldSource.CandidateCompanyProfile;
 
       put("candidate.tradeName", "Nom commercial", true, tradeName, candidateSource);
       put("candidate.address", "Adresse", true, address, candidateSource);
       put("candidate.email", "Courriel", false, candidateEmail, candidateContactSource);
       put("candidate.phone", "Téléphone", false, candidatePhone, candidateContactSource);
       put("candidate.siret", "SIRET", true, siret, candidateSource);
-      const legalForm = usesCandidateCompany ? candidateIdentity.legalForm : (legalIdentity?.legalForm ?? undefined);
+      const legalForm = candidateIdentity.legalForm;
       put("candidate.legalForm", "Forme juridique", false, legalForm, candidateSource);
     } else {
       const memberId = input.scope.memberId;

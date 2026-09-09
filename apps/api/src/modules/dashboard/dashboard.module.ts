@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { CandidateCompanyModule } from "../candidate-company/candidate-company.module";
 import { AdministrativeDossierModule } from "../administrative-dossier";
 import { ClientPortfolioModule } from "../client-portfolio";
 import { CompanyProfileModule } from "../company-profile";
@@ -32,6 +33,8 @@ import { DashboardController } from "./interfaces/http/dashboard.controller";
     WorkspaceModule,
     MarketWatchModule,
     CompanyProfileModule,
+    // CCV2-I.1 — SOT candidate de la coche d'activation.
+    CandidateCompanyModule,
     AdministrativeDossierModule,
     OrganizationsModule,
   ],

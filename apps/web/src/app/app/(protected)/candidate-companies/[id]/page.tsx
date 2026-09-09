@@ -1,31 +1,73 @@
 import type { Metadata } from "next";
-import { Badge, Card, PageHeader } from "../../../../../components/ui";
+import { Badge, PageHeader } from "../../../../../components/ui";
+import { getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import { candidateCompanyDisplayName, CANDIDATE_COMPANY_STATUS_LABELS, type CandidateCompanySummary, type CandidateEstablishmentSummary } from "../../../../../lib/candidate-company-types";
+import { resolveCandidateUiCapabilities } from "../../../../../lib/candidate-permissions";
 import { fetchCandidateCompany, fetchCandidateEstablishments } from "../../../candidate-company-actions";
+import {
+  fetchCandidateBankAccounts,
+  fetchCandidateCertifications,
+  fetchCandidateDocuments,
+  fetchCandidateHumanResources,
+  fetchCandidateInsurances,
+  fetchCandidateMaterialResources,
+  fetchCandidateReferences,
+  fetchCandidateRepresentatives,
+} from "../../../candidate-capability-actions";
+import { fetchDocumentsForPicker } from "../../../connectors-actions";
 import { ApiErrorState } from "../../api-error-state";
-import { AddEstablishmentForm } from "./add-establishment-form";
+import { CandidateCompanyTabs } from "./candidate-company-tabs";
 
 export const metadata: Metadata = { title: "Entreprise candidate — TenderOS" };
 
 /**
- * Checkpoint 2.1-A5 — mission §14 : "N'afficher que ce qui est réellement supporté." Les capacités
- * (représentants/signataires/certifications/assurances/références/moyens) n'ont toujours aucune
- * table satellite propre à CandidateCompany (voir A4/A6.3, `DEFERRED-BE-05` — future consolidation
- * volontairement hors périmètre) : cette section reste donc absente ici, jamais une liste inventée.
+ * Checkpoint TENDEROS-2.1-CCV2-F — fiche UNIQUE de l'entreprise candidate (ferme DEFERRED-BE-05).
  *
- * Checkpoint 2.1-A6.4 (DEFERRED-BE-04, résolu) — le listing des établissements déjà ajoutés, lui,
- * existe désormais côté backend (`GET /candidate-companies/:id/establishments`) et est affiché ici.
+ * Cette page remplace la fiche minimale qui affichait « Capacités : non disponible pour les
+ * entreprises candidates aujourd'hui » : les capacités, les documents et les coordonnées bancaires
+ * existent désormais réellement côté CandidateCompany (CCV2-C, C.1, D) et sont administrables ici.
+ *
+ * AUCUNE DÉPENDANCE LEGACY : toutes les lectures passent par `/candidate-companies/:id/*`. Aucun
+ * composant `clients/[id]/company-profile/*` n'est importé, aucune lecture de `CompanyProfile` ne
+ * vient compléter silencieusement l'affichage.
+ *
+ * Le rôle est résolu CÔTÉ SERVEUR et les capacités d'interface en découlent : la section bancaire
+ * n'est pas rendue puis masquée, elle n'est jamais envoyée au navigateur pour un rôle sans droit.
+ * Ce n'est pas la sécurité — l'API refuse de toute façon — c'est ce qui évite qu'une donnée
+ * sensible transite ou clignote.
  */
 export default async function CandidateCompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   let company: CandidateCompanySummary;
   let establishments: CandidateEstablishmentSummary[];
+  let role: string | undefined;
   try {
-    [company, establishments] = await Promise.all([fetchCandidateCompany(id), fetchCandidateEstablishments(id).then((page) => page.items)]);
+    [company, establishments, role] = await Promise.all([
+      fetchCandidateCompany(id),
+      fetchCandidateEstablishments(id).then((page) => page.items),
+      getCurrentMembershipRole(),
+    ]);
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
+
+  const capabilities = resolveCandidateUiCapabilities(role);
+
+  // Les capacités bancaires ne sont même pas DEMANDÉES si le rôle n'y a pas droit : rien ne
+  // transite, plutôt qu'un 403 silencieusement absorbé.
+  const [representatives, certifications, insurances, references, humanResources, materialResources, documents, bankAccounts, libraryDocuments] = await Promise.all([
+    fetchCandidateRepresentatives(id),
+    fetchCandidateCertifications(id),
+    fetchCandidateInsurances(id),
+    fetchCandidateReferences(id),
+    fetchCandidateHumanResources(id),
+    fetchCandidateMaterialResources(id),
+    fetchCandidateDocuments(id),
+    capabilities.canReadBanking ? fetchCandidateBankAccounts(id) : Promise.resolve([]),
+    // Gap F2 : la bibliotheque n'est chargee que si l'utilisateur peut reellement rattacher.
+    capabilities.canUploadDocuments ? fetchDocumentsForPicker() : Promise.resolve([]),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -35,64 +77,10 @@ export default async function CandidateCompanyDetailPage({ params }: { params: P
         status={<Badge tone={company.status === "ACTIVE" ? "success" : "neutral"}>{CANDIDATE_COMPANY_STATUS_LABELS[company.status]}</Badge>}
       />
 
-      <Card title="Identité">
-        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <dt className="text-xs font-semibold uppercase text-tenderos-slate">Nom</dt>
-            <dd className="text-sm text-tenderos-navy">{company.name}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-semibold uppercase text-tenderos-slate">Raison sociale</dt>
-            <dd className="text-sm text-tenderos-navy">{company.legalName ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-semibold uppercase text-tenderos-slate">SIREN</dt>
-            <dd className="text-sm text-tenderos-navy">{company.siren ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-semibold uppercase text-tenderos-slate">Forme juridique</dt>
-            <dd className="text-sm text-tenderos-navy">{company.legalForm ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-semibold uppercase text-tenderos-slate">TVA intracommunautaire</dt>
-            <dd className="text-sm text-tenderos-navy">{company.vatNumber ?? "—"}</dd>
-          </div>
-        </dl>
-      </Card>
-
-      <Card title="Établissements" description="Établissements (SIRET) rattachés à cette entreprise candidate.">
-        <div className="flex flex-col gap-4">
-          {establishments.length === 0 ? (
-            <p className="text-sm text-tenderos-slate">Aucun établissement ajouté pour le moment.</p>
-          ) : (
-            <ul className="flex flex-col divide-y divide-tenderos-mist rounded-md border border-tenderos-mist">
-              {establishments.map((establishment) => (
-                <li key={establishment.id} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-tenderos-navy">{establishment.label ?? establishment.siret}</span>
-                      {establishment.isPrincipal ? <Badge tone="info">Principal</Badge> : null}
-                    </div>
-                    <span className="text-xs text-tenderos-slate">
-                      SIRET {establishment.siret}
-                      {establishment.city ? ` · ${establishment.city}` : ""}
-                      {establishment.postalCode ? ` (${establishment.postalCode})` : ""}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          <AddEstablishmentForm candidateCompanyId={company.id} />
-        </div>
-      </Card>
-
-      <Card title="Capacités (certifications, assurances, références, moyens)" description="Non disponible pour les entreprises candidates aujourd'hui.">
-        <p className="text-sm text-tenderos-slate">
-          Ces données restent gérées via la fiche entreprise du client tant que la migration backend correspondante n&apos;a pas eu lieu (différée — voir le
-          registre des travaux différés, DEFERRED-BE-05).
-        </p>
-      </Card>
+      <CandidateCompanyTabs
+        dossier={{ company, establishments, representatives, certifications, insurances, references, humanResources, materialResources, documents, bankAccounts, libraryDocuments }}
+        capabilities={capabilities}
+      />
     </div>
   );
 }

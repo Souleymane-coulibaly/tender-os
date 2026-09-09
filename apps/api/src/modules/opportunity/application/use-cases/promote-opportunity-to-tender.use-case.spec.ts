@@ -86,14 +86,42 @@ async function buildHarness() {
     getTenderUseCase,
   );
 
-  return { opportunityRepository, decisionRepository, tenderRepository, auditLogWriter, outboxWriter, useCase, clock, clientPortfolio, createCandidateCompanyUseCase };
+  // Checkpoint CCV2-G.1 — POLICY A : la promotion exige desormais une entreprise candidate. Le
+  // harness en fournit une REELLE (creee par son propre use case, jamais un objet fabrique) pour
+  // les scenarios qui ne portent PAS sur cette exigence.
+  const defaultCandidate = await createCandidateCompanyUseCase.execute({
+    organizationId: ORG,
+    actorId: "user-1",
+    actorRole: "OWNER",
+    name: "Candidat par defaut SAS",
+  });
+  DEFAULT_CANDIDATE_ID = defaultCandidate.id;
+
+  return {
+    opportunityRepository,
+    decisionRepository,
+    tenderRepository,
+    auditLogWriter,
+    outboxWriter,
+    useCase,
+    clock,
+    clientPortfolio,
+    createCandidateCompanyUseCase,
+    defaultCandidateId: defaultCandidate.id,
+  };
 }
 
+/** Renseigne par `buildHarness` : l'identifiant du candidat reel cree pour chaque scenario. */
+let DEFAULT_CANDIDATE_ID = "";
+
+/** Checkpoint CCV2-G.1 — porte une entreprise candidate par defaut. Le scenario qui verifie
+ *  l'exigence elle-meme passe explicitement `candidateCompanyId: undefined`. */
 function qualifiedOpportunity(overrides: Partial<Parameters<typeof Opportunity.create>[0]> = {}): Opportunity {
   const opportunity = Opportunity.create({
     id: OpportunityId.from("opportunity-1"),
     organizationId: ORG,
     clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID,
+    candidateCompanyId: DEFAULT_CANDIDATE_ID,
     title: "Marché de nettoyage",
     createdBy: "user-1",
     occurredAt: new Date("2026-01-01T00:00:00Z"),
@@ -125,7 +153,7 @@ describe("PromoteOpportunityToTenderUseCase", () => {
 
   it("propagates candidateCompanyId from the Opportunity to the promoted Tender (Checkpoint 2.1-A3 §13)", async () => {
     const { opportunityRepository, decisionRepository, useCase, tenderRepository, createCandidateCompanyUseCase } = await buildHarness();
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: "user-1", name: "Alpha SARL" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: "user-1", actorRole: "OWNER", name: "Alpha SARL" });
     const opportunity = qualifiedOpportunity({ candidateCompanyId: candidate.id });
     await opportunityRepository.seed(opportunity);
     await decisionRepository.create({ id: "d1", organizationId: ORG, level: GoNoGoDecisionLevel.Opportunity, opportunityId: opportunity.id.value, decision: GoNoGoDecisionValue.Go, actorId: "user-1", decidedAt: new Date() });
@@ -137,15 +165,25 @@ describe("PromoteOpportunityToTenderUseCase", () => {
     expect(persistedTender?.candidateCompanyId).toBe(candidate.id);
   });
 
-  it("promotes without a candidateCompanyId when the Opportunity never had one — never invents one (Checkpoint 2.1-A3 §14/§22)", async () => {
-    const { opportunityRepository, decisionRepository, useCase } = await buildHarness();
-    const opportunity = qualifiedOpportunity();
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.1 — CONTRAT INVERSÉ. Ce test encodait la règle 2.1-A3 §14/§22
+   * (« promeut sans candidat, sans jamais en inventer »), superseded par POLICY A. La seconde
+   * moitié de la règle SURVIT intacte et reste l'essentiel : le produit ne devine toujours JAMAIS
+   * une entreprise candidate. Ce qui change, c'est qu'il refuse désormais de promouvoir sans elle
+   * au lieu de produire un Tender inexploitable.
+   */
+  it("BLOQUANT (CCV2-G.1) — refuse la promotion d'une Opportunity SANS candidat, et n'en invente jamais un", async () => {
+    const { opportunityRepository, decisionRepository, tenderRepository, useCase } = await buildHarness();
+    const opportunity = qualifiedOpportunity({ candidateCompanyId: undefined });
     await opportunityRepository.seed(opportunity);
     await decisionRepository.create({ id: "d1", organizationId: ORG, level: GoNoGoDecisionLevel.Opportunity, opportunityId: opportunity.id.value, decision: GoNoGoDecisionValue.Go, actorId: "user-1", decidedAt: new Date() });
 
-    const result = await useCase.execute({ organizationId: ORG, opportunityId: opportunity.id.value, ...ACTOR });
+    await expect(useCase.execute({ organizationId: ORG, opportunityId: opportunity.id.value, ...ACTOR })).rejects.toMatchObject({
+      code: "CANDIDATE_COMPANY_REQUIRED",
+    });
 
-    expect(result.tender.candidateCompanyId).toBeUndefined();
+    // Aucun Tender orphelin : la promotion est atomique, l'échec annule tout.
+    expect(tenderRepository.snapshot().size).toBe(0);
   });
 
   it("refuses promotion when the latest decision is NO_GO (no derogation this sprint)", async () => {
@@ -283,6 +321,11 @@ function opportunityInternals(opportunity: Opportunity) {
     id: opportunity.id,
     organizationId: opportunity.organizationId,
     clientAccountId: opportunity.clientAccountId,
+    // Checkpoint CCV2-G.1 — ce helper OMETTAIT `candidateCompanyId` : toute Opportunity rehydratee
+    // via lui perdait silencieusement son entreprise candidate. Defaut preexistant du harness,
+    // sans consequence tant que le champ etait optionnel, revele par POLICY A. Un helper de
+    // rehydratation doit refleter fidelement l'agregat, sans quoi il masque de vrais defauts.
+    candidateCompanyId: opportunity.candidateCompanyId,
     buyerId: opportunity.buyerId,
     title: opportunity.title,
     description: opportunity.description,

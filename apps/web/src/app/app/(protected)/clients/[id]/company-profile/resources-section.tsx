@@ -1,10 +1,15 @@
 "use client";
 
-import { useActionState } from "react";
-import { createHumanResourceAction, createMaterialResourceAction, type FormActionState } from "../../../../company-profile-actions";
+/**
+ * Checkpoint TENDEROS-2.1-CCV2-I.4 — rubrique en LECTURE SEULE.
+ *
+ * Le formulaire de creation a ete retire : sa route refusait tout depuis CCV2-I.1 et n'existe plus.
+ * Cette donnee appartient desormais a `CandidateCompany`. La LISTE reste affichee — des lignes
+ * Legacy subsistent chez les clients sans entreprise candidate (registre CCV2-I.2) et rien d'autre
+ * ne les montre : les masquer reviendrait a les faire disparaitre du produit.
+ */
 import type { CompanyHumanResource, CompanyMaterialResource } from "../../../../../../lib/company-profile-types";
 
-const INITIAL_STATE: FormActionState = {};
 
 export function ResourcesSection({
   clientId,
@@ -23,9 +28,7 @@ export function ResourcesSection({
   );
 }
 
-function HumanResourcesBlock({ clientId, resources }: { clientId: string; resources: CompanyHumanResource[] }) {
-  const boundAction = createHumanResourceAction.bind(null, clientId);
-  const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
+function HumanResourcesBlock({ resources }: { clientId: string; resources: CompanyHumanResource[] }) {
 
   return (
     <div className="flex flex-col gap-4">
@@ -56,49 +59,11 @@ function HumanResourcesBlock({ clientId, resources }: { clientId: string; resour
           </table>
         </div>
       )}
-      <form action={formAction} className="flex flex-col gap-3 rounded border border-neutral-200 p-3">
-        <div className="grid grid-cols-4 gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="hr-category" className="text-xs text-neutral-600">
-              Catégorie *
-            </label>
-            <input id="hr-category" name="category" required className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="hr-title" className="text-xs text-neutral-600">
-              Intitulé *
-            </label>
-            <input id="hr-title" name="title" required className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="headcount" className="text-xs text-neutral-600">
-              Effectif
-            </label>
-            <input id="headcount" name="headcount" type="number" min={1} defaultValue={1} className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="qualification" className="text-xs text-neutral-600">
-              Qualification
-            </label>
-            <input id="qualification" name="qualification" className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-        </div>
-        {state.error ? (
-          <p role="alert" className="text-sm text-red-600">
-            {state.error}
-          </p>
-        ) : null}
-        <button type="submit" disabled={isPending} className="self-start rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-          {isPending ? "Ajout..." : "Ajouter"}
-        </button>
-      </form>
     </div>
   );
 }
 
-function MaterialResourcesBlock({ clientId, resources }: { clientId: string; resources: CompanyMaterialResource[] }) {
-  const boundAction = createMaterialResourceAction.bind(null, clientId);
-  const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
+function MaterialResourcesBlock({ resources }: { clientId: string; resources: CompanyMaterialResource[] }) {
 
   return (
     <div className="flex flex-col gap-4">
@@ -129,36 +94,6 @@ function MaterialResourcesBlock({ clientId, resources }: { clientId: string; res
           </table>
         </div>
       )}
-      <form action={formAction} className="flex flex-col gap-3 rounded border border-neutral-200 p-3">
-        <div className="grid grid-cols-3 gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="mr-category" className="text-xs text-neutral-600">
-              Catégorie *
-            </label>
-            <input id="mr-category" name="category" required className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="mr-name" className="text-xs text-neutral-600">
-              Nom *
-            </label>
-            <input id="mr-name" name="name" required className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="quantity" className="text-xs text-neutral-600">
-              Quantité
-            </label>
-            <input id="quantity" name="quantity" type="number" min={1} defaultValue={1} className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-        </div>
-        {state.error ? (
-          <p role="alert" className="text-sm text-red-600">
-            {state.error}
-          </p>
-        ) : null}
-        <button type="submit" disabled={isPending} className="self-start rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-          {isPending ? "Ajout..." : "Ajouter"}
-        </button>
-      </form>
     </div>
   );
 }

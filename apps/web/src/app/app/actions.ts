@@ -373,6 +373,14 @@ export async function createTenderAction(_prevState: FormActionState, formData: 
     return { error: "Le client est obligatoire." };
   }
 
+  // Checkpoint TENDEROS-2.1-CCV2-G.1 — POLICY A : l'entreprise candidate (l'entité juridique qui
+  // RÉPOND) est obligatoire, au même titre que le client. Le backend reste l'autorité
+  // (`CANDIDATE_COMPANY_REQUIRED`) ; ce contrôle évite seulement un aller-retour inutile.
+  const candidateCompanyId = formData.get("candidateCompanyId");
+  if (typeof candidateCompanyId !== "string" || !candidateCompanyId.trim()) {
+    return { error: "L'entreprise candidate est obligatoire." };
+  }
+
   const parsed = parseTenderFormFields(formData);
   if ("error" in parsed) {
     return { error: parsed.error };
@@ -385,6 +393,7 @@ export async function createTenderAction(_prevState: FormActionState, formData: 
       body: JSON.stringify({
         title: title.trim(),
         clientAccountId,
+        candidateCompanyId,
         ...parsed.fields,
         // Correction securite : jamais lu depuis formData (voir ParsedTenderFields) — ce
         // formulaire ne cree que des Tenders manuels, quelle que soit la valeur eventuellement

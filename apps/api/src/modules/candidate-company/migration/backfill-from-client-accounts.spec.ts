@@ -155,7 +155,7 @@ describe("runCandidateCompanyBackfill", () => {
 
     // Simule une CandidateCompany déjà créée par une exécution précédente interrompue AVANT l'ajout
     // de l'établissement.
-    await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, name: clientAccount.name, siren: VALID_SIREN, sourceClientAccountId: clientAccountId });
+    await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, actorRole: "OWNER", name: clientAccount.name, siren: VALID_SIREN, sourceClientAccountId: clientAccountId });
 
     const profile: CompanyProfileForMigration = { ...EMPTY_PROFILE, legalIdentity: { status: "ACTIVE", legalName: null, siren: VALID_SIREN, siretPrincipal: VALID_SIRET_A, vatNumber: null, legalForm: null, addressLine: null, postalCode: null, city: null, country: null } };
     const lister = new FakeClientAccountLister([clientAccount]);

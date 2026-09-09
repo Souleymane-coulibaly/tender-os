@@ -88,16 +88,26 @@ export function DocumentsSection({
 
       {canManage ? (
         <>
-          <form action={uploadFormAction} className="flex items-end gap-2">
+          {/* Checkpoint TENDEROS-2.1-H.3 — ces deux formulaires debordaient de 307 px a 1024 px.
+              Mesure : `input[name=file]` [1022..1242] et le bouton [1250..1331], hors d'un viewport
+              de 1024. Cause : une ligne `flex` sans `flex-wrap` ni `min-w-0`, placee dans une
+              colonne de `md:grid-cols-2` qui ne fait plus qu'environ 350 px des 1024 px — la barre
+              laterale devenant statique a ce point de bascule. Un champ de type `file` a une largeur
+              intrinseque importante : sans autorisation de retrecir NI de passer a la ligne, la
+              ligne imposait sa largeur au document entier.
+              `flex-wrap` laisse les controles s'empiler quand la colonne est etroite ; `min-w-0`
+              autorise les champs texte a retrecir. Aucun masquage d'overflow : le contenu reste
+              accessible, il se reorganise. */}
+          <form action={uploadFormAction} className="flex flex-wrap items-end gap-2">
             <input
               name="title"
               type="text"
               required
               placeholder="Titre du document..."
-              className="rounded border border-neutral-300 px-2 py-1 text-sm"
+              className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
             />
-            <input name="category" type="text" placeholder="Categorie" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
-            <input name="file" type="file" required className="text-xs" />
+            <input name="category" type="text" placeholder="Categorie" className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-sm" />
+            <input name="file" type="file" required className="min-w-0 max-w-full text-xs" />
             <button
               type="submit"
               disabled={isUploading}
@@ -112,12 +122,12 @@ export function DocumentsSection({
             ) : null}
           </form>
 
-          <form action={attachFormAction} className="flex items-end gap-2">
+          <form action={attachFormAction} className="flex flex-wrap items-end gap-2">
             <input
               name="documentId"
               type="text"
               placeholder="ID d'un document existant..."
-              className="rounded border border-neutral-300 px-2 py-1 text-sm"
+              className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
             />
             <button
               type="submit"

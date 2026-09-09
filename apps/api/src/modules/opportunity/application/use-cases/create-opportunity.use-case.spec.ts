@@ -76,7 +76,7 @@ describe("CreateOpportunityUseCase", () => {
 
   it("accepts a valid, non-archived candidateCompanyId (Checkpoint 2.1-A3)", async () => {
     const { useCase, createCandidateCompanyUseCase } = await buildHarness();
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: "user-1", name: "Alpha SARL" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: "user-1", actorRole: "OWNER", name: "Alpha SARL" });
 
     const result = await useCase.execute({ organizationId: ORG, actorId: "user-1", actorRole: "BID_MANAGER", title: "Avec candidat", candidateCompanyId: candidate.id });
 
@@ -93,7 +93,7 @@ describe("CreateOpportunityUseCase", () => {
 
   it("refuses an archived candidateCompanyId", async () => {
     const { useCase, createCandidateCompanyUseCase, candidateCompanyRepository } = await buildHarness();
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: "user-1", name: "Alpha SARL" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG, actorId: "user-1", actorRole: "OWNER", name: "Alpha SARL" });
     const stored = await candidateCompanyRepository.findById({ organizationId: ORG, candidateCompanyId: candidate.id });
     stored!.archive(new Date());
     await candidateCompanyRepository.save(stored!);

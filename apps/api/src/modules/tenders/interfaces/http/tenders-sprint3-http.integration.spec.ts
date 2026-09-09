@@ -26,6 +26,9 @@ describe("Tenders â€” Sprint 3 (fiche Tender, acheteur, profil, restauration) â€
   let adminToken: string;
   let otherOrgToken: string;
   let clientAId: string;
+  // Checkpoint TENDEROS-2.1-CCV2-G.1 (POLICY A) â€” la creation d'un Tender exige desormais une
+  // entreprise candidate explicite. Creee ici par la VRAIE route produit, jamais insere en base.
+  let candidateId: string;
   let clientBId: string;
   let tenderId: string;
   let buyerId: string;
@@ -116,6 +119,12 @@ describe("Tenders â€” Sprint 3 (fiche Tender, acheteur, profil, restauration) â€
       data: { id: randomUUID(), organizationId: orgId, name: "Client A Sprint 3", nameNormalized: "client a sprint 3", status: "ACTIVE", createdBy: owner.userId },
     });
     clientAId = clientA.id;
+
+    const candidateRes = await asAdmin("/api/v1/candidate-companies", {
+      method: "POST",
+      body: JSON.stringify({ name: `Candidat Sprint 3 ${randomUUID()}` }),
+    });
+    candidateId = ((await candidateRes.json()) as { id: string }).id;
     const clientB = await prisma.clientAccount.create({
       data: { id: randomUUID(), organizationId: orgId, name: "Client B Sprint 3", nameNormalized: "client b sprint 3", status: "ACTIVE", createdBy: owner.userId },
     });
@@ -126,6 +135,9 @@ describe("Tenders â€” Sprint 3 (fiche Tender, acheteur, profil, restauration) â€
     await prisma.tenderStatusHistoryEntry.deleteMany({ where: { organizationId: orgId } });
     await prisma.tenderLot.deleteMany({ where: { organizationId: orgId } });
     await prisma.tender.deleteMany({ where: { organizationId: orgId } });
+    // APRES les Tenders : `Tender.candidateCompany` est une FK composite dont le ON DELETE SET NULL
+    // toucherait `organization_id`, colonne NOT NULL.
+    await prisma.candidateCompany.deleteMany({ where: { organizationId: { in: [orgId, otherOrgId] } } });
     await prisma.buyer.deleteMany({ where: { organizationId: { in: [orgId, otherOrgId] } } });
     await prisma.clientAssignment.deleteMany({ where: { organizationId: orgId } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: orgId } });
@@ -161,7 +173,7 @@ describe("Tenders â€” Sprint 3 (fiche Tender, acheteur, profil, restauration) â€
     const res = await asAdmin("/api/v1/tenders", {
       method: "POST",
       body: JSON.stringify({
-        clientAccountId: clientAId,
+        clientAccountId: clientAId, candidateCompanyId: candidateId,
         title: "Marche Sprint 3",
         buyerId,
         estimatedAmount: "500000",
@@ -184,7 +196,7 @@ describe("Tenders â€” Sprint 3 (fiche Tender, acheteur, profil, restauration) â€
   it("refuses creation with an unknown buyerId", async () => {
     const res = await asAdmin("/api/v1/tenders", {
       method: "POST",
-      body: JSON.stringify({ clientAccountId: clientAId, title: "Marche invalide", buyerId: randomUUID() }),
+      body: JSON.stringify({ clientAccountId: clientAId, candidateCompanyId: candidateId, title: "Marche invalide", buyerId: randomUUID() }),
     });
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: { code: string } };

@@ -1,15 +1,18 @@
 "use client";
 
-import { useActionState } from "react";
-import { createInsuranceAction, type FormActionState } from "../../../../company-profile-actions";
-import { INSURANCE_TYPES, INSURANCE_TYPE_LABELS, TEMPORAL_VALIDITY_LABELS, temporalValidityTone, type CompanyInsurance } from "../../../../../../lib/company-profile-types";
+/**
+ * Checkpoint TENDEROS-2.1-CCV2-I.4 — rubrique en LECTURE SEULE.
+ *
+ * Le formulaire de creation a ete retire : sa route refusait tout depuis CCV2-I.1 et n'existe plus.
+ * Cette donnee appartient desormais a `CandidateCompany`. La LISTE reste affichee — des lignes
+ * Legacy subsistent chez les clients sans entreprise candidate (registre CCV2-I.2) et rien d'autre
+ * ne les montre : les masquer reviendrait a les faire disparaitre du produit.
+ */
+import { INSURANCE_TYPE_LABELS, TEMPORAL_VALIDITY_LABELS, temporalValidityTone, type CompanyInsurance } from "../../../../../../lib/company-profile-types";
 import { Badge } from "../../../../../../components/ui";
 
-const INITIAL_STATE: FormActionState = {};
 
-export function InsurancesSection({ clientId, insurances }: { clientId: string; insurances: CompanyInsurance[] }) {
-  const boundAction = createInsuranceAction.bind(null, clientId);
-  const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
+export function InsurancesSection({ insurances }: { clientId: string; insurances: CompanyInsurance[] }) {
 
   return (
     <div className="flex flex-col gap-4">
@@ -45,50 +48,6 @@ export function InsurancesSection({ clientId, insurances }: { clientId: string; 
           </table>
         </div>
       )}
-
-      <form action={formAction} className="flex flex-col gap-3 rounded border border-neutral-200 p-3">
-        <h3 className="text-sm font-semibold text-neutral-900">Ajouter une assurance</h3>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="type" className="text-xs text-neutral-600">
-              Type *
-            </label>
-            <select id="type" name="type" required className="rounded border border-neutral-300 px-2 py-1.5 text-sm">
-              {INSURANCE_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {INSURANCE_TYPE_LABELS[type]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="insurer" className="text-xs text-neutral-600">
-              Assureur
-            </label>
-            <input id="insurer" name="insurer" className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="policyNumber" className="text-xs text-neutral-600">
-              N° police
-            </label>
-            <input id="policyNumber" name="policyNumber" className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-          </div>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="expiresAt" className="text-xs text-neutral-600">
-            Date d&apos;échéance
-          </label>
-          <input id="expiresAt" name="expiresAt" type="date" className="w-48 rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-        </div>
-        {state.error ? (
-          <p role="alert" className="text-sm text-red-600">
-            {state.error}
-          </p>
-        ) : null}
-        <button type="submit" disabled={isPending} className="self-start rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-          {isPending ? "Ajout..." : "Ajouter"}
-        </button>
-      </form>
     </div>
   );
 }

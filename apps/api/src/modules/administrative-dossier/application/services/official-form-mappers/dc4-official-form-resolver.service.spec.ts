@@ -9,17 +9,6 @@ const TENDER_ID = "tender-1";
 const DECLARATION_ID = "declaration-1";
 
 /** ClientAccount X — LEGACY, volontairement différent du candidat Y (mission §7 "CLIENT ≠ CANDIDATE TEST"). */
-const CLIENT_X_LEGAL_IDENTITY = {
-  tradeName: "ACME Consulting",
-  legalName: "ACME Consulting SAS",
-  siretPrincipal: "11122233300011",
-  legalForm: "SAS",
-  addressLine: "1 rue du Client",
-  postalCode: "75001",
-  city: "Paris",
-  generalEmail: "contact@acme-consulting.fr",
-  phone: "0100000000",
-};
 
 /** CandidateCompany Y — NEW FLOW, jamais confondue avec X ni avec le sous-traitant Z. */
 const CANDIDATE_Y_IDENTITY = {
@@ -45,14 +34,23 @@ const DECLARATION = {
   durationMonths: 6,
 };
 
-function buildResolver(input: { tenderCandidateCompanyId: string | undefined; candidateIdentity: unknown }): Dc4OfficialFormResolver {
+function buildResolver(input: { tenderCandidateCompanyId: string | undefined; candidateIdentity: unknown; candidateRepresentatives?: unknown[] | undefined }): Dc4OfficialFormResolver {
   const declarationRepository = { findById: async () => DECLARATION };
   const getTenderUseCase = { execute: async () => ({ buyerName: "Ville de Test", title: "Marché de test", clientAccountId: "client-x", candidateCompanyId: input.tenderCandidateCompanyId }) };
-  const getCompanyProfileUseCase = { execute: async () => ({ legalIdentity: CLIENT_X_LEGAL_IDENTITY }) };
   const getSubcontractorProfileUseCase = { execute: async () => { throw new Error("no subcontractorProfileId on this declaration (test fixture)"); } };
   const resolveCandidateIdentityUseCase = { execute: async () => input.candidateIdentity };
+  /** Checkpoint CCV2-E — capacités candidate (représentants). Vides par défaut : les contacts
+   *  restent alors MISSING comme avant, aucune assertion existante ne peut réussir grâce à une
+   *  donnée fabriquée. */
+  const resolveCandidateCapabilitiesUseCase = {
+    execute: async () => ({
+      source: "CANDIDATE_COMPANY",
+      representatives: input.candidateRepresentatives ?? [],
+      insurances: [], certifications: [], references: [], humanResources: [], materialResources: [], documents: [],
+    }),
+  };
 
-  return new Dc4OfficialFormResolver(declarationRepository as never, getTenderUseCase as never, getCompanyProfileUseCase as never, getSubcontractorProfileUseCase as never, resolveCandidateIdentityUseCase as never);
+  return new Dc4OfficialFormResolver(declarationRepository as never, getTenderUseCase as never, getSubcontractorProfileUseCase as never, resolveCandidateIdentityUseCase as never, resolveCandidateCapabilitiesUseCase as never);
 }
 
 /** Checkpoint TENDEROS-2.1-P2.2-F3, mission §7/§37/§47 — `titulaire.*` (le candidat lui-même, celui
@@ -75,14 +73,17 @@ describe("Dc4OfficialFormResolver — CLIENT ≠ CANDIDATE (Checkpoint TENDEROS-
     expect(result.readiness.fields.find((f) => f.fieldKey === "subcontractor.tradeName")?.source).toBe(FormFieldSource.Subcontractor);
   });
 
-  it("LEGACY FLOW — no resolved CandidateCompany: titulaire.* falls back to ClientAccount X's legalIdentity", async () => {
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.2 — CONTRAT INVERSÉ. Ce test encodait le repli que la mission
+   * supprime : sans entreprise candidate, l'identité ou les capacités du CLIENT commercial étaient
+   * servies comme si elles étaient celles du candidat. La MOITIÉ essentielle de l'ancienne règle
+   * survit : le client n'est JAMAIS présenté comme le candidat. Ce qui change, c'est qu'on refuse
+   * désormais au lieu de substituer.
+   */
+  it("BLOQUANT (CCV2-G.2) — sans entreprise candidate, la résolution du titulaire est REFUSÉE au lieu de servir le client", async () => {
     const resolver = buildResolver({ tenderCandidateCompanyId: undefined, candidateIdentity: { source: CandidateIdentitySource.None } });
-
-    const result = await resolver.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", subcontractorDeclarationId: DECLARATION_ID });
-
-    expect(result.data["titulaire.tradeName"]).toBe("ACME Consulting");
-    expect(result.data["titulaire.siret"]).toBe("11122233300011");
-    expect(result.readiness.fields.find((f) => f.fieldKey === "titulaire.tradeName")?.source).toBe(FormFieldSource.ClientProfile);
+  
+    await expect(resolver.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", subcontractorDeclarationId: DECLARATION_ID })).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_REQUIRED" });
   });
 
   /** Checkpoint TENDEROS-2.1-P2.2-F3.1 (correctif audit Codex P1). */
@@ -96,14 +97,53 @@ describe("Dc4OfficialFormResolver — CLIENT ≠ CANDIDATE (Checkpoint TENDEROS-
     expect(Object.values(result.data)).not.toContain("contact@acme-consulting.fr");
     expect(Object.values(result.data)).not.toContain("0100000000");
     expect(result.readiness.fields.find((f) => f.fieldKey === "titulaire.email")?.status).toBe(AdministrativeFormFieldStatus.Missing);
+    // Checkpoint CCV2-E — sans représentant porteur, le champ reste MISSING : aucune valeur n'est
+    // fabriquée. Seule la SOURCE devient `CandidateCompanyProfile`, ce qui indique d'où il DOIT
+    // venir au lieu de ne rien indiquer.
   });
 
-  it("LEGACY FLOW non-regression — titulaire.email/phone still resolve from ClientAccount X's legalIdentity", async () => {
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.2 — CONTRAT INVERSÉ. Ce test encodait le repli que la mission
+   * supprime : sans entreprise candidate, l'identité ou les capacités du CLIENT commercial étaient
+   * servies comme si elles étaient celles du candidat. La MOITIÉ essentielle de l'ancienne règle
+   * survit : le client n'est JAMAIS présenté comme le candidat. Ce qui change, c'est qu'on refuse
+   * désormais au lieu de substituer.
+   */
+  it("BLOQUANT (CCV2-G.2) — sans entreprise candidate, le contact du client n'est JAMAIS servi comme celui du titulaire", async () => {
     const resolver = buildResolver({ tenderCandidateCompanyId: undefined, candidateIdentity: { source: CandidateIdentitySource.None } });
+  
+    await expect(resolver.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", subcontractorDeclarationId: DECLARATION_ID })).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_REQUIRED" });
+  });
 
-    const result = await resolver.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", subcontractorDeclarationId: DECLARATION_ID });
+  it("Checkpoint CCV2-E — titulaire.email/phone viennent des REPRÉSENTANTS du candidat, jamais du client, et le DC4 A→B ne conserve aucune identité A", async () => {
+    const resolverA = buildResolver({
+      tenderCandidateCompanyId: "candidate-y",
+      candidateIdentity: CANDIDATE_Y_IDENTITY,
+      candidateRepresentatives: [
+        { firstName: "Sig", lastName: "Nataire", type: "SIGNATORY", email: "sig@candidate-y.test", phone: null },
+        { firstName: "Ada", lastName: "Admin", type: "ADMINISTRATIVE_CONTACT", email: "admin@candidate-y.test", phone: "+33111111111" },
+      ],
+    });
+    const a = await resolverA.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", subcontractorDeclarationId: DECLARATION_ID });
 
-    expect(result.data["titulaire.email"]).toBe("contact@acme-consulting.fr");
-    expect(result.data["titulaire.phone"]).toBe("0100000000");
+    // Le contact administratif prime sur le signataire — ordre explicite, jamais « le premier ».
+    expect(a.data["titulaire.email"]).toBe("admin@candidate-y.test");
+    expect(a.data["titulaire.phone"]).toBe("+33111111111");
+    expect(JSON.stringify(a)).not.toContain("contact@acme-consulting.fr");
+
+    // Bascule vers un AUTRE candidat : le DC4 recalculé ne porte plus rien de A.
+    const resolverB = buildResolver({
+      tenderCandidateCompanyId: "candidate-z",
+      candidateIdentity: { ...CANDIDATE_Y_IDENTITY, candidateCompanyId: "candidate-z", displayName: "CANDIDAT-Z-SAS", legalName: "CANDIDAT-Z-SAS", principalEstablishment: { siret: "39395385100010" } },
+      candidateRepresentatives: [{ firstName: "Bea", lastName: "Beta", type: "ADMINISTRATIVE_CONTACT", email: "admin@candidate-z.test", phone: "+33222222222" }],
+    });
+    const b = await resolverB.resolve({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", subcontractorDeclarationId: DECLARATION_ID });
+
+    const serializedB = JSON.stringify(b);
+    expect(b.data["titulaire.email"]).toBe("admin@candidate-z.test");
+    expect(serializedB).not.toContain("admin@candidate-y.test");
+    expect(serializedB).not.toContain("+33111111111");
+    expect(serializedB).not.toContain(String(CANDIDATE_Y_IDENTITY.displayName));
+    expect(serializedB).not.toContain("contact@acme-consulting.fr");
   });
 });

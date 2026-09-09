@@ -4,6 +4,8 @@ export type EngagementActProps = {
   id: string;
   organizationId: string;
   tenderId: string;
+  /** Checkpoint CCV2-E.2 — instantané IMMUABLE du candidat (voir `stampCandidate`). */
+  candidateCompanyId?: string | undefined;
   reference?: string | undefined;
   lotReference?: string | undefined;
   object?: string | undefined;
@@ -155,6 +157,24 @@ export class EngagementAct {
   get ribDocumentId(): string | undefined {
     return this.props.ribDocumentId;
   }
+  get candidateCompanyId(): string | undefined {
+    return this.props.candidateCompanyId;
+  }
+
+  /**
+   * Checkpoint CCV2-E.2 — pose l'instantané du candidat, UNE SEULE FOIS. Un acte renseigné pour
+   * l'entreprise A reste un document de A : réécrire cet instantané vers le candidat courant
+   * reviendrait à réattribuer silencieusement un engagement juridique, ce que la décision produit
+   * interdit explicitement (`HISTORICAL_REVISION_MUTATION = FORBIDDEN`). Les appels suivants sont
+   * donc des no-op, jamais une erreur — l'appelant n'a pas à savoir si l'instantané existe déjà.
+   */
+  stampCandidate(candidateCompanyId: string | undefined): void {
+    if (this.props.candidateCompanyId !== undefined || candidateCompanyId === undefined) {
+      return;
+    }
+    this.props.candidateCompanyId = candidateCompanyId;
+  }
+
   get signatoryName(): string | undefined {
     return this.props.signatoryName;
   }

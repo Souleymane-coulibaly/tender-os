@@ -3,6 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 
+/**
+ * Checkpoint TENDEROS-2.1-CCV2-I.4 — 7 actions d'ECRITURE de candidature ont ete retirees ici
+ * (identite juridique, comptes bancaires, assurances, certifications, references, moyens humains et
+ * materiels). Leurs routes API n'existent plus : les conserver aurait laisse du code appelant une
+ * adresse morte, que TypeScript accepte sans broncher.
+ *
+ * Ce qui reste est exclusivement COMMERCIAL ou transitionnel : contacts CRM, documents commerciaux,
+ * et l'archivage bancaire — seul moyen de neutraliser une ligne Legacy (CCV2-I.2 §8).
+ */
+
 export type FormActionState = { error?: string };
 
 /** Mêmes conventions que `client-portfolio-actions.ts` : messages français par statut HTTP, jamais
@@ -38,34 +48,6 @@ function optional(value: FormDataEntryValue | null): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-export async function upsertLegalIdentityAction(clientId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
-  try {
-    await appApiFetch(`/api/v1/clients/${clientId}/legal-identity`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        legalName: optional(formData.get("legalName")),
-        tradeName: optional(formData.get("tradeName")),
-        siren: optional(formData.get("siren")),
-        siretPrincipal: optional(formData.get("siretPrincipal")),
-        vatNumber: optional(formData.get("vatNumber")),
-        legalForm: optional(formData.get("legalForm")),
-        apeCode: optional(formData.get("apeCode")),
-        addressLine: optional(formData.get("addressLine")),
-        postalCode: optional(formData.get("postalCode")),
-        city: optional(formData.get("city")),
-        country: optional(formData.get("country")),
-        phone: optional(formData.get("phone")),
-        generalEmail: optional(formData.get("generalEmail")),
-        website: optional(formData.get("website")),
-        confirmDuplicate: formData.get("confirmDuplicate") === "true",
-      }),
-    });
-  } catch (error) {
-    return { error: describeCompanyProfileActionError(error) };
-  }
-  revalidatePath(`/app/clients/${clientId}/company-profile`);
-  return {};
-}
 
 export async function createRepresentativeAction(clientId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
   const firstName = formData.get("firstName");
@@ -94,23 +76,6 @@ export async function createRepresentativeAction(clientId: string, _prevState: F
   return {};
 }
 
-export async function createBankAccountAction(clientId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
-  const accountHolder = formData.get("accountHolder");
-  const iban = formData.get("iban");
-  if (typeof accountHolder !== "string" || !accountHolder.trim() || typeof iban !== "string" || !iban.trim()) {
-    return { error: "Titulaire et IBAN sont obligatoires." };
-  }
-  try {
-    await appApiFetch(`/api/v1/clients/${clientId}/bank-accounts`, {
-      method: "POST",
-      body: JSON.stringify({ accountHolder: accountHolder.trim(), iban: iban.trim(), bankName: optional(formData.get("bankName")), bic: optional(formData.get("bic")) }),
-    });
-  } catch (error) {
-    return { error: describeCompanyProfileActionError(error) };
-  }
-  revalidatePath(`/app/clients/${clientId}/company-profile`);
-  return {};
-}
 
 export async function archiveBankAccountAction(clientId: string, bankAccountId: string): Promise<{ error?: string }> {
   try {
@@ -122,119 +87,10 @@ export async function archiveBankAccountAction(clientId: string, bankAccountId: 
   return {};
 }
 
-export async function createInsuranceAction(clientId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
-  const type = formData.get("type");
-  if (typeof type !== "string" || !type.trim()) {
-    return { error: "Le type d'assurance est obligatoire." };
-  }
-  try {
-    await appApiFetch(`/api/v1/clients/${clientId}/insurances`, {
-      method: "POST",
-      body: JSON.stringify({
-        type,
-        insurer: optional(formData.get("insurer")),
-        policyNumber: optional(formData.get("policyNumber")),
-        expiresAt: optional(formData.get("expiresAt")),
-      }),
-    });
-  } catch (error) {
-    return { error: describeCompanyProfileActionError(error) };
-  }
-  revalidatePath(`/app/clients/${clientId}/company-profile`);
-  return {};
-}
 
-export async function createCertificationAction(clientId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
-  const name = formData.get("name");
-  if (typeof name !== "string" || !name.trim()) {
-    return { error: "Le nom de la certification est obligatoire." };
-  }
-  try {
-    await appApiFetch(`/api/v1/clients/${clientId}/certifications`, {
-      method: "POST",
-      body: JSON.stringify({
-        name: name.trim(),
-        issuer: optional(formData.get("issuer")),
-        number: optional(formData.get("number")),
-        expiresAt: optional(formData.get("expiresAt")),
-      }),
-    });
-  } catch (error) {
-    return { error: describeCompanyProfileActionError(error) };
-  }
-  revalidatePath(`/app/clients/${clientId}/company-profile`);
-  return {};
-}
 
-export async function createReferenceAction(clientId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
-  const projectName = formData.get("projectName");
-  if (typeof projectName !== "string" || !projectName.trim()) {
-    return { error: "Le nom du projet est obligatoire." };
-  }
-  try {
-    await appApiFetch(`/api/v1/clients/${clientId}/references`, {
-      method: "POST",
-      body: JSON.stringify({
-        projectName: projectName.trim(),
-        referenceClientName: optional(formData.get("referenceClientName")),
-        sector: optional(formData.get("sector")),
-        amountValue: optional(formData.get("amountValue")),
-        confidentiality: optional(formData.get("confidentiality")),
-      }),
-    });
-  } catch (error) {
-    return { error: describeCompanyProfileActionError(error) };
-  }
-  revalidatePath(`/app/clients/${clientId}/company-profile`);
-  return {};
-}
 
-export async function createHumanResourceAction(clientId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
-  const category = formData.get("category");
-  const title = formData.get("title");
-  if (typeof category !== "string" || !category.trim() || typeof title !== "string" || !title.trim()) {
-    return { error: "Catégorie et intitulé sont obligatoires." };
-  }
-  const headcountRaw = formData.get("headcount");
-  try {
-    await appApiFetch(`/api/v1/clients/${clientId}/human-resources`, {
-      method: "POST",
-      body: JSON.stringify({
-        category: category.trim(),
-        title: title.trim(),
-        headcount: typeof headcountRaw === "string" && headcountRaw.trim() ? Number(headcountRaw) : undefined,
-        qualification: optional(formData.get("qualification")),
-      }),
-    });
-  } catch (error) {
-    return { error: describeCompanyProfileActionError(error) };
-  }
-  revalidatePath(`/app/clients/${clientId}/company-profile`);
-  return {};
-}
 
-export async function createMaterialResourceAction(clientId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
-  const category = formData.get("category");
-  const name = formData.get("name");
-  if (typeof category !== "string" || !category.trim() || typeof name !== "string" || !name.trim()) {
-    return { error: "Catégorie et nom sont obligatoires." };
-  }
-  const quantityRaw = formData.get("quantity");
-  try {
-    await appApiFetch(`/api/v1/clients/${clientId}/material-resources`, {
-      method: "POST",
-      body: JSON.stringify({
-        category: category.trim(),
-        name: name.trim(),
-        quantity: typeof quantityRaw === "string" && quantityRaw.trim() ? Number(quantityRaw) : undefined,
-      }),
-    });
-  } catch (error) {
-    return { error: describeCompanyProfileActionError(error) };
-  }
-  revalidatePath(`/app/clients/${clientId}/company-profile`);
-  return {};
-}
 
 export async function attachClientDocumentAction(clientId: string, _prevState: FormActionState, formData: FormData): Promise<FormActionState> {
   const documentId = formData.get("documentId");

@@ -6,6 +6,8 @@ export type CandidateCompanySummary = {
   organizationId: string;
   name: string;
   legalName?: string | undefined;
+  /** Checkpoint CCV2-F.2 — nom commercial, distinct de la raison sociale. */
+  tradeName?: string | undefined;
   siren?: string | undefined;
   vatNumber?: string | undefined;
   legalForm?: string | undefined;
@@ -24,6 +26,7 @@ export function toCandidateCompanySummary(company: CandidateCompany): CandidateC
     organizationId: company.organizationId,
     name: company.name,
     legalName: company.legalName,
+    tradeName: company.tradeName,
     siren: company.siren,
     vatNumber: company.vatNumber,
     legalForm: company.legalForm,

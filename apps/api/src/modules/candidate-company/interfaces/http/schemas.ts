@@ -34,3 +34,30 @@ export const AddCandidateEstablishmentBodySchema = z
   })
   .strict();
 export type AddCandidateEstablishmentBody = z.infer<typeof AddCandidateEstablishmentBodySchema>;
+
+/**
+ * Checkpoint TENDEROS-2.1-CCV2-F.2 — patch d'identite juridique.
+ *
+ * `.strict()` est la protection anti-mass-assignment de PREMIERE ligne : toute cle inconnue
+ * (`organizationId`, `sourceClientAccountId`, `clientAccountId`, `status`, `createdBy`...) fait
+ * echouer la validation, la requete n'atteint jamais le use case. La seconde ligne est le TYPE du
+ * patch dans le use case, la troisieme la liste blanche de `CandidateCompany.updateIdentity` :
+ * trois barrieres independantes, aucune ne reposant sur les deux autres.
+ *
+ * `.nullable()` distingue « champ absent » (ne pas toucher) de `null` (effacer explicitement) —
+ * sans quoi un champ optionnel une fois renseigne ne pourrait plus jamais etre vide.
+ */
+export const UpdateCandidateCompanyBodySchema = z
+  .object({
+    name: z.string().min(1).max(200).optional(),
+    legalName: z.string().max(240).nullable().optional(),
+    tradeName: z.string().max(240).nullable().optional(),
+    siren: z.string().max(9).nullable().optional(),
+    vatNumber: z.string().max(20).nullable().optional(),
+    legalForm: z.string().max(120).nullable().optional(),
+  })
+  .strict()
+  // Un patch vide n'est pas une mise a jour : le refuser evite une ecriture et une ligne d'audit
+  // qui ne correspondent a aucun changement reel.
+  .refine((body) => Object.keys(body).length > 0, { message: "At least one field must be provided." });
+export type UpdateCandidateCompanyBody = z.infer<typeof UpdateCandidateCompanyBodySchema>;

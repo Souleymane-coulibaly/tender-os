@@ -4,9 +4,10 @@ import { ID_GENERATOR, type IdGenerator } from "../../../../shared-kernel/id-gen
 import { ENTITLEMENT_SERVICE, type EntitlementService } from "../../../billing";
 import { ClientPermission } from "../../../client-portfolio";
 import { GetPricingEstimateUseCase } from "../../../pricing";
+import { GetTenderUseCase } from "../../../tenders";
 import { EngagementAct } from "../../domain/engagement-act.aggregate";
 import { EngagementActNotFoundError, PricingEstimateNotForThisTenderError } from "../../domain/errors";
-import { EngagementActSummary, toEngagementActSummary } from "../dtos-structured";
+import { EngagementActSummary, toEngagementActSummary, withEngagementActCandidateStaleness } from "../dtos-structured";
 import { ENGAGEMENT_ACT_REPOSITORY, type EngagementActRepository } from "../ports/engagement-act.repository";
 import { AdministrativeDossierAccessService } from "../services/administrative-dossier-access.service";
 
@@ -64,6 +65,7 @@ export class UpdateEngagementActUseCase {
     private readonly accessService: AdministrativeDossierAccessService,
     @Inject(ENGAGEMENT_ACT_REPOSITORY) private readonly repository: EngagementActRepository,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly getTenderUseCase: GetTenderUseCase,
   ) {}
 
   async execute(command: UpdateEngagementActCommand): Promise<EngagementActSummary> {
@@ -88,8 +90,15 @@ export class UpdateEngagementActUseCase {
     if (command.administrativeDocumentId !== undefined) {
       act.linkDocument({ administrativeDocumentId: command.administrativeDocumentId, occurredAt });
     }
+
+    // Checkpoint CCV2-E.2 — pose l'instantané du candidat au moment où le contenu de l'acte est
+    // réellement renseigné. `stampCandidate` est un no-op si l'instantané existe déjà : un acte
+    // écrit pour A ne peut JAMAIS être réattribué à B par une simple mise à jour.
+    const tender = await this.getTenderUseCase.execute({ organizationId: command.organizationId, tenderId: act.tenderId, actorId: command.actorId, actorRole: command.actorRole });
+    act.stampCandidate(tender.candidateCompanyId);
+
     await this.repository.save(act);
-    return toEngagementActSummary(act);
+    return withEngagementActCandidateStaleness(toEngagementActSummary(act), tender.candidateCompanyId);
   }
 }
 
@@ -168,11 +177,16 @@ export class GetEngagementActUseCase {
   constructor(
     private readonly accessService: AdministrativeDossierAccessService,
     @Inject(ENGAGEMENT_ACT_REPOSITORY) private readonly repository: EngagementActRepository,
+    private readonly getTenderUseCase: GetTenderUseCase,
   ) {}
 
   async execute(query: GetEngagementActQuery): Promise<EngagementActSummary | null> {
     await this.accessService.assertTenderAccess({ organizationId: query.organizationId, actorId: query.actorId, actorRole: query.actorRole, tenderId: query.tenderId, permission: ClientPermission.ReadAdministrativeDossier });
     const act = await this.repository.findByTenderId({ organizationId: query.organizationId, tenderId: query.tenderId });
-    return act ? toEngagementActSummary(act) : null;
+    if (!act) return null;
+    // Applicabilité CALCULÉE, jamais persistée : un acte dont l'instantané ne correspond plus au
+    // candidat courant du Tender est signalé périmé, sans que sa révision historique ne bouge.
+    const tender = await this.getTenderUseCase.execute({ organizationId: query.organizationId, tenderId: query.tenderId, actorId: query.actorId, actorRole: query.actorRole });
+    return withEngagementActCandidateStaleness(toEngagementActSummary(act), tender.candidateCompanyId);
   }
 }

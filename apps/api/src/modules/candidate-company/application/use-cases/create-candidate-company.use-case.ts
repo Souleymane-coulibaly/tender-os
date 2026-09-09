@@ -6,6 +6,7 @@ import { Inject, Injectable } from "@nestjs/common";
 // fonction PURE sans aucune dépendance (voir le fichier source), jamais besoin du module NestJS
 // pour l'utiliser ; l'importer via le barrel n'apportait donc aucune valeur, seulement ce cycle.
 import { isValidSiren } from "../../../company-profile/domain/french-company-identifiers";
+import { assertHasCandidatePermission, CandidatePermission } from "../../domain/candidate-permission";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
@@ -20,6 +21,8 @@ import { CANDIDATE_COMPANY_REPOSITORY, type CandidateCompanyRepository } from ".
 export type CreateCandidateCompanyCommand = Readonly<{
   organizationId: string;
   actorId: string;
+  /** Rôle d'ORGANISATION de l'acteur (`MembershipContext.role`), jamais un rôle client. */
+  actorRole: string;
   name: string;
   legalName?: string | undefined;
   siren?: string | undefined;
@@ -47,6 +50,7 @@ export class CreateCandidateCompanyUseCase {
   ) {}
 
   async execute(command: CreateCandidateCompanyCommand): Promise<CandidateCompanySummary> {
+    assertHasCandidatePermission(command.actorRole, CandidatePermission.ManageIdentity);
     if (command.siren !== undefined && !isValidSiren(command.siren)) {
       throw new InvalidSirenError();
     }

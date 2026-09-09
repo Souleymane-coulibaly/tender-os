@@ -75,6 +75,10 @@ import { TenderDocumentsController } from "./interfaces/http/tender-documents.co
     CreateDocumentWithFirstVersionUseCase,
     AddDocumentVersionUseCase,
     GetDocumentUseCase,
+    // Checkpoint CCV2-F.1 — réexporté pour la façade `ListCandidateDocumentVersionsUseCase` : elle
+    // ajoute la vérification d'appartenance au candidat et le palier bancaire, mais ne recalcule
+    // JAMAIS l'historique elle-même. Ce use case applique lui aussi le port de rétrécissement.
+    ListDocumentVersionsUseCase,
     DownloadDocumentVersionUseCase,
     DeleteDocumentUseCase,
     // Nettoyage technique interne (mission P1-1 bis) — jamais un endpoint, réexporté uniquement

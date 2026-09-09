@@ -65,6 +65,21 @@ export default async function globalTeardown(): Promise<void> {
       await prisma.opportunityQuickScore.deleteMany({ where: { organizationId } });
       await prisma.opportunity.deleteMany({ where: { organizationId } });
       await prisma.tender.deleteMany({ where: { organizationId } });
+      // Checkpoint TENDEROS-2.1-CCV2-F.1 — entreprises candidates seedees + tout ce qu'une spec a pu
+      // leur rattacher via l'UI reelle. AVANT `clientAccount` et `organization` : `CandidateCompany`
+      // porte une FK dure vers `Organization`, et ses satellites une FK vers elle. Les associations
+      // documentaires cascadent deja depuis `document` (supprime plus haut), mais sont nettoyees
+      // explicitement pour ne rien dependre de l'ordre.
+      await prisma.documentCandidateCompanyAssociation.deleteMany({ where: { organizationId } });
+      await prisma.companyRepresentative.deleteMany({ where: { organizationId, candidateCompanyId: { not: null } } });
+      await prisma.companyBankAccount.deleteMany({ where: { organizationId, candidateCompanyId: { not: null } } });
+      await prisma.companyCertification.deleteMany({ where: { organizationId, candidateCompanyId: { not: null } } });
+      await prisma.companyInsurance.deleteMany({ where: { organizationId, candidateCompanyId: { not: null } } });
+      await prisma.companyReference.deleteMany({ where: { organizationId, candidateCompanyId: { not: null } } });
+      await prisma.companyHumanResource.deleteMany({ where: { organizationId, candidateCompanyId: { not: null } } });
+      await prisma.companyMaterialResource.deleteMany({ where: { organizationId, candidateCompanyId: { not: null } } });
+      await prisma.candidateEstablishment.deleteMany({ where: { organizationId } });
+      await prisma.candidateCompany.deleteMany({ where: { organizationId } });
       // V2 Sprint 8 (Bibliothèque intelligente) — `KnowledgeEntry.clientAccountId` est aussi une
       // FK vers `clientAccount` : à supprimer AVANT `clientAccount` ci-dessous, même motif que
       // `Opportunity` ci-dessus.

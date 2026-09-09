@@ -22,7 +22,15 @@ export type { GetDocumentQuery } from "./application/use-cases/get-document.use-
 // voir `schema.prisma`, la vérification applicative est donc le seul garde-fou).
 export { DocumentVersionNotFoundError } from "./domain/errors";
 
+// Checkpoint CCV2-D — levée par l'implémentation du port `DocumentAccessNarrowingPolicy` fournie
+// par le module métier propriétaire (bridge), jamais par ce module lui-même.
+export { DocumentAccessNarrowedError } from "./domain/errors";
+
 export { DownloadDocumentVersionUseCase } from "./application/use-cases/download-document-version.use-case";
+
+// Checkpoint CCV2-F.1 — réexporté pour la FAÇADE candidate (`company-profile`), qui vérifie en plus
+// que le Document est réellement associé à CETTE entreprise candidate avant de déléguer ici.
+export { ListDocumentVersionsUseCase } from "./application/use-cases/list-document-versions.use-case";
 export type {
   DownloadDocumentVersionQuery,
   DocumentInternalStream,

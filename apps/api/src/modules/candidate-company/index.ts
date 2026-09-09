@@ -1,7 +1,8 @@
 export { CandidateCompanyModule } from "./candidate-company.module";
 
 export { CandidateCompanyStatus } from "./domain/candidate-company-status";
-export { CandidateCompanyNotFoundError, CandidateCompanyArchivedError } from "./domain/errors";
+export { CandidateCompanyNotFoundError, CandidateCompanyArchivedError,
+  CandidateCompanyRequiredError } from "./domain/errors";
 export type { CandidateCompanySummary, CandidateEstablishmentSummary } from "./application/dtos";
 
 // V2 Sprint 26 (Checkpoint 2.1-A3) — réexporté UNIQUEMENT pour `opportunity`/`tenders` : vérifier
@@ -17,3 +18,14 @@ export type { GetCandidateCompanyQuery } from "./application/use-cases/get-candi
 // résolution ad hoc par consumer.
 export { CandidateIdentitySource, ResolveCandidateIdentityUseCase } from "./application/use-cases/resolve-candidate-identity.use-case";
 export type { CandidateIdentitySummary, ResolveCandidateIdentityQuery } from "./application/use-cases/resolve-candidate-identity.use-case";
+
+// Checkpoint TENDEROS-2.1-CCV2-A — contrat d'autorisation candidate, réexporté pour que CCV2-B/C
+// (capacités, documents, banking) réutilise EXACTEMENT cette matrice au lieu d'en redéfinir une.
+export {
+  assertHasCandidatePermission,
+  CandidatePermission,
+  roleHasCandidatePermission,
+  ROLE_CANDIDATE_PERMISSIONS,
+} from "./domain/candidate-permission";
+export { CandidatePermissionMissingError } from "./domain/errors";
+export { SummarizeCandidateCompanyReadinessUseCase, type CandidateCompanyReadinessSummary } from "./application/use-cases/summarize-candidate-company-readiness.use-case";

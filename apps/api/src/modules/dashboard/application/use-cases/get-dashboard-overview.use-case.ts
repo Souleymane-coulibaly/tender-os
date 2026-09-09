@@ -1,8 +1,8 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { SummarizeCandidateCompanyReadinessUseCase } from "../../../candidate-company";
 import { CLOCK, type Clock } from "../../../../shared-kernel/clock";
 import { HasAnyAdministrativeDocumentUseCase } from "../../../administrative-dossier";
 import { ListAccessibleClientsUseCase, ListClientAccountsUseCase } from "../../../client-portfolio";
-import { CompanyProfileCategoryStatus, GetCompanyProfileUseCase } from "../../../company-profile";
 import { GetCurrentUserUseCase } from "../../../identity";
 import { CountActiveMembersUseCase } from "../../../memberships";
 import { GetOrganizationUseCase } from "../../../organizations";
@@ -64,9 +64,6 @@ const PRIORITY_ASSIGNEES_PER_TENDER_LIMIT = 4;
 const MARKET_WATCH_SEARCHES_SCAN_LIMIT = 3;
 const MARKET_WATCH_MATCHES_PER_SEARCH_LIMIT = 10;
 const MARKET_WATCH_RECOMMENDED_DISPLAY_LIMIT = 4;
-/** V2 Sprint 25 — mission §25.69 checklist "Compléter l'entreprise candidate" : borne le nombre de
- *  comptes accessibles interrogés, jamais tous les clients de l'organisation. */
-const CANDIDATE_COMPANY_SCAN_LIMIT = 5;
 
 function attentionRank(bucket: DeadlineBucket | undefined): number {
   switch (bucket) {
@@ -111,7 +108,7 @@ export class GetDashboardOverviewUseCase {
     private readonly listSavedSearchMatchesUseCase: ListSavedSearchMatchesUseCase,
     private readonly countActiveMembersUseCase: CountActiveMembersUseCase,
     private readonly listClientAccountsUseCase: ListClientAccountsUseCase,
-    private readonly getCompanyProfileUseCase: GetCompanyProfileUseCase,
+    private readonly summarizeCandidateCompanyReadinessUseCase: SummarizeCandidateCompanyReadinessUseCase,
     private readonly hasAnyAdministrativeDocumentUseCase: HasAnyAdministrativeDocumentUseCase,
     // Checkpoint TENDEROS-2.1-P2.3-E5 (Dashboard V2 Premium Analytics) — même discipline que le
     // reste du constructeur : use cases publics déjà RBAC/ClientAccess-gated d'autres modules,
@@ -478,23 +475,21 @@ export class GetDashboardOverviewUseCase {
    *  certifications... — restent des enrichissements ultérieurs, pas un prérequis d'activation).
    *  Bornée à quelques comptes accessibles (jamais tous), une erreur de résolution isolée n'empêche
    *  jamais le reste de la checklist de s'afficher. */
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-I.1 — ferme `P2-DASHBOARD-SEMANTIC-SOT`.
+   *
+   * Cette coche s'appelle « Compléter l'entreprise candidate » : elle interrogeait pourtant la
+   * complétude du profil des `ClientAccount`. Un client commercial n'est pas l'entité qui
+   * candidate — la coche pouvait donc être verte sans qu'aucune entreprise candidate n'existe.
+   * Elle lit désormais la SOT candidate.
+   *
+   * Sémantique MULTI-CANDIDAT explicite (mission §15) : « au moins une entreprise candidate a une
+   * identité complète ». Aucune candidate n'est désignée — ni la première, ni la plus récente — ce
+   * qui rend le résultat indépendant de l'ordre de lecture et impossible à confondre entre deux
+   * candidates d'une même organisation.
+   */
   private async hasCompleteCandidateCompany(query: GetDashboardOverviewQuery): Promise<boolean> {
-    const clients = await this.listClientAccountsUseCase.execute({
-      organizationId: query.organizationId,
-      actorId: query.actorId,
-      actorRole: query.actorRole,
-      includeArchived: false,
-      limit: CANDIDATE_COMPANY_SCAN_LIMIT,
-    });
-
-    for (const client of clients.items) {
-      try {
-        const profile = await this.getCompanyProfileUseCase.execute({ organizationId: query.organizationId, clientAccountId: client.id, actorId: query.actorId, actorRole: query.actorRole });
-        if (profile.completeness.identity === CompanyProfileCategoryStatus.Complete) return true;
-      } catch {
-        // Jamais bloquant — voir commentaire ci-dessus.
-      }
-    }
-    return false;
+    const readiness = await this.summarizeCandidateCompanyReadinessUseCase.execute({ organizationId: query.organizationId });
+    return readiness.hasAtLeastOneComplete;
   }
 }

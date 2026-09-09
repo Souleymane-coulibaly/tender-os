@@ -53,8 +53,11 @@ describe("FindChecklistItemDocumentMatchesUseCase — Candidate SOT (Checkpoint 
     useCase = new FindChecklistItemDocumentMatchesUseCase(
       checklistRepository,
       listTenderDocumentsUseCase as never,
-      getCompanyProfileUseCase as never,
       resolveCandidateIdentityUseCase as never,
+      // CCV2-E — résolveur de capacités candidate. Ce double retourne délibérément des collections
+      // VIDES : ces tests unitaires couvrent le LEGACY FLOW, et un candidat sans capacité doit
+      // produire NO_MATCH, jamais un emprunt au profil du client.
+      { execute: async () => ({ source: "NONE", representatives: [], insurances: [], certifications: [], references: [], humanResources: [], materialResources: [], documents: [] }) } as never,
       listSubcontractorCertificationsUseCase as never,
       listSubcontractorInsurancesUseCase as never,
     );
@@ -80,11 +83,19 @@ describe("FindChecklistItemDocumentMatchesUseCase — Candidate SOT (Checkpoint 
     expect(getCompanyProfileUseCase.execute).not.toHaveBeenCalled();
   });
 
-  it("LEGACY FLOW — a Tender with candidateCompanyId absent keeps resolving capacities from the Client's company-profile exactly as before A6.1", async () => {
-    const result = await useCase.execute({ ...baseQuery, clientAccountId: "client-x", candidateCompanyId: undefined });
-
-    expect(getCompanyProfileUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ organizationId: ORG_ID, clientAccountId: "client-x" }));
-    expect(result.candidates.some((c) => c.label.includes("CLIENT-X"))).toBe(true);
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.2 — CONTRAT INVERSÉ. Ce test encodait le repli que la mission
+   * supprime : sans entreprise candidate, les capacités du CLIENT commercial étaient servies comme
+   * si elles étaient celles du candidat. La MOITIÉ essentielle de l'ancienne règle survit : le
+   * client n'est JAMAIS présenté comme le candidat. Ce qui change, c'est le refus au lieu de la
+   * substitution.
+   */
+  it("BLOQUANT (CCV2-G.2) — un item dont le SUJET est le candidat est refusé sans entreprise candidate, et le profil du client n'est jamais lu", async () => {
+    await expect(
+      useCase.execute({ ...baseQuery, clientAccountId: "client-x", candidateCompanyId: undefined }),
+    ).rejects.toMatchObject({ code: "CANDIDATE_COMPANY_REQUIRED" });
+  
+    expect(getCompanyProfileUseCase.execute).not.toHaveBeenCalled();
   });
 
   it("resolveCandidateIdentityUseCase is always called with the Tender's own candidateCompanyId, never a value from another Tender/organization (tenant isolation)", async () => {
@@ -93,13 +104,22 @@ describe("FindChecklistItemDocumentMatchesUseCase — Candidate SOT (Checkpoint 
     expect(resolveCandidateIdentityUseCase.execute).toHaveBeenCalledWith({ organizationId: ORG_ID, candidateCompanyId: "candidate-alpha" });
   });
 
-  it("a CandidateCompany that fails to resolve (archived/not found) degrades to source=NONE and behaves like a legacy Tender — never a hard crash, never a silent Client substitution as CANDIDATE identity", async () => {
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.2 — CONTRAT INVERSÉ. Ce test encodait le repli que la mission
+   * supprime : sans entreprise candidate, les capacités du CLIENT commercial étaient servies comme
+   * si elles étaient celles du candidat. La MOITIÉ essentielle de l'ancienne règle survit : le
+   * client n'est JAMAIS présenté comme le candidat. Ce qui change, c'est le refus au lieu de la
+   * substitution.
+   */
+  it("BLOQUANT (CCV2-G.2) — une entreprise candidate irrésolvable ne plante pas et ne substitue JAMAIS le client", async () => {
     resolveCandidateIdentityUseCase.execute = vi.fn(async () => ({ source: CandidateIdentitySource.None }));
-
-    const result = await useCase.execute({ ...baseQuery, clientAccountId: "client-x", candidateCompanyId: "candidate-deleted" });
-
-    expect(getCompanyProfileUseCase.execute).toHaveBeenCalled();
-    expect(result.candidates.some((c) => c.label.includes("CLIENT-X"))).toBe(true);
+  
+    // Le Tender PORTE un candidat : la résolution n'est donc pas refusée d'emblée. Ce qui est prouvé
+    // ici est l'absence de bascule vers le profil du client.
+    const result = await useCase.execute({ ...baseQuery, clientAccountId: "client-x", candidateCompanyId: "candidate-archived" });
+  
+    expect(getCompanyProfileUseCase.execute).not.toHaveBeenCalled();
+    expect(result.candidates.some((c) => c.label.includes("CLIENT-X"))).toBe(false);
   });
 
   it("subcontractor-subject items remain entirely unaffected by the Candidate SOT branch (mission A6.1 §16, subject-type untouched)", async () => {

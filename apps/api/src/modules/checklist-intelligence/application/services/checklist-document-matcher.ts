@@ -1,4 +1,5 @@
 import type { ChecklistItem } from "../../../tenders";
+import type { CandidateCapabilitiesSummary } from "../../../company-profile";
 import type { CompanyProfileSummary } from "../../../company-profile";
 import type { DocumentSummary } from "../../../documents";
 import type { SubcontractorCertificationRecord, SubcontractorInsuranceRecord } from "../../../subcontractors";
@@ -76,7 +77,12 @@ function scoreCandidate(item: ChecklistItem, label: string, candidateKind: "CERT
 export function matchChecklistItemDocuments(input: {
   item: ChecklistItem;
   tenderDocuments: readonly DocumentSummary[];
+  /** LEGACY FLOW uniquement — Tender sans `candidateCompanyId` (jamais rétroactivement rempli). */
   companyProfile?: CompanyProfileSummary | undefined;
+  /** NEW FLOW (CCV2-E) — capacités de la SOT `CandidateCompany`. Mutuellement exclusif avec
+   *  `companyProfile` : l'appelant fournit l'un OU l'autre, jamais les deux, ce qui rend une
+   *  contamination Legacy/V2 structurellement impossible dans cette fonction pure. */
+  candidateCapabilities?: CandidateCapabilitiesSummary | undefined;
   subcontractorCertifications?: readonly SubcontractorCertificationRecord[] | undefined;
   subcontractorInsurances?: readonly SubcontractorInsuranceRecord[] | undefined;
 }): ChecklistDocumentMatchResult {
@@ -98,6 +104,32 @@ export function matchChecklistItemDocuments(input: {
     const label = insurance.otherTypeLabel ?? insurance.type;
     const { score, reasons } = scoreCandidate(input.item, label, "INSURANCE", insurance.expiresAt ?? undefined);
     candidates.push({ documentId: insurance.documentId, label, expiresAt: insurance.expiresAt ?? undefined, score, reasons: [...reasons, "source=company_insurance"] });
+  }
+
+  // --- NEW FLOW (CCV2-E) : capacités et bibliothèque documentaire de l'entreprise candidate ----
+  for (const certification of input.candidateCapabilities?.certifications ?? []) {
+    if (!certification.documentId) continue;
+    const { score, reasons } = scoreCandidate(input.item, certification.name, "CERTIFICATION", certification.expiresAt ?? undefined);
+    candidates.push({ documentId: certification.documentId, label: certification.name, expiresAt: certification.expiresAt ?? undefined, score, reasons: [...reasons, "source=candidate_certification"] });
+  }
+
+  for (const insurance of input.candidateCapabilities?.insurances ?? []) {
+    if (!insurance.documentId) continue;
+    const label = insurance.otherTypeLabel ?? insurance.type;
+    const { score, reasons } = scoreCandidate(input.item, label, "INSURANCE", insurance.expiresAt ?? undefined);
+    candidates.push({ documentId: insurance.documentId, label, expiresAt: insurance.expiresAt ?? undefined, score, reasons: [...reasons, "source=candidate_insurance"] });
+  }
+
+  // Bibliothèque documentaire candidate (CCV2-D) — jamais les pièces bancaires : le résolveur les
+  // exclut à la source, donc aucun RIB ne peut atteindre un rapprochement de Checklist.
+  for (const document of input.candidateCapabilities?.documents ?? []) {
+    const label = document.label ?? document.category;
+    // Le vocabulaire de scoring est volontairement restreint (CERTIFICATION | INSURANCE | OTHER) :
+    // on projette la catégorie candidate dessus plutôt que d'élargir le scoring, ce qui changerait
+    // le comportement du rapprochement pour tous les autres appelants.
+    const scoringCategory = document.category === "CERTIFICATION" ? "CERTIFICATION" : document.category === "INSURANCE" ? "INSURANCE" : "OTHER";
+    const { score, reasons } = scoreCandidate(input.item, label, scoringCategory, document.validUntil ?? undefined);
+    candidates.push({ documentId: document.documentId, label, expiresAt: document.validUntil ?? undefined, score, reasons: [...reasons, "source=candidate_document"] });
   }
 
   for (const certification of input.subcontractorCertifications ?? []) {

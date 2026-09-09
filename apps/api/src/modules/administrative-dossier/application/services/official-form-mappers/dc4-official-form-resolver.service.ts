@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { CandidateIdentitySource, ResolveCandidateIdentityUseCase } from "../../../../candidate-company";
-import { GetCompanyProfileUseCase } from "../../../../company-profile";
+import { resolveCandidateContact } from "./candidate-contact.resolver";
+import { CandidateCompanyRequiredError, ResolveCandidateIdentityUseCase } from "../../../../candidate-company";
+import { ResolveCandidateCapabilitiesUseCase } from "../../../../company-profile";
 import { GetTenderUseCase } from "../../../../tenders";
 import { GetSubcontractorProfileUseCase, SubcontractorProfileNotFoundError } from "../../../../subcontractors";
 import { AdministrativeFormFieldStatus } from "../../../domain/administrative-form-field-status";
@@ -9,6 +10,7 @@ import { FormFieldSource } from "../../../domain/form-field-source";
 import { SubcontractorDeclarationNotFoundError } from "../../../domain/errors";
 import { SUBCONTRACTOR_DECLARATION_REPOSITORY, type SubcontractorDeclarationRepository } from "../../ports/subcontractor-declaration.repository";
 import { formatMoney } from "../renderable-document-builders/shared";
+import { buildOfficialCompanyName } from "./official-company-name";
 
 export type Dc4OfficialFormResolution = Readonly<{
   readiness: AdministrativeFormReadiness;
@@ -45,9 +47,9 @@ export class Dc4OfficialFormResolver {
   constructor(
     @Inject(SUBCONTRACTOR_DECLARATION_REPOSITORY) private readonly declarationRepository: SubcontractorDeclarationRepository,
     private readonly getTenderUseCase: GetTenderUseCase,
-    private readonly getCompanyProfileUseCase: GetCompanyProfileUseCase,
     private readonly getSubcontractorProfileUseCase: GetSubcontractorProfileUseCase,
     private readonly resolveCandidateIdentityUseCase: ResolveCandidateIdentityUseCase,
+    private readonly resolveCandidateCapabilitiesUseCase: ResolveCandidateCapabilitiesUseCase,
   ) {}
 
   async resolve(input: { organizationId: string; actorId: string; actorRole: string; subcontractorDeclarationId: string }): Promise<Dc4OfficialFormResolution> {
@@ -55,9 +57,19 @@ export class Dc4OfficialFormResolver {
     if (!declaration) throw new SubcontractorDeclarationNotFoundError();
 
     const tender = await this.getTenderUseCase.execute({ organizationId: input.organizationId, tenderId: declaration.tenderId, actorId: input.actorId, actorRole: input.actorRole });
-    const [companyProfile, candidateIdentity] = await Promise.all([
-      this.getCompanyProfileUseCase.execute({ organizationId: input.organizationId, actorId: input.actorId, actorRole: input.actorRole, clientAccountId: tender.clientAccountId }),
+    // Checkpoint TENDEROS-2.1-CCV2-G.2 — POLICY A appliquée à la GÉNÉRATION COURANTE.
+    //
+    // Le repli sur `CompanyProfile` (profil du CLIENT commercial) est SUPPRIMÉ : il décrivait une
+    // autre personne morale que celle qui candidate. Un Tender historique sans entreprise candidate
+    // reste LISIBLE et ses formulaires déjà générés restent intacts : seule une RÉSOLUTION NOUVELLE
+    // est refusée, avant toute lecture, donc sans qu'aucune requête `CompanyProfile` ne parte.
+    if (!tender.candidateCompanyId) {
+      throw new CandidateCompanyRequiredError();
+    }
+
+    const [candidateIdentity, candidateCapabilities] = await Promise.all([
       this.resolveCandidateIdentityUseCase.execute({ organizationId: input.organizationId, candidateCompanyId: tender.candidateCompanyId }),
+      this.resolveCandidateCapabilitiesUseCase.execute({ organizationId: input.organizationId, candidateCompanyId: tender.candidateCompanyId }),
     ]);
 
     let subcontractorProfile: Awaited<ReturnType<GetSubcontractorProfileUseCase["execute"]>> | undefined;
@@ -72,27 +84,28 @@ export class Dc4OfficialFormResolver {
       }
     }
 
-    const legalIdentity = companyProfile.legalIdentity;
-    const usesCandidateCompany = candidateIdentity.source === CandidateIdentitySource.CandidateCompany;
-    const candidateSource = usesCandidateCompany ? FormFieldSource.CandidateCompanyProfile : FormFieldSource.ClientProfile;
-    const titulaireTradeName = usesCandidateCompany ? candidateIdentity.displayName : (legalIdentity?.tradeName ?? legalIdentity?.legalName ?? undefined);
-    const titulaireSiret = usesCandidateCompany ? candidateIdentity.principalEstablishment?.siret : (legalIdentity?.siretPrincipal ?? undefined);
-    const titulaireAddress = usesCandidateCompany
-      ? candidateIdentity.principalEstablishment
-        ? [candidateIdentity.principalEstablishment.addressLine, [candidateIdentity.principalEstablishment.postalCode, candidateIdentity.principalEstablishment.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
-        : undefined
-      : legalIdentity
-        ? [legalIdentity.addressLine, [legalIdentity.postalCode, legalIdentity.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
-        : undefined;
+    // La source est TOUJOURS l'entreprise candidate : le garde ci-dessus l'a rendue obligatoire.
+    const candidateSource = FormFieldSource.CandidateCompanyProfile;
+    // H.6 — champ officiel COMBINE pour le TITULAIRE (DC4 P50). Le sous-traitant garde sa propre
+    // identite, resolue depuis son propre repertoire : aucune substitution par le candidat.
+    const titulaireTradeName = buildOfficialCompanyName({ legalOrDisplayName: candidateIdentity.displayName, tradeName: candidateIdentity.tradeName });
+    const titulaireSiret = candidateIdentity.principalEstablishment?.siret;
+    const titulaireAddress = candidateIdentity.principalEstablishment
+      ? [candidateIdentity.principalEstablishment.addressLine, [candidateIdentity.principalEstablishment.postalCode, candidateIdentity.principalEstablishment.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")
+      : undefined;
     const subAddress = subcontractorProfile ? [subcontractorProfile.addressLine, [subcontractorProfile.postalCode, subcontractorProfile.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : undefined;
     // Checkpoint TENDEROS-2.1-P2.2-F3.1 (correctif audit Codex P1) — même discipline que DC1/DC2 :
     // `legalIdentity` est le CLIENT COMMERCIAL, jamais un contact du TITULAIRE (le candidat lui-même)
     // en NEW FLOW ; aucune SOT candidate-native équivalente n'existe. Reste `MISSING` plutôt
     // qu'inventé. `subcontractor.*` n'est jamais concerné (SOT propre, `SubcontractorProfile`,
     // inchangée — mission §11 "ne pas confondre titulaire et sous-traitant"). Inchangé en LEGACY FLOW.
-    const titulaireEmail = usesCandidateCompany ? undefined : (legalIdentity?.generalEmail ?? undefined);
-    const titulairePhone = usesCandidateCompany ? undefined : (legalIdentity?.phone ?? undefined);
-    const titulaireContactSource = usesCandidateCompany ? undefined : FormFieldSource.ClientProfile;
+    // Checkpoint CCV2-E (ferme CCV2-01/P0-02 pour le DC4) — le contact du TITULAIRE vient
+    // désormais de SES représentants (`CompanyRepresentative` rattaché à `CandidateCompany`),
+    // jamais du client commercial. Même résolveur, même ordre de préférence que DC1/DC2.
+    const titulaireContact = resolveCandidateContact(candidateCapabilities);
+    const titulaireEmail = titulaireContact?.email;
+    const titulairePhone = titulaireContact?.phone;
+    const titulaireContactSource = FormFieldSource.CandidateCompanyProfile;
 
     const fields: AdministrativeFormFieldReadiness[] = [];
     const data: Record<string, unknown> = {};
@@ -111,7 +124,7 @@ export class Dc4OfficialFormResolver {
     put("titulaire.email", "Courriel du titulaire", false, titulaireEmail, titulaireContactSource);
     put("titulaire.phone", "Téléphone du titulaire", false, titulairePhone, titulaireContactSource);
     put("titulaire.siret", "SIRET du titulaire", true, titulaireSiret, candidateSource);
-    const titulaireLegalForm = usesCandidateCompany ? candidateIdentity.legalForm : (legalIdentity?.legalForm ?? undefined);
+    const titulaireLegalForm = candidateIdentity.legalForm;
     put("titulaire.legalForm", "Forme juridique du titulaire", false, titulaireLegalForm, candidateSource);
 
     put("subcontractor.tradeName", "Nom commercial du sous-traitant", true, subcontractorProfile?.tradeName ?? subcontractorProfile?.legalName ?? declaration.subcontractorName, FormFieldSource.Subcontractor);

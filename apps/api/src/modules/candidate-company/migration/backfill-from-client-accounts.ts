@@ -242,6 +242,7 @@ export async function runCandidateCompanyBackfill(deps: BackfillDependencies, op
                 await deps.addCandidateEstablishmentUseCase.execute({
                   organizationId: options.organizationId,
                   actorId: clientAccount.createdBy,
+                  actorRole,
                   candidateCompanyId: company.id,
                   siret: result.useSiretPrincipal,
                   isPrincipal: true,
@@ -277,6 +278,10 @@ export async function runCandidateCompanyBackfill(deps: BackfillDependencies, op
         const created = await deps.createCandidateCompanyUseCase.execute({
           organizationId: options.organizationId,
           actorId: clientAccount.createdBy,
+          // CCV2-A — réutilise l'acteur "système" DÉJÀ défini pour ce backfill (`OWNER` par
+          // défaut, voir `BackfillOptions.actorRole`), jamais un rôle fabriqué pour l'occasion et
+          // jamais un contournement de `CandidatePermission`.
+          actorRole,
           name: clientAccount.name,
           legalName: profile.legalIdentity?.legalName ?? clientAccount.legalName ?? undefined,
           siren: result.useSiren ?? undefined,
@@ -301,6 +306,7 @@ export async function runCandidateCompanyBackfill(deps: BackfillDependencies, op
             await deps.addCandidateEstablishmentUseCase.execute({
               organizationId: options.organizationId,
               actorId: clientAccount.createdBy,
+              actorRole,
               candidateCompanyId: created.id,
               siret: result.useSiretPrincipal,
               isPrincipal: true,

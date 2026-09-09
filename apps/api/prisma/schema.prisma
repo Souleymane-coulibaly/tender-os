@@ -1301,19 +1301,20 @@ model Document {
   /// exposé dans les listes normales, protège aussi le téléchargement (conception §F).
   deletedAt  DateTime? @map("deleted_at")
 
-  versions                    DocumentVersion[]                  @relation("AllVersions")
-  tenderAssociations          DocumentTenderAssociation[]
-  clientAccountAssociations   DocumentClientAccountAssociation[]
-  requestedDocumentReferences TenderRequestedDocument[]
+  versions                     DocumentVersion[]                     @relation("AllVersions")
+  tenderAssociations           DocumentTenderAssociation[]
+  clientAccountAssociations    DocumentClientAccountAssociation[]
+  candidateCompanyAssociations DocumentCandidateCompanyAssociation[]
+  requestedDocumentReferences  TenderRequestedDocument[]
   /// V2 Sprint 6 — Documents rapprochés/attachés à un ChecklistItem via le matching documentaire.
-  matchedByChecklistItems     TenderChecklistItem[]
+  matchedByChecklistItems      TenderChecklistItem[]
   /// V2 Sprint 7 — Documents référencés (optionnellement) par une Task.
-  tasks                       Task[]
-  dceDocuments                DceDocument[]
-  documentExtraction          DocumentExtraction?
-  analysisJobs                AnalysisJob[]
-  businessAnalyses            DocumentBusinessAnalysis[]
-  knowledgeDocuments          KnowledgeDocument[]
+  tasks                        Task[]
+  dceDocuments                 DceDocument[]
+  documentExtraction           DocumentExtraction?
+  analysisJobs                 AnalysisJob[]
+  businessAnalyses             DocumentBusinessAnalysis[]
+  knowledgeDocuments           KnowledgeDocument[]
 
   /// Support de la FK composée de DceDocument (module DCE) — même motif que TenderLot/AUDIT-007 :
   /// garantit au niveau base qu'un DceDocument ne peut jamais référencer un Document d'une autre
@@ -2519,6 +2520,14 @@ model CandidateCompany {
   nameNormalized String  @map("name_normalized") @db.VarChar(200)
   legalName      String? @map("legal_name") @db.VarChar(240)
 
+  /// Checkpoint TENDEROS-2.1-CCV2-B — nom COMMERCIAL/d'usage, strictement distinct de `legalName`
+  /// (raison sociale). Corrige CCV2-P1-02 : `ResolveCandidateIdentityUseCase` servait jusqu'ici
+  /// `legalName ?? name` comme nom d'usage, ce qui imprimait une raison sociale dans la case "nom
+  /// commercial" du DC1 officiel. Nullable et JAMAIS dérivé de `legalName` pour remplir le champ —
+  /// backfillé uniquement depuis une source Legacy fiable (`CompanyLegalIdentity.tradeName`),
+  /// sinon NULL. Aucun consommateur n'est repointé en CCV2-B (mission §16).
+  tradeName String? @map("trade_name") @db.VarChar(240)
+
   /// SIREN (9 chiffres, niveau entreprise) — le SIRET (établissement) vit sur CandidateEstablishment,
   /// jamais dupliqué ici (mission §7 : pas d'ambiguïté SIREN/SIRET). Validé en domaine via
   /// company-profile/domain/french-company-identifiers.ts (réutilisé, jamais réimplémenté).
@@ -2551,9 +2560,24 @@ model CandidateCompany {
   opportunities Opportunity[]
   tenders       Tender[]
 
+  // Checkpoint TENDEROS-2.1-CCV2-B — satellites de capacités dont cette entreprise candidate est
+  // le propriétaire métier V2 (voir la note sur `candidateCompanyId` de chaque satellite).
+  representatives      CompanyRepresentative[]
+  bankAccounts         CompanyBankAccount[]
+  insurances           CompanyInsurance[]
+  certifications       CompanyCertification[]
+  references           CompanyReference[]
+  humanResources       CompanyHumanResource[]
+  materialResources    CompanyMaterialResource[]
+  documentAssociations DocumentCandidateCompanyAssociation[]
+
   @@unique([id, organizationId])
   @@unique([organizationId, nameNormalized])
   @@unique([organizationId, sourceClientAccountId])
+  /// Support de la FK de COHÉRENCE DE LIGNAGE des satellites (migration CCV2-B, écrite à la main) :
+  /// un satellite ne peut être rattaché qu'à la CandidateCompany réellement issue de SON propre
+  /// ClientAccount. Index unique et non `@@index` : une FK exige une contrainte d'unicité côté cible.
+  @@unique([id, organizationId, sourceClientAccountId])
   @@index([organizationId, status])
   @@index([organizationId, siren])
   @@map("candidate_companies")
@@ -5007,6 +5031,13 @@ model EngagementAct {
   tenderId String @map("tender_id") @db.Uuid
   tender   Tender @relation(fields: [tenderId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
+  /// Checkpoint CCV2-E.2 — INSTANTANÉ IMMUABLE de l'entreprise candidate pour laquelle cet acte a
+  /// été renseigné. Écrit une fois, JAMAIS réécrit vers le candidat courant : un acte généré pour A
+  /// reste un document de A. La péremption (`candidateStale`) est calculée à la LECTURE contre
+  /// `Tender.candidateCompanyId`, jamais stockée. `NULL` = acte antérieur au checkpoint, jamais
+  /// périmé rétroactivement.
+  candidateCompanyId String? @map("candidate_company_id") @db.Uuid
+
   reference                String? @db.VarChar(200)
   lotReference             String? @map("lot_reference") @db.VarChar(200)
   object                   String?
@@ -5031,6 +5062,7 @@ model EngagementAct {
 
   @@unique([id, organizationId])
   @@unique([organizationId, tenderId])
+  @@index([organizationId, candidateCompanyId])
   @@map("administrative_engagement_acts")
 }
 
@@ -5837,8 +5869,8 @@ model CompanyRepresentative {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
 
-  clientAccountId String        @map("client_account_id") @db.Uuid
-  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  clientAccountId String?        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   firstName String @map("first_name") @db.VarChar(120)
   lastName  String @map("last_name") @db.VarChar(120)
@@ -5863,6 +5895,17 @@ model CompanyRepresentative {
   /// aucune sélection automatique, purement informatif au niveau du profil.
   status String @default("ACTIVE") @db.VarChar(20)
 
+  /// Checkpoint TENDEROS-2.1-CCV2-B — PROPRIÉTAIRE MÉTIER V2. Modèle par ASSOCIATION, jamais par
+  /// déplacement : `clientAccountId` ci-dessus reste renseigné et NOT NULL (le chemin de lecture
+  /// Legacy `/clients/:id/profile` continue de fonctionner à l'identique, mission §9), mais dès que
+  /// `candidateCompanyId` est renseigné c'est `CandidateCompany` qui fait autorité — `clientAccountId`
+  /// devient alors un pointeur de LIGNAGE, exactement comme `CandidateCompany.sourceClientAccountId`.
+  /// Il n'y a donc jamais deux copies de la donnée : UNE SEULE ligne, deux chemins d'accès, un seul
+  /// propriétaire métier. Sortie de transition (CCV2-I) : rendre cette colonne NOT NULL et retirer
+  /// `clientAccountId`.
+  candidateCompanyId String?           @map("candidate_company_id") @db.Uuid
+  candidateCompany   CandidateCompany? @relation(fields: [candidateCompanyId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
   createdBy String   @map("created_by") @db.Uuid
   updatedBy String?  @map("updated_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
@@ -5870,6 +5913,7 @@ model CompanyRepresentative {
 
   @@unique([id, organizationId])
   @@index([organizationId, clientAccountId])
+  @@index([organizationId, candidateCompanyId])
   @@map("company_representatives")
 }
 
@@ -5881,8 +5925,8 @@ model CompanyBankAccount {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
 
-  clientAccountId String        @map("client_account_id") @db.Uuid
-  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  clientAccountId String?        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   accountHolder String  @map("account_holder") @db.VarChar(240)
   bankName      String? @map("bank_name") @db.VarChar(200)
@@ -5903,12 +5947,29 @@ model CompanyBankAccount {
   /// ACTIVE | ARCHIVED — CHECK (migration).
   status String @default("ACTIVE") @db.VarChar(20)
 
+  /// Checkpoint TENDEROS-2.1-CCV2-B — PROPRIÉTAIRE MÉTIER V2. Modèle par ASSOCIATION, jamais par
+  /// déplacement : `clientAccountId` ci-dessus reste renseigné et NOT NULL (le chemin de lecture
+  /// Legacy `/clients/:id/profile` continue de fonctionner à l'identique, mission §9), mais dès que
+  /// `candidateCompanyId` est renseigné c'est `CandidateCompany` qui fait autorité — `clientAccountId`
+  /// devient alors un pointeur de LIGNAGE, exactement comme `CandidateCompany.sourceClientAccountId`.
+  /// Il n'y a donc jamais deux copies de la donnée : UNE SEULE ligne, deux chemins d'accès, un seul
+  /// propriétaire métier. Sortie de transition (CCV2-I) : rendre cette colonne NOT NULL et retirer
+  /// `clientAccountId`.
+  candidateCompanyId String?           @map("candidate_company_id") @db.Uuid
+  candidateCompany   CandidateCompany? @relation(fields: [candidateCompanyId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
   createdBy String   @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([id, organizationId])
   @@index([organizationId, clientAccountId])
+  @@index([organizationId, candidateCompanyId])
+  /// Checkpoint CCV2-C.1 — « au plus un compte principal par entreprise candidate », imposé par un
+  /// index unique PARTIEL (migration, WHERE is_primary AND candidate_company_id IS NOT NULL) : non
+  /// exprimable dans le DSL Prisma, donc écrit à la main — même discipline que
+  /// `candidate_establishments_one_principal_per_company`. Les lignes Legacy (client_account_id)
+  /// ne sont volontairement pas contraintes : leur comportement historique reste inchangé.
   @@map("company_bank_accounts")
 }
 
@@ -5921,8 +5982,8 @@ model CompanyInsurance {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
 
-  clientAccountId String        @map("client_account_id") @db.Uuid
-  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  clientAccountId String?        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   /// PROFESSIONAL_LIABILITY | DECENNIAL | OPERATING_LIABILITY | SECTOR_SPECIFIC | OTHER — CHECK
   /// (migration). Catalogue volontairement large avec échappatoire OTHER + libellé libre (mission
@@ -5944,12 +6005,24 @@ model CompanyInsurance {
   /// ACTIVE | ARCHIVED — CHECK (migration).
   status String @default("ACTIVE") @db.VarChar(20)
 
+  /// Checkpoint TENDEROS-2.1-CCV2-B — PROPRIÉTAIRE MÉTIER V2. Modèle par ASSOCIATION, jamais par
+  /// déplacement : `clientAccountId` ci-dessus reste renseigné et NOT NULL (le chemin de lecture
+  /// Legacy `/clients/:id/profile` continue de fonctionner à l'identique, mission §9), mais dès que
+  /// `candidateCompanyId` est renseigné c'est `CandidateCompany` qui fait autorité — `clientAccountId`
+  /// devient alors un pointeur de LIGNAGE, exactement comme `CandidateCompany.sourceClientAccountId`.
+  /// Il n'y a donc jamais deux copies de la donnée : UNE SEULE ligne, deux chemins d'accès, un seul
+  /// propriétaire métier. Sortie de transition (CCV2-I) : rendre cette colonne NOT NULL et retirer
+  /// `clientAccountId`.
+  candidateCompanyId String?           @map("candidate_company_id") @db.Uuid
+  candidateCompany   CandidateCompany? @relation(fields: [candidateCompanyId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
   createdBy String   @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([id, organizationId])
   @@index([organizationId, clientAccountId])
+  @@index([organizationId, candidateCompanyId])
   @@map("company_insurances")
 }
 
@@ -5959,8 +6032,8 @@ model CompanyCertification {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
 
-  clientAccountId String        @map("client_account_id") @db.Uuid
-  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  clientAccountId String?        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   name       String    @db.VarChar(200)
   issuer     String?   @db.VarChar(200)
@@ -5975,12 +6048,24 @@ model CompanyCertification {
   /// ACTIVE | ARCHIVED — CHECK (migration).
   status String @default("ACTIVE") @db.VarChar(20)
 
+  /// Checkpoint TENDEROS-2.1-CCV2-B — PROPRIÉTAIRE MÉTIER V2. Modèle par ASSOCIATION, jamais par
+  /// déplacement : `clientAccountId` ci-dessus reste renseigné et NOT NULL (le chemin de lecture
+  /// Legacy `/clients/:id/profile` continue de fonctionner à l'identique, mission §9), mais dès que
+  /// `candidateCompanyId` est renseigné c'est `CandidateCompany` qui fait autorité — `clientAccountId`
+  /// devient alors un pointeur de LIGNAGE, exactement comme `CandidateCompany.sourceClientAccountId`.
+  /// Il n'y a donc jamais deux copies de la donnée : UNE SEULE ligne, deux chemins d'accès, un seul
+  /// propriétaire métier. Sortie de transition (CCV2-I) : rendre cette colonne NOT NULL et retirer
+  /// `clientAccountId`.
+  candidateCompanyId String?           @map("candidate_company_id") @db.Uuid
+  candidateCompany   CandidateCompany? @relation(fields: [candidateCompanyId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
   createdBy String   @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([id, organizationId])
   @@index([organizationId, clientAccountId])
+  @@index([organizationId, candidateCompanyId])
   @@map("company_certifications")
 }
 
@@ -5990,8 +6075,8 @@ model CompanyReference {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
 
-  clientAccountId String        @map("client_account_id") @db.Uuid
-  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  clientAccountId String?        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   projectName          String    @map("project_name") @db.VarChar(300)
   referenceClientName  String?   @map("reference_client_name") @db.VarChar(240)
@@ -6017,6 +6102,17 @@ model CompanyReference {
   /// DRAFT | VALIDATED | ARCHIVED — CHECK (migration).
   status String @default("DRAFT") @db.VarChar(20)
 
+  /// Checkpoint TENDEROS-2.1-CCV2-B — PROPRIÉTAIRE MÉTIER V2. Modèle par ASSOCIATION, jamais par
+  /// déplacement : `clientAccountId` ci-dessus reste renseigné et NOT NULL (le chemin de lecture
+  /// Legacy `/clients/:id/profile` continue de fonctionner à l'identique, mission §9), mais dès que
+  /// `candidateCompanyId` est renseigné c'est `CandidateCompany` qui fait autorité — `clientAccountId`
+  /// devient alors un pointeur de LIGNAGE, exactement comme `CandidateCompany.sourceClientAccountId`.
+  /// Il n'y a donc jamais deux copies de la donnée : UNE SEULE ligne, deux chemins d'accès, un seul
+  /// propriétaire métier. Sortie de transition (CCV2-I) : rendre cette colonne NOT NULL et retirer
+  /// `clientAccountId`.
+  candidateCompanyId String?           @map("candidate_company_id") @db.Uuid
+  candidateCompany   CandidateCompany? @relation(fields: [candidateCompanyId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
   createdBy String   @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -6025,6 +6121,7 @@ model CompanyReference {
 
   @@unique([id, organizationId])
   @@index([organizationId, clientAccountId])
+  @@index([organizationId, candidateCompanyId])
   @@map("company_references")
 }
 
@@ -6052,8 +6149,8 @@ model CompanyHumanResource {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
 
-  clientAccountId String        @map("client_account_id") @db.Uuid
-  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  clientAccountId String?        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   category               String  @db.VarChar(120)
   title                  String  @db.VarChar(200)
@@ -6068,12 +6165,24 @@ model CompanyHumanResource {
   /// ACTIVE | ARCHIVED — CHECK (migration).
   status String @default("ACTIVE") @db.VarChar(20)
 
+  /// Checkpoint TENDEROS-2.1-CCV2-B — PROPRIÉTAIRE MÉTIER V2. Modèle par ASSOCIATION, jamais par
+  /// déplacement : `clientAccountId` ci-dessus reste renseigné et NOT NULL (le chemin de lecture
+  /// Legacy `/clients/:id/profile` continue de fonctionner à l'identique, mission §9), mais dès que
+  /// `candidateCompanyId` est renseigné c'est `CandidateCompany` qui fait autorité — `clientAccountId`
+  /// devient alors un pointeur de LIGNAGE, exactement comme `CandidateCompany.sourceClientAccountId`.
+  /// Il n'y a donc jamais deux copies de la donnée : UNE SEULE ligne, deux chemins d'accès, un seul
+  /// propriétaire métier. Sortie de transition (CCV2-I) : rendre cette colonne NOT NULL et retirer
+  /// `clientAccountId`.
+  candidateCompanyId String?           @map("candidate_company_id") @db.Uuid
+  candidateCompany   CandidateCompany? @relation(fields: [candidateCompanyId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
   createdBy String   @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([id, organizationId])
   @@index([organizationId, clientAccountId])
+  @@index([organizationId, candidateCompanyId])
   @@map("company_human_resources")
 }
 
@@ -6082,8 +6191,8 @@ model CompanyMaterialResource {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
 
-  clientAccountId String        @map("client_account_id") @db.Uuid
-  clientAccount   ClientAccount @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  clientAccountId String?        @map("client_account_id") @db.Uuid
+  clientAccount   ClientAccount? @relation(fields: [clientAccountId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   category        String  @db.VarChar(120)
   name            String  @db.VarChar(240)
@@ -6102,12 +6211,24 @@ model CompanyMaterialResource {
   /// ACTIVE | ARCHIVED — CHECK (migration).
   status String @default("ACTIVE") @db.VarChar(20)
 
+  /// Checkpoint TENDEROS-2.1-CCV2-B — PROPRIÉTAIRE MÉTIER V2. Modèle par ASSOCIATION, jamais par
+  /// déplacement : `clientAccountId` ci-dessus reste renseigné et NOT NULL (le chemin de lecture
+  /// Legacy `/clients/:id/profile` continue de fonctionner à l'identique, mission §9), mais dès que
+  /// `candidateCompanyId` est renseigné c'est `CandidateCompany` qui fait autorité — `clientAccountId`
+  /// devient alors un pointeur de LIGNAGE, exactement comme `CandidateCompany.sourceClientAccountId`.
+  /// Il n'y a donc jamais deux copies de la donnée : UNE SEULE ligne, deux chemins d'accès, un seul
+  /// propriétaire métier. Sortie de transition (CCV2-I) : rendre cette colonne NOT NULL et retirer
+  /// `clientAccountId`.
+  candidateCompanyId String?           @map("candidate_company_id") @db.Uuid
+  candidateCompany   CandidateCompany? @relation(fields: [candidateCompanyId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
   createdBy String   @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([id, organizationId])
   @@index([organizationId, clientAccountId])
+  @@index([organizationId, candidateCompanyId])
   @@map("company_material_resources")
 }
 
@@ -6140,6 +6261,77 @@ model DocumentClientAccountAssociation {
   @@index([organizationId, clientAccountId])
   @@index([organizationId, documentId])
   @@map("document_client_account_associations")
+}
+
+/// Checkpoint TENDEROS-2.1-CCV2-B — rattachement d'un document d'entreprise à une CandidateCompany.
+/// Miroir strict de `DocumentClientAccountAssociation` (et de `SubcontractorProfileDocument`) : le
+/// moteur documentaire reste `Document`/`DocumentVersion`, JAMAIS dupliqué — aucun stockage, aucun
+/// hash, aucun versioning ici, uniquement le rattachement métier et ses métadonnées de validité.
+/// Les justificatifs déjà portés par un satellite structuré (assurance/certification/banque/
+/// référence) utilisent LEUR PROPRE `documentId`, jamais cette table — même règle anti-double-
+/// comptage que côté ClientAccount.
+model DocumentCandidateCompanyAssociation {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  documentId String   @map("document_id") @db.Uuid
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  candidateCompanyId String           @map("candidate_company_id") @db.Uuid
+  candidateCompany   CandidateCompany @relation(fields: [candidateCompanyId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  /// KBIS | TAX_CERTIFICATE | SOCIAL_CERTIFICATE | ARTICLES_OF_ASSOCIATION | INSURANCE |
+  /// CERTIFICATION | BANK_DETAILS | REFERENCE | POWER_OF_ATTORNEY | CV | OTHER — CHECK (migration).
+  /// Union des catalogues DÉJÀ en place (`document_client_account_associations` et
+  /// `subcontractor_profile_documents`), jamais une liste inventée.
+  category String  @db.VarChar(40)
+  label    String? @db.VarChar(240)
+
+  issuedAt   DateTime? @map("issued_at")
+  validFrom  DateTime? @map("valid_from")
+  validUntil DateTime? @map("valid_until")
+
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([documentId, candidateCompanyId])
+  @@index([organizationId, candidateCompanyId])
+  @@index([organizationId, documentId])
+  @@map("document_candidate_company_associations")
+}
+
+/// Checkpoint TENDEROS-2.1-CCV2-B — registre de migration (mission §8). Trace les ClientAccount qui
+/// n'ont AUCUNE CandidateCompany correspondante : décision produit figée — aucune CandidateCompany
+/// n'est créée automatiquement, les données Legacy sont conservées telles quelles. Ne contient
+/// délibérément AUCUNE donnée métier sensible (ni nom, ni SIREN, ni IBAN) : uniquement des
+/// identifiants, un motif et un statut, afin qu'un registre d'exploitation ne devienne pas une
+/// seconde exposition des données candidates.
+model CandidateMigrationRegisterEntry {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  clientAccountId String @map("client_account_id") @db.Uuid
+
+  /// NO_CANDIDATE_COMPANY | AMBIGUOUS_SOURCE — CHECK (migration).
+  reason String @db.VarChar(40)
+  /// PENDING_PRODUCT_DECISION | RESOLVED — CHECK (migration). `RESOLVED` dès qu'une CandidateCompany
+  /// est apparue pour ce ClientAccount (promotion assistée ultérieure), jamais supprimé : le registre
+  /// garde l'historique de ce qui n'a pas pu être migré automatiquement.
+  status String @default("PENDING_PRODUCT_DECISION") @db.VarChar(40)
+
+  /// Nombre de lignes satellites Legacy restées non associées — un compteur, jamais leur contenu.
+  legacySatelliteCount Int @default(0) @map("legacy_satellite_count")
+
+  /// Checkpoint CCV2-E.1 — nombre de DOCUMENTS d'entreprise Legacy restés non migrables pour ce
+  /// ClientAccount. Un compteur, jamais un titre, jamais une clé de stockage.
+  legacyDocumentCount Int @default(0) @map("legacy_document_count")
+
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt  DateTime @updatedAt @map("last_seen_at")
+
+  @@unique([organizationId, clientAccountId])
+  @@index([organizationId, status])
+  @@map("candidate_migration_register")
 }
 
 /// Répertoire ORGANISATIONNEL de sous-traitants (mission §6) — réutilisable par plusieurs

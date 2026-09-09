@@ -64,8 +64,22 @@ describe("Checklist intelligente — real HTTP + PostgreSQL (NestJS)", () => {
     const clientAccount = await prisma.clientAccount.create({
       data: { id: randomUUID(), organizationId: input.organizationId, name: `Client HTTP ${suffix}`, nameNormalized: `client http ${suffix}`, status: "ACTIVE", createdBy: input.userId },
     });
+    // Checkpoint TENDEROS-2.1-CCV2-G.2 — l'appariement documentaire d'un item dont le SUJET est le
+    // candidat exige desormais une entreprise candidate : les certifications du CLIENT commercial
+    // ne peuvent plus servir de preuve de conformite pour le candidat.
+    const candidateCompanyId = randomUUID();
+    await prisma.candidateCompany.create({
+      data: {
+        id: candidateCompanyId,
+        organizationId: input.organizationId,
+        name: `Candidat Checklist ${candidateCompanyId}`,
+        nameNormalized: `candidat checklist ${candidateCompanyId}`,
+        status: "ACTIVE",
+        createdBy: input.userId,
+      },
+    });
     const tender = await prisma.tender.create({
-      data: { id: randomUUID(), organizationId: input.organizationId, clientAccountId: clientAccount.id, title: "Marche Checklist HTTP", status: "IN_ANALYSIS", tags: [], createdBy: input.userId },
+      data: { id: randomUUID(), organizationId: input.organizationId, clientAccountId: clientAccount.id, candidateCompanyId, title: "Marche Checklist HTTP", status: "IN_ANALYSIS", tags: [], createdBy: input.userId },
     });
     return { clientAccountId: clientAccount.id, tenderId: tender.id };
   }
@@ -179,7 +193,9 @@ describe("Checklist intelligente — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.analysisJob.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.documentTenderAssociation.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.document.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    // Les Tenders D'ABORD : FK composite `[candidateCompanyId, organizationId]`.
     await prisma.tender.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    await prisma.candidateCompany.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: [orgAId, orgBId] } } } });

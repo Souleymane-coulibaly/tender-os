@@ -1,9 +1,12 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { assertHasCandidatePermission, CandidatePermission } from "../../domain/candidate-permission";
 import { toCandidateCompanySummary, type CandidateCompanySummary } from "../dtos";
 import { CANDIDATE_COMPANY_REPOSITORY, type CandidateCompanyRepository } from "../ports/candidate-company.repository";
 
 export type ListCandidateCompaniesQuery = Readonly<{
   organizationId: string;
+  /** Rôle d'ORGANISATION de l'acteur (`MembershipContext.role`), jamais un rôle client. */
+  actorRole: string;
   includeArchived?: boolean | undefined;
   cursor?: string | undefined;
   limit?: number | undefined;
@@ -16,6 +19,7 @@ export class ListCandidateCompaniesUseCase {
   constructor(@Inject(CANDIDATE_COMPANY_REPOSITORY) private readonly candidateCompanyRepository: CandidateCompanyRepository) {}
 
   async execute(query: ListCandidateCompaniesQuery): Promise<ListCandidateCompaniesResult> {
+    assertHasCandidatePermission(query.actorRole, CandidatePermission.Read);
     const result = await this.candidateCompanyRepository.list({
       organizationId: query.organizationId,
       includeArchived: query.includeArchived ?? false,

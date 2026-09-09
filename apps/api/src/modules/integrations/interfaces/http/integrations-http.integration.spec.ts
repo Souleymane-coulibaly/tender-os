@@ -60,6 +60,27 @@ describe("Integration Hub (integrations) — real HTTP + PostgreSQL (NestJS)", (
     const client = await prisma.clientAccount.create({ data: { id: randomUUID(), organizationId, name, nameNormalized: name.toLowerCase(), status: "ACTIVE", createdBy: userId } });
     return client.id;
   }
+  /** Checkpoint TENDEROS-2.1-CCV2-G.1 — `POST /tenders` exige une entreprise candidate (POLICY A) :
+   *  un appel d'offres sans candidat n'est plus créable par le parcours produit. Cette spec teste le
+   *  Hub d'intégration, pas la candidature — elle a donc besoin d'un candidat RÉEL, pas d'un
+   *  contournement. */
+  async function createCandidateCompany(organizationId: string, userId: string): Promise<string> {
+    const suffix = randomUUID();
+    const company = await prisma.candidateCompany.create({
+      data: {
+        id: randomUUID(),
+        organizationId,
+        name: `Candidate Webhook ${suffix}`,
+        nameNormalized: `candidate webhook ${suffix}`,
+        legalName: `CANDIDATE WEBHOOK ${suffix} SAS`,
+        siren: "356000000",
+        status: "ACTIVE",
+        createdBy: userId,
+      },
+    });
+    return company.id;
+  }
+
   async function createTender(organizationId: string, clientAccountId: string, userId: string, title: string): Promise<string> {
     const tender = await prisma.tender.create({ data: { id: randomUUID(), organizationId, clientAccountId, title, status: "IN_ANALYSIS", tags: [], createdBy: userId } });
     return tender.id;
@@ -142,6 +163,9 @@ describe("Integration Hub (integrations) — real HTTP + PostgreSQL (NestJS)", (
     await prisma.responsePackage.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.tender.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    // Les Tenders d'abord : la FK composite `[candidateCompanyId, organizationId]` mettrait sinon
+    // `organization_id` (NOT NULL) à NULL en cascade.
+    await prisma.candidateCompany.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAssignment.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -300,8 +324,9 @@ describe("Integration Hub (integrations) — real HTTP + PostgreSQL (NestJS)", (
       const webhook = (await webhookRes.json()) as { secret: string; subscription: { id: string } };
 
       const clientA = await createClient(orgAId, ownerAUserId, `Client Webhook E2E ${randomUUID()}`);
+      const candidateA = await createCandidateCompany(orgAId, ownerAUserId);
       const tenderTitle = `Webhook E2E Tender ${randomUUID()}`;
-      const createRes = await fetch(`${baseUrl}/api/v1/tenders`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ title: tenderTitle, clientAccountId: clientA }) });
+      const createRes = await fetch(`${baseUrl}/api/v1/tenders`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId), body: JSON.stringify({ title: tenderTitle, clientAccountId: clientA, candidateCompanyId: candidateA }) });
       expect(createRes.status).toBe(201);
       const createdTender = (await createRes.json()) as { id: string };
       const tenderCreatedEventIds = await listOutboxEventIds({
@@ -420,10 +445,11 @@ describe("Integration Hub (integrations) — real HTTP + PostgreSQL (NestJS)", (
       const webhook = (await webhookRes.json()) as { subscription: { id: string } };
 
       const clientA = await createClient(orgAId, ownerAUserId, `Client Webhook Backlog ${randomUUID()}`);
+      const candidateA = await createCandidateCompany(orgAId, ownerAUserId);
       const createRes = await fetch(`${baseUrl}/api/v1/tenders`, {
         method: "POST",
         headers: authHeaders(tokenOwnerA, orgAId),
-        body: JSON.stringify({ title: `Webhook Backlog Tender ${randomUUID()}`, clientAccountId: clientA }),
+        body: JSON.stringify({ title: `Webhook Backlog Tender ${randomUUID()}`, clientAccountId: clientA, candidateCompanyId: candidateA }),
       });
       expect(createRes.status).toBe(201);
       const createdTender = (await createRes.json()) as { id: string };

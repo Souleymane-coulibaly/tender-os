@@ -180,6 +180,10 @@ describe("Opportunity / GO-NO-GO — real HTTP + PostgreSQL (NestJS)", () => {
     await prisma.clientAssignment.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.clientAccount.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
+    // Checkpoint CCV2-G.1 — les Tenders D'ABORD (FK composite `[candidateCompanyId,
+    // organizationId]` : supprimer la CandidateCompany en premier declencherait un SET NULL sur
+    // `organization_id`, qui est NOT NULL).
+    await prisma.candidateCompany.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.membershipRole.deleteMany({ where: { membership: { organizationId: { in: [orgAId, orgBId] } } } });
     await prisma.organizationMembership.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
     await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: [orgAId, orgBId] } } });
@@ -247,10 +251,31 @@ describe("Opportunity / GO-NO-GO — real HTTP + PostgreSQL (NestJS)", () => {
     const promoteWithoutCandidateBody = (await promoteWithoutCandidate.json()) as { error: { code: string } };
     expect(promoteWithoutCandidateBody.error.code).toBe("OPPORTUNITY_MISSING_CLIENT_ACCOUNT");
 
+    // Checkpoint CCV2-G.1 — POLICY A : la promotion exige AUSSI une entreprise candidate (l'entite
+    // juridique qui repond), distincte du ClientAccount ci-dessus (la relation commerciale). Le
+    // refus ci-dessus portait sur le CLIENT ; celui-ci porte sur le CANDIDAT.
+    // Fixture ecrite en PERSISTANCE, comme le `clientAccount` ci-dessus : ce test porte sur la
+    // PROMOTION, pas sur la creation d'entreprise candidate (couverte par son propre spec). Un
+    // aller-retour HTTP de plus ferait deborder son budget de temps sans rien prouver de neuf.
+    const candidateCompany = await prisma.candidateCompany.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgAId,
+        name: `Candidate HTTP ${randomUUID().slice(0, 8)}`,
+        nameNormalized: `candidate http ${randomUUID().slice(0, 8)}`,
+        status: "ACTIVE",
+        createdBy: ownerAUserId,
+      },
+    });
+
+    // Checkpoint CCV2-G.1 — le client ET l'entreprise candidate sont rattaches par le MEME PATCH :
+    // aucun appel supplementaire, donc aucun besoin de relever le delai de ce test. Le refus
+    // specifique `CANDIDATE_COMPANY_REQUIRED` est prouve par son spec dedie
+    // (`ccv2g1-candidate-required-http.integration.spec.ts`), le redupliquer ici n'ajouterait rien.
     await fetch(`${baseUrl}/api/v1/opportunities/${opportunity.id}`, {
       method: "PATCH",
       headers: authHeaders(tokenOwnerA, orgAId),
-      body: JSON.stringify({ title: "Marché de nettoyage HTTP", clientAccountId: clientAccount.id }),
+      body: JSON.stringify({ title: "Marché de nettoyage HTTP", clientAccountId: clientAccount.id, candidateCompanyId: candidateCompany.id }),
     });
 
     const promoteRes = await fetch(`${baseUrl}/api/v1/opportunities/${opportunity.id}/promote`, { method: "POST", headers: authHeaders(tokenOwnerA, orgAId) });
@@ -319,10 +344,23 @@ describe("Opportunity / GO-NO-GO — real HTTP + PostgreSQL (NestJS)", () => {
     });
     await assignClientManager({ organizationId: orgAId, clientAccountId: clientAccount.id, userId: ownerAUserId });
 
+    // Checkpoint CCV2-G.1 — l'Opportunity porte son entreprise candidate des la creation : ce test
+    // porte sur la CONCURRENCE, pas sur l'exigence de candidat.
+    const concurrencyCandidate = await prisma.candidateCompany.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgAId,
+        name: `Candidate concurrence ${randomUUID().slice(0, 8)}`,
+        nameNormalized: `candidate concurrence ${randomUUID().slice(0, 8)}`,
+        status: "ACTIVE",
+        createdBy: ownerAUserId,
+      },
+    });
+
     const createRes = await fetch(`${baseUrl}/api/v1/opportunities`, {
       method: "POST",
       headers: authHeaders(tokenOwnerA, orgAId),
-      body: JSON.stringify({ title: "Marché concurrence HTTP", clientAccountId: clientAccount.id }),
+      body: JSON.stringify({ title: "Marché concurrence HTTP", clientAccountId: clientAccount.id, candidateCompanyId: concurrencyCandidate.id }),
     });
     const opportunity = (await createRes.json()) as { id: string };
 
@@ -345,6 +383,20 @@ describe("Opportunity / GO-NO-GO — real HTTP + PostgreSQL (NestJS)", () => {
     expect(tenderCount).toBe(1);
   });
 
+
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.2 — la generation GO/NO-GO exige desormais une entreprise
+   * candidate : c'est elle, et non le profil du client commercial, qui porte les capacites notees.
+   * Ce helper en cree une reelle pour les tests dont le sujet est le rapport lui-meme.
+   */
+  async function createCandidateCompanyFor(organizationId: string, createdBy: string): Promise<string> {
+    const id = randomUUID();
+    await prisma.candidateCompany.create({
+      data: { id, organizationId, name: `Candidat GO-NO-GO ${id}`, nameNormalized: `candidat go-no-go ${id}`, status: "ACTIVE", createdBy },
+    });
+    return id;
+  }
+
   it("Level 2 — generating a report before any DCE analysis has succeeded returns 409, never a raw 500", async () => {
     const clientAccount = await prisma.clientAccount.create({
       data: { id: randomUUID(), organizationId: orgAId, name: "Client sans analyse", nameNormalized: "client sans analyse", status: "ACTIVE", createdBy: ownerAUserId },
@@ -365,7 +417,7 @@ describe("Opportunity / GO-NO-GO — real HTTP + PostgreSQL (NestJS)", () => {
     });
     await assignClientManager({ organizationId: orgAId, clientAccountId: clientAccount.id, userId: ownerAUserId });
     const tender = await prisma.tender.create({
-      data: { id: randomUUID(), organizationId: orgAId, clientAccountId: clientAccount.id, title: "Tender avec analyse", status: "IN_ANALYSIS", tags: [], createdBy: ownerAUserId },
+      data: { id: randomUUID(), organizationId: orgAId, clientAccountId: clientAccount.id, candidateCompanyId: await createCandidateCompanyFor(orgAId, ownerAUserId), title: "Tender avec analyse", status: "IN_ANALYSIS", tags: [], createdBy: ownerAUserId },
     });
     await seedSucceededAnalysis({ organizationId: orgAId, tenderId: tender.id, actorId: ownerAUserId });
 
@@ -396,7 +448,7 @@ describe("Opportunity / GO-NO-GO — real HTTP + PostgreSQL (NestJS)", () => {
     });
     await assignClientManager({ organizationId: orgAId, clientAccountId: clientAccount.id, userId: ownerAUserId });
     const tender = await prisma.tender.create({
-      data: { id: randomUUID(), organizationId: orgAId, clientAccountId: clientAccount.id, title: "Tender E2E FIX-C", status: "IN_ANALYSIS", tags: [], createdBy: ownerAUserId },
+      data: { id: randomUUID(), organizationId: orgAId, clientAccountId: clientAccount.id, candidateCompanyId: await createCandidateCompanyFor(orgAId, ownerAUserId), title: "Tender E2E FIX-C", status: "IN_ANALYSIS", tags: [], createdBy: ownerAUserId },
     });
 
     const { dceId } = await seedSucceededAnalysis({ organizationId: orgAId, tenderId: tender.id, actorId: ownerAUserId, analysisVersion: 1, dceRevision: 1 });
@@ -477,7 +529,7 @@ describe("Opportunity / GO-NO-GO — real HTTP + PostgreSQL (NestJS)", () => {
     });
     await assignClientManager({ organizationId: orgAId, clientAccountId: clientAccount.id, userId: ownerAUserId });
     const tender = await prisma.tender.create({
-      data: { id: randomUUID(), organizationId: orgAId, clientAccountId: clientAccount.id, title: "Tender Concurrence GO/NO-GO", status: "IN_ANALYSIS", tags: [], createdBy: ownerAUserId },
+      data: { id: randomUUID(), organizationId: orgAId, clientAccountId: clientAccount.id, candidateCompanyId: await createCandidateCompanyFor(orgAId, ownerAUserId), title: "Tender Concurrence GO/NO-GO", status: "IN_ANALYSIS", tags: [], createdBy: ownerAUserId },
     });
     await seedSucceededAnalysis({ organizationId: orgAId, tenderId: tender.id, actorId: ownerAUserId });
 

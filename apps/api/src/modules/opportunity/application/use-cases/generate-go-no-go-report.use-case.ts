@@ -5,9 +5,9 @@ import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { GetEffectiveTenderAnalysisSummaryUseCase, ListTenderClausesUseCase, ListTenderCriteriaUseCase, ListTenderRequirementsUseCase, ListTenderRisksUseCase } from "../../../analysis";
 import { AiSuggestionStatus, ListAiSuggestionsUseCase } from "../../../ai-suggestion";
-import { CandidateIdentitySource, ResolveCandidateIdentityUseCase } from "../../../candidate-company";
+import { CandidateCompanyRequiredError, ResolveCandidateIdentityUseCase } from "../../../candidate-company";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
-import { GetCompanyProfileUseCase } from "../../../company-profile";
+import { ResolveCandidateCapabilitiesUseCase } from "../../../company-profile";
 import { DceNotFoundError, ListDceDocumentsUseCase } from "../../../dce";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import {
@@ -22,7 +22,7 @@ import {
 } from "../../../tenders";
 import { GoNoGoAnalysisNotCurrentError } from "../../domain/errors";
 import { bucketRiskSeverity, computeGoNoGoReport } from "../../domain/scoring/compute-go-no-go-report";
-import { mapCompanyProfileToQuickScoreInput } from "../mappers/company-profile-to-quick-score-input.mapper";
+import { mapCandidateCapabilitiesToQuickScoreInput } from "../mappers/candidate-capabilities-to-quick-score-input.mapper";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { GO_NO_GO_REPORT_REPOSITORY, withGoNoGoFreshness, type GoNoGoReportRecord, type GoNoGoReportRepository } from "../ports/go-no-go-report.repository";
 
@@ -89,8 +89,8 @@ export class GenerateGoNoGoReportUseCase {
     private readonly listTenderClausesUseCase: ListTenderClausesUseCase,
     private readonly listAiSuggestionsUseCase: ListAiSuggestionsUseCase,
     private readonly listDceDocumentsUseCase: ListDceDocumentsUseCase,
-    private readonly getCompanyProfileUseCase: GetCompanyProfileUseCase,
     private readonly resolveCandidateIdentityUseCase: ResolveCandidateIdentityUseCase,
+    private readonly resolveCandidateCapabilitiesUseCase: ResolveCandidateCapabilitiesUseCase,
   ) {}
 
   async execute(command: GenerateGoNoGoReportCommand): Promise<GoNoGoReportRecord> {
@@ -133,10 +133,16 @@ export class GenerateGoNoGoReportUseCase {
 
     const findingsQuery = { organizationId: command.organizationId, tenderId: command.tenderId, actorId: command.actorId, actorRole: command.actorRole, limit: FINDINGS_PAGE_LIMIT, offset: 0 };
 
-    const candidateIdentity = await this.resolveCandidateIdentityUseCase.execute({ organizationId: command.organizationId, candidateCompanyId: tender.candidateCompanyId });
-    const usesCandidateCompany = candidateIdentity.source === CandidateIdentitySource.CandidateCompany;
+    // Checkpoint TENDEROS-2.1-CCV2-G.2 — POLICY A. Noter la capacité à répondre à partir du profil
+    // du CLIENT commercial reviendrait à évaluer la mauvaise entreprise : le repli est SUPPRIMÉ.
+    // Les rapports GO/NO-GO déjà produits restent lisibles et immuables.
+    if (!tender.candidateCompanyId) {
+      throw new CandidateCompanyRequiredError();
+    }
 
-    const [requirements, criteria, risks, clauses, aiSuggestions, requestedDocuments, lots, companyProfile] = await Promise.all([
+    const candidateIdentity = await this.resolveCandidateIdentityUseCase.execute({ organizationId: command.organizationId, candidateCompanyId: tender.candidateCompanyId });
+
+    const [requirements, criteria, risks, clauses, aiSuggestions, requestedDocuments, lots, candidateCapabilities] = await Promise.all([
       this.listTenderRequirementsUseCase.execute(findingsQuery),
       this.listTenderCriteriaUseCase.execute(findingsQuery),
       this.listTenderRisksUseCase.execute(findingsQuery),
@@ -146,7 +152,8 @@ export class GenerateGoNoGoReportUseCase {
       this.tenderLotRepository.listByTender({ organizationId: command.organizationId, tenderId: command.tenderId }),
       // NEW FLOW — CandidateCompany fait autorité et ne porte aucune capacité : jamais un repli
       // silencieux sur les satellites du CLIENT (mission A6.2, même discipline qu'A6.1 §9).
-      usesCandidateCompany ? Promise.resolve(undefined) : this.getCompanyProfileUseCase.execute({ organizationId: command.organizationId, clientAccountId: tender.clientAccountId, actorId: command.actorId, actorRole: command.actorRole }),
+      // NEW FLOW (CCV2-E, fermeture de DEFERRED-BE-02) — capacités de la SOT `CandidateCompany`.
+      this.resolveCandidateCapabilitiesUseCase.execute({ organizationId: command.organizationId, candidateCompanyId: tender.candidateCompanyId }),
     ]);
 
     let dceDocumentCount = 0;
@@ -209,9 +216,10 @@ export class GenerateGoNoGoReportUseCase {
       // `Tender` n'a pas de champ "secteur" (contrairement à `Opportunity`) — le rapprochement
       // référence/secteur reste donc non applicable au Niveau 2 (limitation assumée, cohérente
       // avec le texte libre non structuré de `CompanyReference.sector`, voir le plan Sprint 5).
-      // Checkpoint 2.1-A6.2 — `companyProfile` absent en NEW FLOW (CandidateCompany sans satellites) :
-      // `computeGoNoGoReport` gère déjà nativement `companyProfile: undefined`, jamais un défaut inventé.
-      companyProfile: companyProfile ? mapCompanyProfileToQuickScoreInput(companyProfile, undefined) : undefined,
+      // Checkpoint CCV2-E — NEW FLOW : capacités de `CandidateCompany` ; LEGACY FLOW : profil du
+      // client. Jamais les deux, jamais l'un à défaut de l'autre.
+      // Checkpoint CCV2-G.2 — source UNIQUE : les capacites de l'entreprise candidate.
+      companyProfile: mapCandidateCapabilitiesToQuickScoreInput(candidateIdentity, candidateCapabilities, undefined),
       subcontractingFlags,
     });
 
@@ -229,7 +237,7 @@ export class GenerateGoNoGoReportUseCase {
       result,
       // Checkpoint 2.1-A6.2 (correctif audit — P2 "fraîcheur candidate") — instantané de la
       // Candidate effectivement utilisée pour CE calcul, jamais re-résolu si elle change ensuite.
-      candidateCompanyId: usesCandidateCompany ? tender.candidateCompanyId : undefined,
+      candidateCompanyId: tender.candidateCompanyId,
     });
 
     await this.auditLogWriter.record({

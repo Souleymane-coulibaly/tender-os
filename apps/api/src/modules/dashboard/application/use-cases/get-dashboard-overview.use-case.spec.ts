@@ -26,7 +26,9 @@ function buildUseCase(overrides: Partial<Record<string, { execute: ReturnType<ty
     listSavedSearchMatchesUseCase: stub({ items: [], nextCursor: null }),
     countActiveMembersUseCase: stub(1),
     listClientAccountsUseCase: stub({ items: [], nextCursor: null }),
-    getCompanyProfileUseCase: stub({ completeness: { identity: "INCOMPLETE" } }),
+    // Checkpoint CCV2-I.1 — la coche « Completer l'entreprise candidate » lit desormais la SOT
+    // candidate. Le double renvoie une organisation sans candidate complete.
+    summarizeCandidateCompanyReadinessUseCase: stub({ totalActive: 0, completeIdentityCount: 0, hasAtLeastOneComplete: false }),
     hasAnyAdministrativeDocumentUseCase: stub(false),
     getTenderActivityTrendUseCase: stub([]),
     getOrganizationUseCase: stub({ id: "org-1", name: "Test Org", slug: "test-org", defaultTimezone: "Europe/Paris" }),
@@ -47,7 +49,7 @@ function buildUseCase(overrides: Partial<Record<string, { execute: ReturnType<ty
     deps.listSavedSearchMatchesUseCase as never,
     deps.countActiveMembersUseCase as never,
     deps.listClientAccountsUseCase as never,
-    deps.getCompanyProfileUseCase as never,
+    deps.summarizeCandidateCompanyReadinessUseCase as never,
     deps.hasAnyAdministrativeDocumentUseCase as never,
     deps.getTenderActivityTrendUseCase as never,
     deps.getOrganizationUseCase as never,

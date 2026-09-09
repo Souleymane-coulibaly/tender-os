@@ -123,21 +123,98 @@ describe("Administrative Dossier — V2 Sprint 11 DC1 real official form fill (r
     return { templateId: template.id };
   }
 
-  async function createClientTenderAndCandidate(input: { tradeName: string; siret: string }): Promise<{ clientAccountId: string; tenderId: string }> {
+  /** SIRET valide (Luhn) et DISTINCT a chaque appel : `candidate_establishments` impose l'unicite
+   *  `(organization_id, siret)` — regle de domaine CCV2-B — la ou le profil client tolere le
+   *  doublon via `confirmDuplicate`. */
+  let siretCounter = 0;
+  function nextCandidateSiret(): string {
+    siretCounter += 1;
+    const base = `3560000000${String(siretCounter).padStart(3, "0")}`;
+    const digits = base.split("").map(Number);
+    let sum = 0;
+    for (let index = 0; index < digits.length; index += 1) {
+      const position = digits.length - index;
+      const doubled = position % 2 === 0 ? (digits[index] as number) * 2 : (digits[index] as number);
+      sum += doubled > 9 ? doubled - 9 : doubled;
+    }
+    return `${base}${(10 - (sum % 10)) % 10}`;
+  }
+
+  async function createClientTenderAndCandidate(input: { tradeName: string; siret: string }): Promise<{ clientAccountId: string; tenderId: string; candidateSiret: string; candidateCompanyId: string }> {
     const suffix = randomUUID();
+    const candidateSiret = nextCandidateSiret();
     const clientAccount = await prisma.clientAccount.create({
       data: { id: randomUUID(), organizationId: orgId, name: `Client DC1 ${suffix}`, nameNormalized: `client dc1 ${suffix}`, status: "ACTIVE", createdBy: contributorUserId },
     });
-    const tender = await prisma.tender.create({
-      data: { id: randomUUID(), organizationId: orgId, clientAccountId: clientAccount.id, title: "Marche DC1 - renovation", buyerName: "Commune de Test — Direction des Achats", status: "DRAFT", tags: [], createdBy: contributorUserId },
+    // Checkpoint TENDEROS-2.1-CCV2-G.2 — le DC1 tire désormais son identité EXCLUSIVEMENT de
+    // l'entreprise candidate. Le profil du client reste renseigné ci-dessous à l'identique : c'est
+    // précisément ce qui rend ces tests probants — les MEMES valeurs existent des deux côtés, et le
+    // formulaire doit servir celles du CANDIDAT.
+    const candidateCompany = await prisma.candidateCompany.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        name: input.tradeName,
+        nameNormalized: `${input.tradeName.toLowerCase()} ${suffix}`,
+        legalName: input.tradeName,
+        siren: input.siret.slice(0, 9),
+        status: "ACTIVE",
+        createdBy: contributorUserId,
+      },
+    });
+    await prisma.candidateEstablishment.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        candidateCompanyId: candidateCompany.id,
+        siret: candidateSiret,
+        isPrincipal: true,
+        addressLine: "12 rue de la République",
+        postalCode: "75001",
+        city: "Paris",
+        createdBy: contributorUserId,
+      },
+    });
+    await prisma.companyRepresentative.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        candidateCompanyId: candidateCompany.id,
+        firstName: "Contact",
+        lastName: "Administratif",
+        type: "ADMINISTRATIVE_CONTACT",
+        email: "contact@example.test",
+        phone: "0123456789",
+        status: "ACTIVE",
+        createdBy: contributorUserId,
+      },
     });
 
-    const legalIdentityRes = await fetch(`${baseUrl}/api/v1/clients/${clientAccount.id}/legal-identity`, {
-      method: "PATCH",
-      headers: jsonHeaders(tokenOwner),
-      body: JSON.stringify({ legalName: input.tradeName, tradeName: input.tradeName, siren: input.siret.slice(0, 9), siretPrincipal: input.siret, addressLine: "12 rue de la République", postalCode: "75001", city: "Paris", phone: "0123456789", generalEmail: "contact@example.test", confirmDuplicate: true }),
+    const tender = await prisma.tender.create({
+      data: { id: randomUUID(), organizationId: orgId, clientAccountId: clientAccount.id, candidateCompanyId: candidateCompany.id, title: "Marche DC1 - renovation", buyerName: "Commune de Test — Direction des Achats", status: "DRAFT", tags: [], createdBy: contributorUserId },
     });
-    expect(legalIdentityRes.status).toBe(200);
+
+    // Checkpoint TENDEROS-2.1-CCV2-I.1 — identité juridique du CLIENT amorcée DIRECTEMENT en base.
+    // `PATCH /clients/:id/legal-identity` est retiré (409 `CLIENT_BIDDER_WRITE_RETIRED`), mais cette
+    // ligne doit continuer d'exister : c'est le LEURRE dont ces tests prouvent qu'il n'est JAMAIS lu
+    // à la place de l'entreprise candidate. La supprimer affaiblirait la preuve au lieu de l'adapter.
+    await prisma.companyLegalIdentity.create({
+      data: {
+        id: randomUUID(),
+        organizationId: orgId,
+        clientAccountId: clientAccount.id,
+        legalName: input.tradeName,
+        tradeName: input.tradeName,
+        siren: input.siret.slice(0, 9),
+        siretPrincipal: input.siret,
+        addressLine: "12 rue de la République",
+        postalCode: "75001",
+        city: "Paris",
+        phone: "0123456789",
+        generalEmail: "contact@example.test",
+        createdBy: contributorUserId,
+      },
+    });
 
     const ensureDc1Res = await fetch(`${baseUrl}/api/v1/tenders/${tender.id}/administrative-dc1`, { method: "POST", headers: jsonHeaders(tokenOwner) });
     expect(ensureDc1Res.status).toBe(200);
@@ -145,7 +222,7 @@ describe("Administrative Dossier — V2 Sprint 11 DC1 real official form fill (r
     const updateDc1Res = await fetch(`${baseUrl}/api/v1/administrative-dc1-declarations/${dc1.id}`, { method: "PATCH", headers: jsonHeaders(tokenOwner), body: JSON.stringify({ exclusionAttestation: true }) });
     expect(updateDc1Res.status).toBe(200);
 
-    return { clientAccountId: clientAccount.id, tenderId: tender.id };
+    return { clientAccountId: clientAccount.id, tenderId: tender.id, candidateSiret, candidateCompanyId: candidateCompany.id };
   }
 
   beforeAll(async () => {
@@ -197,6 +274,8 @@ describe("Administrative Dossier — V2 Sprint 11 DC1 real official form fill (r
     await prisma.documentVersion.deleteMany({ where: { organizationId: orgId } });
     await prisma.document.deleteMany({ where: { organizationId: orgId } });
     await prisma.tender.deleteMany({ where: { organizationId: orgId } });
+    // AVANT `candidateCompany` : le helper cree desormais aussi un representant candidate.
+    await prisma.companyRepresentative.deleteMany({ where: { organizationId: orgId } });
     await prisma.candidateEstablishment.deleteMany({ where: { organizationId: orgId } });
     await prisma.candidateCompany.deleteMany({ where: { organizationId: orgId } });
     await prisma.clientAssignment.deleteMany({ where: { organizationId: orgId } });
@@ -214,7 +293,7 @@ describe("Administrative Dossier — V2 Sprint 11 DC1 real official form fill (r
   }, 60000);
 
   it("readiness reflects real business data honestly — no invented values, no side effect", async () => {
-    const { tenderId } = await createClientTenderAndCandidate({ tradeName: "Établissements Béranger & Cie", siret: "35600000000048" });
+    const { tenderId, candidateSiret } = await createClientTenderAndCandidate({ tradeName: "Établissements Béranger & Cie", siret: "35600000000048" });
 
     const countBefore = await prisma.generatedDocument.count({ where: { organizationId: orgId } });
 
@@ -230,7 +309,8 @@ describe("Administrative Dossier — V2 Sprint 11 DC1 real official form fill (r
 
     // Champs INDIVIDUAL réellement disponibles depuis de vraies données métier.
     expect(readiness.fields.find((f) => f.fieldKey === "candidate.tradeName")).toMatchObject({ status: "AVAILABLE", value: "Établissements Béranger & Cie" });
-    expect(readiness.fields.find((f) => f.fieldKey === "candidate.siret")).toMatchObject({ status: "AVAILABLE", value: "35600000000048" });
+    // Le SIRET vient desormais de l'ETABLISSEMENT PRINCIPAL du candidat, jamais du profil client.
+    expect(readiness.fields.find((f) => f.fieldKey === "candidate.siret")).toMatchObject({ status: "AVAILABLE", value: candidateSiret });
     expect(readiness.fields.find((f) => f.fieldKey === "dc1.exclusionAttestation")).toMatchObject({ status: "AVAILABLE", value: true });
     expect(readiness.fields.find((f) => f.fieldKey === "dc1.candidatSeul")).toMatchObject({ status: "AVAILABLE", value: true });
 
@@ -277,7 +357,7 @@ describe("Administrative Dossier — V2 Sprint 11 DC1 real official form fill (r
   });
 
   it("BLOCKING (mission §58/§39 history) — generating twice for the SAME tender appends revision #2 to the SAME lineage, never creates a second independent lineage, and R1's snapshot stays frozen", async () => {
-    const { tenderId, clientAccountId } = await createClientTenderAndCandidate({ tradeName: "Couverture Marchand SAS", siret: "35600000000048" });
+    const { tenderId, candidateCompanyId } = await createClientTenderAndCandidate({ tradeName: "Couverture Marchand SAS", siret: "35600000000048" });
 
     const firstRes = await fetch(`${baseUrl}/api/v1/tenders/${tenderId}/official-forms/dc1/generate`, { method: "POST", headers: jsonHeaders(tokenOwner) });
     expect(firstRes.status).toBe(201);
@@ -285,10 +365,15 @@ describe("Administrative Dossier — V2 Sprint 11 DC1 real official form fill (r
     expect(first.revisions.map((r) => r.revisionNumber)).toEqual([1]);
 
     // La fiche source change ENTRE les deux générations — R1 doit rester figé sur l'ancien nom.
-    const updateRes = await fetch(`${baseUrl}/api/v1/clients/${clientAccountId}/legal-identity`, {
+    //
+    // Checkpoint TENDEROS-2.1-CCV2-G.2 — la SOURCE mutée est désormais l'ENTREPRISE CANDIDATE, via
+    // sa route native (CCV2-F.2), et non plus le profil du client commercial. L'intention du test
+    // est rigoureusement conservée : une révision figée, une révision à jour. Ce qui change, c'est
+    // l'entité dont l'identité fait autorité pour un formulaire officiel.
+    const updateRes = await fetch(`${baseUrl}/api/v1/candidate-companies/${candidateCompanyId}`, {
       method: "PATCH",
       headers: jsonHeaders(tokenOwner),
-      body: JSON.stringify({ tradeName: "Couverture Marchand SAS (renommee)", confirmDuplicate: true }),
+      body: JSON.stringify({ legalName: "Couverture Marchand SAS (renommee)" }),
     });
     expect(updateRes.status).toBe(200);
 

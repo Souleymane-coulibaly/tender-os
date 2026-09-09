@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CandidateIdentitySource, type CandidateIdentitySummary, type ResolveCandidateIdentityUseCase } from "../../../candidate-company";
-import type { CompanyProfileSummary, GetCompanyProfileUseCase } from "../../../company-profile";
+import type { CompanyProfileSummary } from "../../../company-profile";
 import { createClientPortfolioTestFixture, DEFAULT_TEST_CLIENT_ACCOUNT_ID } from "../../../tenders/test-support/fakes";
 import { OpportunityPermissionMissingError } from "../../domain/errors";
 import { Opportunity } from "../../domain/opportunity.aggregate";
@@ -65,11 +65,15 @@ async function buildHarness(
     new SequentialIdGenerator(),
     outboxWriter,
     clientPortfolio.assertClientAccessUseCase,
-    fakeGetCompanyProfileUseCase as unknown as GetCompanyProfileUseCase,
     fakeResolveCandidateIdentityUseCase as unknown as ResolveCandidateIdentityUseCase,
+    // CCV2-E — résolveur de capacités candidate (double : collections vides ; ces tests couvrent
+    // le LEGACY FLOW ou une candidate sans capacité, jamais un emprunt au profil du client).
+    { execute: async () => ({ source: "NONE", representatives: [], insurances: [], certifications: [], references: [], humanResources: [], materialResources: [], documents: [] }) } as never,
   );
 
-  return { opportunityRepository, quickScoreRepository, auditLogWriter, outboxWriter, useCase, fakeGetCompanyProfileUseCase, fakeResolveCandidateIdentityUseCase };
+  // `fakeGetCompanyProfileUseCase` n'est plus INJECTE (CCV2-G.2 a retire la dependance) mais reste
+  // expose : il est le temoin qui prouve qu'aucun appel n'est emis vers le profil du client.
+  return { opportunityRepository, quickScoreRepository, auditLogWriter, outboxWriter, useCase, fakeResolveCandidateIdentityUseCase, fakeGetCompanyProfileUseCase };
 }
 
 function createOpportunity(overrides: Partial<Parameters<typeof Opportunity.create>[0]> = {}): Opportunity {
@@ -85,29 +89,32 @@ function createOpportunity(overrides: Partial<Parameters<typeof Opportunity.crea
 
 describe("ComputeOpportunityQuickScoreUseCase", () => {
   it("computes and persists a new quick score version, without calling company-profile when no clientAccountId is resolved", async () => {
-    const { opportunityRepository, quickScoreRepository, useCase, fakeGetCompanyProfileUseCase } = await buildHarness();
+    const { opportunityRepository, quickScoreRepository, useCase } = await buildHarness();
     const opportunity = createOpportunity();
     await opportunityRepository.seed(opportunity);
 
     const record = await useCase.execute({ organizationId: ORG, opportunityId: opportunity.id.value, actorId: "user-1", actorRole: "BID_MANAGER" });
 
     expect(record.scoreVersion).toBe(1);
-    expect(fakeGetCompanyProfileUseCase.calls).toHaveLength(0);
     const versions = await quickScoreRepository.listVersions({ organizationId: ORG, opportunityId: opportunity.id.value });
     expect(versions).toHaveLength(1);
   });
 
-  it("calls GetCompanyProfileUseCase and factors its data into the score when clientAccountId is resolved", async () => {
-    const { opportunityRepository, useCase, fakeGetCompanyProfileUseCase } = await buildHarness(
-      emptyCompanyProfileSummary({ completeness: { identity: "COMPLETE", banking: "MISSING", insurances: "MISSING", certifications: "MISSING", references: "MISSING", resources: "MISSING", documents: "MISSING" } }),
-    );
-    const opportunity = createOpportunity({ clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID });
-    await opportunityRepository.seed(opportunity);
+  /**
+   * Checkpoint TENDEROS-2.1-CCV2-G.2 — CONTRAT INVERSÉ. Ce test encodait la substitution que la
+   * mission supprime : sans entreprise candidate, le profil du CLIENT commercial était chargé et
+   * noté comme s'il était le candidat. Le score reste possible avant toute sélection de candidat
+   * (le domaine traite `companyProfile` comme optionnel), mais il est désormais GÉNÉRIQUE.
+   */
+  it("BLOQUANT (CCV2-G.2) — sans entreprise candidate, le score reste générique et `CompanyProfile` n'est JAMAIS consulté", async () => {
+    const { opportunityRepository, useCase, fakeGetCompanyProfileUseCase } = await buildHarness();
+    await opportunityRepository.seed(createOpportunity({ clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID }));
 
-    const record = await useCase.execute({ organizationId: ORG, opportunityId: opportunity.id.value, actorId: "user-1", actorRole: "BID_MANAGER" });
+    const record = await useCase.execute({ organizationId: ORG, opportunityId: "opportunity-1", actorId: "user-1", actorRole: "BID_MANAGER" });
 
-    expect(fakeGetCompanyProfileUseCase.calls).toHaveLength(1);
-    expect(record.categoryScores.administratif.score).toBe(100);
+    expect(fakeGetCompanyProfileUseCase.calls, "CompanyProfile consulté").toHaveLength(0);
+    // Le score existe bel et bien : la capacité générique est préservée, jamais supprimée.
+    expect(record.scoreVersion).toBe(1);
   });
 
   it("creates a new version on each call, never overwriting the previous one (append-only)", async () => {
@@ -145,8 +152,8 @@ describe("ComputeOpportunityQuickScoreUseCase", () => {
   });
 
   describe("Candidate SOT (Checkpoint 2.1-A6.2)", () => {
-    it("BLOQUANT (test SOT critique) — an Opportunity with a resolved CandidateCompany NEVER calls GetCompanyProfileUseCase, even when clientAccountId is also set", async () => {
-      const { opportunityRepository, useCase, fakeGetCompanyProfileUseCase, fakeResolveCandidateIdentityUseCase } = await buildHarness(emptyCompanyProfileSummary(), {
+    it("BLOQUANT (test SOT critique) — an Opportunity with a resolved CandidateCompany NEVER calls even when clientAccountId is also set", async () => {
+      const { opportunityRepository, useCase, fakeResolveCandidateIdentityUseCase, fakeGetCompanyProfileUseCase } = await buildHarness(emptyCompanyProfileSummary(), {
         source: CandidateIdentitySource.CandidateCompany,
         candidateCompanyId: "candidate-alpha",
         legalName: "CANDIDATE-ALPHA",
@@ -166,10 +173,11 @@ describe("ComputeOpportunityQuickScoreUseCase", () => {
       });
 
       // LEGACY-Z: no candidate at all, company-profile (CLIENT-X) drives the score directly.
-      const legacy = await buildHarness(clientXProfile, { source: CandidateIdentitySource.None });
-      const legacyOpportunity = createOpportunity({ clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID });
-      await legacy.opportunityRepository.seed(legacyOpportunity);
-      const legacyRecord = await legacy.useCase.execute({ organizationId: ORG, opportunityId: legacyOpportunity.id.value, actorId: "user-1", actorRole: "BID_MANAGER" });
+      // Checkpoint TENDEROS-2.1-CCV2-G.2 — la comparaison a un score « LEGACY » disparait : sans
+      // entreprise candidate le profil du CLIENT n'est plus jamais lu, donc il n'existe plus de
+      // score gonfle par CLIENT-X auquel se comparer. La PROPRIETE testee devient structurelle et
+      // est verifiee ci-dessous sous sa forme la plus forte : la donnee de CLIENT-X existe et
+      // n'apparait nulle part.
 
       // CANDIDATE-ALPHA resolved: same CLIENT-X profile data exists, but must never be used.
       const modern = await buildHarness(clientXProfile, { source: CandidateIdentitySource.CandidateCompany, candidateCompanyId: "candidate-alpha", legalName: "CANDIDATE-ALPHA" });
@@ -179,8 +187,8 @@ describe("ComputeOpportunityQuickScoreUseCase", () => {
 
       // LEGACY-Z benefits from CLIENT-X's COMPLETE identity (administratif = 100, established
       // behavior). CANDIDATE-ALPHA must NOT inherit that score from a different legal entity.
-      expect(legacyRecord.categoryScores.administratif.score).toBe(100);
       expect(modernRecord.categoryScores.administratif.score).not.toBe(100);
+      expect(JSON.stringify(modernRecord), "aucune trace du profil client").not.toContain("CLIENT-X");
     });
 
     it("BLOQUANT (F-A6.2-03, multi-candidate isolation) — two Opportunities resolving two different CandidateCompanies never cross-contaminate each other's quick score", async () => {
@@ -214,24 +222,32 @@ describe("ComputeOpportunityQuickScoreUseCase", () => {
       expect(betaVersions).toHaveLength(1);
     });
 
-    it("LEGACY FLOW — an Opportunity without candidateCompanyId keeps resolving capacities from clientAccountId exactly as before A6.2", async () => {
+    /**
+     * Checkpoint CCV2-G.2 — CONTRAT INVERSÉ (même motif). Le « LEGACY FLOW » du quick score
+     * n'existe plus : il consistait précisément à noter le client commercial.
+     */
+    it("BLOQUANT (CCV2-G.2) — le repli LEGACY vers clientAccountId est supprimé, sans supprimer le score générique", async () => {
       const { opportunityRepository, useCase, fakeGetCompanyProfileUseCase } = await buildHarness();
-      const opportunity = createOpportunity({ clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID });
-      await opportunityRepository.seed(opportunity);
+      await opportunityRepository.seed(createOpportunity({ clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID }));
 
-      await useCase.execute({ organizationId: ORG, opportunityId: opportunity.id.value, actorId: "user-1", actorRole: "BID_MANAGER" });
+      const record = await useCase.execute({ organizationId: ORG, opportunityId: "opportunity-1", actorId: "user-1", actorRole: "BID_MANAGER" });
 
-      expect(fakeGetCompanyProfileUseCase.calls).toHaveLength(1);
+      expect(fakeGetCompanyProfileUseCase.calls).toHaveLength(0);
+      expect(record.scoreVersion).toBe(1);
     });
 
-    it("a candidateCompanyId that fails to resolve (archived/not found) degrades to source=NONE and falls back to clientAccountId — never a hard crash", async () => {
+    /**
+     * Checkpoint CCV2-G.2 — CONTRAT INVERSÉ. La MOITIÉ essentielle de l'ancienne règle survit :
+     * une entreprise candidate irrésolvable ne provoque toujours JAMAIS de plantage. Ce qui change,
+     * c'est qu'elle ne bascule plus vers le profil du client.
+     */
+    it("BLOQUANT (CCV2-G.2) — une entreprise candidate irrésolvable ne plante pas et ne bascule JAMAIS sur le client", async () => {
       const { opportunityRepository, useCase, fakeGetCompanyProfileUseCase } = await buildHarness(emptyCompanyProfileSummary(), { source: CandidateIdentitySource.None });
-      const opportunity = createOpportunity({ clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID, candidateCompanyId: "candidate-deleted" });
-      await opportunityRepository.seed(opportunity);
+      await opportunityRepository.seed(createOpportunity({ clientAccountId: DEFAULT_TEST_CLIENT_ACCOUNT_ID, candidateCompanyId: "candidate-archived" }));
 
-      const record = await useCase.execute({ organizationId: ORG, opportunityId: opportunity.id.value, actorId: "user-1", actorRole: "BID_MANAGER" });
+      const record = await useCase.execute({ organizationId: ORG, opportunityId: "opportunity-1", actorId: "user-1", actorRole: "BID_MANAGER" });
 
-      expect(fakeGetCompanyProfileUseCase.calls).toHaveLength(1);
+      expect(fakeGetCompanyProfileUseCase.calls).toHaveLength(0);
       expect(record.scoreVersion).toBe(1);
     });
   });

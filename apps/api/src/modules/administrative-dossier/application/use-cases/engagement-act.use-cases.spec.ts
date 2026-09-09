@@ -37,6 +37,12 @@ function inMemoryRepository(seed: readonly EngagementAct[] = []): EngagementActR
   };
 }
 
+/** Checkpoint CCV2-E.2 — Tender courant, source du candidat servant à l'instantané et au calcul
+ *  d'applicabilité. `candidateCompanyId` paramétrable pour prouver le contraste A/B. */
+function fakeGetTenderUseCase(candidateCompanyId?: string) {
+  return { execute: async () => ({ id: TENDER_ID, candidateCompanyId }) } as never;
+}
+
 describe("EnsureEngagementActUseCase — mission §14 'un Acte d'engagement par Tender'", () => {
   it("creates an engagement act with no frozen pricing yet", async () => {
     const useCase = new EnsureEngagementActUseCase(fakeAccessService(), inMemoryRepository(), fakeClock(), fakeIdGenerator(), fakeEntitlementService());
@@ -47,7 +53,7 @@ describe("EnsureEngagementActUseCase — mission §14 'un Acte d'engagement par 
 
 describe("UpdateEngagementActUseCase", () => {
   it("throws EngagementActNotFoundError for an unknown act", async () => {
-    const useCase = new UpdateEngagementActUseCase(fakeAccessService(), inMemoryRepository(), fakeClock());
+    const useCase = new UpdateEngagementActUseCase(fakeAccessService(), inMemoryRepository(), fakeClock(), fakeGetTenderUseCase());
     await expect(useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", engagementActId: "missing" })).rejects.toBeInstanceOf(EngagementActNotFoundError);
   });
 });
@@ -105,8 +111,55 @@ describe("UnfreezeEngagementActPricingUseCase", () => {
 
 describe("GetEngagementActUseCase", () => {
   it("returns null when no act exists for the tender", async () => {
-    const useCase = new GetEngagementActUseCase(fakeAccessService(), inMemoryRepository());
+    const useCase = new GetEngagementActUseCase(fakeAccessService(), inMemoryRepository(), fakeGetTenderUseCase());
     const result = await useCase.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
     expect(result).toBeNull();
+  });
+});
+
+describe("Checkpoint CCV2-E.2 — Acte d'engagement : instantané immuable + applicabilité calculée", () => {
+  const CANDIDATE_A = "candidate-a";
+  const CANDIDATE_B = "candidate-b";
+
+  it("pose l'instantané du candidat A, refuse de le réattribuer à B, et signale la péremption sans jamais modifier la révision", async () => {
+    const repository = inMemoryRepository();
+    const act = EngagementAct.create({ id: "act-1", organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, createdBy: "user-1", occurredAt: new Date("2026-01-01T00:00:00.000Z") });
+    await repository.create(act);
+
+    // --- Renseigné alors que le Tender porte le candidat A : l'instantané devient A.
+    const updateForA = new UpdateEngagementActUseCase(fakeAccessService(), repository, fakeClock(), fakeGetTenderUseCase(CANDIDATE_A));
+    const forA = await updateForA.execute({
+      organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", engagementActId: "act-1",
+      signatoryName: "Signataire A", signatoryCapacity: "Gérant",
+    });
+    expect(forA.candidateCompanyId).toBe(CANDIDATE_A);
+    expect(forA.candidateStale).toBe(false);
+
+    // --- Le Tender bascule sur B. La lecture signale la péremption…
+    const readAfterSwitch = new GetEngagementActUseCase(fakeAccessService(), repository, fakeGetTenderUseCase(CANDIDATE_B));
+    const stale = await readAfterSwitch.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
+    expect(stale?.candidateStale).toBe(true);
+    // …sans jamais réécrire l'instantané : l'acte reste un document de A.
+    expect(stale?.candidateCompanyId).toBe(CANDIDATE_A);
+    expect(stale?.signatoryName).toBe("Signataire A");
+
+    // --- Une mise à jour sous le candidat B ne réattribue PAS l'acte : HISTORICAL_REVISION_MUTATION
+    //     est interdit. L'instantané reste A, et l'acte reste signalé périmé.
+    const updateUnderB = new UpdateEngagementActUseCase(fakeAccessService(), repository, fakeClock(), fakeGetTenderUseCase(CANDIDATE_B));
+    const stillA = await updateUnderB.execute({
+      organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", engagementActId: "act-1", signatoryCapacity: "Directeur",
+    });
+    expect(stillA.candidateCompanyId).toBe(CANDIDATE_A);
+    expect(stillA.candidateStale).toBe(true);
+  });
+
+  it("un acte ANTÉRIEUR au checkpoint (sans instantané) n'est jamais déclaré périmé rétroactivement", async () => {
+    const repository = inMemoryRepository();
+    await repository.create(EngagementAct.create({ id: "act-legacy", organizationId: ORGANIZATION_ID, tenderId: TENDER_ID, createdBy: "user-1", occurredAt: new Date("2025-01-01T00:00:00.000Z") }));
+
+    const read = new GetEngagementActUseCase(fakeAccessService(), repository, fakeGetTenderUseCase(CANDIDATE_B));
+    const legacy = await read.execute({ organizationId: ORGANIZATION_ID, actorId: "user-1", actorRole: "OWNER", tenderId: TENDER_ID });
+    expect(legacy?.candidateCompanyId).toBeUndefined();
+    expect(legacy?.candidateStale).toBe(false);
   });
 });

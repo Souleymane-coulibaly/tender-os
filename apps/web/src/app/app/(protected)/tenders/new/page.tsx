@@ -3,6 +3,7 @@ import Link from "next/link";
 import { appApiFetch } from "../../../../../lib/app-api-client";
 import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../../lib/client-portfolio-types";
 import type { Buyer } from "../../../../../lib/tenders-types";
+import type { CandidateCompanyPage } from "../../../../../lib/candidate-company-types";
 import { ApiErrorState } from "../../api-error-state";
 import { CreateTenderForm } from "./create-tender-form";
 
@@ -13,10 +14,15 @@ export default async function NewTenderPage() {
   // création : le paramètre par défaut `includeArchived=false` de /clients l'exclut déjà.
   let clients: ClientPortfolioPage<ClientAccountSummary>;
   let buyers: Buyer[];
+  // Checkpoint CCV2-G.1 — la liste est bornée à l'organisation courante par l'API elle-même
+  // (`X-Organization-Id`), jamais filtrée côté interface. Les entreprises archivées sont exclues
+  // par le défaut de la route (`includeArchived` absent).
+  let candidateCompanies: CandidateCompanyPage;
   try {
-    [clients, buyers] = await Promise.all([
+    [clients, buyers, candidateCompanies] = await Promise.all([
       appApiFetch<ClientPortfolioPage<ClientAccountSummary>>("/api/v1/clients?limit=100&status=ACTIVE"),
       appApiFetch<Buyer[]>("/api/v1/buyers"),
+      appApiFetch<CandidateCompanyPage>("/api/v1/candidate-companies?limit=100"),
     ]);
   } catch (error) {
     return <ApiErrorState error={error} />;
@@ -37,10 +43,29 @@ export default async function NewTenderPage() {
     );
   }
 
+  // Checkpoint CCV2-G.1 — sans entreprise candidate, la création est structurellement impossible :
+  // on le dit AVANT le formulaire plutôt que de laisser l'utilisateur le remplir pour échouer au
+  // dernier champ. Même discipline que le garde-fou « aucun client accessible » ci-dessus.
+  if (candidateCompanies.items.length === 0) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h1 className="text-xl font-semibold">Nouvel appel d&apos;offres</h1>
+        <p className="text-sm text-neutral-600">
+          Aucune entreprise candidate. Un appel d&apos;offres doit désormais désigner explicitement
+          l&apos;entité juridique qui y répond —{" "}
+          <Link href="/app/candidate-companies/new" className="text-neutral-900 underline">
+            créez d&apos;abord une entreprise candidate
+          </Link>
+          .
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">Nouvel appel d&apos;offres</h1>
-      <CreateTenderForm clients={clients.items} buyers={buyers} />
+      <CreateTenderForm clients={clients.items} buyers={buyers} candidateCompanies={candidateCompanies.items} />
     </div>
   );
 }

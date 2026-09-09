@@ -38,7 +38,7 @@ describe("ResolveCandidateIdentityUseCase (Checkpoint 2.1-A4 — Candidate Conte
   it("NEW FLOW — resolves identity (name/siren/legalForm) from CandidateCompany when set", async () => {
     const candidate = await createCandidateCompanyUseCase.execute({
       organizationId: ORG_A,
-      actorId: ACTOR,
+      actorId: ACTOR, actorRole: "OWNER",
       name: "Menuiserie Corentin SARL",
       siren: "356000000",
       legalForm: "SARL",
@@ -53,10 +53,10 @@ describe("ResolveCandidateIdentityUseCase (Checkpoint 2.1-A4 — Candidate Conte
   });
 
   it("resolves the PRINCIPAL establishment only, never a secondary one substituted arbitrarily", async () => {
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, name: "Alpha" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, actorRole: "OWNER", name: "Alpha" });
     await addCandidateEstablishmentUseCase.execute({
       organizationId: ORG_A,
-      actorId: ACTOR,
+      actorId: ACTOR, actorRole: "OWNER",
       candidateCompanyId: candidate.id,
       siret: "39395385100010",
       isPrincipal: false,
@@ -64,7 +64,7 @@ describe("ResolveCandidateIdentityUseCase (Checkpoint 2.1-A4 — Candidate Conte
     });
     await addCandidateEstablishmentUseCase.execute({
       organizationId: ORG_A,
-      actorId: ACTOR,
+      actorId: ACTOR, actorRole: "OWNER",
       candidateCompanyId: candidate.id,
       siret: "35600000000048",
       isPrincipal: true,
@@ -78,10 +78,10 @@ describe("ResolveCandidateIdentityUseCase (Checkpoint 2.1-A4 — Candidate Conte
   });
 
   it("leaves principalEstablishment undefined when no establishment is a declared principal (never a guessed substitute)", async () => {
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, name: "Alpha" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, actorRole: "OWNER", name: "Alpha" });
     await addCandidateEstablishmentUseCase.execute({
       organizationId: ORG_A,
-      actorId: ACTOR,
+      actorId: ACTOR, actorRole: "OWNER",
       candidateCompanyId: candidate.id,
       siret: "35600000000048",
       isPrincipal: false,
@@ -93,7 +93,7 @@ describe("ResolveCandidateIdentityUseCase (Checkpoint 2.1-A4 — Candidate Conte
   });
 
   it("multi-tenant: never resolves a CandidateCompany belonging to a different organization", async () => {
-    const candidateOrgA = await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, name: "Alpha" });
+    const candidateOrgA = await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, actorRole: "OWNER", name: "Alpha" });
 
     const result = await useCase.execute({ organizationId: ORG_B, candidateCompanyId: candidateOrgA.id });
 
@@ -101,8 +101,8 @@ describe("ResolveCandidateIdentityUseCase (Checkpoint 2.1-A4 — Candidate Conte
   });
 
   it("multi-candidate: two CandidateCompany in the same organization resolve independently, never mixed", async () => {
-    const alpha = await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, name: "Alpha", siren: "356000000" });
-    const beta = await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, name: "Beta" });
+    const alpha = await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, actorRole: "OWNER", name: "Alpha", siren: "356000000" });
+    const beta = await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, actorRole: "OWNER", name: "Beta" });
 
     const resultAlpha = await useCase.execute({ organizationId: ORG_A, candidateCompanyId: alpha.id });
     const resultBeta = await useCase.execute({ organizationId: ORG_A, candidateCompanyId: beta.id });
@@ -114,7 +114,7 @@ describe("ResolveCandidateIdentityUseCase (Checkpoint 2.1-A4 — Candidate Conte
   });
 
   it("falls back displayName to the raw name when legalName is not set", async () => {
-    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, name: "Alpha Travaux" });
+    const candidate = await createCandidateCompanyUseCase.execute({ organizationId: ORG_A, actorId: ACTOR, actorRole: "OWNER", name: "Alpha Travaux" });
     const result = await useCase.execute({ organizationId: ORG_A, candidateCompanyId: candidate.id });
     expect(result.displayName).toBe("Alpha Travaux");
   });

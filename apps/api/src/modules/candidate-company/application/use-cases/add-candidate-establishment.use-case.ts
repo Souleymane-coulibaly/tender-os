@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 // Import DIRECT du fichier source, jamais le barrel — même correctif de cycle require() que
 // `create-candidate-company.use-case.ts` (voir son commentaire pour le détail complet).
 import { isValidSiret } from "../../../company-profile/domain/french-company-identifiers";
+import { assertHasCandidatePermission, CandidatePermission } from "../../domain/candidate-permission";
 import type { Clock } from "../../../../shared-kernel/clock";
 import { CLOCK } from "../../../../shared-kernel/clock";
 import type { IdGenerator } from "../../../../shared-kernel/id-generator";
@@ -20,6 +21,8 @@ import { CANDIDATE_COMPANY_REPOSITORY, type CandidateCompanyRepository } from ".
 export type AddCandidateEstablishmentCommand = Readonly<{
   organizationId: string;
   actorId: string;
+  /** Rôle d'ORGANISATION de l'acteur (`MembershipContext.role`), jamais un rôle client. */
+  actorRole: string;
   candidateCompanyId: string;
   siret: string;
   label?: string | undefined;
@@ -50,6 +53,7 @@ export class AddCandidateEstablishmentUseCase {
   ) {}
 
   async execute(command: AddCandidateEstablishmentCommand): Promise<CandidateEstablishmentSummary> {
+    assertHasCandidatePermission(command.actorRole, CandidatePermission.ManageIdentity);
     if (!isValidSiret(command.siret)) {
       throw new InvalidSiretError();
     }

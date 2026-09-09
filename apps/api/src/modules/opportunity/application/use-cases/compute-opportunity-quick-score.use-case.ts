@@ -5,12 +5,12 @@ import type { IdGenerator } from "../../../../shared-kernel/id-generator";
 import { ID_GENERATOR } from "../../../../shared-kernel/id-generator";
 import { CandidateIdentitySource, ResolveCandidateIdentityUseCase } from "../../../candidate-company";
 import { AssertClientAccessUseCase, ClientPermission } from "../../../client-portfolio";
-import { type CompanyProfileSummary, GetCompanyProfileUseCase } from "../../../company-profile";
+import { ResolveCandidateCapabilitiesUseCase } from "../../../company-profile";
 import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import { OpportunityPermission } from "../../domain/opportunity-permission";
 import { assertOpportunityFound } from "../../domain/opportunity.aggregate";
 import { computeOpportunityQuickScore, type QuickScoreCompanyProfileInput } from "../../domain/scoring/compute-opportunity-quick-score";
-import { mapCompanyProfileToQuickScoreInput } from "../mappers/company-profile-to-quick-score-input.mapper";
+import { mapCandidateCapabilitiesToQuickScoreInput } from "../mappers/candidate-capabilities-to-quick-score-input.mapper";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { OPPORTUNITY_REPOSITORY, type OpportunityRepository } from "../ports/opportunity.repository";
 import { OPPORTUNITY_QUICK_SCORE_REPOSITORY, type OpportunityQuickScoreRepository, type OpportunityQuickScoreRecord } from "../ports/opportunity-quick-score.repository";
@@ -56,8 +56,8 @@ export class ComputeOpportunityQuickScoreUseCase {
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
     private readonly assertClientAccessUseCase: AssertClientAccessUseCase,
-    private readonly getCompanyProfileUseCase: GetCompanyProfileUseCase,
     private readonly resolveCandidateIdentityUseCase: ResolveCandidateIdentityUseCase,
+    private readonly resolveCandidateCapabilitiesUseCase: ResolveCandidateCapabilitiesUseCase,
   ) {}
 
   async execute(command: ComputeOpportunityQuickScoreCommand): Promise<OpportunityQuickScoreRecord> {
@@ -79,16 +79,27 @@ export class ComputeOpportunityQuickScoreUseCase {
     const candidateIdentity = await this.resolveCandidateIdentityUseCase.execute({ organizationId: command.organizationId, candidateCompanyId: opportunity.candidateCompanyId });
     const usesCandidateCompany = candidateIdentity.source === CandidateIdentitySource.CandidateCompany;
 
+    // Checkpoint TENDEROS-2.1-CCV2-G.2 — CONTRAT EXPLICITE (mission §7).
+    //
+    // Une Opportunity n'est PAS encore un Tender : le produit soutient légitimement un score AVANT
+    // qu'une entreprise candidate ait été choisie, et le domaine le prévoit déjà —
+    // `computeOpportunityQuickScore` traite `companyProfile` comme OPTIONNEL et enregistre les
+    // données manquantes (`missingData`) au lieu d'inventer une note.
+    //
+    // Ce qui est SUPPRIMÉ, c'est la substitution : en l'absence d'entreprise candidate, le profil du
+    // CLIENT commercial était chargé et noté comme s'il était le candidat. Désormais le score reste
+    // simplement GÉNÉRIQUE (critères d'opportunité seuls), et `CompanyProfile` n'est jamais consulté.
     let companyProfile: QuickScoreCompanyProfileInput | undefined;
-    let companyProfileSummary: CompanyProfileSummary | undefined;
-    if (!usesCandidateCompany && opportunity.clientAccountId !== undefined) {
-      companyProfileSummary = await this.getCompanyProfileUseCase.execute({
+
+    // NEW FLOW (CCV2-E, fermeture de DEFERRED-BE-02) — les capacités viennent de la SOT
+    // `CandidateCompany`. Le profil du CLIENT n'est jamais chargé ici : c'est une autre entité
+    // juridique, et l'utiliser reviendrait à noter la mauvaise entreprise.
+    if (usesCandidateCompany) {
+      const capabilities = await this.resolveCandidateCapabilitiesUseCase.execute({
         organizationId: command.organizationId,
-        clientAccountId: opportunity.clientAccountId,
-        actorId: command.actorId,
-        actorRole: command.actorRole,
+        candidateCompanyId: opportunity.candidateCompanyId,
       });
-      companyProfile = mapCompanyProfileToQuickScoreInput(companyProfileSummary, opportunity.sector);
+      companyProfile = mapCandidateCapabilitiesToQuickScoreInput(candidateIdentity, capabilities, opportunity.sector);
     }
 
     const result = computeOpportunityQuickScore({
@@ -109,7 +120,7 @@ export class ComputeOpportunityQuickScoreUseCase {
       // Checkpoint 2.1-A6.2 (correctif audit — P2 "fraîcheur candidate") — `candidateCompanyId`
       // effectivement utilisé pour CE calcul, jamais re-résolu si l'Opportunity change ensuite
       // (voir `withQuickScoreCandidateStaleness`, calculé à la lecture).
-      dataSnapshot: { companyProfile: companyProfileSummary ?? null, candidateCompanyId: usesCandidateCompany ? opportunity.candidateCompanyId : null },
+      dataSnapshot: { companyProfile: null, candidateCompanyId: usesCandidateCompany ? opportunity.candidateCompanyId : null },
       createdAt: now,
       result,
     });

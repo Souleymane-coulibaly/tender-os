@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { assertClientCommercialDocumentCategory } from "../../domain/client-commercial-document-category";
 import { Inject, Injectable } from "@nestjs/common";
 import { ClientPermission } from "../../../client-portfolio";
 import { GetDocumentUseCase } from "../../../documents";
@@ -47,6 +48,18 @@ export class AttachDocumentToClientAccountUseCase {
 
   async execute(command: AttachDocumentToClientAccountCommand): Promise<DocumentClientAccountAssociationRecord> {
     await this.accessService.assertClientAccess({ ...command, permission: ClientPermission.ManageCompanyProfile });
+
+    // Checkpoint TENDEROS-2.1-CCV2-I.1 — cette surface reste OUVERTE : un client commercial a de
+    // vrais documents (contrat, brief, compte rendu). Ce qu'elle ne peut plus accepter, c'est une
+    // piece de CANDIDATURE : elle appartient a `CandidateCompany` depuis CCV2-D, et l'accepter ici
+    // rouvrirait une seconde source de verite inscriptible.
+    //
+    // Checkpoint TENDEROS-2.1-CCV2-I.3 — deplace APRES la verification d'acces. Evalue avant, ce
+    // controle repondait 422 a un acteur qui n'avait aucun droit sur ce client : par la difference
+    // entre 422 et 404, il apprenait que sa categorie AURAIT ete acceptee, et le produit repondait
+    // sur le fond a quelqu'un qu'il devait ignorer. L'autorisation passe donc toujours en premier —
+    // meme regle que pour les gardes de retrait d'ecriture posees en I.1.
+    assertClientCommercialDocumentCategory(command.category);
     const { documentId } = await verifyAttachableDocument(this.getDocumentUseCase, command);
 
     const existing = await this.repository.list({ organizationId: command.organizationId, clientAccountId: command.clientAccountId });
