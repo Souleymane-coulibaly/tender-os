@@ -10,14 +10,12 @@ import {
   toAwardCriterionSummary,
   toBuyerSummary,
   toMilestoneSummary,
-  toRequestedDocumentSummary,
   toRiskSummary,
   toTenderLotSummary,
   toTenderSummary,
   type AwardCriterionSummary,
   type BuyerSummary,
   type MilestoneSummary,
-  type RequestedDocumentSummary,
   type RiskSummary,
   type TenderLotSummary,
   type TenderSummary,
@@ -25,7 +23,7 @@ import {
 import { AWARD_CRITERION_REPOSITORY, type AwardCriterionRepository } from "../ports/award-criterion.repository";
 import { BUYER_REPOSITORY, type BuyerRepository } from "../ports/buyer.repository";
 import { MILESTONE_REPOSITORY, type MilestoneRepository } from "../ports/milestone.repository";
-import { REQUESTED_DOCUMENT_REPOSITORY, type RequestedDocumentRepository } from "../ports/requested-document.repository";
+import { CHECKLIST_ITEM_REPOSITORY, type ChecklistItemRepository } from "../ports/checklist-item.repository";
 import { RISK_REPOSITORY, type RiskRepository } from "../ports/risk.repository";
 import { TENDER_LOT_REPOSITORY, type TenderLotRepository } from "../ports/tender-lot.repository";
 import { TENDER_STATUS_HISTORY_REPOSITORY, type TenderStatusHistoryEntry, type TenderStatusHistoryRepository } from "../ports/tender-status-history.repository";
@@ -39,7 +37,6 @@ export type TenderProfile = Readonly<{
   buyer: BuyerSummary | null;
   lots: readonly TenderLotSummary[];
   criteria: readonly AwardCriterionSummary[];
-  requestedDocuments: readonly RequestedDocumentSummary[];
   milestones: readonly MilestoneSummary[];
   risks: readonly RiskSummary[];
   statusHistory: readonly TenderStatusHistoryEntry[];
@@ -63,7 +60,7 @@ export class GetTenderProfileUseCase {
     @Inject(BUYER_REPOSITORY) private readonly buyerRepository: BuyerRepository,
     @Inject(TENDER_LOT_REPOSITORY) private readonly lotRepository: TenderLotRepository,
     @Inject(AWARD_CRITERION_REPOSITORY) private readonly criterionRepository: AwardCriterionRepository,
-    @Inject(REQUESTED_DOCUMENT_REPOSITORY) private readonly requestedDocumentRepository: RequestedDocumentRepository,
+    @Inject(CHECKLIST_ITEM_REPOSITORY) private readonly checklistItemRepository: ChecklistItemRepository,
     @Inject(MILESTONE_REPOSITORY) private readonly milestoneRepository: MilestoneRepository,
     @Inject(RISK_REPOSITORY) private readonly riskRepository: RiskRepository,
     @Inject(TENDER_STATUS_HISTORY_REPOSITORY) private readonly statusHistoryRepository: TenderStatusHistoryRepository,
@@ -95,11 +92,11 @@ export class GetTenderProfileUseCase {
       actorRole: query.actorRole,
     });
 
-    const [buyer, lots, criteria, requestedDocuments, milestones, risks, statusHistory] = await Promise.all([
+    const [buyer, lots, criteria, checklistItems, milestones, risks, statusHistory] = await Promise.all([
       tender.buyerId ? this.buyerRepository.findById({ organizationId: query.organizationId, buyerId: tender.buyerId }) : Promise.resolve(null),
       this.lotRepository.listByTender({ organizationId: query.organizationId, tenderId: query.tenderId }),
       this.criterionRepository.listByTender({ organizationId: query.organizationId, tenderId: query.tenderId }),
-      this.requestedDocumentRepository.listByTender({ organizationId: query.organizationId, tenderId: query.tenderId }),
+      this.checklistItemRepository.listByTender({ organizationId: query.organizationId, tenderId: query.tenderId }),
       this.milestoneRepository.listByTender({ organizationId: query.organizationId, tenderId: query.tenderId }),
       this.riskRepository.listByTender({ organizationId: query.organizationId, tenderId: query.tenderId }),
       this.statusHistoryRepository.listByTender({ organizationId: query.organizationId, tenderId: query.tenderId }),
@@ -112,7 +109,7 @@ export class GetTenderProfileUseCase {
       candidateArchived: candidate.status === "ARCHIVED",
       lots,
       criteria,
-      requestedDocumentsCount: requestedDocuments.length,
+      checklistItemsCount: checklistItems.length,
       milestones,
       risksCount: risks.length,
       now,
@@ -124,7 +121,6 @@ export class GetTenderProfileUseCase {
       buyer: buyer ? toBuyerSummary(buyer) : null,
       lots: lots.map(toTenderLotSummary),
       criteria: criteria.map(toAwardCriterionSummary),
-      requestedDocuments: requestedDocuments.map(toRequestedDocumentSummary),
       milestones: milestones.map((milestone) => toMilestoneSummary(milestone, now)),
       risks: risks.map(toRiskSummary),
       statusHistory: statusHistory.slice(0, 20),

@@ -267,32 +267,6 @@ export const UpdateAwardCriterionBodySchema = CreateAwardCriterionBodySchema.omi
 }).partial();
 export type UpdateAwardCriterionBody = z.infer<typeof UpdateAwardCriterionBodySchema>;
 
-export const CreateRequestedDocumentBodySchema = z
-  .object({
-    name: z.string().trim().min(1).max(300),
-    category: z.string().trim().min(1).max(100).optional(),
-    documentType: z.string().trim().min(1).max(100).optional(),
-    required: z.boolean().optional(),
-    description: z.string().trim().min(1).optional(),
-    expirationDate: z.string().datetime().optional(),
-    displayOrder: z.number().int().min(0).optional(),
-    isEliminatory: z.boolean().optional(),
-    lotId: z.string().uuid().optional(),
-    requestedFormat: z.string().trim().min(1).max(80).optional(),
-    signatureRequired: z.boolean().optional(),
-    buyerProvidedTemplate: z.boolean().optional(),
-  })
-  .strict();
-export type CreateRequestedDocumentBody = z.infer<typeof CreateRequestedDocumentBodySchema>;
-export const UpdateRequestedDocumentBodySchema = CreateRequestedDocumentBodySchema.extend({
-  documentRef: z.string().uuid().optional(),
-}).partial();
-export type UpdateRequestedDocumentBody = z.infer<typeof UpdateRequestedDocumentBodySchema>;
-export const ChangeRequestedDocumentStatusBodySchema = z
-  .object({ status: z.enum(["PENDING", "PROVIDED", "VALIDATED", "REJECTED"]) })
-  .strict();
-export type ChangeRequestedDocumentStatusBody = z.infer<typeof ChangeRequestedDocumentStatusBodySchema>;
-
 const MILESTONE_TYPES = [
   "SUBMISSION_DEADLINE",
   "QUESTION_DEADLINE",

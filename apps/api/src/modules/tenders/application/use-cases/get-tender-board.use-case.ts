@@ -9,10 +9,6 @@ import { ALERT_REPOSITORY, type AlertRepository } from "../ports/alert.repositor
 import { AWARD_CRITERION_REPOSITORY, type AwardCriterionRepository } from "../ports/award-criterion.repository";
 import { CHECKLIST_ITEM_REPOSITORY, type ChecklistItemRepository } from "../ports/checklist-item.repository";
 import { MILESTONE_REPOSITORY, type MilestoneRepository } from "../ports/milestone.repository";
-import {
-  REQUESTED_DOCUMENT_REPOSITORY,
-  type RequestedDocumentRepository,
-} from "../ports/requested-document.repository";
 import { RISK_REPOSITORY, type RiskRepository } from "../ports/risk.repository";
 import { TENDER_SEARCH_PROVIDER, type TenderSearchProvider } from "../ports/tender-search-provider";
 import { TENDER_REPOSITORY, type TenderRepository } from "../ports/tender.repository";
@@ -49,7 +45,6 @@ export class GetTenderBoardUseCase {
   constructor(
     @Inject(TENDER_REPOSITORY) private readonly tenderRepository: TenderRepository,
     @Inject(CHECKLIST_ITEM_REPOSITORY) private readonly checklistRepository: ChecklistItemRepository,
-    @Inject(REQUESTED_DOCUMENT_REPOSITORY) private readonly documentRepository: RequestedDocumentRepository,
     @Inject(AWARD_CRITERION_REPOSITORY) private readonly criterionRepository: AwardCriterionRepository,
     @Inject(MILESTONE_REPOSITORY) private readonly milestoneRepository: MilestoneRepository,
     @Inject(RISK_REPOSITORY) private readonly riskRepository: RiskRepository,
@@ -103,9 +98,8 @@ export class GetTenderBoardUseCase {
     const allTenders = columnsData.flatMap((column) => column.tenders);
     const tenderIds = allTenders.map((tender) => tender.id.value);
 
-    const [checklistItems, requestedDocuments, criteria, milestones, risks, alerts] = await Promise.all([
+    const [checklistItems, criteria, milestones, risks, alerts] = await Promise.all([
       this.checklistRepository.listByTenderIds({ organizationId: query.organizationId, tenderIds }),
-      this.documentRepository.listByTenderIds({ organizationId: query.organizationId, tenderIds }),
       this.criterionRepository.listByTenderIds({ organizationId: query.organizationId, tenderIds }),
       this.milestoneRepository.listByTenderIds({ organizationId: query.organizationId, tenderIds }),
       this.riskRepository.listByTenderIds({ organizationId: query.organizationId, tenderIds }),
@@ -115,7 +109,6 @@ export class GetTenderBoardUseCase {
     const enrichment = enrichTenders({
       tenders: allTenders,
       checklistItems,
-      requestedDocuments,
       criteria,
       milestones,
       risks,

@@ -922,35 +922,6 @@ export async function createAwardCriterionAction(
   return {};
 }
 
-// ---- Requested documents ----
-
-export async function createRequestedDocumentAction(
-  tenderId: string,
-  _prevState: FormActionState,
-  formData: FormData,
-): Promise<FormActionState> {
-  const name = formData.get("name");
-  if (typeof name !== "string" || !name) {
-    return { error: "Le nom de la piece est obligatoire." };
-  }
-
-  try {
-    await appApiFetch(`/api/v1/tenders/${tenderId}/requested-documents`, {
-      method: "POST",
-      body: JSON.stringify({
-        name,
-        category: optional(formData.get("category")),
-        required: formData.get("required") === "on",
-      }),
-    });
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
-
-  revalidatePath(`/app/tenders/${tenderId}`);
-  return {};
-}
-
 // ---- Milestones ----
 
 export async function createMilestoneAction(

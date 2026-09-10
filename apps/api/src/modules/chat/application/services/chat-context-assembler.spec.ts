@@ -25,8 +25,9 @@ describe("ChatContextAssembler — Knowledge Base scope (non-negotiable rule)", 
     const getEffectiveTenderAnalysisSummaryUseCase = { execute: vi.fn(async () => { throw new TenderBusinessAnalysisNotFoundError(); }) };
     const getGoNoGoReportUseCase = { execute: vi.fn(async () => { throw new GoNoGoReportNotFoundError(); }) };
 
+    // Lots, critères, jalons, risques, checklist — le dépôt des « Pièces demandées » a disparu du
+    // constructeur avec leur fusion dans la checklist (TENDEROS-2.1).
     assembler = new ChatContextAssembler(
-      emptyRepository() as never,
       emptyRepository() as never,
       emptyRepository() as never,
       emptyRepository() as never,

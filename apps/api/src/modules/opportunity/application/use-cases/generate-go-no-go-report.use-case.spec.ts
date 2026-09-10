@@ -20,7 +20,7 @@ import { GoNoGoAnalysisNotCurrentError } from "../../domain/errors";
 import {
   createClientPortfolioTestFixture,
   DEFAULT_TEST_CLIENT_ACCOUNT_ID,
-  InMemoryRequestedDocumentRepository,
+  InMemoryChecklistItemRepository,
   InMemoryTenderLotRepository,
   InMemoryTenderRepository,
 } from "../../../tenders/test-support/fakes";
@@ -166,7 +166,7 @@ async function buildHarness(
   const reportRepository = options.reportRepository ?? new InMemoryGoNoGoReportRepository();
   const auditLogWriter = new InMemoryAuditLogWriter();
   const outboxWriter = new FakeOutboxWriter();
-  const requestedDocumentRepository = new InMemoryRequestedDocumentRepository();
+  const checklistItemRepository = new InMemoryChecklistItemRepository();
   const tenderLotRepository = new InMemoryTenderLotRepository();
   const tenderRepository = new InMemoryTenderRepository();
   const clientPortfolio = await createClientPortfolioTestFixture(ORG);
@@ -194,7 +194,7 @@ async function buildHarness(
     reportRepository,
     auditLogWriter,
     outboxWriter,
-    requestedDocumentRepository,
+    checklistItemRepository,
     tenderLotRepository,
     new FixedClock(),
     new SequentialIdGenerator(),

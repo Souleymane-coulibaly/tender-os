@@ -10,7 +10,6 @@ import {
   InMemoryAwardCriterionRepository,
   InMemoryChecklistItemRepository,
   InMemoryMilestoneRepository,
-  InMemoryRequestedDocumentRepository,
   InMemoryRiskRepository,
   InMemoryTenderRepository,
   InMemoryTenderSearchProvider,
@@ -27,7 +26,6 @@ describe("GetTenderBoardUseCase", () => {
     useCase = new GetTenderBoardUseCase(
       tenderRepository,
       new InMemoryChecklistItemRepository(),
-      new InMemoryRequestedDocumentRepository(),
       new InMemoryAwardCriterionRepository(),
       new InMemoryMilestoneRepository(),
       new InMemoryRiskRepository(),

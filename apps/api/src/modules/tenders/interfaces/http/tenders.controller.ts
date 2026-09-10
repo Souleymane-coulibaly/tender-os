@@ -38,13 +38,6 @@ import {
 } from "../../application/use-cases/update-award-criterion.use-case";
 import { ListAwardCriteriaUseCase } from "../../application/use-cases/list-award-criteria.use-case";
 
-import { CreateRequestedDocumentUseCase } from "../../application/use-cases/create-requested-document.use-case";
-import {
-  ChangeRequestedDocumentStatusUseCase,
-  DeleteRequestedDocumentUseCase,
-  UpdateRequestedDocumentUseCase,
-} from "../../application/use-cases/update-requested-document.use-case";
-import { ListRequestedDocumentsUseCase } from "../../application/use-cases/list-requested-documents.use-case";
 
 import { CreateMilestoneUseCase } from "../../application/use-cases/create-milestone.use-case";
 import {
@@ -69,7 +62,6 @@ import {
   presentMilestone,
   presentPage,
   presentReadiness,
-  presentRequestedDocument,
   presentRisk,
   presentStatusHistoryEntry,
   presentTender,
@@ -82,7 +74,6 @@ import { TendersErrorFilter } from "./tenders-error.filter";
 import {
   ArchiveTenderBodySchema,
   ChangeChecklistItemStatusBodySchema,
-  ChangeRequestedDocumentStatusBodySchema,
   ChangeRiskStatusBodySchema,
   ChangeTenderCandidateBodySchema,
   ChangeTenderCandidateCompanyBodySchema,
@@ -91,7 +82,6 @@ import {
   CreateAwardCriterionBodySchema,
   CreateChecklistItemBodySchema,
   CreateMilestoneBodySchema,
-  CreateRequestedDocumentBodySchema,
   CreateRiskBodySchema,
   CreateTenderBodySchema,
   IdParamSchema,
@@ -102,12 +92,10 @@ import {
   UpdateAwardCriterionBodySchema,
   UpdateChecklistItemBodySchema,
   UpdateMilestoneBodySchema,
-  UpdateRequestedDocumentBodySchema,
   UpdateRiskBodySchema,
   UpdateTenderBodySchema,
   type ArchiveTenderBody,
   type ChangeChecklistItemStatusBody,
-  type ChangeRequestedDocumentStatusBody,
   type ChangeRiskStatusBody,
   type ChangeTenderCandidateBody,
   type ChangeTenderCandidateCompanyBody,
@@ -116,7 +104,6 @@ import {
   type CreateAwardCriterionBody,
   type CreateChecklistItemBody,
   type CreateMilestoneBody,
-  type CreateRequestedDocumentBody,
   type CreateRiskBody,
   type CreateTenderBody,
   type ListChecklistItemsQuery,
@@ -126,7 +113,6 @@ import {
   type UpdateAwardCriterionBody,
   type UpdateChecklistItemBody,
   type UpdateMilestoneBody,
-  type UpdateRequestedDocumentBody,
   type UpdateRiskBody,
   type UpdateTenderBody,
 } from "./schemas";
@@ -165,11 +151,6 @@ export class TendersController {
     private readonly deleteAwardCriterionUseCase: DeleteAwardCriterionUseCase,
     private readonly listAwardCriteriaUseCase: ListAwardCriteriaUseCase,
 
-    private readonly createRequestedDocumentUseCase: CreateRequestedDocumentUseCase,
-    private readonly updateRequestedDocumentUseCase: UpdateRequestedDocumentUseCase,
-    private readonly changeRequestedDocumentStatusUseCase: ChangeRequestedDocumentStatusUseCase,
-    private readonly deleteRequestedDocumentUseCase: DeleteRequestedDocumentUseCase,
-    private readonly listRequestedDocumentsUseCase: ListRequestedDocumentsUseCase,
 
     private readonly createMilestoneUseCase: CreateMilestoneUseCase,
     private readonly updateMilestoneUseCase: UpdateMilestoneUseCase,
@@ -646,97 +627,6 @@ export class TendersController {
       organizationId: membership.organizationId,
       tenderId,
       criterionId,
-      actorId: actor.userId,
-      actorRole: membership.role,
-    });
-  }
-
-  // ---- Requested documents ----
-
-  @Post(":tenderId/requested-documents")
-  @HttpCode(HttpStatus.CREATED)
-  async createRequestedDocument(
-    @CurrentActor() actor: AuthenticatedActor,
-    @CurrentMembershipContext() membership: MembershipContext,
-    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
-    @Body(new ZodValidationPipe(CreateRequestedDocumentBodySchema)) body: CreateRequestedDocumentBody,
-  ) {
-    const result = await this.createRequestedDocumentUseCase.execute({
-      organizationId: membership.organizationId,
-      tenderId,
-      actorId: actor.userId,
-      actorRole: membership.role,
-      ...body,
-    });
-    return presentRequestedDocument(result);
-  }
-
-  @Get(":tenderId/requested-documents")
-  @HttpCode(HttpStatus.OK)
-  async listRequestedDocuments(
-    @CurrentMembershipContext() membership: MembershipContext,
-    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
-  ) {
-    const documents = await this.listRequestedDocumentsUseCase.execute({
-      organizationId: membership.organizationId,
-      tenderId,
-      actorRole: membership.role,
-    });
-    return documents.map(presentRequestedDocument);
-  }
-
-  @Patch(":tenderId/requested-documents/:documentId")
-  @HttpCode(HttpStatus.OK)
-  async updateRequestedDocument(
-    @CurrentActor() actor: AuthenticatedActor,
-    @CurrentMembershipContext() membership: MembershipContext,
-    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
-    @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
-    @Body(new ZodValidationPipe(UpdateRequestedDocumentBodySchema)) body: UpdateRequestedDocumentBody,
-  ) {
-    const result = await this.updateRequestedDocumentUseCase.execute({
-      organizationId: membership.organizationId,
-      tenderId,
-      documentId,
-      actorId: actor.userId,
-      actorRole: membership.role,
-      ...body,
-    });
-    return presentRequestedDocument(result);
-  }
-
-  @Post(":tenderId/requested-documents/:documentId/status")
-  @HttpCode(HttpStatus.OK)
-  async changeRequestedDocumentStatus(
-    @CurrentActor() actor: AuthenticatedActor,
-    @CurrentMembershipContext() membership: MembershipContext,
-    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
-    @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
-    @Body(new ZodValidationPipe(ChangeRequestedDocumentStatusBodySchema)) body: ChangeRequestedDocumentStatusBody,
-  ) {
-    const result = await this.changeRequestedDocumentStatusUseCase.execute({
-      organizationId: membership.organizationId,
-      tenderId,
-      documentId,
-      actorId: actor.userId,
-      actorRole: membership.role,
-      status: body.status,
-    });
-    return presentRequestedDocument(result);
-  }
-
-  @Delete(":tenderId/requested-documents/:documentId")
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteRequestedDocument(
-    @CurrentActor() actor: AuthenticatedActor,
-    @CurrentMembershipContext() membership: MembershipContext,
-    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
-    @Param("documentId", new ZodValidationPipe(IdParamSchema)) documentId: string,
-  ) {
-    await this.deleteRequestedDocumentUseCase.execute({
-      organizationId: membership.organizationId,
-      tenderId,
-      documentId,
       actorId: actor.userId,
       actorRole: membership.role,
     });

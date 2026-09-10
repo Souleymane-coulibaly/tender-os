@@ -68,8 +68,9 @@ export type GoNoGoRecommendation = "GO" | "GO_CONDITIONAL" | "NO_GO";
 
 /** Checkpoint 2.1-P2.1-FIX-C — jamais persistée côté backend, recalculée à chaque lecture en
  *  comparant les sources figées (candidate/analysisVersion/dceRevision) à l'état courant. Checklist
- *  est délibérément absente : audit ciblé confirmé que le GO/NO-GO ne consomme jamais la Checklist
- *  (seulement `TenderRequestedDocument`, une entité V1 distincte). */
+ *  est délibérément absente : depuis la fusion des « Pièces demandées », le GO/NO-GO lit les
+ *  éléments documentaires de la checklist, mais leur évolution ne rend pas un rapport périmé —
+ *  pas plus que celle des pièces demandées auparavant. */
 export type GoNoGoFreshness = "CURRENT" | "STALE" | "UNKNOWN";
 
 export type GoNoGoReport = {

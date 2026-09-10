@@ -11,7 +11,6 @@ import {
   InMemoryAwardCriterionRepository,
   InMemoryChecklistItemRepository,
   InMemoryMilestoneRepository,
-  InMemoryRequestedDocumentRepository,
   InMemoryRiskRepository,
   InMemoryTenderRepository,
 } from "../../test-support/fakes";
@@ -29,7 +28,6 @@ describe("GetTenderStatisticsUseCase", () => {
     useCase = new GetTenderStatisticsUseCase(
       tenderRepository,
       new InMemoryChecklistItemRepository(),
-      new InMemoryRequestedDocumentRepository(),
       new InMemoryAwardCriterionRepository(),
       new InMemoryMilestoneRepository(),
       riskRepository,

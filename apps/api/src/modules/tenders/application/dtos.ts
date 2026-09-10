@@ -3,7 +3,6 @@ import type { AwardCriterion } from "../domain/award-criterion.entity";
 import type { Buyer } from "../domain/buyer.entity";
 import type { ChecklistItem } from "../domain/checklist-item.entity";
 import type { Milestone } from "../domain/milestone.entity";
-import type { RequestedDocument } from "../domain/requested-document.entity";
 import type { Risk } from "../domain/risk.entity";
 import type { Tender } from "../domain/tender.aggregate";
 import type { TenderLot } from "../domain/tender-lot.entity";
@@ -315,46 +314,6 @@ export function toAwardCriterionSummary(criterion: AwardCriterion): AwardCriteri
     scoringMethod: criterion.scoringMethod,
     eliminationThreshold: criterion.eliminationThreshold,
     status: criterion.status,
-  };
-}
-
-export type RequestedDocumentSummary = {
-  id: string;
-  tenderId: string;
-  name: string;
-  category?: string | undefined;
-  documentType?: string | undefined;
-  required: boolean;
-  description?: string | undefined;
-  expirationDate?: string | undefined;
-  status: string;
-  documentId?: string | undefined;
-  displayOrder: number;
-  isEliminatory: boolean;
-  lotId?: string | undefined;
-  requestedFormat?: string | undefined;
-  signatureRequired: boolean;
-  buyerProvidedTemplate: boolean;
-};
-
-export function toRequestedDocumentSummary(document: RequestedDocument): RequestedDocumentSummary {
-  return {
-    id: document.id,
-    tenderId: document.tenderId,
-    name: document.name,
-    category: document.category,
-    documentType: document.documentType,
-    required: document.required,
-    description: document.description,
-    expirationDate: document.expirationDate?.toISOString(),
-    status: document.status,
-    documentId: document.documentId,
-    displayOrder: document.displayOrder,
-    isEliminatory: document.isEliminatory,
-    lotId: document.lotId,
-    requestedFormat: document.requestedFormat,
-    signatureRequired: document.signatureRequired,
-    buyerProvidedTemplate: document.buyerProvidedTemplate,
   };
 }
 

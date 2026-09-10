@@ -13,14 +13,14 @@ import { OUTBOX_WRITER, type OutboxWriter } from "../../../outbox";
 import {
   assertHasTenderPermission,
   GetTenderUseCase,
-  REQUESTED_DOCUMENT_REPOSITORY,
-  RequestedDocumentStatus,
+  CHECKLIST_ITEM_REPOSITORY,
   TENDER_LOT_REPOSITORY,
   TenderPermission,
-  type RequestedDocumentRepository,
+  type ChecklistItemRepository,
   type TenderLotRepository,
 } from "../../../tenders";
 import { GoNoGoAnalysisNotCurrentError } from "../../domain/errors";
+import { toChecklistDocumentSignals } from "../../domain/scoring/checklist-document-signals";
 import { bucketRiskSeverity, computeGoNoGoReport } from "../../domain/scoring/compute-go-no-go-report";
 import { mapCandidateCapabilitiesToQuickScoreInput } from "../mappers/candidate-capabilities-to-quick-score-input.mapper";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
@@ -76,7 +76,7 @@ export class GenerateGoNoGoReportUseCase {
     @Inject(GO_NO_GO_REPORT_REPOSITORY) private readonly repository: GoNoGoReportRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     @Inject(OUTBOX_WRITER) private readonly outboxWriter: OutboxWriter,
-    @Inject(REQUESTED_DOCUMENT_REPOSITORY) private readonly requestedDocumentRepository: RequestedDocumentRepository,
+    @Inject(CHECKLIST_ITEM_REPOSITORY) private readonly checklistItemRepository: ChecklistItemRepository,
     @Inject(TENDER_LOT_REPOSITORY) private readonly tenderLotRepository: TenderLotRepository,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
@@ -142,13 +142,13 @@ export class GenerateGoNoGoReportUseCase {
 
     const candidateIdentity = await this.resolveCandidateIdentityUseCase.execute({ organizationId: command.organizationId, candidateCompanyId: tender.candidateCompanyId });
 
-    const [requirements, criteria, risks, clauses, aiSuggestions, requestedDocuments, lots, candidateCapabilities] = await Promise.all([
+    const [requirements, criteria, risks, clauses, aiSuggestions, checklistItems, lots, candidateCapabilities] = await Promise.all([
       this.listTenderRequirementsUseCase.execute(findingsQuery),
       this.listTenderCriteriaUseCase.execute(findingsQuery),
       this.listTenderRisksUseCase.execute(findingsQuery),
       this.listTenderClausesUseCase.execute(findingsQuery),
       this.listAiSuggestionsUseCase.execute({ organizationId: command.organizationId, actorId: command.actorId, actorRole: command.actorRole, parentTenderId: command.tenderId }),
-      this.requestedDocumentRepository.listByTender({ organizationId: command.organizationId, tenderId: command.tenderId }),
+      this.checklistItemRepository.listByTender({ organizationId: command.organizationId, tenderId: command.tenderId }),
       this.tenderLotRepository.listByTender({ organizationId: command.organizationId, tenderId: command.tenderId }),
       // NEW FLOW — CandidateCompany fait autorité et ne porte aucune capacité : jamais un repli
       // silencieux sur les satellites du CLIENT (mission A6.2, même discipline qu'A6.1 §9).
@@ -164,9 +164,9 @@ export class GenerateGoNoGoReportUseCase {
       if (!(error instanceof DceNotFoundError)) throw error;
     }
 
-    const providedStatuses = new Set<RequestedDocumentStatus>([RequestedDocumentStatus.Provided, RequestedDocumentStatus.Validated]);
-    const requiredDocs = requestedDocuments.filter((doc) => doc.required);
-    const eliminatoryDocs = requestedDocuments.filter((doc) => doc.isEliminatory);
+    // TENDEROS-2.1 — les pièces sont des éléments de checklist depuis la fusion des « Pièces
+    // demandées » : mêmes signaux, même notation, source unique.
+    const checklistDocuments = toChecklistDocumentSignals(checklistItems);
 
     const risksBucketed = risks.items.map((risk) => bucketRiskSeverity(risk.severity));
 
@@ -197,13 +197,7 @@ export class GenerateGoNoGoReportUseCase {
         risksHigh: risksBucketed.filter((s) => s === "HIGH").length,
         risksCritical: risksBucketed.filter((s) => s === "CRITICAL").length,
       },
-      requestedDocuments: {
-        total: requestedDocuments.length,
-        required: requiredDocs.length,
-        eliminatory: eliminatoryDocs.length,
-        eliminatoryUnprovided: eliminatoryDocs.filter((doc) => !providedStatuses.has(doc.status)).length,
-        requiredUnprovided: requiredDocs.filter((doc) => !providedStatuses.has(doc.status)).length,
-      },
+      checklistDocuments,
       dceDocumentCount,
       lots: { total: lots.length, selectedForResponse: lots.filter((lot) => lot.selectedForResponse).length },
       aiSuggestions: {

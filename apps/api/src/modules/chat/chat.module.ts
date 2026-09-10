@@ -36,7 +36,7 @@ import { ChatController } from "./interfaces/http/chat.controller";
  * `KnowledgeBaseModule`/`OpportunityModule` dans UN SEUL sens (réutilise `AI_PROVIDER_REGISTRY`,
  * `GetTenderUseCase`, les 6 use cases de lecture des Findings, `GetEffectiveTenderAnalysisSummary
  * UseCase`, `AssertClientAccessUseCase`, `SearchKnowledgeBaseUseCase`, `GetGoNoGoReportUseCase`,
- * les repositories Lot/Criterion/RequestedDocument/Milestone/Risk/ChecklistItem) — même motif que
+ * les repositories Lot/Criterion/Milestone/Risk/ChecklistItem) — même motif que
  * `GenerationModule`. Aucun de ces modules n'importe jamais Chat en retour, évitant tout cycle Nest.
  * Read-only sur les données métier ce sprint (mission §"aucune action IA autonome") : aucune
  * dépendance vers Workspace/Generation/Export.

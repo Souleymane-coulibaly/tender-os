@@ -9,7 +9,6 @@ import {
   InMemoryAwardCriterionRepository,
   InMemoryChecklistItemRepository,
   InMemoryMilestoneRepository,
-  InMemoryRequestedDocumentRepository,
   InMemoryRiskRepository,
   InMemoryTenderRepository,
 } from "../../test-support/fakes";
@@ -26,7 +25,6 @@ describe("GetTenderReadinessUseCase", () => {
     useCase = new GetTenderReadinessUseCase(
       tenderRepository,
       new InMemoryChecklistItemRepository(),
-      new InMemoryRequestedDocumentRepository(),
       new InMemoryAwardCriterionRepository(),
       new InMemoryMilestoneRepository(),
       riskRepository,

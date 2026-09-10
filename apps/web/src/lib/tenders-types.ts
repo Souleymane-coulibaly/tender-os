@@ -112,7 +112,7 @@ export type TenderCompleteness = {
   dates: TenderCompletenessStatus;
   lots: TenderCompletenessStatus;
   criteria: TenderCompletenessStatus;
-  requestedDocuments: TenderCompletenessStatus;
+  checklist: TenderCompletenessStatus;
   milestones: TenderCompletenessStatus;
   risks: TenderCompletenessStatus;
 };
@@ -128,7 +128,7 @@ export const TENDER_COMPLETENESS_CATEGORY_LABELS: Record<keyof TenderCompletenes
   dates: "Dates",
   lots: "Lots",
   criteria: "Criteres",
-  requestedDocuments: "Pieces demandees",
+  checklist: "Checklist",
   milestones: "Jalons",
   risks: "Risques",
 };
@@ -141,7 +141,6 @@ export type TenderProfile = {
   buyer: Buyer | null;
   lots: TenderLot[];
   criteria: AwardCriterion[];
-  requestedDocuments: RequestedDocument[];
   milestones: Milestone[];
   risks: Risk[];
   statusHistory: StatusHistoryEntry[];
@@ -388,27 +387,6 @@ export type AwardCriterion = {
   scoringMethod?: string;
   eliminationThreshold?: string;
   status: string;
-};
-
-export type RequestedDocumentStatus = "PENDING" | "PROVIDED" | "VALIDATED" | "REJECTED";
-
-export type RequestedDocument = {
-  id: string;
-  tenderId: string;
-  name: string;
-  category?: string;
-  documentType?: string;
-  required: boolean;
-  description?: string;
-  expirationDate?: string;
-  status: RequestedDocumentStatus;
-  documentId?: string;
-  displayOrder: number;
-  isEliminatory: boolean;
-  lotId?: string;
-  requestedFormat?: string;
-  signatureRequired: boolean;
-  buyerProvidedTemplate: boolean;
 };
 
 export type MilestoneType =

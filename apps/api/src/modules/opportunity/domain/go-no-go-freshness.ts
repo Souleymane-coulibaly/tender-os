@@ -14,11 +14,12 @@ import type { AnalysisFreshness } from "../../analysis";
  *   besoin de comparer `dceRevision` directement : `AnalysisFreshness` de l'analyse effective
  *   courante encode déjà cette comparaison).
  *
- * Checklist est délibérément ABSENTE de cette liste — audit ciblé (§3-8 de la mission) confirmé :
- * `GenerateGoNoGoReportUseCase` ne consomme jamais `TenderChecklistItem` (seulement
- * `TenderRequestedDocument`, une entité V1 distincte). Imposer une dépendance Checklist inexistante
- * serait exactement l'erreur que la mission interdit explicitement (§8 "ne pas imposer une
- * dépendance inexistante").
+ * Checklist est délibérément ABSENTE de cette liste. Depuis la fusion des « Pièces demandées »
+ * (TENDEROS-2.1), le rapport lit les éléments DOCUMENTAIRES de la checklist, là où il lisait
+ * `TenderRequestedDocument` ; pas plus que ces pièces hier, leur évolution ne rend un rapport
+ * périmé. Un rapport GO/NO-GO est l'instantané d'une décision, pas un tableau de bord : rendre sa
+ * fraîcheur dépendante de la checklist serait un changement de sémantique à part entière, jamais
+ * un effet de bord de cette fusion.
  */
 export const GoNoGoFreshness = { Current: "CURRENT", Stale: "STALE", Unknown: "UNKNOWN" } as const;
 export type GoNoGoFreshness = (typeof GoNoGoFreshness)[keyof typeof GoNoGoFreshness];

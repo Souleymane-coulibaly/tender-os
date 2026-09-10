@@ -15,13 +15,11 @@ import {
   AWARD_CRITERION_REPOSITORY,
   CHECKLIST_ITEM_REPOSITORY,
   MILESTONE_REPOSITORY,
-  REQUESTED_DOCUMENT_REPOSITORY,
   RISK_REPOSITORY,
   TENDER_LOT_REPOSITORY,
   type AwardCriterionRepository,
   type ChecklistItemRepository,
   type MilestoneRepository,
-  type RequestedDocumentRepository,
   type RiskRepository,
   type TenderLotRepository,
   type TenderSummary,
@@ -61,7 +59,6 @@ export class ChatContextAssembler {
   constructor(
     @Inject(TENDER_LOT_REPOSITORY) private readonly tenderLotRepository: TenderLotRepository,
     @Inject(AWARD_CRITERION_REPOSITORY) private readonly awardCriterionRepository: AwardCriterionRepository,
-    @Inject(REQUESTED_DOCUMENT_REPOSITORY) private readonly requestedDocumentRepository: RequestedDocumentRepository,
     @Inject(MILESTONE_REPOSITORY) private readonly milestoneRepository: MilestoneRepository,
     @Inject(RISK_REPOSITORY) private readonly riskRepository: RiskRepository,
     @Inject(CHECKLIST_ITEM_REPOSITORY) private readonly checklistItemRepository: ChecklistItemRepository,
@@ -96,10 +93,9 @@ export class ChatContextAssembler {
     sections.push(this.buildTenderFieldsSection(input.tender, register));
 
     const findingsQuery = { organizationId: input.organizationId, tenderId: input.tenderId, actorRole: input.actorRole, actorId: input.actorId, limit: FINDINGS_PAGE_SIZE, offset: 0 };
-    const [lots, criteria, requestedDocuments, milestones, risks, checklistItems] = await Promise.all([
+    const [lots, criteria, milestones, risks, checklistItems] = await Promise.all([
       this.tenderLotRepository.listByTender({ organizationId: input.organizationId, tenderId: input.tenderId }),
       this.awardCriterionRepository.listByTender({ organizationId: input.organizationId, tenderId: input.tenderId }),
-      this.requestedDocumentRepository.listByTender({ organizationId: input.organizationId, tenderId: input.tenderId }),
       this.milestoneRepository.listByTender({ organizationId: input.organizationId, tenderId: input.tenderId }),
       this.riskRepository.listByTender({ organizationId: input.organizationId, tenderId: input.tenderId }),
       this.checklistItemRepository.listByTender({ organizationId: input.organizationId, tenderId: input.tenderId }),
@@ -117,14 +113,6 @@ export class ChatContextAssembler {
       bulletListSection(
         "CRITÈRES D'ATTRIBUTION",
         criteria.map((criterion) => register(`TENDER:criterion:${criterion.id}`, { sourceType: CitationSourceType.TenderField, label: `Critère : ${criterion.name}`, content: `${criterion.name} (pondération ${criterion.weight})${criterion.description ? ` : ${criterion.description}` : ""}` })),
-        (ref) => known.get(ref)!.content,
-      ),
-    );
-
-    sections.push(
-      bulletListSection(
-        "DOCUMENTS DEMANDÉS",
-        requestedDocuments.map((doc) => register(`TENDER:requestedDocument:${doc.id}`, { sourceType: CitationSourceType.TenderField, label: `Pièce demandée : ${doc.name}`, content: `${doc.name} — ${doc.required ? "obligatoire" : "optionnel"}${doc.isEliminatory ? ", éliminatoire" : ""}` })),
         (ref) => known.get(ref)!.content,
       ),
     );

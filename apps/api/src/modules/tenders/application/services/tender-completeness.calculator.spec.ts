@@ -53,7 +53,7 @@ const baseInput = {
   candidateArchived: false,
   lots: [],
   criteria: [],
-  requestedDocumentsCount: 0,
+  checklistItemsCount: 0,
   milestones: [],
   risksCount: 0,
   now: NOW,
@@ -131,11 +131,11 @@ describe("computeTenderCompleteness — dates", () => {
   });
 });
 
-describe("computeTenderCompleteness — lots / requestedDocuments / risks", () => {
+describe("computeTenderCompleteness — lots / checklist / risks", () => {
   it("are MISSING when the corresponding list is empty", () => {
     const result = computeTenderCompleteness({ ...baseInput, tender: createTender() });
     expect(result.lots).toBe(TenderCompletenessStatus.Missing);
-    expect(result.requestedDocuments).toBe(TenderCompletenessStatus.Missing);
+    expect(result.checklist).toBe(TenderCompletenessStatus.Missing);
     expect(result.risks).toBe(TenderCompletenessStatus.Missing);
   });
 
@@ -144,11 +144,11 @@ describe("computeTenderCompleteness — lots / requestedDocuments / risks", () =
       ...baseInput,
       tender: createTender(),
       lots: [createLot()],
-      requestedDocumentsCount: 1,
+      checklistItemsCount: 1,
       risksCount: 1,
     });
     expect(result.lots).toBe(TenderCompletenessStatus.Complete);
-    expect(result.requestedDocuments).toBe(TenderCompletenessStatus.Complete);
+    expect(result.checklist).toBe(TenderCompletenessStatus.Complete);
     expect(result.risks).toBe(TenderCompletenessStatus.Complete);
   });
 });

@@ -14,7 +14,6 @@ import { CHECKLIST_ITEM_REPOSITORY } from "./application/ports/checklist-item.re
 import { CHECKLIST_ITEM_SOURCE_REPOSITORY } from "./application/ports/checklist-item-source.repository";
 import { CHECKLIST_RECONCILIATION_REPOSITORY } from "./application/ports/checklist-reconciliation.repository";
 import { MILESTONE_REPOSITORY } from "./application/ports/milestone.repository";
-import { REQUESTED_DOCUMENT_REPOSITORY } from "./application/ports/requested-document.repository";
 import { RISK_REPOSITORY } from "./application/ports/risk.repository";
 import { TENDER_SEARCH_PROVIDER } from "./application/ports/tender-search-provider";
 import { TENDER_LOT_REPOSITORY } from "./application/ports/tender-lot.repository";
@@ -75,13 +74,6 @@ import {
 } from "./application/use-cases/update-award-criterion.use-case";
 import { ListAwardCriteriaUseCase } from "./application/use-cases/list-award-criteria.use-case";
 
-import { CreateRequestedDocumentUseCase } from "./application/use-cases/create-requested-document.use-case";
-import {
-  ChangeRequestedDocumentStatusUseCase,
-  DeleteRequestedDocumentUseCase,
-  UpdateRequestedDocumentUseCase,
-} from "./application/use-cases/update-requested-document.use-case";
-import { ListRequestedDocumentsUseCase } from "./application/use-cases/list-requested-documents.use-case";
 
 import { CreateMilestoneUseCase } from "./application/use-cases/create-milestone.use-case";
 import {
@@ -108,7 +100,6 @@ import { PrismaChecklistItemSourceRepository } from "./infrastructure/prisma-che
 import { PrismaChecklistReconciliationRepository } from "./infrastructure/prisma-checklist-reconciliation.repository";
 import { PrismaIlikeTenderSearchProvider } from "./infrastructure/prisma-ilike-tender-search.provider";
 import { PrismaMilestoneRepository } from "./infrastructure/prisma-milestone.repository";
-import { PrismaRequestedDocumentRepository } from "./infrastructure/prisma-requested-document.repository";
 import { PrismaRiskRepository } from "./infrastructure/prisma-risk.repository";
 import { PrismaAtomicTransactionRunner } from "./infrastructure/prisma-atomic-transaction-runner";
 import { PrismaTenderLotRepository } from "./infrastructure/prisma-tender-lot.repository";
@@ -172,11 +163,6 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     DeleteAwardCriterionUseCase,
     ListAwardCriteriaUseCase,
 
-    CreateRequestedDocumentUseCase,
-    UpdateRequestedDocumentUseCase,
-    ChangeRequestedDocumentStatusUseCase,
-    DeleteRequestedDocumentUseCase,
-    ListRequestedDocumentsUseCase,
 
     CreateMilestoneUseCase,
     UpdateMilestoneUseCase,
@@ -201,7 +187,6 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     { provide: CHECKLIST_ITEM_SOURCE_REPOSITORY, useClass: PrismaChecklistItemSourceRepository },
     { provide: CHECKLIST_RECONCILIATION_REPOSITORY, useClass: PrismaChecklistReconciliationRepository },
     { provide: AWARD_CRITERION_REPOSITORY, useClass: PrismaAwardCriterionRepository },
-    { provide: REQUESTED_DOCUMENT_REPOSITORY, useClass: PrismaRequestedDocumentRepository },
     { provide: MILESTONE_REPOSITORY, useClass: PrismaMilestoneRepository },
     { provide: RISK_REPOSITORY, useClass: PrismaRiskRepository },
     { provide: ALERT_REPOSITORY, useClass: PrismaAlertRepository },
@@ -234,9 +219,6 @@ import { TendersController } from "./interfaces/http/tenders.controller";
     AWARD_CRITERION_REPOSITORY,
     CreateAwardCriterionUseCase,
     UpdateAwardCriterionUseCase,
-    REQUESTED_DOCUMENT_REPOSITORY,
-    CreateRequestedDocumentUseCase,
-    UpdateRequestedDocumentUseCase,
     MILESTONE_REPOSITORY,
     CreateMilestoneUseCase,
     UpdateMilestoneUseCase,

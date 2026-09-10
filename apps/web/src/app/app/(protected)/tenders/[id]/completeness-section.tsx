@@ -14,7 +14,7 @@ const COMPLETENESS_CATEGORIES: (keyof TenderCompleteness)[] = [
   "dates",
   "lots",
   "criteria",
-  "requestedDocuments",
+  "checklist",
   "milestones",
   "risks",
 ];

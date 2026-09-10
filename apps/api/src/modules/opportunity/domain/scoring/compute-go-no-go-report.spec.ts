@@ -31,7 +31,7 @@ function baseInput(overrides: Partial<ComputeGoNoGoReportInput> = {}): ComputeGo
       goNoGoRationale: "Dossier complet, aucun signal bloquant.",
     },
     findings: { requirementsTotal: 5, requirementsMandatory: 3, criteriaTotal: 4, criteriaEliminatory: 1, risksTotal: 0, risksHigh: 0, risksCritical: 0 },
-    requestedDocuments: { total: 5, required: 3, eliminatory: 1, eliminatoryUnprovided: 0, requiredUnprovided: 0 },
+    checklistDocuments: { total: 5, required: 3, eliminatory: 1, eliminatoryUnprovided: 0, requiredUnprovided: 0 },
     dceDocumentCount: 8,
     lots: { total: 1, selectedForResponse: 1 },
     aiSuggestions: { accepted: 4, modified: 1, pending: 0, rejected: 0, total: 5 },
@@ -67,7 +67,7 @@ describe("computeGoNoGoReport", () => {
     const weak = computeGoNoGoReport(
       baseInput({
         companyProfile: undefined,
-        requestedDocuments: { total: 5, required: 3, eliminatory: 3, eliminatoryUnprovided: 3, requiredUnprovided: 3 },
+        checklistDocuments: { total: 5, required: 3, eliminatory: 3, eliminatoryUnprovided: 3, requiredUnprovided: 3 },
         findings: { requirementsTotal: 0, requirementsMandatory: 0, criteriaTotal: 0, criteriaEliminatory: 0, risksTotal: 0, risksHigh: 0, risksCritical: 0 },
       }),
     );
@@ -75,7 +75,7 @@ describe("computeGoNoGoReport", () => {
   });
 
   it("never lets a detected blocker silently override the score-derived recommendation", () => {
-    const result = computeGoNoGoReport(baseInput({ requestedDocuments: { total: 5, required: 3, eliminatory: 1, eliminatoryUnprovided: 1, requiredUnprovided: 0 } }));
+    const result = computeGoNoGoReport(baseInput({ checklistDocuments: { total: 5, required: 3, eliminatory: 1, eliminatoryUnprovided: 1, requiredUnprovided: 0 } }));
 
     expect(result.blockers.length).toBeGreaterThan(0);
     // La recommandation reste dérivée UNIQUEMENT du score, jamais changée automatiquement par un blocage.
@@ -102,8 +102,8 @@ describe("computeGoNoGoReport", () => {
   });
 
   it("computes a higher documentary load as requested documents / DCE documents / requirements grow", () => {
-    const low = computeGoNoGoReport(baseInput({ requestedDocuments: { total: 1, required: 1, eliminatory: 0, eliminatoryUnprovided: 0, requiredUnprovided: 0 }, dceDocumentCount: 2, lots: { total: 1, selectedForResponse: 1 }, findings: { requirementsTotal: 2, requirementsMandatory: 1, criteriaTotal: 1, criteriaEliminatory: 0, risksTotal: 0, risksHigh: 0, risksCritical: 0 } }));
-    const high = computeGoNoGoReport(baseInput({ requestedDocuments: { total: 40, required: 30, eliminatory: 10, eliminatoryUnprovided: 0, requiredUnprovided: 0 }, dceDocumentCount: 60, lots: { total: 5, selectedForResponse: 5 }, findings: { requirementsTotal: 80, requirementsMandatory: 40, criteriaTotal: 10, criteriaEliminatory: 2, risksTotal: 0, risksHigh: 0, risksCritical: 0 } }));
+    const low = computeGoNoGoReport(baseInput({ checklistDocuments: { total: 1, required: 1, eliminatory: 0, eliminatoryUnprovided: 0, requiredUnprovided: 0 }, dceDocumentCount: 2, lots: { total: 1, selectedForResponse: 1 }, findings: { requirementsTotal: 2, requirementsMandatory: 1, criteriaTotal: 1, criteriaEliminatory: 0, risksTotal: 0, risksHigh: 0, risksCritical: 0 } }));
+    const high = computeGoNoGoReport(baseInput({ checklistDocuments: { total: 40, required: 30, eliminatory: 10, eliminatoryUnprovided: 0, requiredUnprovided: 0 }, dceDocumentCount: 60, lots: { total: 5, selectedForResponse: 5 }, findings: { requirementsTotal: 80, requirementsMandatory: 40, criteriaTotal: 10, criteriaEliminatory: 2, risksTotal: 0, risksHigh: 0, risksCritical: 0 } }));
 
     const order = ["LOW", "MEDIUM", "HIGH", "VERY_HIGH"];
     expect(order.indexOf(high.documentaryLoad)).toBeGreaterThan(order.indexOf(low.documentaryLoad));

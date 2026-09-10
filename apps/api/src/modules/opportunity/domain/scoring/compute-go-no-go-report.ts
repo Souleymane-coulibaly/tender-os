@@ -61,7 +61,7 @@ export type AnalysisSignals = Readonly<{
   goNoGoRationale: string;
 }>;
 
-export type RequestedDocumentsSignals = Readonly<{
+export type ChecklistDocumentSignals = Readonly<{
   total: number;
   required: number;
   eliminatory: number;
@@ -94,7 +94,7 @@ export type ComputeGoNoGoReportInput = Readonly<{
   submissionDeadline?: Date | undefined;
   analysis: AnalysisSignals;
   findings: FindingsSignals;
-  requestedDocuments: RequestedDocumentsSignals;
+  checklistDocuments: ChecklistDocumentSignals;
   dceDocumentCount: number;
   lots: LotsSignals;
   aiSuggestions: AiSuggestionsSignals;
@@ -102,20 +102,20 @@ export type ComputeGoNoGoReportInput = Readonly<{
   subcontractingFlags: readonly string[];
 }>;
 
-/** Complétude documentaire administrative — pièces demandées obligatoires réellement fournies/
+/** Complétude documentaire administrative — pièces obligatoires de la checklist prêtes ou
  *  validées (mission §21 "charge documentaire" côté administratif, distinct de la charge globale). */
 function scoreAdministratif(input: ComputeGoNoGoReportInput, missingData: string[]): ScoredCategory {
-  const { requestedDocuments } = input;
-  if (requestedDocuments.total === 0) {
-    missingData.push("Aucune pièce administrative demandée recensée pour ce Tender.");
-    return { score: 50, weight: LEVEL_2_CATEGORY_WEIGHTS.administratif, justification: "Aucune pièce demandée recensée — score neutre." };
+  const { checklistDocuments } = input;
+  if (checklistDocuments.total === 0) {
+    missingData.push("Aucune pièce documentaire recensée dans la checklist de ce Tender.");
+    return { score: 50, weight: LEVEL_2_CATEGORY_WEIGHTS.administratif, justification: "Aucune pièce documentaire dans la checklist — score neutre." };
   }
-  const requiredProvidedRatio = requestedDocuments.required > 0 ? 1 - requestedDocuments.requiredUnprovided / requestedDocuments.required : 1;
+  const requiredProvidedRatio = checklistDocuments.required > 0 ? 1 - checklistDocuments.requiredUnprovided / checklistDocuments.required : 1;
   const score = Math.round(requiredProvidedRatio * 100);
   return {
     score,
     weight: LEVEL_2_CATEGORY_WEIGHTS.administratif,
-    justification: `${requestedDocuments.required - requestedDocuments.requiredUnprovided}/${requestedDocuments.required} pièce(s) obligatoire(s) fournie(s) ou validée(s).`,
+    justification: `${checklistDocuments.required - checklistDocuments.requiredUnprovided}/${checklistDocuments.required} pièce(s) obligatoire(s) prête(s) ou validée(s).`,
   };
 }
 
@@ -138,11 +138,11 @@ function scoreTechnique(input: ComputeGoNoGoReportInput, missingData: string[]):
   };
 }
 
-/** Charge documentaire (mission §21) — combine pièces demandées, documents DCE, lots et exigences.
+/** Charge documentaire (mission §21) — combine pièces de la checklist, documents DCE, lots et exigences.
  *  Jamais une simple lecture du nombre de fichiers uploadés : reflète le VOLUME réel de travail. */
 function computeDocumentaryLoad(input: ComputeGoNoGoReportInput): DocumentaryLoad {
   const points =
-    Math.min(4, Math.ceil(input.requestedDocuments.total / 5)) +
+    Math.min(4, Math.ceil(input.checklistDocuments.total / 5)) +
     Math.min(3, Math.ceil(input.dceDocumentCount / 10)) +
     Math.min(2, input.lots.total > 1 ? 2 : input.lots.total) +
     Math.min(3, Math.ceil(input.findings.requirementsTotal / 10));
@@ -165,7 +165,7 @@ function computeEstimatedPrepTime(input: ComputeGoNoGoReportInput, documentaryLo
   const base = prepLevelFromLoad(documentaryLoad);
   const memoireTechnique: PrepTimeLevel = input.findings.criteriaTotal > 5 || input.findings.requirementsTotal > 15 ? "HIGH" : base;
   const pricing: PrepTimeLevel = input.lots.total > 3 ? "HIGH" : input.lots.total > 1 ? "MEDIUM" : "LOW";
-  const validation: PrepTimeLevel = input.requestedDocuments.eliminatoryUnprovided > 0 ? "HIGH" : base;
+  const validation: PrepTimeLevel = input.checklistDocuments.eliminatoryUnprovided > 0 ? "HIGH" : base;
   return { administratif: base, memoireTechnique, pricing, documents: base, validation };
 }
 
@@ -176,7 +176,7 @@ function computeComplexity(input: ComputeGoNoGoReportInput): number {
   const analysisLevel = input.analysis.complexityLevel.trim().toUpperCase();
   let complexity = analysisLevel === "HIGH" || analysisLevel === "ELEVE" || analysisLevel === "ÉLEVÉ" ? 3 : analysisLevel === "LOW" || analysisLevel === "FAIBLE" ? 1 : 2;
   if (input.lots.total > 3) complexity += 1;
-  if (input.requestedDocuments.eliminatory > 2) complexity += 1;
+  if (input.checklistDocuments.eliminatory > 2) complexity += 1;
   return Math.max(1, Math.min(5, complexity));
 }
 
@@ -272,13 +272,13 @@ export function computeGoNoGoReport(input: ComputeGoNoGoReportInput): GoNoGoRepo
       justification: `Date limite : ${input.submissionDeadline.toISOString()}.`,
     });
   }
-  if (input.requestedDocuments.eliminatoryUnprovided > 0) {
+  if (input.checklistDocuments.eliminatoryUnprovided > 0) {
     blockers.push({
       category: "administratif",
-      description: `${input.requestedDocuments.eliminatoryUnprovided} pièce(s) éliminatoire(s) non fournie(s) ou non validée(s).`,
+      description: `${input.checklistDocuments.eliminatoryUnprovided} pièce(s) bloquante(s) de la checklist sans document prêt ni validation.`,
       weight: LEVEL_2_CATEGORY_WEIGHTS.administratif,
-      source: "requested_document",
-      justification: "Une pièce marquée éliminatoire reste absente ou non validée — signal factuel, ne bloque jamais automatiquement la décision humaine.",
+      source: "checklist_item",
+      justification: "Une pièce marquée bloquante dans la checklist reste absente ou non validée — signal factuel, ne bloque jamais automatiquement la décision humaine.",
     });
   }
 

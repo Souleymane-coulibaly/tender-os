@@ -11,7 +11,6 @@ import type { AwardCriterion } from "../domain/award-criterion.entity";
 import type { Buyer } from "../domain/buyer.entity";
 import type { ChecklistItem } from "../domain/checklist-item.entity";
 import type { Milestone } from "../domain/milestone.entity";
-import type { RequestedDocument } from "../domain/requested-document.entity";
 import type { Risk } from "../domain/risk.entity";
 import type { Tender } from "../domain/tender.aggregate";
 import type { TenderLot } from "../domain/tender-lot.entity";
@@ -27,7 +26,6 @@ import type {
   CreateChecklistItemSourceInput,
 } from "../application/ports/checklist-item-source.repository";
 import type { MilestoneRepository } from "../application/ports/milestone.repository";
-import type { RequestedDocumentRepository } from "../application/ports/requested-document.repository";
 import type { RiskRepository } from "../application/ports/risk.repository";
 import type { TenderSearchCriteria, TenderSearchProvider } from "../application/ports/tender-search-provider";
 import type {
@@ -468,56 +466,6 @@ export class InMemoryChecklistItemSourceRepository implements ChecklistItemSourc
 
   async listByChecklistItem(input: { organizationId: string; checklistItemId: string }): Promise<ChecklistItemSourceRecord[]> {
     return this.sources.filter((source) => source.organizationId === input.organizationId && source.checklistItemId === input.checklistItemId);
-  }
-}
-
-export class InMemoryRequestedDocumentRepository implements RequestedDocumentRepository {
-  readonly documents: RequestedDocument[] = [];
-
-  async findById(input: {
-    organizationId: string;
-    tenderId: string;
-    documentId: string;
-  }): Promise<RequestedDocument | null> {
-    return (
-      this.documents.find(
-        (doc) =>
-          doc.id === input.documentId && doc.organizationId === input.organizationId && doc.tenderId === input.tenderId,
-      ) ?? null
-    );
-  }
-
-  async listByTender(input: { organizationId: string; tenderId: string }): Promise<RequestedDocument[]> {
-    return this.documents.filter(
-      (doc) => doc.organizationId === input.organizationId && doc.tenderId === input.tenderId,
-    );
-  }
-
-  async listByTenderIds(input: {
-    organizationId: string;
-    tenderIds: readonly string[];
-  }): Promise<RequestedDocument[]> {
-    const allowed = new Set(input.tenderIds);
-    return this.documents.filter((doc) => doc.organizationId === input.organizationId && allowed.has(doc.tenderId));
-  }
-
-  async save(document: RequestedDocument): Promise<void> {
-    const index = this.documents.findIndex((existing) => existing.id === document.id);
-    if (index === -1) {
-      this.documents.push(document);
-    } else {
-      this.documents[index] = document;
-    }
-  }
-
-  async delete(input: { organizationId: string; tenderId: string; documentId: string }): Promise<void> {
-    const index = this.documents.findIndex(
-      (doc) =>
-        doc.id === input.documentId && doc.organizationId === input.organizationId && doc.tenderId === input.tenderId,
-    );
-    if (index !== -1) {
-      this.documents.splice(index, 1);
-    }
   }
 }
 

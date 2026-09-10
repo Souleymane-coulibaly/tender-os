@@ -11,7 +11,6 @@ import { calculateTenderReadiness, type TenderAnalysisReadinessState } from "./r
  */
 const EMPTY = {
   checklistItems: [],
-  requestedDocuments: [],
   criteria: [],
   milestones: [],
   risks: [],
@@ -39,9 +38,10 @@ describe("Readiness — autorité de la consolidation (F-02)", () => {
 
     expect(before.status).not.toBe("READY");
     const checklist = before.breakdown.find((entry) => entry.label === "Checklist obligatoire")!;
-    const documents = before.breakdown.find((entry) => entry.label === "Pièces obligatoires")!;
     expect(checklist.achievedRatio, "une checklist vide sans analyse n'est pas satisfaite").toBe(0);
-    expect(documents.achievedRatio, "aucune pièce connue sans analyse n'est pas satisfaite").toBe(0);
+    // Les pièces sont désormais des éléments de checklist : la règle « vide sans analyse = non
+    // satisfait » ci-dessus les couvre, sans dimension distincte.
+    expect(before.breakdown.some((entry) => entry.label === "Pièces obligatoires")).toBe(false);
   });
 
   it("un ensemble vide N'EST satisfait que si une consolidation COURANTE l'a établi", () => {

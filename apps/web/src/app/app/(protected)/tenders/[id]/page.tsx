@@ -22,7 +22,6 @@ import {
   type Buyer,
   type Milestone,
   type Readiness,
-  type RequestedDocument,
   type Risk,
   type StatusHistoryEntry,
   type Tender,
@@ -48,7 +47,6 @@ import { EditTenderForm } from "./edit-tender-form";
 import { GoNoGoSection } from "./go-no-go-section";
 import { LotsSection } from "./lots-section";
 import { MilestonesSection } from "./milestones-section";
-import { RequestedDocumentsSection } from "./requested-documents-section";
 import { RestoreButton } from "./restore-button";
 import { RisksSection } from "./risks-section";
 import { StatusChangeForm } from "./status-change-form";
@@ -75,7 +73,6 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
   let tender: Tender;
   let lots: TenderLot[];
   let criteria: AwardCriterion[];
-  let requestedDocuments: RequestedDocument[];
   let milestones: Milestone[];
   let risks: Risk[];
   let alerts: Alert[];
@@ -97,7 +94,6 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       tender,
       lots,
       criteria,
-      requestedDocuments,
       milestones,
       risks,
       alerts,
@@ -117,7 +113,6 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       appApiFetch<Tender>(`/api/v1/tenders/${id}`),
       appApiFetch<TenderLot[]>(`/api/v1/tenders/${id}/lots`),
       appApiFetch<AwardCriterion[]>(`/api/v1/tenders/${id}/criteria`),
-      appApiFetch<RequestedDocument[]>(`/api/v1/tenders/${id}/requested-documents`),
       appApiFetch<Milestone[]>(`/api/v1/tenders/${id}/milestones`),
       appApiFetch<Risk[]>(`/api/v1/tenders/${id}/risks`),
       appApiFetch<Alert[]>(`/api/v1/tenders/${id}/alerts`),
@@ -232,7 +227,6 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <LotsSection tenderId={tender.id} lots={lots} canManage={canManageTenderLots(role)} />
         <CriteriaSection tenderId={tender.id} criteria={criteria} />
-        <RequestedDocumentsSection tenderId={tender.id} documents={requestedDocuments} />
         <DocumentsSection tenderId={tender.id} documents={documents} canManage={canUploadOrEditDocument(role)} />
         <MilestonesSection tenderId={tender.id} milestones={milestones} />
         <RisksSection tenderId={tender.id} risks={risks} />

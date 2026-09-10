@@ -5,7 +5,6 @@ import { ChecklistItem, ChecklistItemStatus } from "./checklist-item.entity";
 import { Milestone, MilestoneType } from "./milestone.entity";
 import { calculateTenderReadiness } from "./readiness-calculator";
 import { ReadinessStatus } from "./readiness-status";
-import { RequestedDocument, RequestedDocumentStatus } from "./requested-document.entity";
 import { Risk } from "./risk.entity";
 
 const NOW = new Date("2026-06-01T00:00:00Z");
@@ -27,7 +26,6 @@ describe("calculateTenderReadiness", () => {
   it("returns a full score when there is nothing outstanding", () => {
     const result = calculateTenderReadiness({
       checklistItems: [],
-      requestedDocuments: [],
       criteria: [
         AwardCriterion.create({
           id: "c-1",
@@ -54,7 +52,6 @@ describe("calculateTenderReadiness", () => {
   it("lowers the score when required checklist items are incomplete", () => {
     const result = calculateTenderReadiness({
       checklistItems: [requiredChecklistItem(ChecklistItemStatus.Todo)],
-      requestedDocuments: [],
       criteria: [],
       milestones: [],
       risks: [],
@@ -81,7 +78,6 @@ describe("calculateTenderReadiness", () => {
 
     const result = calculateTenderReadiness({
       checklistItems: [requiredChecklistItem(ChecklistItemStatus.Completed)],
-      requestedDocuments: [],
       criteria: [],
       milestones: [],
       risks: [],
@@ -108,7 +104,6 @@ describe("calculateTenderReadiness", () => {
 
     const result = calculateTenderReadiness({
       checklistItems: [],
-      requestedDocuments: [],
       criteria: [],
       milestones: [],
       risks: [risk],
@@ -125,7 +120,6 @@ describe("calculateTenderReadiness", () => {
   it("has no blocking issue when everything is fine", () => {
     const result = calculateTenderReadiness({
       checklistItems: [],
-      requestedDocuments: [],
       criteria: [],
       milestones: [],
       risks: [],
@@ -151,7 +145,6 @@ describe("calculateTenderReadiness", () => {
 
     const result = calculateTenderReadiness({
       checklistItems: [],
-      requestedDocuments: [],
       criteria: [],
       milestones: [overdueMilestone],
       risks: [],
@@ -165,20 +158,11 @@ describe("calculateTenderReadiness", () => {
     expect(result.score).toBeLessThan(100);
   });
 
-  it("penalizes missing required documents", () => {
-    const document = RequestedDocument.create({
-      id: "doc-1",
-      organizationId: "org-1",
-      tenderId: "tender-1",
-      name: "Attestation fiscale",
-      required: true,
-      occurredAt: NOW,
-    });
-    expect(document.status).toBe(RequestedDocumentStatus.Pending);
-
+  it("TENDEROS-2.1 — les pièces demandées sont fusionnées dans la checklist : 60 points, total 100", () => {
+    // Les 25 points de l'ancienne dimension « Pièces obligatoires » rejoignent la checklist, où les
+    // pièces ont été reprises : les exigences suivies ne changent pas de poids, seulement d'endroit.
     const result = calculateTenderReadiness({
       checklistItems: [],
-      requestedDocuments: [document],
       criteria: [],
       milestones: [],
       risks: [],
@@ -188,6 +172,8 @@ describe("calculateTenderReadiness", () => {
       now: NOW,
     });
 
-    expect(result.score).toBeLessThan(100);
+    expect(result.breakdown.map((entry) => entry.label)).not.toContain("Pièces obligatoires");
+    expect(result.breakdown.find((entry) => entry.label === "Checklist obligatoire")?.weight).toBe(60);
+    expect(result.breakdown.reduce((sum, entry) => sum + entry.weight, 0)).toBe(100);
   });
 });

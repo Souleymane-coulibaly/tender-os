@@ -1099,6 +1099,11 @@ model TenderAwardCriterion {
 /// et §9 "Références documentaires" de la mission (champs quasi identiques). Aucun stockage
 /// binaire ici : `documentId` référence le module Documents (FK ajoutée avec ce module —
 /// décision validée lors de la conception Documents §V.3).
+/// TABLE HÉRITÉE — plus écrite par aucun code applicatif depuis la fusion dans la Checklist
+/// (migration `20261018090000_merge_requested_documents_into_checklist`). Chaque ligne a été reprise
+/// en `TenderChecklistItem` ; la correspondance est tracée dans
+/// `TenderRequestedDocumentChecklistMigration`. Conservée en l'état : sa suppression éventuelle
+/// relèvera d'une migration distincte, après une décision de conservation explicite.
 model TenderRequestedDocument {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
@@ -5515,6 +5520,24 @@ model AiSuggestionOrphanedArchive {
   rowSnapshot Json     @map("row_snapshot")
 
   @@map("ai_suggestions_orphaned_archive")
+}
+
+/// Fusion « Pièces demandées » -> Checklist — une ligne par pièce reprise, jamais modifiée ensuite.
+/// `checklistItemId` est volontairement DÉNORMALISÉ (aucune FK) : la suppression ultérieure de
+/// l'élément de checklist ne doit pas effacer la trace de sa provenance.
+model TenderRequestedDocumentChecklistMigration {
+  requestedDocumentId String   @id @map("requested_document_id") @db.Uuid
+  organizationId      String   @map("organization_id") @db.Uuid
+  tenderId            String   @map("tender_id") @db.Uuid
+  checklistItemId     String   @map("checklist_item_id") @db.Uuid
+  /// CREATED | LINKED_EXISTING — CHECK (migration).
+  outcome             String   @db.VarChar(40)
+  note                String?
+  migratedAt          DateTime @default(now()) @map("migrated_at")
+
+  @@index([organizationId, tenderId])
+  @@index([checklistItemId])
+  @@map("tender_requested_document_checklist_migrations")
 }
 
 // ============================================================================

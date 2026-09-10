@@ -1,10 +1,5 @@
-import { Inject, Injectable } from "@nestjs/common";
-import {
-  REQUESTED_DOCUMENT_REPOSITORY,
-  CreateRequestedDocumentUseCase,
-  UpdateRequestedDocumentUseCase,
-  type RequestedDocumentRepository,
-} from "../../../tenders";
+import { Injectable } from "@nestjs/common";
+import { ChecklistItemOrigin, ChecklistItemType, ChecklistRequirementLevel, CreateChecklistItemUseCase } from "../../../tenders";
 import { CREATE_FIELD_SENTINEL } from "../../application/ports/entity-target-adapter";
 import type {
   AiSuggestionEntityTargetAdapter,
@@ -14,81 +9,78 @@ import type {
   EntityTargetReadResult,
 } from "../../application/ports/entity-target-adapter";
 
-const ALLOWED_FIELDS: ReadonlySet<string> = new Set([
-  "name",
-  "category",
-  "documentType",
-  "required",
-  "description",
-  "expirationDate",
-  "displayOrder",
-  "isEliminatory",
-  "lotId",
-  "requestedFormat",
-  "signatureRequired",
-  "buyerProvidedTemplate",
-]);
-const MERGEABLE_FIELDS: ReadonlySet<string> = new Set(["description"]);
+/** Forme validée par `CreateRequestedDocumentProposalSchema` (`finding-mapping-schemas.ts`). */
+type LegacyRequestedDocumentProposal = Readonly<{
+  name: string;
+  category?: string | undefined;
+  required?: boolean | undefined;
+  description?: string | undefined;
+  lotId?: string | undefined;
+}>;
 
-type CreateDocumentProposal = Readonly<{ name: string } & Record<string, unknown>>;
-
-/** V2 Sprint 4 §10 — mapping RequirementFinding → TENDER_REQUESTED_DOCUMENT. */
+/**
+ * TENDEROS-2.1 — fusion des « Pièces demandées » dans la Checklist.
+ *
+ * Ce type de suggestion n'est plus produit depuis le V2 Sprint 6 : les exigences du DCE ciblent
+ * `CHECKLIST_ITEM`. Des suggestions antérieures peuvent pourtant encore attendre une décision. Les
+ * accepter crée désormais un ÉLÉMENT DE CHECKLIST, avec la correspondance de champs de la migration
+ * `20261018090000` — jamais une ligne dans `tender_requested_documents`, que plus aucun code
+ * n'écrit. Le type reste lisible dans l'historique des suggestions.
+ *
+ * `origin` vaut AI_SUGGESTION, et non MANUAL comme pour les pièces migrées : l'élément naît bien
+ * d'une proposition de l'analyse, il relève donc de la réconciliation comme tout élément de cette
+ * origine.
+ *
+ * Les suggestions de MISE À JOUR d'une pièce existante n'ont jamais été produites (le mapping
+ * Sprint 4 ne proposait que des créations). Si l'une se présentait, elle est refusée explicitement
+ * plutôt que redirigée au jugé vers un élément de checklist qu'elle ne désigne pas.
+ */
 @Injectable()
 export class TenderRequestedDocumentAdapter implements AiSuggestionEntityTargetAdapter {
-  constructor(
-    @Inject(REQUESTED_DOCUMENT_REPOSITORY) private readonly repository: RequestedDocumentRepository,
-    private readonly createUseCase: CreateRequestedDocumentUseCase,
-    private readonly updateUseCase: UpdateRequestedDocumentUseCase,
-  ) {}
+  constructor(private readonly createChecklistItemUseCase: CreateChecklistItemUseCase) {}
 
-  isFieldMergeable(fieldName: string): boolean {
-    return MERGEABLE_FIELDS.has(fieldName);
+  isFieldMergeable(_fieldName: string): boolean {
+    return false;
   }
 
   async readCurrentValue(input: EntityTargetReadInput): Promise<EntityTargetReadResult> {
-    if (input.fieldName === CREATE_FIELD_SENTINEL || input.entityId === undefined) {
-      return { exists: false, currentValue: undefined };
-    }
-    this.assertAllowedField(input.fieldName);
-    const document = await this.repository.findById({ organizationId: input.organizationId, tenderId: input.parentTenderId, documentId: input.entityId });
-    if (!document) {
-      return { exists: false, currentValue: undefined };
-    }
-    const currentValue = (document as unknown as Record<string, unknown>)[input.fieldName];
-    return { exists: currentValue !== undefined && currentValue !== null && currentValue !== "", currentValue };
+    this.assertCreation(input.fieldName, input.entityId);
+    return { exists: false, currentValue: undefined };
   }
 
   async applyValue(input: EntityTargetApplyInput): Promise<EntityTargetApplyResult> {
-    if (input.fieldName === CREATE_FIELD_SENTINEL || input.entityId === undefined) {
-      const proposal = input.value as CreateDocumentProposal;
-      if (!proposal || typeof proposal.name !== "string") {
-        throw new Error("Une proposition de création de pièce demandée doit contenir au minimum name.");
-      }
-      const created = await this.createUseCase.execute({
-        organizationId: input.organizationId,
-        tenderId: input.parentTenderId,
-        actorId: input.actorId,
-        actorRole: input.actorRole,
-        ...proposal,
-      } as Parameters<CreateRequestedDocumentUseCase["execute"]>[0]);
-      return { entityId: created.id };
+    this.assertCreation(input.fieldName, input.entityId);
+    const proposal = input.value as LegacyRequestedDocumentProposal;
+    if (!proposal || typeof proposal.name !== "string") {
+      throw new Error("Une proposition de pièce demandée doit contenir au minimum name.");
     }
 
-    this.assertAllowedField(input.fieldName);
-    await this.updateUseCase.execute({
+    const description = [proposal.description?.trim(), proposal.category ? `Catégorie : ${proposal.category}` : undefined]
+      .filter((part): part is string => part !== undefined && part !== "")
+      .join("\n\n");
+
+    const created = await this.createChecklistItemUseCase.execute({
       organizationId: input.organizationId,
       tenderId: input.parentTenderId,
-      documentId: input.entityId,
       actorId: input.actorId,
       actorRole: input.actorRole,
-      [input.fieldName]: input.value,
-    } as Parameters<UpdateRequestedDocumentUseCase["execute"]>[0]);
-    return { entityId: input.entityId };
+      requestId: input.requestId,
+      title: proposal.name,
+      description: description === "" ? undefined : description,
+      required: proposal.required ?? false,
+      requirementLevel: proposal.required ? ChecklistRequirementLevel.Mandatory : ChecklistRequirementLevel.Conditional,
+      type: ChecklistItemType.AdministrativeDocument,
+      lotId: proposal.lotId,
+      origin: ChecklistItemOrigin.AiSuggestion,
+    });
+    return { entityId: created.id };
   }
 
-  private assertAllowedField(fieldName: string): void {
-    if (!ALLOWED_FIELDS.has(fieldName)) {
-      throw new Error(`Champ pièce demandée "${fieldName}" non autorisé pour une suggestion TENDER_REQUESTED_DOCUMENT.`);
+  private assertCreation(fieldName: string, entityId: string | undefined): void {
+    if (fieldName !== CREATE_FIELD_SENTINEL || entityId !== undefined) {
+      throw new Error(
+        "Les « Pièces demandées » ont été fusionnées dans la Checklist : une suggestion TENDER_REQUESTED_DOCUMENT de mise à jour ne peut plus être appliquée. Rejetez-la, puis modifiez l'élément de checklist correspondant.",
+      );
     }
   }
 }

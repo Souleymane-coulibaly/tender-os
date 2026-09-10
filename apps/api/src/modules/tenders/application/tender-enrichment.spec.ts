@@ -34,7 +34,6 @@ describe("enrichTenders", () => {
     const result = enrichTenders({
       tenders: [tenderA, tenderB],
       checklistItems: [],
-      requestedDocuments: [],
       criteria: [],
       milestones: [],
       risks: [riskForA],
@@ -53,7 +52,6 @@ describe("enrichTenders", () => {
     const result = enrichTenders({
       tenders: [overdueTender, futureTender],
       checklistItems: [],
-      requestedDocuments: [],
       criteria: [],
       milestones: [],
       risks: [],
@@ -76,7 +74,6 @@ describe("enrichTenders", () => {
     const result = enrichTenders({
       tenders: [submittedTender],
       checklistItems: [],
-      requestedDocuments: [],
       criteria: [],
       milestones: [],
       risks: [],

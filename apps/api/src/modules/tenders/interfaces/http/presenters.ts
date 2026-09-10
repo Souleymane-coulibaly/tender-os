@@ -4,7 +4,6 @@ import type {
   BuyerSummary,
   ChecklistItemSummary,
   MilestoneSummary,
-  RequestedDocumentSummary,
   RiskSummary,
   TenderLotSummary,
   TenderSummary,
@@ -36,9 +35,6 @@ export function presentChecklistItem(item: ChecklistItemSummary): ChecklistItemS
 }
 export function presentAwardCriterion(criterion: AwardCriterionSummary): AwardCriterionSummary {
   return { ...criterion };
-}
-export function presentRequestedDocument(document: RequestedDocumentSummary): RequestedDocumentSummary {
-  return { ...document };
 }
 export function presentMilestone(milestone: MilestoneSummary): MilestoneSummary {
   return { ...milestone };

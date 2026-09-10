@@ -21,7 +21,8 @@ export type TenderCompleteness = Readonly<{
   dates: TenderCompletenessStatus;
   lots: TenderCompletenessStatus;
   criteria: TenderCompletenessStatus;
-  requestedDocuments: TenderCompletenessStatus;
+  /** TENDEROS-2.1 — remplace « Pièces demandées », fusionnées dans la Checklist. */
+  checklist: TenderCompletenessStatus;
   milestones: TenderCompletenessStatus;
   risks: TenderCompletenessStatus;
 }>;
@@ -33,7 +34,7 @@ export function computeTenderCompleteness(input: {
   candidateArchived: boolean;
   lots: readonly TenderLot[];
   criteria: readonly AwardCriterion[];
-  requestedDocumentsCount: number;
+  checklistItemsCount: number;
   milestones: readonly Milestone[];
   risksCount: number;
   now: Date;
@@ -63,13 +64,13 @@ export function computeTenderCompleteness(input: {
 
   const criteria = computeCriteriaCompleteness(input.criteria);
 
-  const requestedDocuments = input.requestedDocumentsCount === 0 ? TenderCompletenessStatus.Missing : TenderCompletenessStatus.Complete;
+  const checklist = input.checklistItemsCount === 0 ? TenderCompletenessStatus.Missing : TenderCompletenessStatus.Complete;
 
   const milestones = computeMilestonesCompleteness(input.milestones, input.now);
 
   const risks = input.risksCount === 0 ? TenderCompletenessStatus.Missing : TenderCompletenessStatus.Complete;
 
-  return { generalInformation, candidate, buyer, dates, lots, criteria, requestedDocuments, milestones, risks };
+  return { generalInformation, candidate, buyer, dates, lots, criteria, checklist, milestones, risks };
 }
 
 function computeCriteriaCompleteness(criteria: readonly AwardCriterion[]): TenderCompletenessStatus {

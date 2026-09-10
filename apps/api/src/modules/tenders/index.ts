@@ -1,5 +1,5 @@
 export { TendersModule } from "./tenders.module";
-export type { TenderSummary, TenderLotSummary, BuyerSummary, AwardCriterionSummary, RequestedDocumentSummary, MilestoneSummary, RiskSummary } from "./application/dtos";
+export type { TenderSummary, TenderLotSummary, BuyerSummary, AwardCriterionSummary, MilestoneSummary, RiskSummary } from "./application/dtos";
 // Réexporté uniquement pour permettre au module Documents de vérifier qu'un Tender existe et
 // appartient à l'organisation active avant d'y associer un document (AttachDocumentToTender/
 // ListTenderDocuments) — même motif que les réexports déjà pratiqués par Memberships.
@@ -41,12 +41,6 @@ export type { UpdateAwardCriterionCommand } from "./application/use-cases/update
 export { AWARD_CRITERION_REPOSITORY } from "./application/ports/award-criterion.repository";
 export type { AwardCriterionRepository } from "./application/ports/award-criterion.repository";
 
-export { CreateRequestedDocumentUseCase } from "./application/use-cases/create-requested-document.use-case";
-export type { CreateRequestedDocumentCommand } from "./application/use-cases/create-requested-document.use-case";
-export { UpdateRequestedDocumentUseCase } from "./application/use-cases/update-requested-document.use-case";
-export type { UpdateRequestedDocumentCommand } from "./application/use-cases/update-requested-document.use-case";
-export { REQUESTED_DOCUMENT_REPOSITORY } from "./application/ports/requested-document.repository";
-export type { RequestedDocumentRepository } from "./application/ports/requested-document.repository";
 
 export { CreateMilestoneUseCase } from "./application/use-cases/create-milestone.use-case";
 export type { CreateMilestoneCommand } from "./application/use-cases/create-milestone.use-case";
@@ -67,7 +61,7 @@ export type { BuyerFields, CreateBuyerCommand } from "./application/use-cases/bu
 export { BUYER_REPOSITORY } from "./application/ports/buyer.repository";
 export type { BuyerRepository } from "./application/ports/buyer.repository";
 
-export { TenderNotFoundError, TenderLotNotFoundError, AwardCriterionNotFoundError, RequestedDocumentNotFoundError, MilestoneNotFoundError, RiskNotFoundError, BuyerNotFoundError, TenderPermissionMissingError } from "./domain/errors";
+export { TenderNotFoundError, TenderLotNotFoundError, AwardCriterionNotFoundError, MilestoneNotFoundError, RiskNotFoundError, BuyerNotFoundError, TenderPermissionMissingError } from "./domain/errors";
 
 // V2 Sprint 5 — réexportés UNIQUEMENT pour `opportunity` (Niveau 2 : génération/régénération de
 // GoNoGoReport, enregistrement de GoNoGoDecision au niveau Tender) — réutilise TEL QUEL le système
@@ -75,15 +69,13 @@ export { TenderNotFoundError, TenderLotNotFoundError, AwardCriterionNotFoundErro
 export { TenderPermission, roleHasTenderPermission } from "./domain/tender-permission";
 export { assertHasTenderPermission } from "./application/policies/tender-authorization.policy";
 
-// V2 Sprint 5 — `REQUESTED_DOCUMENT_REPOSITORY`/`TENDER_LOT_REPOSITORY` déjà exportés ci-dessus
-// (pour `ai-suggestion-bridge`) sont réutilisés EN LECTURE SEULE par `opportunity` (calcul du
+// V2 Sprint 5 — `TENDER_LOT_REPOSITORY`, déjà exporté ci-dessus (pour `ai-suggestion-bridge`),
+// est réutilisé EN LECTURE SEULE par `opportunity` (calcul du
 // GoNoGoReport Niveau 2) — seuls les types de valeur des entités manquaient encore.
-export { RequestedDocumentStatus } from "./domain/requested-document.entity";
-export type { RequestedDocument } from "./domain/requested-document.entity";
 export type { TenderLot } from "./domain/tender-lot.entity";
 
 // V2 Sprint 6 — réexportés pour `ai-suggestion-bridge` (nouvel adaptateur CHECKLIST_ITEM, même
-// motif que Milestone/Risk/RequestedDocument ci-dessus) ET pour le nouveau module cross-cutting
+// motif que Milestone/Risk ci-dessus) ET pour le nouveau module cross-cutting
 // `checklist-intelligence` (rapprochement documentaire + réconciliation nouvelle analyse, qui ne
 // peuvent pas vivre DANS `tenders` : `documents`/`analysis` importent déjà `TendersModule`, un
 // import inverse créerait un cycle).

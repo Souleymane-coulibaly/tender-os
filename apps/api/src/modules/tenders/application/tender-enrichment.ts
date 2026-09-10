@@ -3,7 +3,6 @@ import type { AwardCriterion } from "../domain/award-criterion.entity";
 import type { ChecklistItem } from "../domain/checklist-item.entity";
 import type { Milestone } from "../domain/milestone.entity";
 import { calculateTenderReadiness, type ReadinessResult } from "../domain/readiness-calculator";
-import type { RequestedDocument } from "../domain/requested-document.entity";
 import { Risk, RiskStatus } from "../domain/risk.entity";
 import type { Tender } from "../domain/tender.aggregate";
 import { TenderStatus } from "../domain/tender-status";
@@ -48,7 +47,6 @@ function groupByTenderId<T extends { tenderId: string }>(items: readonly T[]): M
 export function enrichTenders(input: {
   tenders: readonly Tender[];
   checklistItems: readonly ChecklistItem[];
-  requestedDocuments: readonly RequestedDocument[];
   criteria: readonly AwardCriterion[];
   milestones: readonly Milestone[];
   risks: readonly Risk[];
@@ -56,7 +54,6 @@ export function enrichTenders(input: {
   now: Date;
 }): Map<string, TenderEnrichment> {
   const checklistByTender = groupByTenderId(input.checklistItems);
-  const documentsByTender = groupByTenderId(input.requestedDocuments);
   const criteriaByTender = groupByTenderId(input.criteria);
   const milestonesByTender = groupByTenderId(input.milestones);
   const risksByTender = groupByTenderId(input.risks);
@@ -71,7 +68,6 @@ export function enrichTenders(input: {
 
     const readiness = calculateTenderReadiness({
       checklistItems,
-      requestedDocuments: documentsByTender.get(tenderId) ?? [],
       criteria: criteriaByTender.get(tenderId) ?? [],
       milestones: milestonesByTender.get(tenderId) ?? [],
       risks,

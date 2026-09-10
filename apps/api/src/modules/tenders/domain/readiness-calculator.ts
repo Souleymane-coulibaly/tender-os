@@ -3,7 +3,6 @@ import { ChecklistItem, ChecklistItemStatus } from "./checklist-item.entity";
 import { Milestone } from "./milestone.entity";
 import { AwardCriterion } from "./award-criterion.entity";
 import { ReadinessStatus } from "./readiness-status";
-import { RequestedDocument, RequestedDocumentStatus } from "./requested-document.entity";
 import { Risk, RiskStatus } from "./risk.entity";
 
 /**
@@ -43,16 +42,21 @@ export type ReadinessResult = Readonly<{
 }>;
 
 /**
- * Moteur de score de préparation (mission §13) — déterministe, sans IA. Pondération
- * proposée par moi (non documentée) : checklist obligatoire 35% ; pièces obligatoires 25% ;
- * au moins un critère renseigné 10% ; aucune échéance dépassée 15% ; aucun risque CRITICAL
- * non résolu 15%. Un risque ou une alerte CRITICAL non résolu(e) plafonne le statut à
+ * Moteur de score de préparation (mission §13) — déterministe, sans IA. Pondération : checklist
+ * obligatoire 60% ; au moins un critère renseigné 10% ; aucune échéance dépassée 15% ; aucun
+ * risque CRITICAL non résolu 15%.
+ *
+ * TENDEROS-2.1 — fusion des « Pièces demandées » dans la Checklist. Les pièces pesaient 25% dans
+ * une dimension distincte, alors que l'analyse IA ne les alimentait plus depuis le V2 Sprint 6 :
+ * un quart du score reposait sur une liste que plus rien ne remplissait automatiquement. Elles ont
+ * été reprises en éléments de checklist (migration `20261018090000`) ; leurs 25 points rejoignent
+ * donc la checklist (35 + 25 = 60). Les exigences suivies ne changent pas de poids, seulement
+ * d'endroit. Un risque ou une alerte CRITICAL non résolu(e) plafonne le statut à
  * NOT_READY quel que soit le score numérique — le score n'est pas une garantie de conformité
  * juridique (mission §13).
  */
 export function calculateTenderReadiness(input: {
   checklistItems: ChecklistItem[];
-  requestedDocuments: RequestedDocument[];
   criteria: AwardCriterion[];
   milestones: Milestone[];
   risks: Risk[];
@@ -72,9 +76,8 @@ export function calculateTenderReadiness(input: {
   pendingMandatoryRequirements: number;
   now: Date;
 }): ReadinessResult {
-  // Une checklist et des pièces obligatoires sont DÉRIVÉES de l'analyse du DCE : tant qu'aucune
-  // consolidation exploitable n'existe, leur vacuité ne signifie pas « rien à faire » mais « pas
-  // encore su ». Voir `TenderAnalysisReadinessState`.
+  // La checklist est DÉRIVÉE de l'analyse du DCE : tant qu'aucune consolidation exploitable
+  // n'existe, sa vacuité ne signifie pas « rien à faire » mais « pas encore su ». Voir `TenderAnalysisReadinessState`.
   const analysisIsCurrent = input.analysis === "CURRENT";
   // F-06 — un ensemble vide n'est satisfait que si une consolidation COURANTE l'a etabli ET
   // qu'aucune exigence obligatoire detectee n'attend encore d'etre confirmee.
@@ -88,13 +91,6 @@ export function calculateTenderReadiness(input: {
   const checklistRatio =
     requiredChecklist.length === 0 ? emptySetRatio : completedChecklist.length / requiredChecklist.length;
 
-  const requiredDocuments = input.requestedDocuments.filter((doc) => doc.required);
-  const satisfiedDocuments = requiredDocuments.filter(
-    (doc) => doc.status === RequestedDocumentStatus.Provided || doc.status === RequestedDocumentStatus.Validated,
-  );
-  const documentsRatio =
-    requiredDocuments.length === 0 ? emptySetRatio : satisfiedDocuments.length / requiredDocuments.length;
-
   const criteriaRatio = input.criteria.length > 0 ? 1 : 0;
 
   const overdueMilestones = input.milestones.filter((milestone) => milestone.isOverdue(input.now));
@@ -106,8 +102,7 @@ export function calculateTenderReadiness(input: {
   const risksRatio = unresolvedCriticalRisks.length === 0 ? 1 : 0;
 
   const breakdown: ReadinessBreakdownEntry[] = [
-    { label: "Checklist obligatoire", weight: 35, achievedRatio: checklistRatio, points: 35 * checklistRatio },
-    { label: "Pièces obligatoires", weight: 25, achievedRatio: documentsRatio, points: 25 * documentsRatio },
+    { label: "Checklist obligatoire", weight: 60, achievedRatio: checklistRatio, points: 60 * checklistRatio },
     { label: "Critères d'attribution renseignés", weight: 10, achievedRatio: criteriaRatio, points: 10 * criteriaRatio },
     { label: "Échéances respectées", weight: 15, achievedRatio: milestonesRatio, points: 15 * milestonesRatio },
     { label: "Aucun risque critique non résolu", weight: 15, achievedRatio: risksRatio, points: 15 * risksRatio },
@@ -144,9 +139,8 @@ export function calculateTenderReadiness(input: {
   return {
     score,
     status,
-    completedItems: completedChecklist.length + satisfiedDocuments.length,
-    remainingItems:
-      requiredChecklist.length - completedChecklist.length + (requiredDocuments.length - satisfiedDocuments.length),
+    completedItems: completedChecklist.length,
+    remainingItems: requiredChecklist.length - completedChecklist.length,
     criticalAlerts,
     warnings,
     breakdown,

@@ -16,7 +16,6 @@ import { calculateTenderReadiness } from "./readiness-calculator";
  */
 const BASE = {
   checklistItems: [],
-  requestedDocuments: [],
   criteria: [],
   milestones: [],
   risks: [],

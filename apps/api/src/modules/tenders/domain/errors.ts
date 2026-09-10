@@ -91,13 +91,6 @@ export class AwardCriterionNotFoundError extends DomainError {
   }
 }
 
-export class RequestedDocumentNotFoundError extends DomainError {
-  readonly code = "REQUESTED_DOCUMENT_NOT_FOUND";
-  constructor() {
-    super("Requested document not found.");
-  }
-}
-
 export class MilestoneNotFoundError extends DomainError {
   readonly code = "MILESTONE_NOT_FOUND";
   constructor() {

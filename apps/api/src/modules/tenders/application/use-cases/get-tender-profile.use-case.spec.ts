@@ -11,9 +11,9 @@ import {
   createClientPortfolioTestFixture,
   FixedClock,
   InMemoryAwardCriterionRepository,
+  InMemoryChecklistItemRepository,
   InMemoryBuyerRepository,
   InMemoryMilestoneRepository,
-  InMemoryRequestedDocumentRepository,
   InMemoryRiskRepository,
   InMemoryTenderLotRepository,
   InMemoryTenderRepository,
@@ -27,7 +27,7 @@ describe("GetTenderProfileUseCase (V2 Sprint 3 §14)", () => {
   let buyerRepository: InMemoryBuyerRepository;
   let lotRepository: InMemoryTenderLotRepository;
   let criterionRepository: InMemoryAwardCriterionRepository;
-  let requestedDocumentRepository: InMemoryRequestedDocumentRepository;
+  let checklistItemRepository: InMemoryChecklistItemRepository;
   let milestoneRepository: InMemoryMilestoneRepository;
   let riskRepository: InMemoryRiskRepository;
   let statusHistoryRepository: InMemoryTenderStatusHistoryRepository;
@@ -39,7 +39,7 @@ describe("GetTenderProfileUseCase (V2 Sprint 3 §14)", () => {
     buyerRepository = new InMemoryBuyerRepository();
     lotRepository = new InMemoryTenderLotRepository();
     criterionRepository = new InMemoryAwardCriterionRepository();
-    requestedDocumentRepository = new InMemoryRequestedDocumentRepository();
+    checklistItemRepository = new InMemoryChecklistItemRepository();
     milestoneRepository = new InMemoryMilestoneRepository();
     riskRepository = new InMemoryRiskRepository();
     statusHistoryRepository = new InMemoryTenderStatusHistoryRepository();
@@ -50,7 +50,7 @@ describe("GetTenderProfileUseCase (V2 Sprint 3 §14)", () => {
       buyerRepository,
       lotRepository,
       criterionRepository,
-      requestedDocumentRepository,
+      checklistItemRepository,
       milestoneRepository,
       riskRepository,
       statusHistoryRepository,
@@ -94,7 +94,7 @@ describe("GetTenderProfileUseCase (V2 Sprint 3 §14)", () => {
     expect(profile.lots).toHaveLength(1);
     expect(profile.criteria).toHaveLength(1);
     expect(profile.risks).toHaveLength(1);
-    expect(profile.requestedDocuments).toHaveLength(0);
+    expect(profile.completeness.checklist).toBe(TenderCompletenessStatus.Missing);
     expect(profile.milestones).toHaveLength(0);
     expect(profile.completeness.buyer).toBe(TenderCompletenessStatus.Complete);
     expect(profile.completeness.candidate).toBe(TenderCompletenessStatus.Complete);
