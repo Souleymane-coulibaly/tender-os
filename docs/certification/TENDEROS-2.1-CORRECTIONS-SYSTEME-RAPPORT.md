@@ -369,6 +369,13 @@ Modèles avec leur tarif, sans quoi les prévisions restent « Partielles » (au
 Signalé, non modifié : sans tarif, l'aperçu affiche un total partiel de 0 (« 0.000000 EUR —
 Partiel ») plutôt que « Coût non disponible » — comportement existant de l'estimation partielle.
 
+**Checklist d'activation — « Compléter l'entreprise candidate » menait à l'écran Clients**
+(signalé). `activation-checklist-widget.tsx` pointait encore vers `/app/clients`, lien antérieur à
+la séparation Client / Entreprise candidate (CCV2-I) et jamais mis à jour — aucun test ne couvrait
+ce widget. Corrigé : `/app/candidate-companies`. Test ajouté (`activation-checklist-widget.test.tsx`,
+2 tests : l'étape ouverte mène aux entreprises candidates ; une étape terminée n'est pas un lien).
+Web : typecheck 0, lint 0 erreur.
+
 **Abonnement staging désynchronisé de Stripe** (constaté en même temps : « Essai Starter — 0 jours
 restants », échéance au 05/09/2026 déjà passée). Établi : les variables Stripe du service API
 staging sont toutes définies (clé, secret de webhook, 7 prix, `APP_BASE_URL`) et les webhooks

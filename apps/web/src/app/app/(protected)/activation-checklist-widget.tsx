@@ -5,7 +5,9 @@ import type { ActivationChecklistItemId, DashboardActivationChecklist } from "..
 // V2 Sprint 25 (Guide interactif) — mission §25.69 "checklist dynamique". Chaque lien mène à la
 // route réelle qui permet de compléter l'étape — jamais un simple libellé sans action.
 const ITEM_LINKS: Partial<Record<ActivationChecklistItemId, string>> = {
-  CANDIDATE_COMPANY_COMPLETE: "/app/clients",
+  // L'entreprise candidate (celle qui répond) n'est pas le client : depuis leur séparation (CCV2-I),
+  // elle a son propre écran.
+  CANDIDATE_COMPANY_COMPLETE: "/app/candidate-companies",
   ADMINISTRATIVE_DOCUMENTS_ADDED: "/app/tenders",
   MARKET_WATCH_CONFIGURED: "/app/market-watch",
   FIRST_DCE_IMPORTED: "/app/tenders/new",
