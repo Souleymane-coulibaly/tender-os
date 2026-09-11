@@ -6,6 +6,7 @@ import type { PublicPlanCatalogEntry } from "../../../../lib/billing-types";
 vi.mock("../../billing-actions", () => ({
   createCheckoutSessionAction: vi.fn(async () => ({ url: "https://checkout.stripe.com/test" })),
   createCustomerPortalSessionAction: vi.fn(async () => ({ url: "https://billing.stripe.com/test" })),
+  createPlanChangeSessionAction: vi.fn(async () => ({ url: "https://billing.stripe.com/test/plan-change" })),
 }));
 
 const CATALOG: PublicPlanCatalogEntry[] = [
@@ -69,16 +70,30 @@ describe("PlanCatalogSection", () => {
     expect(within(starterCard).queryByRole("button", { name: /Passer à/ })).not.toBeInTheDocument();
   });
 
-  it("BLOQUANT — an org WITH an active subscription gets upgrade CTAs routed through the Stripe portal (never a second Checkout Session, which would create a duplicate Stripe subscription)", async () => {
-    const { createCheckoutSessionAction, createCustomerPortalSessionAction } = await import("../../billing-actions");
+  it("BLOQUANT — an org WITH a subscription gets a plan change for THE CHOSEN plan (never the generic portal, which only shows the current plan, nor a second Checkout Session, which would create a duplicate Stripe subscription)", async () => {
+    const { createCheckoutSessionAction, createCustomerPortalSessionAction, createPlanChangeSessionAction } = await import("../../billing-actions");
+    vi.mocked(createCheckoutSessionAction).mockClear();
+    vi.mocked(createCustomerPortalSessionAction).mockClear();
     render(<PlanCatalogSection catalog={CATALOG} currentPlanTier="STARTER" hasAnySubscription canManage />);
 
     const businessHeading = screen.getByRole("heading", { name: "Business" });
     const businessCard = businessHeading.closest("section") as HTMLElement;
     fireEvent.click(within(businessCard).getByRole("button", { name: "Passer à Business" }));
 
-    await vi.waitFor(() => expect(createCustomerPortalSessionAction).toHaveBeenCalled());
+    await vi.waitFor(() => expect(createPlanChangeSessionAction).toHaveBeenCalledWith("BUSINESS", "MONTHLY"));
+    expect(createCustomerPortalSessionAction).not.toHaveBeenCalled();
     expect(createCheckoutSessionAction).not.toHaveBeenCalled();
+  });
+
+  it("the plan change carries the interval shown on screen (Annual → YEARLY)", async () => {
+    const { createPlanChangeSessionAction } = await import("../../billing-actions");
+    render(<PlanCatalogSection catalog={CATALOG} currentPlanTier="STARTER" hasAnySubscription canManage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Annuel" }));
+    const enterpriseCard = screen.getByRole("heading", { name: "Enterprise" }).closest("section") as HTMLElement;
+    fireEvent.click(within(enterpriseCard).getByRole("button", { name: "Passer à Enterprise" }));
+
+    await vi.waitFor(() => expect(createPlanChangeSessionAction).toHaveBeenCalledWith("ENTERPRISE", "YEARLY"));
   });
 
   it("BLOQUANT — an org with NO subscription gets a direct checkout CTA (safe: no existing Stripe subscription to duplicate)", async () => {

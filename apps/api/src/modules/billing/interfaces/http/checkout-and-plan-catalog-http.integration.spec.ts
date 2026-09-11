@@ -52,6 +52,8 @@ describe("Billing — checkout & plan catalog (real HTTP + PostgreSQL, fake Stri
       return { sessionId: `cs_fake_${randomUUID()}`, url: `https://checkout.stripe.com/fake/${randomUUID()}` };
     },
     createCustomerPortalSession: async () => ({ url: `https://billing.stripe.com/fake/${randomUUID()}` }),
+    retrieveSubscription: async () => null,
+    createPlanChangePortalSession: async () => ({ url: `https://billing.stripe.com/fake/${randomUUID()}` }),
     constructWebhookEvent: () => {
       if (!pendingEvent) throw new Error("test did not set pendingEvent before calling execute()");
       return pendingEvent;

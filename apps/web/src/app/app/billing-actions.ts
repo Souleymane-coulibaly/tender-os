@@ -101,6 +101,21 @@ export async function createCheckoutSessionAction(target: CheckoutTarget, return
   }
 }
 
+/** Organisation déjà abonnée : Stripe s'ouvre directement sur la confirmation du forfait choisi
+ *  (prorata, prochaine facture), jamais sur l'accueil générique du portail ni sur une seconde
+ *  Checkout Session. Seuls le palier et la périodicité partent d'ici — le prix est résolu côté API. */
+export async function createPlanChangeSessionAction(planTier: SubscriptionPlanTier, billingInterval: BillingInterval): Promise<CheckoutSessionResult> {
+  try {
+    const result = await appApiFetch<{ url: string }>("/api/v1/billing/plan-change-sessions", {
+      method: "POST",
+      body: JSON.stringify({ planTier, billingInterval }),
+    });
+    return { url: result.url };
+  } catch (error) {
+    return { error: describeBillingActionError(error) };
+  }
+}
+
 export async function createCustomerPortalSessionAction(): Promise<CheckoutSessionResult> {
   try {
     const result = await appApiFetch<{ url: string }>("/api/v1/billing/customer-portal-sessions", { method: "POST" });

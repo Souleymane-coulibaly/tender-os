@@ -21,6 +21,7 @@ import { ConsumeAoCreditUseCase } from "./application/use-cases/consume-ao-credi
 import { ConsumePassForTenderUseCase } from "./application/use-cases/consume-pass-for-tender.use-case";
 import { CreateCheckoutSessionUseCase } from "./application/use-cases/create-checkout-session.use-case";
 import { CreateCustomerPortalSessionUseCase } from "./application/use-cases/create-customer-portal-session.use-case";
+import { CreatePlanChangePortalSessionUseCase } from "./application/use-cases/create-plan-change-portal-session.use-case";
 import { CreateEntitlementOverrideUseCase } from "./application/use-cases/create-entitlement-override.use-case";
 import { GetAoCreditBalanceUseCase } from "./application/use-cases/get-ao-credit-balance.use-case";
 import { GetOrganizationEntitlementsUseCase } from "./application/use-cases/get-organization-entitlements.use-case";
@@ -104,6 +105,7 @@ import { StripeWebhookController } from "./interfaces/http/stripe-webhook.contro
     ListOrganizationAoCreditLedgerUseCase,
     CreateCheckoutSessionUseCase,
     CreateCustomerPortalSessionUseCase,
+    CreatePlanChangePortalSessionUseCase,
     HandleStripeWebhookUseCase,
     SendTrialRemindersUseCase,
     TrialReminderWorker,

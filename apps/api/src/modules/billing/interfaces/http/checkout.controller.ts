@@ -5,8 +5,14 @@ import type { BillingInterval } from "../../domain/billing-interval";
 import type { SubscriptionPlanTier } from "../../domain/plan-tier";
 import { CreateCheckoutSessionUseCase } from "../../application/use-cases/create-checkout-session.use-case";
 import { CreateCustomerPortalSessionUseCase } from "../../application/use-cases/create-customer-portal-session.use-case";
+import { CreatePlanChangePortalSessionUseCase } from "../../application/use-cases/create-plan-change-portal-session.use-case";
 import { BillingErrorFilter } from "./billing-error.filter";
-import { CreateCheckoutSessionBodySchema, type CreateCheckoutSessionBody } from "./schemas";
+import {
+  CreateCheckoutSessionBodySchema,
+  CreatePlanChangeSessionBodySchema,
+  type CreateCheckoutSessionBody,
+  type CreatePlanChangeSessionBody,
+} from "./schemas";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
 
 /**
@@ -22,6 +28,7 @@ export class CheckoutController {
   constructor(
     private readonly createCheckoutSessionUseCase: CreateCheckoutSessionUseCase,
     private readonly createCustomerPortalSessionUseCase: CreateCustomerPortalSessionUseCase,
+    private readonly createPlanChangePortalSessionUseCase: CreatePlanChangePortalSessionUseCase,
   ) {}
 
   @Post("checkout-sessions")
@@ -49,5 +56,21 @@ export class CheckoutController {
   @HttpCode(HttpStatus.CREATED)
   async createCustomerPortalSession(@CurrentMembershipContext() membership: MembershipContext) {
     return this.createCustomerPortalSessionUseCase.execute({ organizationId: membership.organizationId, actorRole: membership.role });
+  }
+
+  /** « Passer à Business/Enterprise » pour une organisation déjà abonnée : portail Stripe ouvert
+   *  directement sur la confirmation du nouveau forfait (jamais une seconde Checkout Session). */
+  @Post("plan-change-sessions")
+  @HttpCode(HttpStatus.CREATED)
+  async createPlanChangeSession(
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Body(new ZodValidationPipe(CreatePlanChangeSessionBodySchema)) body: CreatePlanChangeSessionBody,
+  ) {
+    return this.createPlanChangePortalSessionUseCase.execute({
+      organizationId: membership.organizationId,
+      actorRole: membership.role,
+      planTier: body.planTier as SubscriptionPlanTier,
+      billingInterval: body.billingInterval as BillingInterval,
+    });
   }
 }

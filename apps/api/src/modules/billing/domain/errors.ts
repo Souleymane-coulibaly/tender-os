@@ -250,6 +250,25 @@ export class NoStripeCustomerForOrganizationError extends DomainError {
   }
 }
 
+/** Changement de forfait vers le forfait déjà en cours (même palier, même périodicité) : il n'y a
+ *  rien à confirmer chez Stripe. */
+export class PlanChangeTargetIsCurrentPlanError extends DomainError {
+  readonly code = "PLAN_CHANGE_TARGET_IS_CURRENT_PLAN";
+  constructor(target: string) {
+    super(`The organization is already on ${target}`);
+  }
+}
+
+/** Le portail Stripe ne sait changer le prix que d'un abonnement Stripe existant, non résilié et à
+ *  une seule ligne. Un abonnement local sans identifiant Stripe (attribué manuellement), inconnu de
+ *  Stripe ou résilié ne peut pas passer par ce parcours. */
+export class StripeSubscriptionNotUpdatableError extends DomainError {
+  readonly code = "STRIPE_SUBSCRIPTION_NOT_UPDATABLE";
+  constructor(reason: string) {
+    super(`The Stripe subscription cannot be updated: ${reason}`);
+  }
+}
+
 export class BillingManagementPermissionMissingError extends DomainError {
   readonly code = "BILLING_MANAGEMENT_PERMISSION_MISSING";
   constructor() {

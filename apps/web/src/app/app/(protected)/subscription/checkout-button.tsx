@@ -1,11 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { createCheckoutSessionAction, createCustomerPortalSessionAction, type CheckoutTarget } from "../../billing-actions";
+import {
+  createCheckoutSessionAction,
+  createCustomerPortalSessionAction,
+  createPlanChangeSessionAction,
+  type CheckoutTarget,
+} from "../../billing-actions";
+import type { BillingInterval, SubscriptionPlanTier } from "../../../../lib/billing-types";
 
 type Props =
   | { kind: "checkout"; target: CheckoutTarget; label: string; className?: string }
+  | { kind: "plan-change"; planTier: SubscriptionPlanTier; billingInterval: BillingInterval; label: string; className?: string }
   | { kind: "portal"; label: string; className?: string };
+
+function openSession(props: Props) {
+  switch (props.kind) {
+    case "checkout":
+      return createCheckoutSessionAction(props.target);
+    case "plan-change":
+      return createPlanChangeSessionAction(props.planTier, props.billingInterval);
+    case "portal":
+      return createCustomerPortalSessionAction();
+  }
+}
 
 const DEFAULT_CLASS = "rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50";
 
@@ -21,7 +39,7 @@ export function CheckoutButton(props: Props) {
   async function handleClick() {
     setIsPending(true);
     setError(undefined);
-    const result = props.kind === "checkout" ? await createCheckoutSessionAction(props.target) : await createCustomerPortalSessionAction();
+    const result = await openSession(props);
     if (result.error || !result.url) {
       setError(result.error ?? "Une erreur est survenue.");
       setIsPending(false);

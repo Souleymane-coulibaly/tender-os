@@ -43,6 +43,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   BILLING_MANAGEMENT_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
   // Correctif audit Codex 22C (P1-02) — non-2xx pour que Stripe rejoue l'événement.
   STRIPE_UNRECOGNIZED_PRICE: HttpStatus.UNPROCESSABLE_ENTITY,
+  // Changement de forfait d'un abonnement existant (lien direct vers la confirmation Stripe).
+  PLAN_CHANGE_TARGET_IS_CURRENT_PLAN: HttpStatus.CONFLICT,
+  STRIPE_SUBSCRIPTION_NOT_UPDATABLE: HttpStatus.UNPROCESSABLE_ENTITY,
 };
 
 @Catch(DomainError)

@@ -254,6 +254,45 @@ sans erreur. Organisation sans droit actif : page structurée sans erreur. (Deux
 interrompus par l'environnement : mise en veille du poste sur batterie critique à 12:27, redémarrage
 de l'API locale à la reprise — sans lien avec le code.)
 
+**Abonnement — « Passer à Business » ramenait toujours sur Starter dans Stripe** (signalé sur
+staging). Pour une organisation déjà abonnée, le bouton ouvrait le **portail Stripe générique**
+(`billingPortal.sessions.create` avec le seul client) : aucun forfait cible n'était transmis, le
+portail affichait donc l'abonnement en cours. Le libellé promettait un changement que le parcours ne
+faisait pas. Décision utilisateur : lien direct vers la confirmation Stripe. Corrigé :
+
+- API : `POST /api/v1/billing/plan-change-sessions` (`CreatePlanChangePortalSessionUseCase`), corps
+  strict `{ planTier, billingInterval }` — jamais un prix ni une URL. Le prix est résolu côté serveur
+  (`resolveStripeSubscriptionPriceId`, même discipline anti price-tampering que le checkout) ; la
+  ligne unique de l'abonnement est lue chez Stripe ; le portail s'ouvre sur le flux
+  `subscription_update_confirm` (prorata et prochaine facture affichés par Stripe, paiement et
+  3-D Secure gérés par Stripe), retour sur `/app/subscription`. Le forfait local n'est jamais modifié
+  ici : le webhook existant `customer.subscription.updated` l'applique une fois le changement
+  confirmé chez Stripe. Deux erreurs explicites : `PLAN_CHANGE_TARGET_IS_CURRENT_PLAN` (409) et
+  `STRIPE_SUBSCRIPTION_NOT_UPDATABLE` (422 — aucun abonnement Stripe lié, inconnu de Stripe, résilié,
+  ou à plusieurs lignes), traduites côté web.
+- Web : `createPlanChangeSessionAction`, bouton `kind="plan-change"` portant le palier et la
+  périodicité affichée (Mensuel/Annuel). Le portail générique reste sur « Gérer mon abonnement ».
+- Tests : `create-plan-change-portal-session.use-case.spec.ts` (10 tests : prix résolu, périodicité,
+  même forfait, prix non configuré, pas de client Stripe, pas d'abonnement lié, inconnu de Stripe,
+  résilié, plusieurs lignes, rôle insuffisant) ; `plan-catalog-section.test.tsx` (le bouton appelle
+  le changement de forfait avec le bon palier et la bonne périodicité, jamais le portail générique
+  ni un second checkout) ; intégration HTTP billing (PostgreSQL réel) verte.
+
+Non vérifiable ici : l'appel réel à Stripe (aucune clé Stripe de test dans cet environnement). À
+valider sur staging.
+
+**Abonnement staging désynchronisé de Stripe** (constaté en même temps : « Essai Starter — 0 jours
+restants », échéance au 05/09/2026 déjà passée). Établi : les variables Stripe du service API
+staging sont toutes définies (clé, secret de webhook, 7 prix, `APP_BASE_URL`) et les webhooks
+arrivent signés (`invoice.paid` reçu à 08:32) — mais cet `invoice.paid` visait un abonnement Stripe
+que la base staging ne connaît pas (`sub_1UEPsq07eCirupoFGF5ue59Y`). Hypothèse la plus probable :
+base staging recréée (même cause que les rôles système manquants) alors que Stripe conservait les
+abonnements créés avant ; l'abonnement local restant n'est alors plus mis à jour par Stripe. Non
+tranché : il faudrait lire la base staging ou le tableau de bord Stripe (hors des droits de ce
+chantier). Conséquence directe : si l'abonnement local ne correspond pas à un abonnement Stripe
+vivant, le changement de forfait répond désormais un message explicite (« ne peut pas être modifié
+en ligne ») au lieu d'ouvrir un portail trompeur.
+
 E2E collaboration (après le renommage) : 2 réussis, 4 échecs **sans lien avec le renommage** (le
 titre « Espace collaboratif » est bien trouvé). Causes préexistantes, prouvées par l'instantané :
 (1) couplage d'ordre — `collaboration-validations.spec` ajoute déjà les participants sur le même

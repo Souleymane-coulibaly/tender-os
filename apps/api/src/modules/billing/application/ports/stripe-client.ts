@@ -29,6 +29,22 @@ export type CreateStripeCheckoutSessionInput = Readonly<{
 
 export type StripeCheckoutSession = Readonly<{ sessionId: string; url: string }>;
 
+/** Ce que TenderOS lit d'un abonnement Stripe pour en changer le prix : son statut et ses lignes. */
+export type StripeSubscriptionSnapshot = Readonly<{
+  status: string;
+  items: ReadonlyArray<Readonly<{ id: string; priceId: string }>>;
+}>;
+
+export type CreatePlanChangePortalSessionInput = Readonly<{
+  stripeCustomerId: string;
+  stripeSubscriptionId: string;
+  /** La ligne d'abonnement dont le prix change (le portail n'en accepte qu'une). */
+  subscriptionItemId: string;
+  /** Toujours résolu par le backend (`resolveStripeSubscriptionPriceId`), jamais reçu du client. */
+  priceId: string;
+  returnUrl: string;
+}>;
+
 export type StripeWebhookEvent = Readonly<{
   id: string;
   type: string;
@@ -47,6 +63,12 @@ export type StripeWebhookEvent = Readonly<{
 export interface StripeClient {
   createCheckoutSession(input: CreateStripeCheckoutSessionInput): Promise<StripeCheckoutSession>;
   createCustomerPortalSession(input: { stripeCustomerId: string; returnUrl: string }): Promise<{ url: string }>;
+  /** `null` si l'abonnement n'existe pas (ou plus) chez Stripe. */
+  retrieveSubscription(stripeSubscriptionId: string): Promise<StripeSubscriptionSnapshot | null>;
+  /** Portail ouvert directement sur la confirmation du nouveau prix (flux Stripe
+   *  `subscription_update_confirm`) : Stripe affiche le prorata et la prochaine facture, gère le
+   *  paiement et le 3-D Secure, puis ramène sur TenderOS. */
+  createPlanChangePortalSession(input: CreatePlanChangePortalSessionInput): Promise<{ url: string }>;
   /** Vérifie la signature cryptographique du corps BRUT — jamais confiance dans le JSON déjà
    *  désérialisé par un `@Body()` classique (même motif que `SignatureWebhookVerifierPort`,
    *  module `signature`). Lève `StripeWebhookSignatureInvalidError` si invalide. */

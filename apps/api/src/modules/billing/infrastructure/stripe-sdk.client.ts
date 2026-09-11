@@ -2,9 +2,11 @@ import { Injectable, Logger } from "@nestjs/common";
 import Stripe from "stripe";
 import { StripeWebhookSignatureInvalidError } from "../domain/errors";
 import type {
+  CreatePlanChangePortalSessionInput,
   CreateStripeCheckoutSessionInput,
   StripeCheckoutSession,
   StripeClient,
+  StripeSubscriptionSnapshot,
   StripeWebhookEvent,
 } from "../application/ports/stripe-client";
 
@@ -84,6 +86,34 @@ export class StripeSdkClient implements StripeClient {
 
   async createCustomerPortalSession(input: { stripeCustomerId: string; returnUrl: string }): Promise<{ url: string }> {
     const session = await this.stripeClient().billingPortal.sessions.create({ customer: input.stripeCustomerId, return_url: input.returnUrl });
+    return { url: session.url };
+  }
+
+  async retrieveSubscription(stripeSubscriptionId: string): Promise<StripeSubscriptionSnapshot | null> {
+    try {
+      const subscription = await this.stripeClient().subscriptions.retrieve(stripeSubscriptionId);
+      return { status: subscription.status, items: subscription.items.data.map((item) => ({ id: item.id, priceId: item.price.id })) };
+    } catch (error) {
+      // Abonnement inconnu de Stripe (supprimé, autre compte ou autre mode) : une absence explicite,
+      // que le cas d'usage traduit en erreur métier — jamais une 500.
+      if ((error as { code?: string }).code === "resource_missing") return null;
+      throw error;
+    }
+  }
+
+  async createPlanChangePortalSession(input: CreatePlanChangePortalSessionInput): Promise<{ url: string }> {
+    const session = await this.stripeClient().billingPortal.sessions.create({
+      customer: input.stripeCustomerId,
+      return_url: input.returnUrl,
+      flow_data: {
+        type: "subscription_update_confirm",
+        subscription_update_confirm: {
+          subscription: input.stripeSubscriptionId,
+          items: [{ id: input.subscriptionItemId, price: input.priceId, quantity: 1 }],
+        },
+        after_completion: { type: "redirect", redirect: { return_url: input.returnUrl } },
+      },
+    });
     return { url: session.url };
   }
 

@@ -119,8 +119,14 @@ function PlanCard({
           <span className="rounded-lg border border-tenderos-navy/15 px-3 py-2 text-center text-sm font-semibold text-tenderos-slate">Plan actuel</span>
         ) : hasAnySubscription ? (
           <div className="flex flex-col gap-1">
-            <CheckoutButton kind="portal" label={`Passer à ${entry.displayName}`} className="w-full rounded-lg bg-tenderos-navy px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-tenderos-navy/90" />
-            <p className="text-center text-xs text-tenderos-slate">Changement géré depuis le Portail Stripe.</p>
+            <CheckoutButton
+              kind="plan-change"
+              planTier={entry.tier}
+              billingInterval={interval}
+              label={`Passer à ${entry.displayName}`}
+              className="w-full rounded-lg bg-tenderos-navy px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-tenderos-navy/90"
+            />
+            <p className="text-center text-xs text-tenderos-slate">Vous confirmez le changement et le prorata sur Stripe.</p>
           </div>
         ) : (
           <CheckoutButton

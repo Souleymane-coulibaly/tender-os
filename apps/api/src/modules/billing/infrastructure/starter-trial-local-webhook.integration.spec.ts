@@ -38,6 +38,12 @@ describe("Starter Trial — local webhook flow (real Postgres, fake Stripe clien
     createCustomerPortalSession: async () => {
       throw new Error("never called in this local-webhook-only test");
     },
+    retrieveSubscription: async () => {
+      throw new Error("never called in this local-webhook-only test");
+    },
+    createPlanChangePortalSession: async () => {
+      throw new Error("never called in this local-webhook-only test");
+    },
     // Jamais de vérification de signature cryptographique réelle ici (mission "sans appeler
     // réellement Stripe") — le "rawBody" est directement l'événement synthétique préparé par le
     // test, `constructWebhookEvent` se contente de le retourner tel quel.

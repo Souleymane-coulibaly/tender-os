@@ -90,3 +90,14 @@ export const CreateCheckoutSessionBodySchema = z
   .strict();
 
 export type CreateCheckoutSessionBody = z.infer<typeof CreateCheckoutSessionBodySchema>;
+
+/** Changement de forfait d'un abonnement existant — même discipline anti price-tampering que le
+ *  checkout : un palier et une périodicité, jamais un prix, un Price ID ni une URL. */
+export const CreatePlanChangeSessionBodySchema = z
+  .object({
+    planTier: z.enum(SUBSCRIPTION_PLAN_TIERS as unknown as [string, ...string[]]),
+    billingInterval: z.enum(Object.values(BillingInterval) as [string, ...string[]]),
+  })
+  .strict();
+
+export type CreatePlanChangeSessionBody = z.infer<typeof CreatePlanChangeSessionBodySchema>;

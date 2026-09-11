@@ -517,6 +517,21 @@ export class FakeStripeClient implements StripeClient {
     return { url: `https://billing.stripe.test/session/${input.stripeCustomerId}` };
   }
 
+  /** Abonnements connus du « Stripe » de test — un identifiant absent vaut « inconnu de Stripe ». */
+  readonly stripeSubscriptions = new Map<string, NonNullable<Awaited<ReturnType<StripeClient["retrieveSubscription"]>>>>();
+  readonly retrieveSubscriptionCalls: string[] = [];
+  readonly planChangePortalSessionCalls: Parameters<StripeClient["createPlanChangePortalSession"]>[0][] = [];
+
+  async retrieveSubscription(stripeSubscriptionId: string): ReturnType<StripeClient["retrieveSubscription"]> {
+    this.retrieveSubscriptionCalls.push(stripeSubscriptionId);
+    return this.stripeSubscriptions.get(stripeSubscriptionId) ?? null;
+  }
+
+  async createPlanChangePortalSession(input: Parameters<StripeClient["createPlanChangePortalSession"]>[0]): Promise<{ url: string }> {
+    this.planChangePortalSessionCalls.push(input);
+    return { url: `https://billing.stripe.test/plan-change/${input.stripeSubscriptionId}` };
+  }
+
   constructWebhookEvent(rawBody: Buffer, signatureHeader: string): StripeWebhookEvent {
     if (signatureHeader === "invalid-signature") {
       throw new StripeWebhookSignatureInvalidError();
