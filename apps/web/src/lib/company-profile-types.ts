@@ -185,19 +185,16 @@ export const CATEGORY_STATUS_LABELS: Record<CompanyProfileCategoryStatus, string
   TO_VERIFY: "À vérifier",
 };
 
-export function categoryStatusBadgeClass(status: CompanyProfileCategoryStatus): string {
-  switch (status) {
-    case "COMPLETE":
-      return "bg-green-100 text-green-800";
-    case "PARTIAL":
-    case "TO_VERIFY":
-      return "bg-amber-100 text-amber-800";
-    case "MISSING":
-      return "bg-neutral-200 text-neutral-700";
-    case "EXPIRED":
-      return "bg-red-100 text-red-800";
-  }
-}
+/** Design System — remplace l'ancien `categoryStatusBadgeClass()` (classes de badge écrites à la
+ *  main) par une table `STATUT → tone` consommée via `<Badge tone={...}>`. Mêmes couleurs
+ *  qu'avant : vert → success, ambre → warning, gris → neutral, rouge → danger. */
+export const CATEGORY_STATUS_TONE: Record<CompanyProfileCategoryStatus, BadgeTone> = {
+  COMPLETE: "success",
+  PARTIAL: "warning",
+  TO_VERIFY: "warning",
+  MISSING: "neutral",
+  EXPIRED: "danger",
+};
 
 export type CompanyProfileSummary = {
   clientAccountId: string;

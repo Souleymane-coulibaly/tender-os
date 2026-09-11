@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "../../../../components/ui";
 import { runSavedSearchNowAction } from "../../market-watch-actions";
 
 /**
@@ -33,16 +34,11 @@ export function RunSavedSearchNowButton({ savedSearchId }: { savedSearchId: stri
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={isPending}
-        className="self-start rounded border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50"
-      >
+    <div className="flex max-w-xs flex-col gap-1">
+      <Button type="button" onClick={handleClick} disabled={isPending} className="self-start">
         {isPending ? "Recherche en cours..." : "Tester la veille"}
-      </button>
-      {feedback ? <p className={`text-sm ${feedback.kind === "error" ? "text-red-600" : "text-neutral-600"}`}>{feedback.message}</p> : null}
+      </Button>
+      {feedback ? <p className={`text-sm ${feedback.kind === "error" ? "text-danger-fg" : "text-success-fg"}`}>{feedback.message}</p> : null}
     </div>
   );
 }

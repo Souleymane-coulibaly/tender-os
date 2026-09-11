@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { Button, Select } from "../../../../../components/ui";
 import { assignUserToClientAction, type FormActionState } from "../../../client-portfolio-actions";
 import { CLIENT_ROLES, CLIENT_ROLE_LABELS } from "../../../../../lib/client-portfolio-types";
 
@@ -17,40 +18,30 @@ export function AssignUserForm({ clientId, candidates }: { clientId: string; can
   const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
 
   if (candidates.length === 0) {
-    return <p className="text-sm text-neutral-600">Tous les membres de l&apos;organisation sont déjà affectés à ce client.</p>;
+    return <p className="text-sm text-tenderos-slate">Tous les membres de l&apos;organisation sont déjà affectés à ce client.</p>;
   }
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-3">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="userId" className="text-xs text-neutral-600">
-          Utilisateur
-        </label>
-        <select id="userId" name="userId" required className="min-w-56 rounded border border-neutral-300 px-2 py-1.5 text-sm">
-          {candidates.map((user) => (
-            <option key={user.id} value={user.id}>
-              {user.displayName} ({user.email}) — {user.role}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="role" className="text-xs text-neutral-600">
-          Rôle client
-        </label>
-        <select id="role" name="role" required defaultValue="VIEWER" className="rounded border border-neutral-300 px-2 py-1.5 text-sm">
-          {CLIENT_ROLES.map((role) => (
-            <option key={role} value={role}>
-              {CLIENT_ROLE_LABELS[role]}
-            </option>
-          ))}
-        </select>
-      </div>
-      <button type="submit" disabled={isPending} className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+      <Select label="Utilisateur" id="userId" name="userId" required wrapperClassName="min-w-56 flex-1 sm:max-w-sm">
+        {candidates.map((user) => (
+          <option key={user.id} value={user.id}>
+            {user.displayName} ({user.email}) — {user.role}
+          </option>
+        ))}
+      </Select>
+      <Select label="Rôle client" id="role" name="role" required defaultValue="VIEWER" wrapperClassName="basis-48">
+        {CLIENT_ROLES.map((role) => (
+          <option key={role} value={role}>
+            {CLIENT_ROLE_LABELS[role]}
+          </option>
+        ))}
+      </Select>
+      <Button type="submit" disabled={isPending}>
         {isPending ? "Affectation..." : "Affecter"}
-      </button>
+      </Button>
       {state.error ? (
-        <p role="alert" className="w-full text-sm text-red-600">
+        <p role="alert" className="w-full text-sm text-danger-fg">
           {state.error}
         </p>
       ) : null}

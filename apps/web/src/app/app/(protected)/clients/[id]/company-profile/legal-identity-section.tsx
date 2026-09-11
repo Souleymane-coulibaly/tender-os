@@ -1,3 +1,4 @@
+import { Card } from "../../../../../../components/ui";
 import type { CompanyLegalIdentity } from "../../../../../../lib/company-profile-types";
 
 /**
@@ -16,35 +17,37 @@ import type { CompanyLegalIdentity } from "../../../../../../lib/company-profile
  * Devenu un composant serveur : sans état de formulaire ni action, `"use client"` n'a plus d'objet.
  */
 export function LegalIdentitySection({ legalIdentity }: { legalIdentity: CompanyLegalIdentity | null }) {
-  if (!legalIdentity) {
-    return <p className="text-sm text-neutral-600">Aucune identité juridique historique pour ce client.</p>;
-  }
-
   return (
-    <dl className="grid max-w-2xl grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-      <ReadOnlyField label="Raison sociale" value={legalIdentity.legalName} />
-      <ReadOnlyField label="Nom commercial" value={legalIdentity.tradeName} />
-      <ReadOnlyField label="SIREN" value={legalIdentity.siren} />
-      <ReadOnlyField label="SIRET (siège)" value={legalIdentity.siretPrincipal} />
-      <ReadOnlyField label="N° TVA intracommunautaire" value={legalIdentity.vatNumber} />
-      <ReadOnlyField label="Forme juridique" value={legalIdentity.legalForm} />
-      <ReadOnlyField label="Code APE/NAF" value={legalIdentity.apeCode} />
-      <ReadOnlyField label="Adresse" value={legalIdentity.addressLine} />
-      <ReadOnlyField label="Code postal" value={legalIdentity.postalCode} />
-      <ReadOnlyField label="Ville" value={legalIdentity.city} />
-      <ReadOnlyField label="Pays" value={legalIdentity.country} />
-      <ReadOnlyField label="Téléphone" value={legalIdentity.phone} />
-      <ReadOnlyField label="Email général" value={legalIdentity.generalEmail} />
-      <ReadOnlyField label="Site web" value={legalIdentity.website} />
-    </dl>
+    <Card title="Identité légale">
+      {!legalIdentity ? (
+        <p className="text-sm text-tenderos-slate">Aucune identité juridique historique pour ce client.</p>
+      ) : (
+        <dl className="grid max-w-2xl grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+          <ReadOnlyField label="Raison sociale" value={legalIdentity.legalName} />
+          <ReadOnlyField label="Nom commercial" value={legalIdentity.tradeName} />
+          <ReadOnlyField label="SIREN" value={legalIdentity.siren} />
+          <ReadOnlyField label="SIRET (siège)" value={legalIdentity.siretPrincipal} />
+          <ReadOnlyField label="N° TVA intracommunautaire" value={legalIdentity.vatNumber} />
+          <ReadOnlyField label="Forme juridique" value={legalIdentity.legalForm} />
+          <ReadOnlyField label="Code APE/NAF" value={legalIdentity.apeCode} />
+          <ReadOnlyField label="Adresse" value={legalIdentity.addressLine} />
+          <ReadOnlyField label="Code postal" value={legalIdentity.postalCode} />
+          <ReadOnlyField label="Ville" value={legalIdentity.city} />
+          <ReadOnlyField label="Pays" value={legalIdentity.country} />
+          <ReadOnlyField label="Téléphone" value={legalIdentity.phone} />
+          <ReadOnlyField label="Email général" value={legalIdentity.generalEmail} />
+          <ReadOnlyField label="Site web" value={legalIdentity.website} />
+        </dl>
+      )}
+    </Card>
   );
 }
 
 function ReadOnlyField({ label, value }: { label: string; value?: string | null | undefined }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500">{label}</dt>
-      <dd className="text-sm text-neutral-900">{value ?? "Non renseigné"}</dd>
+      <dt className="text-xs font-medium uppercase tracking-wide text-tenderos-slate">{label}</dt>
+      <dd className="text-sm text-tenderos-navy">{value ?? "Non renseigné"}</dd>
     </div>
   );
 }

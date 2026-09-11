@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button, Input } from "../../../../../components/ui";
 import {
   archiveClientAccountAction,
   deleteClientAccountAction,
@@ -48,91 +49,69 @@ export function ClientLifecycleActions({ client, canDelete }: { client: ClientAc
       <div className="flex items-center gap-2">
         {!isArchived ? (
           !confirmingArchive ? (
-            <button
-              type="button"
-              onClick={() => setConfirmingArchive(true)}
-              className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100"
-            >
+            <Button type="button" variant="danger" onClick={() => setConfirmingArchive(true)}>
               Archiver
-            </button>
+            </Button>
           ) : (
-            <div className="flex items-center gap-2 rounded border border-neutral-200 p-2">
-              <span className="text-xs text-neutral-700">Confirmer l&apos;archivage ?</span>
-              <button
-                type="button"
-                onClick={handleArchive}
-                disabled={isPending}
-                className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
-              >
+            <div className="flex items-center gap-2 rounded-lg border border-tenderos-navy/10 p-2">
+              <span className="text-xs text-tenderos-navy">Confirmer l&apos;archivage ?</span>
+              <Button type="button" variant="danger" size="sm" onClick={handleArchive} disabled={isPending}>
                 Confirmer
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmingArchive(false)}
-                className="rounded px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100"
-              >
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmingArchive(false)}>
                 Annuler
-              </button>
+              </Button>
             </div>
           )
         ) : (
-          <button
-            type="button"
-            onClick={handleRestore}
-            disabled={isPending}
-            className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
-          >
+          <Button type="button" onClick={handleRestore} disabled={isPending}>
             Restaurer
-          </button>
+          </Button>
         )}
 
         {canDelete && isArchived ? (
           !confirmingDelete ? (
-            <button
-              type="button"
-              onClick={() => setConfirmingDelete(true)}
-              className="rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
-            >
+            <Button type="button" variant="danger" onClick={() => setConfirmingDelete(true)}>
               Supprimer définitivement
-            </button>
+            </Button>
           ) : (
-            <div className="flex flex-col items-end gap-2 rounded border border-red-300 bg-red-50 p-3">
-              <p className="max-w-xs text-right text-xs text-red-800">
+            <div className="flex flex-col items-end gap-2 rounded-lg bg-danger-bg p-3">
+              <p className="max-w-xs text-right text-xs text-danger-fg">
                 Cette action est irréversible : le client ne peut être supprimé que s&apos;il ne contient plus aucun appel
                 d&apos;offres ni entrée de connaissance. Tapez <span className="font-semibold">SUPPRIMER</span> pour confirmer.
               </p>
-              <input
-                type="text"
-                value={deleteConfirmationText}
-                onChange={(event) => setDeleteConfirmationText(event.target.value)}
-                className="w-40 rounded border border-red-300 px-2 py-1 text-xs"
-              />
+              {/* `Input` sans label rend le contrôle nu : la largeur est portée par ce conteneur. */}
+              <div className="w-40">
+                <Input type="text" value={deleteConfirmationText} onChange={(event) => setDeleteConfirmationText(event.target.value)} />
+              </div>
               <div className="flex items-center gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="danger"
+                  size="sm"
                   onClick={handleDelete}
                   disabled={isPending || deleteConfirmationText !== "SUPPRIMER"}
-                  className="rounded bg-red-700 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
                 >
                   Confirmer la suppression
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     setConfirmingDelete(false);
                     setDeleteConfirmationText("");
                   }}
-                  className="rounded px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100"
                 >
                   Annuler
-                </button>
+                </Button>
               </div>
             </div>
           )
         ) : null}
       </div>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}

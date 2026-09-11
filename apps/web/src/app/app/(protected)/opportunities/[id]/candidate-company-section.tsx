@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { Button, Select } from "../../../../../components/ui";
 import { updateOpportunityAction } from "../../../opportunity-actions";
 import { candidateCompanyDisplayName, type CandidateCompanySummary } from "../../../../../lib/candidate-company-types";
 
@@ -10,6 +11,10 @@ import { candidateCompanyDisplayName, type CandidateCompanySummary } from "../..
  * légitimement n'avoir aucune CandidateCompany rattachée (mission §17 "état normal"), jamais un
  * repli silencieux sur le Client. Réutilise `updateOpportunityAction` existant (PATCH partiel),
  * jamais une seconde route inventée.
+ *
+ * Design System — cellule de la grille d'informations de la fiche (pas une `Card` à elle seule).
+ * `min-w-0` sur la cellule, le formulaire et le `<select>` : un `<select>` se dimensionne sur son
+ * option la plus large et pousserait sinon la grille hors de l'écran (même borne que côté Tender).
  */
 export function OpportunityCandidateCompanySection({
   opportunityId,
@@ -43,19 +48,19 @@ export function OpportunityCandidateCompanySection({
   }
 
   return (
-    <div>
-      <h2 className="text-xs font-semibold uppercase text-neutral-500">Entreprise candidate</h2>
+    <div className="flex min-w-0 flex-col items-start">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-tenderos-slate">Entreprise candidate</h2>
       {currentCandidateCompany ? (
-        <Link href={`/app/candidate-companies/${currentCandidateCompany.id}`} className="text-sm text-neutral-900 hover:underline">
+        <Link href={`/app/candidate-companies/${currentCandidateCompany.id}`} className="break-words text-sm text-tenderos-navy hover:underline">
           {candidateCompanyDisplayName(currentCandidateCompany)}
         </Link>
       ) : (
-        <p className="text-sm italic text-amber-700">Non sélectionnée</p>
+        <p className="text-sm italic text-warning-fg">Non sélectionnée</p>
       )}
 
       {canManage && open ? (
-        <form action={handleSelect} className="mt-2 flex flex-col gap-2 rounded border border-amber-200 bg-amber-50 p-3">
-          <select name="candidateCompanyId" required defaultValue="" className="rounded border border-neutral-300 px-2 py-1 text-sm">
+        <form action={handleSelect} className="mt-2 flex w-full min-w-0 flex-col gap-2 rounded-lg bg-warning-bg p-3">
+          <Select name="candidateCompanyId" required defaultValue="" className="min-w-0 truncate">
             <option value="" disabled>
               Sélectionner...
             </option>
@@ -64,25 +69,25 @@ export function OpportunityCandidateCompanySection({
                 {candidateCompanyDisplayName(company)}
               </option>
             ))}
-          </select>
+          </Select>
           {error ? (
-            <p role="alert" className="text-xs text-red-600">
+            <p role="alert" className="text-xs text-danger-fg">
               {error}
             </p>
           ) : null}
-          <div className="flex gap-2">
-            <button type="submit" disabled={isPending} className="rounded bg-amber-800 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="primary" size="sm" disabled={isPending}>
               {isPending ? "Changement..." : "Confirmer"}
-            </button>
-            <button type="button" onClick={() => setOpen(false)} className="rounded px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-100">
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
               Annuler
-            </button>
+            </Button>
           </div>
         </form>
       ) : canManage && otherCandidates.length > 0 ? (
-        <button type="button" onClick={() => setOpen(true)} className="mt-1 block text-xs font-medium text-neutral-700 underline hover:text-neutral-900">
+        <Button type="button" variant="link" onClick={() => setOpen(true)} className="mt-1 text-xs">
           {currentCandidateCompany ? "Changer d'entreprise candidate" : "Sélectionner une entreprise candidate"}
-        </button>
+        </Button>
       ) : null}
     </div>
   );

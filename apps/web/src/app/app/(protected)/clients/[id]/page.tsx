@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Badge, Button, Card, PageHeader } from "../../../../../components/ui";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import {
   CLIENT_ACCOUNT_STATUS_LABELS,
-  clientAccountStatusBadgeClass,
+  CLIENT_ACCOUNT_STATUS_TONE,
   type ClientAccountSummary,
   type ClientAssignmentView,
 } from "../../../../../lib/client-portfolio-types";
@@ -66,60 +67,40 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <Link href="/app/clients" className="text-sm text-neutral-500 hover:underline">
-              ← Clients
-            </Link>
-          </div>
-          <h1 className="mt-1 text-xl font-semibold">{client.name}</h1>
-          <span className={`mt-1 inline-block rounded px-2 py-0.5 text-xs font-medium ${clientAccountStatusBadgeClass(client.status)}`}>
-            {CLIENT_ACCOUNT_STATUS_LABELS[client.status]}
-          </span>
-        </div>
-        {canManage ? <ClientLifecycleActions client={client} canDelete={canDelete} /> : null}
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Clients", href: "/app/clients" }, { label: client.name }]}
+        title={client.name}
+        status={<Badge tone={CLIENT_ACCOUNT_STATUS_TONE[client.status] ?? "neutral"}>{CLIENT_ACCOUNT_STATUS_LABELS[client.status]}</Badge>}
+        actions={canManage ? <ClientLifecycleActions client={client} canDelete={canDelete} /> : undefined}
+      />
 
-      <section className="rounded border border-neutral-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-900">Informations générales</h2>
+      <Card title="Informations générales">
         <EditClientAccountForm client={client} disabled={client.status === "ARCHIVED"} />
-      </section>
+      </Card>
 
-      <section className="rounded border border-neutral-200 p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-neutral-900">Profil entreprise du client</h2>
-            <p className="mt-1 text-sm text-neutral-600">Identité légale, contacts, comptes bancaires, assurances, certifications, références et moyens.</p>
-          </div>
-          <Link href={`/app/clients/${client.id}/company-profile`} className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
-            Ouvrir la fiche →
-          </Link>
-        </div>
-      </section>
+      <Card
+        title="Profil entreprise du client"
+        actions={<Button href={`/app/clients/${client.id}/company-profile`}>Ouvrir la fiche →</Button>}
+      >
+        <p className="text-sm text-tenderos-slate">Identité légale, contacts, comptes bancaires, assurances, certifications, références et moyens.</p>
+      </Card>
 
-      <section className="rounded border border-neutral-200 p-4">
-        <ClientAssignmentsSection clientId={client.id} assignments={assignments} candidates={candidates} canManage={canManage} />
-      </section>
+      <ClientAssignmentsSection clientId={client.id} assignments={assignments} candidates={candidates} canManage={canManage} />
 
-      <section className="rounded border border-neutral-200 p-4">
-        <ClientTendersSection clientId={client.id} tenders={tenders.items} hasMore={tenders.pageInfo.hasNextPage} />
-      </section>
+      <ClientTendersSection clientId={client.id} tenders={tenders.items} hasMore={tenders.pageInfo.hasNextPage} />
 
-      <section className="rounded border border-neutral-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-900">Pricing &amp; prévisions</h2>
+      <Card title="Pricing & prévisions">
         <ClientPricingSection summary={pricing} />
-      </section>
+      </Card>
 
-      <section className="rounded border border-neutral-200 p-4">
-        <h2 className="text-sm font-semibold text-neutral-900">Base de connaissances</h2>
-        <p className="mt-2 text-sm text-neutral-600">
+      <Card title="Base de connaissances">
+        <p className="text-sm text-tenderos-slate">
           {knowledge.total} entrée(s) spécifique(s) à ce client.{" "}
-          <Link href={`/app/knowledge?clientAccountId=${client.id}`} className="text-neutral-700 hover:underline">
+          <Link href={`/app/knowledge?clientAccountId=${client.id}`} className="text-tenderos-blue hover:underline">
             Voir →
           </Link>
         </p>
-      </section>
+      </Card>
     </div>
   );
 }

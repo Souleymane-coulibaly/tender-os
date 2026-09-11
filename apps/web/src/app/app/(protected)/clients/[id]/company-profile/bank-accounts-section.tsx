@@ -10,6 +10,7 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button, Card } from "../../../../../../components/ui";
 import { archiveBankAccountAction } from "../../../../company-profile-actions";
 import {
   SATELLITE_STATUS_LABELS,
@@ -38,55 +39,58 @@ export function BankAccountsSection({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {bankAccounts.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucun compte bancaire enregistré.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="py-2 pr-4">Titulaire</th>
-                <th className="py-2 pr-4">IBAN</th>
-                <th className="py-2 pr-4">Banque</th>
-                <th className="py-2 pr-4">Statut</th>
-                <th className="py-2 pr-4">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bankAccounts.map((account) => (
-                <tr key={account.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4 font-medium text-neutral-900">
-                    {account.accountHolder}
-                  </td>
-                  <td className="py-2 pr-4 font-mono text-neutral-600">{account.iban}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{account.bankName ?? "—"}</td>
-                  <td className="py-2 pr-4 text-neutral-600">
-                    {SATELLITE_STATUS_LABELS[account.status] ?? account.status}
-                  </td>
-                  <td className="py-2 pr-4">
-                    {account.status === "ACTIVE" ? (
-                      <button
-                        type="button"
-                        onClick={() => handleArchive(account.id)}
-                        disabled={archivingId === account.id}
-                        className="text-red-700 hover:underline disabled:opacity-50"
-                      >
-                        Archiver
-                      </button>
-                    ) : null}
-                  </td>
+    <Card title="Comptes bancaires">
+      <div className="flex flex-col gap-4">
+        {bankAccounts.length === 0 ? (
+          <p className="text-sm text-tenderos-slate">Aucun compte bancaire enregistré.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-tenderos-navy/10 text-left text-xs font-semibold uppercase tracking-wide text-tenderos-slate">
+                  <th scope="col" className="py-2 pr-4">Titulaire</th>
+                  <th scope="col" className="py-2 pr-4">IBAN</th>
+                  <th scope="col" className="py-2 pr-4">Banque</th>
+                  <th scope="col" className="py-2 pr-4">Statut</th>
+                  <th scope="col" className="py-2 pr-4">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {archiveError ? (
-        <p role="alert" className="text-sm text-red-600">
-          {archiveError}
-        </p>
-      ) : null}
-    </div>
+              </thead>
+              <tbody>
+                {bankAccounts.map((account) => (
+                  <tr key={account.id} className="border-b border-tenderos-navy/10 last:border-0">
+                    <td className="py-2 pr-4 font-medium text-tenderos-navy">
+                      {account.accountHolder}
+                    </td>
+                    <td className="py-2 pr-4 font-mono text-tenderos-slate">{account.iban}</td>
+                    <td className="py-2 pr-4 text-tenderos-slate">{account.bankName ?? "—"}</td>
+                    <td className="py-2 pr-4 text-tenderos-slate">
+                      {SATELLITE_STATUS_LABELS[account.status] ?? account.status}
+                    </td>
+                    <td className="py-2 pr-4">
+                      {account.status === "ACTIVE" ? (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          onClick={() => handleArchive(account.id)}
+                          disabled={archivingId === account.id}
+                        >
+                          Archiver
+                        </Button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {archiveError ? (
+          <p role="alert" className="text-sm text-danger-fg">
+            {archiveError}
+          </p>
+        ) : null}
+      </div>
+    </Card>
   );
 }

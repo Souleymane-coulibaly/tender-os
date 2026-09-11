@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { deadlineUrgencyClass, marketTypeBadgeClass, matchStatusBadgeClass, MARKET_TYPE_LABELS, scoreBadgeClass, SOURCE_LABELS, type SavedSearchMatchSummary } from "../../../../lib/market-watch-types";
+import { Alert, Badge, Button, Card } from "../../../../components/ui";
+import { deadlineUrgencyClass, MARKET_TYPE_LABELS, marketTypeTone, MATCH_STATUS_TONE, scoreTone, SOURCE_LABELS, type SavedSearchMatchSummary } from "../../../../lib/market-watch-types";
 import { promoteExternalTenderAction, setMatchStatusAction } from "../../market-watch-actions";
 
 function formatDate(value: string | undefined): string {
@@ -48,24 +49,26 @@ export function MatchCard({ match, savedSearchId }: { match: SavedSearchMatchSum
   }
 
   return (
-    <div className={`rounded border border-neutral-200 p-4 ${status === "IGNORED" ? "opacity-60" : ""}`}>
+    <Card padding="tight" interactive className={status === "IGNORED" ? "opacity-60" : ""}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <Link href={`/app/market-watch/${match.tender.id}`} className="text-sm font-semibold text-neutral-900 hover:underline">
+          <Link href={`/app/market-watch/${match.tender.id}`} className="text-sm font-semibold text-tenderos-navy hover:underline">
             {match.tender.title}
           </Link>
-          <p className="mt-0.5 text-xs text-neutral-500">{match.tender.buyerName ?? "Acheteur non communiqué"}</p>
+          <p className="mt-0.5 text-xs text-tenderos-slate">{match.tender.buyerName ?? "Acheteur non communiqué"}</p>
         </div>
-        <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${scoreBadgeClass(match.score)}`}>Pertinence {match.score}%</span>
+        <span className="shrink-0">
+          <Badge tone={scoreTone(match.score)}>Pertinence {match.score}%</Badge>
+        </span>
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-2 text-xs">
-        <span className={`rounded px-2 py-0.5 font-medium ${marketTypeBadgeClass(match.tender.marketType)}`}>{MARKET_TYPE_LABELS[match.tender.marketType] ?? match.tender.marketType}</span>
-        <span className="rounded bg-neutral-100 px-2 py-0.5 font-medium text-neutral-700">{SOURCE_LABELS[match.tender.source] ?? match.tender.source}</span>
-        {status !== "NEW" ? <span className={`rounded px-2 py-0.5 font-medium ${matchStatusBadgeClass(status)}`}>{status === "INTERESTED" ? "Intéressé" : "Ignoré"}</span> : null}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Badge tone={marketTypeTone(match.tender.marketType)}>{MARKET_TYPE_LABELS[match.tender.marketType] ?? match.tender.marketType}</Badge>
+        <Badge>{SOURCE_LABELS[match.tender.source] ?? match.tender.source}</Badge>
+        {status !== "NEW" ? <Badge tone={MATCH_STATUS_TONE[status]}>{status === "INTERESTED" ? "Intéressé" : "Ignoré"}</Badge> : null}
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-neutral-600 sm:grid-cols-4">
+      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-tenderos-slate sm:grid-cols-4">
         <div>Publié : {formatDate(match.tender.publicationDate)}</div>
         <div className={deadlineUrgencyClass(match.tender.submissionDeadline)}>Deadline : {formatDate(match.tender.submissionDeadline)}</div>
         <div>Montant : {formatAmount(match.tender.estimatedAmount, match.tender.currency)}</div>
@@ -73,46 +76,54 @@ export function MatchCard({ match, savedSearchId }: { match: SavedSearchMatchSum
       </div>
 
       {match.matchReasons.length > 0 ? (
-        <p className="mt-2 text-xs text-neutral-500">
+        <div className="mt-2 flex flex-wrap gap-1">
           {match.matchReasons.map((reason) => (
-            <span key={reason.criterion} className="mr-2">
+            <span key={reason.criterion} className="rounded-full bg-tenderos-light px-2 py-0.5 text-xs font-medium text-tenderos-navy/70">
               {reason.matched ? "✓" : "•"} {reason.label}
             </span>
           ))}
-        </p>
+        </div>
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button type="button" disabled={isPending} onClick={() => handleSetStatus("INTERESTED")} className="rounded border border-neutral-300 px-2.5 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50">
+        <Button type="button" size="sm" disabled={isPending} onClick={() => handleSetStatus("INTERESTED")}>
           ★ Favori
-        </button>
-        <button type="button" disabled={isPending} onClick={() => handleSetStatus("IGNORED")} className="rounded border border-neutral-300 px-2.5 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50">
+        </Button>
+        <Button type="button" size="sm" disabled={isPending} onClick={() => handleSetStatus("IGNORED")}>
           Ignorer
-        </button>
+        </Button>
         {match.tender.sourceUrl ? (
-          <a href={match.tender.sourceUrl} target="_blank" rel="noreferrer noopener" className="rounded border border-neutral-300 px-2.5 py-1 text-xs hover:bg-neutral-50">
+          // Lien externe (nouvel onglet) : `Button href` rend un `<Link>` interne sans `target` —
+          // lien natif aux classes de `Button variant="secondary" size="sm"`.
+          <a
+            href={match.tender.sourceUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="inline-flex items-center justify-center rounded-lg border border-tenderos-navy/15 px-3 py-1.5 text-xs font-semibold text-tenderos-navy transition hover:bg-tenderos-light"
+          >
             Voir la source
           </a>
         ) : null}
         {promoted ? (
-          <span className="text-xs font-medium text-green-700">Ajouté aux opportunités ✓</span>
+          <span className="text-xs font-medium text-success-fg">Ajouté aux opportunités ✓</span>
         ) : (
-          <button type="button" disabled={isPending} onClick={() => handlePromote()} className="rounded bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-50">
+          // `outline` et non `primary` : une carte par marché, donc jamais plusieurs boutons primaires à l'écran.
+          <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => handlePromote()}>
             Ajouter à mes opportunités
-          </button>
+          </Button>
         )}
       </div>
 
       {promoteError === "ALREADY_PROMOTED" ? (
-        <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+        <Alert tone="warning" className="mt-2">
           Ce marché a déjà été ajouté à vos opportunités.{" "}
-          <button type="button" onClick={() => handlePromote(true)} className="font-medium underline">
+          <Button type="button" variant="link" onClick={() => handlePromote(true)}>
             Ajouter quand même
-          </button>
-        </div>
+          </Button>
+        </Alert>
       ) : promoteError ? (
-        <p className="mt-2 text-xs text-red-600">{promoteError}</p>
+        <p className="mt-2 text-xs text-danger-fg">{promoteError}</p>
       ) : null}
-    </div>
+    </Card>
   );
 }

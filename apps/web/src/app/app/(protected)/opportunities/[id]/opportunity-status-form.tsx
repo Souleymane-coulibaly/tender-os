@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button, Card, Select } from "../../../../../components/ui";
 import { changeOpportunityStatusAction } from "../../../opportunity-actions";
 import { ALLOWED_OPPORTUNITY_MANUAL_TRANSITIONS, OPPORTUNITY_STATUS_LABELS, type OpportunityStatus } from "../../../../../lib/opportunity-types";
 
@@ -35,33 +36,36 @@ export function OpportunityStatusForm({ opportunityId, status }: { opportunityId
   }
 
   return (
-    <form
-      className="flex items-end gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void handleSubmit();
-      }}
-    >
-      <div className="flex flex-col gap-1">
-        <label htmlFor="opportunity-status" className="text-xs text-neutral-600">
-          Changer le statut
-        </label>
-        <select id="opportunity-status" value={selected} onChange={(e) => setSelected(e.target.value as OpportunityStatus)} className="rounded border border-neutral-300 px-2 py-1 text-sm">
+    <Card padding="tight">
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void handleSubmit();
+        }}
+      >
+        <Select
+          id="opportunity-status"
+          label="Changer le statut"
+          value={selected}
+          onChange={(e) => setSelected(e.target.value as OpportunityStatus)}
+          wrapperClassName="min-w-[12rem] max-w-xs flex-1"
+        >
           {nextStatuses.map((next) => (
             <option key={next} value={next}>
               {OPPORTUNITY_STATUS_LABELS[next]}
             </option>
           ))}
-        </select>
-      </div>
-      <button type="submit" disabled={isPending} className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50">
-        {isPending ? "…" : "Appliquer"}
-      </button>
-      {error ? (
-        <p role="alert" className="text-xs text-red-600">
-          {error}
-        </p>
-      ) : null}
-    </form>
+        </Select>
+        <Button type="submit" variant="secondary" disabled={isPending}>
+          {isPending ? "…" : "Appliquer"}
+        </Button>
+        {error ? (
+          <p role="alert" className="text-xs text-danger-fg">
+            {error}
+          </p>
+        ) : null}
+      </form>
+    </Card>
   );
 }

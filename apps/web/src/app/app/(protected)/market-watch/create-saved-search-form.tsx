@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button, Checkbox, Input } from "../../../../components/ui";
 import { createSavedSearchAction } from "../../market-watch-actions";
 
 /** Mission §95/§96/§97/§98 — mode simple par défaut (mot-clé + zone + budget), section avancée
@@ -54,78 +55,90 @@ export function CreateSavedSearchForm() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <label htmlFor="ss-name" className="text-sm font-medium text-neutral-700">
-          Nom de la veille
-        </label>
-        <input id="ss-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="ex. Nettoyage Île-de-France" className="mt-1 w-full max-w-md rounded border border-neutral-300 px-3 py-2 text-sm" />
-      </div>
+      <Input
+        label="Nom de la veille"
+        id="ss-name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="ex. Nettoyage Île-de-France"
+        wrapperClassName="max-w-md"
+      />
 
-      <div>
-        <label htmlFor="ss-keyword" className="text-sm font-medium text-neutral-700">
-          Je recherche
-        </label>
-        <input id="ss-keyword" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="ex. Nettoyage industriel" className="mt-1 w-full max-w-md rounded border border-neutral-300 px-3 py-2 text-sm" />
-      </div>
+      <Input
+        label="Je recherche"
+        id="ss-keyword"
+        value={keyword}
+        onChange={(e) => setKeyword(e.target.value)}
+        placeholder="ex. Nettoyage industriel"
+        wrapperClassName="max-w-md"
+      />
 
-      <div>
-        <label htmlFor="ss-department" className="text-sm font-medium text-neutral-700">
-          Où (département)
-        </label>
-        <input id="ss-department" value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="ex. 75" className="mt-1 w-full max-w-xs rounded border border-neutral-300 px-3 py-2 text-sm" />
-      </div>
+      <Input
+        label="Où (département)"
+        id="ss-department"
+        value={department}
+        onChange={(e) => setDepartment(e.target.value)}
+        placeholder="ex. 75"
+        wrapperClassName="max-w-xs"
+      />
 
-      <div>
-        <label htmlFor="ss-min-amount" className="text-sm font-medium text-neutral-700">
-          Budget minimum (€)
-        </label>
-        <input id="ss-min-amount" type="number" min={0} value={minAmount} onChange={(e) => setMinAmount(e.target.value)} placeholder="ex. 100000" className="mt-1 w-full max-w-xs rounded border border-neutral-300 px-3 py-2 text-sm" />
-      </div>
+      <Input
+        label="Budget minimum (€)"
+        id="ss-min-amount"
+        type="number"
+        min={0}
+        value={minAmount}
+        onChange={(e) => setMinAmount(e.target.value)}
+        placeholder="ex. 100000"
+        wrapperClassName="max-w-xs"
+      />
 
-      <button type="button" onClick={() => setShowAdvanced((v) => !v)} className="self-start text-xs font-medium text-neutral-600 hover:underline">
+      <Button variant="link" onClick={() => setShowAdvanced((v) => !v)} className="self-start text-xs">
         {showAdvanced ? "Masquer les filtres avancés" : "Filtres avancés"}
-      </button>
+      </Button>
 
       {showAdvanced ? (
-        <div className="flex flex-col gap-3 rounded border border-neutral-200 p-3">
-          <div>
-            <label htmlFor="ss-exclude" className="text-sm font-medium text-neutral-700">
-              Mots-clés exclus
-            </label>
-            <input id="ss-exclude" value={excludeKeyword} onChange={(e) => setExcludeKeyword(e.target.value)} className="mt-1 w-full max-w-md rounded border border-neutral-300 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label htmlFor="ss-cpv" className="text-sm font-medium text-neutral-700">
-              Code CPV
-            </label>
-            <input id="ss-cpv" value={cpvCode} onChange={(e) => setCpvCode(e.target.value)} placeholder="ex. 90910000" className="mt-1 w-full max-w-xs rounded border border-neutral-300 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label htmlFor="ss-deadline" className="text-sm font-medium text-neutral-700">
-              Deadline dans au moins (jours)
-            </label>
-            <input id="ss-deadline" type="number" min={0} value={deadlineAfterDays} onChange={(e) => setDeadlineAfterDays(e.target.value)} placeholder="ex. 14" className="mt-1 w-full max-w-xs rounded border border-neutral-300 px-3 py-2 text-sm" />
-          </div>
+        <div className="flex flex-col gap-3 rounded-lg border border-tenderos-navy/10 p-3">
+          <Input
+            label="Mots-clés exclus"
+            id="ss-exclude"
+            value={excludeKeyword}
+            onChange={(e) => setExcludeKeyword(e.target.value)}
+            wrapperClassName="max-w-md"
+          />
+          <Input
+            label="Code CPV"
+            id="ss-cpv"
+            value={cpvCode}
+            onChange={(e) => setCpvCode(e.target.value)}
+            placeholder="ex. 90910000"
+            wrapperClassName="max-w-xs"
+          />
+          <Input
+            label="Deadline dans au moins (jours)"
+            id="ss-deadline"
+            type="number"
+            min={0}
+            value={deadlineAfterDays}
+            onChange={(e) => setDeadlineAfterDays(e.target.value)}
+            placeholder="ex. 14"
+            wrapperClassName="max-w-xs"
+          />
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-2 rounded border border-neutral-200 p-3">
-        <span className="text-sm font-medium text-neutral-700">Alertes</span>
-        <label className="flex items-center gap-2 text-sm text-neutral-700">
-          <input type="checkbox" checked={alertInApp} onChange={(e) => setAlertInApp(e.target.checked)} />
-          Notification TenderOS
-        </label>
-        <label className="flex items-center gap-2 text-sm text-neutral-700">
-          <input type="checkbox" checked={alertEmail} onChange={(e) => setAlertEmail(e.target.checked)} />
-          Email
-        </label>
+      <div className="flex flex-col gap-2 rounded-lg border border-tenderos-navy/10 p-3">
+        <h3 className="text-sm font-semibold text-tenderos-navy">Alertes</h3>
+        <Checkbox label="Notification TenderOS" checked={alertInApp} onChange={(e) => setAlertInApp(e.target.checked)} />
+        <Checkbox label="Email" checked={alertEmail} onChange={(e) => setAlertEmail(e.target.checked)} />
         {alertEmail ? (
           <div className="ml-6 flex flex-col gap-1">
-            <label className="flex items-center gap-2 text-xs text-neutral-600">
+            {/* Pas de composant Radio dans le design system : bouton radio natif, libellé aux jetons. */}
+            <label className="flex items-center gap-2 text-xs text-tenderos-slate">
               <input type="radio" name="freq" checked={emailFrequency === "DAILY_DIGEST"} onChange={() => setEmailFrequency("DAILY_DIGEST")} />
               Résumé quotidien
             </label>
-            <label className="flex items-center gap-2 text-xs text-neutral-600">
+            <label className="flex items-center gap-2 text-xs text-tenderos-slate">
               <input type="radio" name="freq" checked={emailFrequency === "IMMEDIATE"} onChange={() => setEmailFrequency("IMMEDIATE")} />
               Immédiatement
             </label>
@@ -133,12 +146,12 @@ export function CreateSavedSearchForm() {
         ) : null}
       </div>
 
-      <button type="button" disabled={isPending} onClick={handleCreate} className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+      <Button type="button" variant="primary" disabled={isPending} onClick={handleCreate} className="self-start">
         {isPending ? "Création..." : "Créer la veille"}
-      </button>
+      </Button>
 
       {error ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger-fg">
           {error}
         </p>
       ) : null}

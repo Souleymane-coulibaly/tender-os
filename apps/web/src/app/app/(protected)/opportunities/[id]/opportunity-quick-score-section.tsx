@@ -2,13 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Badge, Button, Card, type BadgeTone } from "../../../../../components/ui";
 import { computeQuickScoreAction } from "../../../opportunity-actions";
 import { LEVEL_1_CATEGORY_LABELS, type Level1Category, type OpportunityQuickScore } from "../../../../../lib/opportunity-types";
 
-function scoreBadgeClass(score: number): string {
-  if (score >= 70) return "bg-green-100 text-green-800";
-  if (score >= 40) return "bg-amber-100 text-amber-800";
-  return "bg-red-100 text-red-800";
+/** Design System — remplace l'ancien `scoreBadgeClass()` local : mêmes seuils (70 / 40). */
+function scoreTone(score: number): BadgeTone {
+  if (score >= 70) return "success";
+  if (score >= 40) return "warning";
+  return "danger";
 }
 
 /**
@@ -40,72 +42,76 @@ export function OpportunityQuickScoreSection({ opportunityId, initialScore, canC
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded border border-neutral-200 p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-neutral-700">Score de préqualification</h2>
-        {canCompute ? (
-          <button type="button" disabled={isPending} onClick={handleCompute} className="rounded border border-neutral-300 px-3 py-1.5 text-xs hover:bg-neutral-100 disabled:opacity-50">
+    <Card
+      title="Score de préqualification"
+      actions={
+        canCompute ? (
+          <Button type="button" variant="secondary" size="sm" disabled={isPending} onClick={handleCompute}>
             {isPending ? "Calcul…" : score ? "Recalculer" : "Calculer le score"}
-          </button>
-        ) : null}
-      </div>
-
-      {error ? (
-        <p role="alert" className="text-xs text-red-600">
-          {error}
-        </p>
-      ) : null}
-
-      {!score ? (
-        <p className="text-sm text-neutral-500">Aucun score calculé pour le moment.</p>
-      ) : (
-        <>
-          <div className="flex items-center gap-3">
-            <span className={`rounded px-2 py-1 text-sm font-semibold ${scoreBadgeClass(score.globalScore)}`}>{score.globalScore}/100</span>
-            <span className="text-xs text-neutral-500">Confiance {Math.round(score.confidence * 100)}% — Complexité {score.complexity}/5 — v{score.scoreVersion}</span>
-          </div>
-
-          <ul className="flex flex-col gap-1 text-xs text-neutral-600">
-            {(Object.entries(score.categoryScores) as [Level1Category, { score: number; weight: number; justification: string }][]).map(([category, entry]) => (
-              <li key={category} className="flex flex-col border-b border-neutral-100 py-1">
-                <div className="flex justify-between">
-                  <span className="font-medium text-neutral-800">{LEVEL_1_CATEGORY_LABELS[category]}</span>
-                  <span>
-                    {entry.score}/100 <span className="text-neutral-400">(poids {entry.weight})</span>
-                  </span>
-                </div>
-                <span className="italic text-neutral-500">{entry.justification}</span>
-              </li>
-            ))}
-          </ul>
-
-          {score.blockers.length > 0 ? (
-            <div className="rounded border border-red-200 bg-red-50 p-2">
-              <p className="text-xs font-semibold text-red-800">Blocages détectés</p>
-              <ul className="mt-1 flex flex-col gap-1 text-xs text-red-700">
-                {score.blockers.map((blocker, i) => (
-                  <li key={i}>{blocker.description}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          {score.missingData.length > 0 ? (
-            <div className="rounded border border-amber-200 bg-amber-50 p-2">
-              <p className="text-xs font-semibold text-amber-800">Données manquantes (confiance réduite)</p>
-              <ul className="mt-1 flex flex-col gap-1 text-xs text-amber-700">
-                {score.missingData.map((item, i) => (
-                  <li key={i}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          <p className="text-xs italic text-neutral-500">
-            Ce score est une aide à la décision, jamais une prédiction de gain — la décision finale reste humaine.
+          </Button>
+        ) : null
+      }
+    >
+      <div className="flex flex-col gap-3">
+        {error ? (
+          <p role="alert" className="text-xs text-danger-fg">
+            {error}
           </p>
-        </>
-      )}
-    </section>
+        ) : null}
+
+        {!score ? (
+          <p className="text-sm text-tenderos-slate">Aucun score calculé pour le moment.</p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge tone={scoreTone(score.globalScore)}>{score.globalScore}/100</Badge>
+              <span className="text-xs text-tenderos-slate">
+                Confiance {Math.round(score.confidence * 100)}% — Complexité {score.complexity}/5 — v{score.scoreVersion}
+              </span>
+            </div>
+
+            <ul className="flex flex-col gap-1 text-xs text-tenderos-slate">
+              {(Object.entries(score.categoryScores) as [Level1Category, { score: number; weight: number; justification: string }][]).map(([category, entry]) => (
+                <li key={category} className="flex flex-col border-b border-tenderos-navy/10 py-1">
+                  <div className="flex justify-between">
+                    <span className="font-medium text-tenderos-navy">{LEVEL_1_CATEGORY_LABELS[category]}</span>
+                    <span>
+                      {entry.score}/100 <span className="text-tenderos-slate/70">(poids {entry.weight})</span>
+                    </span>
+                  </div>
+                  <span className="italic text-tenderos-slate">{entry.justification}</span>
+                </li>
+              ))}
+            </ul>
+
+            {score.blockers.length > 0 ? (
+              <div className="rounded-lg bg-danger-bg p-3">
+                <p className="text-xs font-semibold text-danger-fg">Blocages détectés</p>
+                <ul className="mt-1 flex flex-col gap-1 text-xs text-danger-fg">
+                  {score.blockers.map((blocker, i) => (
+                    <li key={i}>{blocker.description}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {score.missingData.length > 0 ? (
+              <div className="rounded-lg bg-warning-bg p-3">
+                <p className="text-xs font-semibold text-warning-fg">Données manquantes (confiance réduite)</p>
+                <ul className="mt-1 flex flex-col gap-1 text-xs text-warning-fg">
+                  {score.missingData.map((item, i) => (
+                    <li key={i}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <p className="text-xs italic text-tenderos-slate">
+              Ce score est une aide à la décision, jamais une prédiction de gain — la décision finale reste humaine.
+            </p>
+          </>
+        )}
+      </div>
+    </Card>
   );
 }

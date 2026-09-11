@@ -2,6 +2,8 @@
  *  les DTO exposes par l'API (voir apps/api/src/modules/opportunity/application/dtos.ts et
  *  application/ports/*.ts), jamais une redefinition divergente. */
 
+import type { BadgeTone } from "../components/ui";
+
 export type OpportunityStatus = "DRAFT" | "TO_QUALIFY" | "QUALIFIED" | "GO" | "GO_CONDITIONAL" | "NO_GO" | "PROMOTED" | "DISMISSED" | "ARCHIVED";
 export type OpportunitySource = "MANUAL" | "BOAMP" | "TED" | "PRIVATE";
 export type GoNoGoDecisionValue = "GO" | "GO_CONDITIONAL" | "NO_GO";
@@ -134,16 +136,19 @@ export const OPPORTUNITY_STATUS_LABELS: Record<OpportunityStatus, string> = {
   ARCHIVED: "Archivée",
 };
 
-export const OPPORTUNITY_STATUS_BADGE_CLASSES: Record<OpportunityStatus, string> = {
-  DRAFT: "bg-neutral-100 text-neutral-700",
-  TO_QUALIFY: "bg-blue-100 text-blue-800",
-  QUALIFIED: "bg-blue-100 text-blue-800",
-  GO: "bg-green-100 text-green-800",
-  GO_CONDITIONAL: "bg-amber-100 text-amber-800",
-  NO_GO: "bg-red-100 text-red-800",
-  PROMOTED: "bg-purple-100 text-purple-800",
-  DISMISSED: "bg-neutral-200 text-neutral-600",
-  ARCHIVED: "bg-neutral-200 text-neutral-600",
+/** Design System — table STATUT → tone de `Badge` (remplace l'ancien jeu de classes de badge écrit
+ *  à la main). PROMOTED (ancien violet, absent des jetons) prend `gold` : il reste distinct des
+ *  statuts « en cours » (`info`) et marque l'aboutissement du funnel. */
+export const OPPORTUNITY_STATUS_TONE: Record<OpportunityStatus, BadgeTone> = {
+  DRAFT: "neutral",
+  TO_QUALIFY: "info",
+  QUALIFIED: "info",
+  GO: "success",
+  GO_CONDITIONAL: "warning",
+  NO_GO: "danger",
+  PROMOTED: "gold",
+  DISMISSED: "neutral",
+  ARCHIVED: "neutral",
 };
 
 /** Funnel amont manuel uniquement (mission §5) — GO/GO_CONDITIONAL/NO_GO/PROMOTED ne sont JAMAIS
@@ -211,16 +216,13 @@ export const PREP_TIME_LABELS: Record<PrepTimeLevel, string> = {
   HIGH: "Élevé",
 };
 
-export function goNoGoBadgeClass(value: GoNoGoDecisionValue | GoNoGoRecommendation): string {
-  switch (value) {
-    case "GO":
-      return "bg-green-100 text-green-800";
-    case "GO_CONDITIONAL":
-      return "bg-amber-100 text-amber-800";
-    case "NO_GO":
-      return "bg-red-100 text-red-800";
-  }
-}
+/** Design System — table décision GO/NO-GO → tone de `Badge` (remplace `goNoGoBadgeClass()`).
+ *  `GoNoGoRecommendation` a exactement les mêmes valeurs que `GoNoGoDecisionValue`. */
+export const GO_NO_GO_TONE: Record<GoNoGoDecisionValue | GoNoGoRecommendation, BadgeTone> = {
+  GO: "success",
+  GO_CONDITIONAL: "warning",
+  NO_GO: "danger",
+};
 
 /** Vérifications UI uniquement, jamais l'autorité — le backend revalide systématiquement
  *  (`OpportunityPermission`/`ClientPermission`/`TenderPermission`) quoi que montre l'interface. */

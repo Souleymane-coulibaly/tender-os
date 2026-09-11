@@ -1,3 +1,4 @@
+import { Button, Card, Checkbox, Input, Select } from "../../../../components/ui";
 import { CLIENT_ACCOUNT_STATUS_LABELS, type ClientAccountStatus } from "../../../../lib/client-portfolio-types";
 
 export type ClientFiltersState = {
@@ -10,40 +11,28 @@ export type ClientFiltersState = {
  *  filtres actifs. */
 export function ClientFilters({ values }: { values: ClientFiltersState }) {
   return (
-    <form method="GET" action="/app/clients" className="flex flex-wrap items-end gap-3 rounded border border-neutral-200 p-3">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="nameSearch" className="text-xs text-neutral-600">
-          Recherche par nom
-        </label>
-        <input
+    <Card padding="tight">
+      <form method="GET" action="/app/clients" className="flex flex-wrap items-end gap-3">
+        <Input
+          label="Recherche par nom"
           id="nameSearch"
           name="nameSearch"
           type="text"
           defaultValue={values.nameSearch}
           placeholder="Nom du client..."
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          wrapperClassName="min-w-[12rem] flex-1 sm:max-w-xs"
         />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="status" className="text-xs text-neutral-600">
-          Statut
-        </label>
-        <select id="status" name="status" defaultValue={values.status ?? ""} className="rounded border border-neutral-300 px-2 py-1 text-sm">
+        <Select label="Statut" id="status" name="status" defaultValue={values.status ?? ""} wrapperClassName="basis-40">
           <option value="">Tous</option>
           {Object.entries(CLIENT_ACCOUNT_STATUS_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
-      </div>
-      <label className="flex items-center gap-2 pb-1.5 text-xs text-neutral-600">
-        <input type="checkbox" name="includeArchived" value="true" defaultChecked={values.includeArchived} />
-        Inclure les clients archivés
-      </label>
-      <button type="submit" className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100">
-        Filtrer
-      </button>
-    </form>
+        </Select>
+        <Checkbox name="includeArchived" value="true" defaultChecked={values.includeArchived} label="Inclure les clients archivés" className="pb-2.5" />
+        <Button type="submit">Filtrer</Button>
+      </form>
+    </Card>
   );
 }

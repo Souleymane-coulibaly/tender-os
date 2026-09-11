@@ -376,6 +376,75 @@ ce widget. Corrigé : `/app/candidate-companies`. Test ajouté (`activation-chec
 2 tests : l'étape ouverte mène aux entreprises candidates ; une étape terminée n'est pas un lien).
 Web : typecheck 0, lint 0 erreur.
 
+**Homogénéisation visuelle — lot 1 : Paramètres** (demande utilisateur : aligner les autres pages sur
+la fiche appel d'offres, couleurs, tailles, polices). Audit par script : ~38 sections restaient dans
+l'ancien style (~1 300 classes grises brutes, titres et boutons faits à la main). Décisions
+utilisateur : migration par lots validés un à un ; `DESIGN_SYSTEM.md` rédigé.
+
+- Méthode : celle de la fiche appel d'offres (`b29d94c`) — gris bruts remplacés par les jetons
+  (`tenderos-navy/slate/light`, bordures `tenderos-navy/10`), couleurs d'état par les jetons
+  sémantiques, sections en `Card`, boutons en `Button` (classes de placement conservées,
+  `type="submit"` explicite), badges faits main en `Badge` via des tables `STATUT → tone`, champs en
+  `Input/Select/Textarea/Checkbox`, tableaux en `Table`.
+- Structure commune : `SectionTabs` (onglets d'un layout, onglet actif déduit de l'adresse) ;
+  `TabsNav` accepte un nom accessible ; layouts Configuration IA et Intégrations = `PageHeader` puis
+  onglets, comme la fiche AO ; les pages d'onglet ne rendent que des `Card` (retour « ← Liste » pour
+  les fiches et créations).
+- Périmètre : Configuration IA (7 onglets, fiches et créations), Intégrations (3 onglets, fiche
+  webhook), Coûts IA — 41 fichiers ; helpers `*BadgeClass` convertis en tables de tons (modèles IA,
+  versions de template d'export, clés API, webhooks, livraisons, connexions) ; plus 3 titres `<h1>`
+  faits main restés dans la fiche AO (checklist administrative, dossier structuré, livrable) et le
+  bouton de paiement d'Abonnement.
+- `DESIGN_SYSTEM.md` : couleurs (valeurs), correspondance depuis l'ancien style, typographie,
+  espacements, composants, anatomie des pages, états, icônes, responsive, pièges connus.
+- Garde-fou : `design-system.contract.test.ts` — aucun gris brut ni `<h1>` fait main dans les dossiers
+  migrés (fiche AO, entreprises candidates, membres, notifications, abonnement, Configuration IA,
+  Intégrations, Coûts IA). Couleurs brutes (verts/rouges/ambres) : 0 dans le lot 1 ; 33 encadrés
+  teintés `-50/-200` subsistent dans la fiche AO (hors périmètre de `b29d94c`, à convertir en
+  `Alert` dans un lot ultérieur).
+- Écarts visuels assumés : astérisque rouge du design system sur les champs requis ; certaines
+  zones de texte passent de `text-xs` à `text-sm` ; « Reconnecter » en `primary` (pas de variante
+  d'avertissement) ; sélecteurs de couleur et zone de dépôt gardés natifs, restylés par jetons.
+- Web : typecheck 0, lint 0 erreur, 100/100 fichiers de tests (dont le contrat).
+- Navigateur (serveur local, 1280 px) : les 14 pages du lot et la fiche « Templates de mémoire »
+  s'affichent sans page blanche ni écran d'erreur, avec un seul titre de page (« Configuration IA »,
+  « Intégrations » ou « Coûts IA ») et le bon onglet actif — y compris sur les créations
+  (`/models/new` garde « Modèles » actif). Captures relues : même anatomie que la fiche AO. Notés :
+  les 7 onglets de Configuration IA passent sur deux lignes à 1280 px ; l'introduction de
+  Connecteurs reste hors carte ; « Par type de tâche IA » (Coûts IA) reste sans message quand il
+  n'y a pas de données (comportement existant).
+
+**Homogénéisation visuelle — lot 2 : Clients, Opportunités, Veille** (même méthode que le lot 1).
+
+- Pages autonomes : chaque liste, création et fiche ouvre sur un `PageHeader` (fil d'Ariane, statut
+  en `Badge`, action principale), contenu en `Card`, tableaux en `Table`, listes vides en
+  `EmptyState` (même texte). Fiche client, profil d'entreprise du client (onglets gardés en boutons —
+  une spec e2e les interroge par rôle — mais au style de `TabsNav`), fiche opportunité (score,
+  décision GO/NO-GO, promotion, archivage), Veille (veilles enregistrées, cartes de marchés, fiche
+  marché).
+- Tables de tons remplaçant les helpers `*BadgeClass` / constantes de classes : statut de compte
+  client, statut de catégorie du profil, statut d'opportunité, décision GO/NO-GO, score de
+  préqualification (mêmes seuils), type de marché, statut de correspondance, score de pertinence
+  (mêmes seuils) ; `deadlineUrgencyClass` (urgence des échéances) passé aux jetons. Aucune couleur
+  brute restante dans les dossiers du lot 2 ni dans leurs fichiers `lib/`.
+- Choix assumés : champ « Nom * » laissé natif dans les formulaires client (un test interroge ce
+  libellé exact) ; boutons de choix GO / GO conditionnel / NO GO natifs (teinte de la décision
+  sélectionnée, même principe que la fiche AO) ; liens externes « Voir la source » natifs (`Button`
+  ne transmet pas `target`) ; boutons radio natifs (pas de composant Radio) ; statut « promue » en
+  badge doré (le violet n'est pas un jeton) ; actions destructrices (Archiver, Retirer) en `danger`.
+- Signalé, non modifié : la fiche opportunité peut afficher plusieurs boutons principaux selon
+  l'état (Promouvoir, Enregistrer la décision, Confirmer) ; une opportunité non qualifiée affiche
+  aussi un message de rôle trompeur (comportement existant).
+- Garde-fou étendu à `clients`, `opportunities`, `market-watch`. Web : typecheck 0, lint 0 erreur,
+  contrat vert, 100/100 fichiers de tests (lots 1 et 2 réunis).
+- Navigateur (serveur local, 1280 px) : liste, création, fiche client et profil d'entreprise du
+  client ; liste et création d'opportunité ; Veille — sans page blanche ni écran d'erreur, un seul
+  titre de page chacune (fiches opportunité et marché non ouvertes : listes vides dans les données
+  de test). Captures relues : même anatomie que la fiche AO. Notés : « Nom * » sans astérisque
+  rouge dans les formulaires client (libellé exact exigé par un test) ; tableau des utilisateurs
+  affectés en double bordure (tableau dans une carte) ; 9 onglets du profil d'entreprise sur deux
+  lignes ; la rubrique « Pricing & prévisions » de la fiche client garde son libellé.
+
 **Abonnement staging désynchronisé de Stripe** (constaté en même temps : « Essai Starter — 0 jours
 restants », échéance au 05/09/2026 déjà passée). Établi : les variables Stripe du service API
 staging sont toutes définies (clé, secret de webhook, 7 prix, `APP_BASE_URL`) et les webhooks

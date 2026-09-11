@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PageHeader } from "../../../../../../components/ui";
 import { appApiFetch } from "../../../../../../lib/app-api-client";
 import type { CompanyProfileSummary } from "../../../../../../lib/company-profile-types";
 import type { ClientAccountSummary } from "../../../../../../lib/client-portfolio-types";
@@ -24,19 +25,23 @@ export default async function CompanyProfilePage({ params }: { params: Promise<{
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Link href={`/app/clients/${id}`} className="text-sm text-neutral-500 hover:underline">
-          ← {client.name}
-        </Link>
-        <h1 className="mt-1 text-xl font-semibold">Profil entreprise du client</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Identité légale, contacts, comptes bancaires, assurances, certifications, références et moyens de ce client — distinct de la fiche{" "}
-          <Link href="/app/candidate-companies" className="underline hover:text-neutral-900">
-            Entreprise candidate
-          </Link>
-          , qui porte l&apos;entité juridique répondant effectivement à vos appels d&apos;offres.
-        </p>
-      </div>
+      <PageHeader
+        breadcrumb={[
+          { label: "Clients", href: "/app/clients" },
+          { label: client.name, href: `/app/clients/${id}` },
+          { label: "Profil entreprise" },
+        ]}
+        title="Profil entreprise du client"
+        description={
+          <>
+            Identité légale, contacts, comptes bancaires, assurances, certifications, références et moyens de ce client — distinct de la fiche{" "}
+            <Link href="/app/candidate-companies" className="underline hover:text-tenderos-navy">
+              Entreprise candidate
+            </Link>
+            , qui porte l&apos;entité juridique répondant effectivement à vos appels d&apos;offres.
+          </>
+        }
+      />
 
       <CompanyProfileTabs clientId={id} profile={profile} />
     </div>

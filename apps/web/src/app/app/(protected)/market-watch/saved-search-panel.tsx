@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Button, Card } from "../../../../components/ui";
 import type { SavedSearchSummary } from "../../../../lib/market-watch-types";
 import { deleteSavedSearchAction, setSavedSearchStatusAction } from "../../market-watch-actions";
 
@@ -14,15 +15,17 @@ import { deleteSavedSearchAction, setSavedSearchStatusAction } from "../../marke
  */
 export function SavedSearchPanel({ savedSearches, activeSearchId }: { savedSearches: SavedSearchSummary[]; activeSearchId: string | undefined }) {
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-neutral-700">Mes veilles</h2>
-        <Link href="/app/market-watch?new" className="text-xs font-medium text-neutral-900 hover:underline">
+    <Card
+      padding="tight"
+      title="Mes veilles"
+      actions={
+        <Button variant="link" href="/app/market-watch?new" className="text-xs">
           + Nouvelle
-        </Link>
-      </div>
+        </Button>
+      }
+    >
       {savedSearches.length === 0 ? (
-        <p className="text-xs text-neutral-500">Aucune veille pour l&apos;instant.</p>
+        <p className="text-sm text-tenderos-slate">Aucune veille pour l&apos;instant.</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {savedSearches.map((search) => (
@@ -30,7 +33,7 @@ export function SavedSearchPanel({ savedSearches, activeSearchId }: { savedSearc
           ))}
         </ul>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -54,17 +57,19 @@ function SavedSearchRow({ search, isActive }: { search: SavedSearchSummary; isAc
   }
 
   return (
-    <li className={`group flex items-center gap-1 rounded ${isActive ? "bg-neutral-900" : "hover:bg-neutral-100"}`}>
-      <Link href={`/app/market-watch?searchId=${search.id}`} className={`min-w-0 flex-1 truncate px-3 py-2 text-sm ${isActive ? "text-white" : "text-neutral-700"}`}>
+    <li className={`group flex items-center gap-1 rounded-lg ${isActive ? "bg-tenderos-navy" : "hover:bg-tenderos-light"}`}>
+      <Link href={`/app/market-watch?searchId=${search.id}`} className={`min-w-0 flex-1 truncate px-3 py-2 text-sm ${isActive ? "text-white" : "text-tenderos-navy"}`}>
         {search.name}
         {!search.isActive ? <span className="ml-1.5 text-xs opacity-70">(en pause)</span> : null}
         {search.newMatchCount ? (
-          <span className={`ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${isActive ? "bg-white text-neutral-900" : "bg-red-600 text-white"}`}>
+          <span className={`ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-semibold ${isActive ? "bg-white text-tenderos-navy" : "bg-danger-fg text-white"}`}>
             {search.newMatchCount}
           </span>
         ) : null}
       </Link>
-      <div className={`flex shrink-0 items-center gap-0.5 pr-1.5 opacity-0 group-hover:opacity-100 ${isActive ? "text-white" : "text-neutral-500"}`}>
+      {/* Boutons natifs volontaires : leur couleur suit la ligne (blanc sur la veille active en
+          navy), ce que les variantes de `Button` (texte navy/bleu imposé) rendraient illisible. */}
+      <div className={`flex shrink-0 items-center gap-0.5 pr-1.5 opacity-0 group-hover:opacity-100 ${isActive ? "text-white" : "text-tenderos-slate"}`}>
         <button
           type="button"
           disabled={isPending}

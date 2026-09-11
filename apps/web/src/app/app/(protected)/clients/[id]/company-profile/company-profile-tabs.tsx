@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Badge, Card } from "../../../../../../components/ui";
 import { RetiredBidderNotice } from "./retired-bidder-notice";
-import { CATEGORY_STATUS_LABELS, categoryStatusBadgeClass, type CompanyProfileSummary } from "../../../../../../lib/company-profile-types";
+import { CATEGORY_STATUS_LABELS, CATEGORY_STATUS_TONE, type CompanyProfileSummary } from "../../../../../../lib/company-profile-types";
 import { BankAccountsSection } from "./bank-accounts-section";
 import { CertificationsSection } from "./certifications-section";
 import { DocumentsSection } from "./documents-section";
@@ -58,14 +59,17 @@ export function CompanyProfileTabs({ clientId, profile }: { clientId: string; pr
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-1 border-b border-neutral-200">
+      <div className="flex flex-wrap gap-1 overflow-x-auto border-b border-tenderos-navy/10 pb-px">
         {TABS.map((tab) => (
           <button
             key={tab.key}
             type="button"
             onClick={() => setActiveTab(tab.key)}
-            className={`rounded-t px-3 py-2 text-sm font-medium ${
-              activeTab === tab.key ? "border-b-2 border-neutral-900 text-neutral-900" : "text-neutral-500 hover:text-neutral-800"
+            aria-current={activeTab === tab.key ? "page" : undefined}
+            className={`shrink-0 whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition ${
+              activeTab === tab.key
+                ? "border-tenderos-blue text-tenderos-navy"
+                : "border-transparent text-tenderos-slate hover:border-tenderos-navy/20 hover:text-tenderos-navy"
             }`}
           >
             {tab.label}
@@ -77,10 +81,12 @@ export function CompanyProfileTabs({ clientId, profile }: { clientId: string; pr
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {(Object.entries(profile.completeness) as [keyof CompanyProfileSummary["completeness"], CompanyProfileSummary["completeness"][keyof CompanyProfileSummary["completeness"]]][]).map(
             ([category, status]) => (
-              <div key={category} className="rounded border border-neutral-200 p-3">
-                <p className="text-xs uppercase tracking-wide text-neutral-500">{CATEGORY_LABELS[category]}</p>
-                <span className={`mt-2 inline-block rounded px-2 py-0.5 text-xs font-medium ${categoryStatusBadgeClass(status)}`}>{CATEGORY_STATUS_LABELS[status]}</span>
-              </div>
+              <Card key={category} padding="tight">
+                <p className="text-xs uppercase tracking-wide text-tenderos-slate">{CATEGORY_LABELS[category]}</p>
+                <div className="mt-2">
+                  <Badge tone={CATEGORY_STATUS_TONE[status] ?? "neutral"}>{CATEGORY_STATUS_LABELS[status]}</Badge>
+                </div>
+              </Card>
             ),
           )}
         </div>

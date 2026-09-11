@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Alert, Badge, Button, Card, PageHeader } from "../../../../../components/ui";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import {
   canManageOpportunity,
   canPromoteOpportunity,
   canRecordGoNoGoDecision,
   OPPORTUNITY_SOURCE_LABELS,
-  OPPORTUNITY_STATUS_BADGE_CLASSES,
   OPPORTUNITY_STATUS_LABELS,
+  OPPORTUNITY_STATUS_TONE,
   type GoNoGoDecision,
   type Opportunity,
   type OpportunityQuickScore,
@@ -24,6 +25,9 @@ import { OpportunityStatusForm } from "./opportunity-status-form";
 import { PromoteOpportunityButton } from "./promote-opportunity-button";
 
 export const metadata: Metadata = { title: "Détail de l'opportunité — TenderOS" };
+
+/** Libellé d'un champ de la fiche (grille de la carte d'informations). */
+const FIELD_LABEL_CLASSES = "text-xs font-semibold uppercase tracking-wide text-tenderos-slate";
 
 export default async function OpportunityDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -61,72 +65,79 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
   // possible). Confort UX uniquement — le backend reste l'autorité et revalide systématiquement.
   const decisionAllowedFromStatus = ["QUALIFIED", "GO", "GO_CONDITIONAL", "NO_GO"].includes(opportunity.status);
   const canPromote = canPromoteOpportunity(role) && (opportunity.status === "GO" || opportunity.status === "GO_CONDITIONAL");
+  const canArchive = canManage && opportunity.status !== "ARCHIVED" && opportunity.status !== "PROMOTED";
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">{opportunity.title}</h1>
-          <p className="text-sm text-neutral-600">
+      <PageHeader
+        breadcrumb={[{ label: "Opportunités", href: "/app/opportunities" }, { label: opportunity.title }]}
+        title={opportunity.title}
+        description={
+          <>
             {opportunity.buyerName ?? "Acheteur non renseigné"} — {OPPORTUNITY_SOURCE_LABELS[opportunity.source]}
-          </p>
-          {opportunity.clientAccountId ? (
-            <Link href={`/app/clients/${opportunity.clientAccountId}`} className="text-sm text-neutral-700 hover:underline">
-              Voir le client →
-            </Link>
-          ) : (
-            <p className="text-sm italic text-amber-700">Aucun client rattaché — score et décision restent possibles, avec confiance réduite.</p>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <span className={`rounded px-2 py-1 text-xs font-medium ${OPPORTUNITY_STATUS_BADGE_CLASSES[opportunity.status]}`}>
-            {OPPORTUNITY_STATUS_LABELS[opportunity.status]}
-          </span>
-          {canManage && opportunity.status !== "ARCHIVED" && opportunity.status !== "PROMOTED" ? <ArchiveOpportunityButton opportunityId={opportunity.id} /> : null}
-        </div>
-      </div>
+            {opportunity.clientAccountId ? null : (
+              <span className="mt-1 block italic text-warning-fg">Aucun client rattaché — score et décision restent possibles, avec confiance réduite.</span>
+            )}
+          </>
+        }
+        status={<Badge tone={OPPORTUNITY_STATUS_TONE[opportunity.status]}>{OPPORTUNITY_STATUS_LABELS[opportunity.status]}</Badge>}
+        actions={
+          opportunity.clientAccountId || canArchive ? (
+            <>
+              {opportunity.clientAccountId ? (
+                <Button href={`/app/clients/${opportunity.clientAccountId}`} variant="link" className="text-sm">
+                  Voir le client →
+                </Button>
+              ) : null}
+              {canArchive ? <ArchiveOpportunityButton opportunityId={opportunity.id} /> : null}
+            </>
+          ) : undefined
+        }
+      />
 
       {opportunity.status === "PROMOTED" && opportunity.tenderId ? (
-        <div className="rounded border border-purple-200 bg-purple-50 p-4 text-sm text-purple-800">
+        <Alert tone="info">
           Cette opportunité a été promue en appel d&apos;offres.{" "}
-          <Link href={`/app/tenders/${opportunity.tenderId}`} className="underline">
+          <Link href={`/app/tenders/${opportunity.tenderId}`} className="font-semibold underline">
             Voir l&apos;appel d&apos;offres →
           </Link>
-        </div>
+        </Alert>
       ) : null}
 
-      <section className="grid grid-cols-1 gap-4 rounded border border-neutral-200 p-4 md:grid-cols-3">
-        <div>
-          <h2 className="text-xs font-semibold uppercase text-neutral-500">Secteur</h2>
-          <p className="text-sm text-neutral-900">{opportunity.sector ?? "—"}</p>
+      <Card>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div>
+            <h2 className={FIELD_LABEL_CLASSES}>Secteur</h2>
+            <p className="text-sm text-tenderos-navy">{opportunity.sector ?? "—"}</p>
+          </div>
+          <div>
+            <h2 className={FIELD_LABEL_CLASSES}>Localisation</h2>
+            <p className="text-sm text-tenderos-navy">{opportunity.location ?? "—"}</p>
+          </div>
+          <div>
+            <h2 className={FIELD_LABEL_CLASSES}>Date limite de dépôt</h2>
+            <p className="text-sm text-tenderos-navy">{opportunity.submissionDeadline ? new Date(opportunity.submissionDeadline).toLocaleDateString("fr-FR") : "—"}</p>
+          </div>
+          <div>
+            <h2 className={FIELD_LABEL_CLASSES}>Montant estimé</h2>
+            <p className="text-sm text-tenderos-navy">{opportunity.estimatedAmount ? `${opportunity.estimatedAmount} ${opportunity.currency ?? ""}` : "—"}</p>
+          </div>
+          <div>
+            <h2 className={FIELD_LABEL_CLASSES}>Type de procédure</h2>
+            <p className="text-sm text-tenderos-navy">{opportunity.procedureType ?? "—"}</p>
+          </div>
+          <div>
+            <h2 className={FIELD_LABEL_CLASSES}>Référence externe</h2>
+            <p className="text-sm text-tenderos-navy">{opportunity.externalReference ?? "—"}</p>
+          </div>
+          <OpportunityCandidateCompanySection
+            opportunityId={opportunity.id}
+            currentCandidateCompany={currentCandidateCompany}
+            availableCandidateCompanies={availableCandidateCompanies}
+            canManage={canManage && canManageCandidateCompany(role)}
+          />
         </div>
-        <div>
-          <h2 className="text-xs font-semibold uppercase text-neutral-500">Localisation</h2>
-          <p className="text-sm text-neutral-900">{opportunity.location ?? "—"}</p>
-        </div>
-        <div>
-          <h2 className="text-xs font-semibold uppercase text-neutral-500">Date limite de dépôt</h2>
-          <p className="text-sm text-neutral-900">{opportunity.submissionDeadline ? new Date(opportunity.submissionDeadline).toLocaleDateString("fr-FR") : "—"}</p>
-        </div>
-        <div>
-          <h2 className="text-xs font-semibold uppercase text-neutral-500">Montant estimé</h2>
-          <p className="text-sm text-neutral-900">{opportunity.estimatedAmount ? `${opportunity.estimatedAmount} ${opportunity.currency ?? ""}` : "—"}</p>
-        </div>
-        <div>
-          <h2 className="text-xs font-semibold uppercase text-neutral-500">Type de procédure</h2>
-          <p className="text-sm text-neutral-900">{opportunity.procedureType ?? "—"}</p>
-        </div>
-        <div>
-          <h2 className="text-xs font-semibold uppercase text-neutral-500">Référence externe</h2>
-          <p className="text-sm text-neutral-900">{opportunity.externalReference ?? "—"}</p>
-        </div>
-        <OpportunityCandidateCompanySection
-          opportunityId={opportunity.id}
-          currentCandidateCompany={currentCandidateCompany}
-          availableCandidateCompanies={availableCandidateCompanies}
-          canManage={canManage && canManageCandidateCompany(role)}
-        />
-      </section>
+      </Card>
 
       {canManage && opportunity.status !== "ARCHIVED" ? <OpportunityStatusForm opportunityId={opportunity.id} status={opportunity.status} /> : null}
 
@@ -144,7 +155,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
       {canPromote ? (
         <PromoteOpportunityButton opportunityId={opportunity.id} hasCandidateCompany={Boolean(opportunity.candidateCompanyId)} />
       ) : opportunity.status === "GO" || opportunity.status === "GO_CONDITIONAL" ? (
-        <p className="text-xs text-neutral-500">La promotion en appel d&apos;offres est réservée aux rôles OWNER / ADMIN / BID_MANAGER.</p>
+        <p className="text-xs text-tenderos-slate">La promotion en appel d&apos;offres est réservée aux rôles OWNER / ADMIN / BID_MANAGER.</p>
       ) : null}
     </div>
   );

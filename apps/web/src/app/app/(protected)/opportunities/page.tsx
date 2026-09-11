@@ -1,13 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Badge, Button, EmptyState, PageHeader, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "../../../../components/ui";
 import { appApiFetch } from "../../../../lib/app-api-client";
-import { OPPORTUNITY_STATUS_BADGE_CLASSES, OPPORTUNITY_STATUS_LABELS, type Opportunity, type OpportunityStatus } from "../../../../lib/opportunity-types";
+import { OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_STATUS_TONE, type Opportunity, type OpportunityStatus } from "../../../../lib/opportunity-types";
 import type { PageResponse } from "../../../../lib/tenders-types";
 import { ApiErrorState } from "../api-error-state";
 
 export const metadata: Metadata = { title: "Opportunités — TenderOS" };
 
 type SearchParams = { cursor?: string; status?: string };
+
+/** Filtre de statut : l'actif est plein (navy), les autres discrets — liens de navigation (URL),
+ *  jamais des boutons d'action, donc hors `Button` (un seul `primary` par écran). */
+function filterClasses(active: boolean): string {
+  return `rounded-lg px-2 py-1 font-medium transition ${active ? "bg-tenderos-navy text-white" : "border border-tenderos-navy/15 text-tenderos-slate hover:bg-tenderos-light"}`;
+}
 
 export default async function OpportunitiesListPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
@@ -24,83 +31,77 @@ export default async function OpportunitiesListPage({ searchParams }: { searchPa
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Opportunités</h1>
-          <p className="text-sm text-neutral-600">Préqualification avant création d&apos;un appel d&apos;offres — score, décision, puis promotion.</p>
-        </div>
-        <Link href="/app/opportunities/new" className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
-          Nouvelle opportunité
-        </Link>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Opportunités" }]}
+        title="Opportunités"
+        description="Préqualification avant création d'un appel d'offres — score, décision, puis promotion."
+        actions={
+          <Button href="/app/opportunities/new" variant="primary">
+            Nouvelle opportunité
+          </Button>
+        }
+      />
 
       <div className="flex flex-wrap gap-2 text-xs">
-        <Link href="/app/opportunities" className={`rounded px-2 py-1 ${!params.status ? "bg-neutral-900 text-white" : "border border-neutral-300 text-neutral-600"}`}>
+        <Link href="/app/opportunities" className={filterClasses(!params.status)}>
           Toutes
         </Link>
         {(Object.keys(OPPORTUNITY_STATUS_LABELS) as OpportunityStatus[]).map((status) => (
-          <Link
-            key={status}
-            href={`/app/opportunities?status=${status}`}
-            className={`rounded px-2 py-1 ${params.status === status ? "bg-neutral-900 text-white" : "border border-neutral-300 text-neutral-600"}`}
-          >
+          <Link key={status} href={`/app/opportunities?status=${status}`} className={filterClasses(params.status === status)}>
             {OPPORTUNITY_STATUS_LABELS[status]}
           </Link>
         ))}
       </div>
 
       {page.items.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucune opportunité à afficher.</p>
+        <EmptyState title="Aucune opportunité à afficher." />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="py-2 pr-4">Titre</th>
-                <th className="py-2 pr-4">Acheteur</th>
-                <th className="py-2 pr-4">Statut</th>
-                <th className="py-2 pr-4">Date limite</th>
-                <th className="py-2 pr-4">Dernière modification</th>
-                <th className="py-2 pr-4">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {page.items.map((opportunity) => (
-                <tr key={opportunity.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4">
-                    <Link href={`/app/opportunities/${opportunity.id}`} className="font-medium text-neutral-900 hover:underline">
-                      {opportunity.title}
-                    </Link>
-                  </td>
-                  <td className="py-2 pr-4 text-neutral-600">{opportunity.buyerName ?? "—"}</td>
-                  <td className="py-2 pr-4">
-                    <span className={`rounded px-2 py-1 text-xs font-medium ${OPPORTUNITY_STATUS_BADGE_CLASSES[opportunity.status]}`}>
-                      {OPPORTUNITY_STATUS_LABELS[opportunity.status]}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4 text-neutral-600">
-                    {opportunity.submissionDeadline ? new Date(opportunity.submissionDeadline).toLocaleDateString("fr-FR") : "—"}
-                  </td>
-                  <td className="py-2 pr-4 text-neutral-600">{new Date(opportunity.updatedAt).toLocaleDateString("fr-FR")}</td>
-                  <td className="py-2 pr-4">
-                    <Link href={`/app/opportunities/${opportunity.id}`} className="text-neutral-700 hover:underline">
-                      Ouvrir
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableHeaderCell>Titre</TableHeaderCell>
+              <TableHeaderCell>Acheteur</TableHeaderCell>
+              <TableHeaderCell>Statut</TableHeaderCell>
+              <TableHeaderCell>Date limite</TableHeaderCell>
+              <TableHeaderCell>Dernière modification</TableHeaderCell>
+              <TableHeaderCell>Actions</TableHeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {page.items.map((opportunity) => (
+              <TableRow key={opportunity.id}>
+                <TableCell>
+                  <Link href={`/app/opportunities/${opportunity.id}`} className="font-medium text-tenderos-navy hover:underline">
+                    {opportunity.title}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-tenderos-slate">{opportunity.buyerName ?? "—"}</TableCell>
+                <TableCell>
+                  <Badge tone={OPPORTUNITY_STATUS_TONE[opportunity.status]}>{OPPORTUNITY_STATUS_LABELS[opportunity.status]}</Badge>
+                </TableCell>
+                <TableCell className="text-tenderos-slate">
+                  {opportunity.submissionDeadline ? new Date(opportunity.submissionDeadline).toLocaleDateString("fr-FR") : "—"}
+                </TableCell>
+                <TableCell className="text-tenderos-slate">{new Date(opportunity.updatedAt).toLocaleDateString("fr-FR")}</TableCell>
+                <TableCell>
+                  <Link href={`/app/opportunities/${opportunity.id}`} className="text-tenderos-blue hover:underline">
+                    Ouvrir
+                  </Link>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
 
       {page.pageInfo.hasNextPage && page.pageInfo.nextCursor ? (
-        <Link
+        <Button
           href={`/app/opportunities?${new URLSearchParams({ ...params, cursor: page.pageInfo.nextCursor }).toString()}`}
-          className="self-start text-sm text-neutral-700 hover:underline"
+          variant="link"
+          className="self-start text-sm"
         >
           Page suivante →
-        </Link>
+        </Button>
       ) : null}
     </div>
   );

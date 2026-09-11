@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Alert, Button, Textarea } from "../../../../../components/ui";
 import { promoteOpportunityAction } from "../../../opportunity-actions";
 
 /** Promotion Opportunity -> Tender (mission §20-22) — crée TOUJOURS un nouveau Tender, jamais une
@@ -47,47 +48,43 @@ export function PromoteOpportunityButton({
   // Le bouton reste neanmoins la garde d'affichage : l'autorite reste le backend.
   if (!hasCandidateCompany) {
     return (
-      <section className="flex flex-col gap-2 rounded border border-amber-200 bg-amber-50 p-4">
-        <p className="text-sm font-medium text-amber-900">Entreprise candidate requise</p>
-        <p className="text-sm text-amber-800">
-          Un appel d&apos;offres désigne l&apos;entité juridique qui y répond. Sélectionnez
-          l&apos;entreprise candidate de cette opportunité ci-dessus avant de la promouvoir — elle
-          ne peut jamais être déduite du client.
-        </p>
-      </section>
+      <Alert tone="warning" title="Entreprise candidate requise">
+        Un appel d&apos;offres désigne l&apos;entité juridique qui y répond. Sélectionnez
+        l&apos;entreprise candidate de cette opportunité ci-dessus avant de la promouvoir — elle
+        ne peut jamais être déduite du client.
+      </Alert>
     );
   }
 
+  // Encadré d'état (contient un champ et l'action) : boîte aux jetons `success`, pas une `Alert`.
   return (
-    <section className="flex flex-col gap-2 rounded border border-green-200 bg-green-50 p-4">
-      <p className="text-sm text-green-800">
+    <section className="flex flex-col gap-2 rounded-lg bg-success-bg p-4">
+      <p className="text-sm text-success-fg">
         Cette opportunité peut être promue en appel d&apos;offres. La promotion crée un NOUVEAU dossier appel d&apos;offres et rattache automatiquement le client et l&apos;entreprise candidate déjà sélectionnés.
       </p>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
       {requiresJustification ? (
-        <label className="flex flex-col gap-1 text-xs text-green-900">
-          Justification du contournement d&apos;affectation
-          <textarea
-            value={justification}
-            onChange={(event) => setJustification(event.target.value)}
-            rows={2}
-            className="rounded border border-green-300 bg-white p-2 text-sm text-slate-900"
-            placeholder="Motif : pourquoi agir sans affectation CLIENT_MANAGER sur ce client ?"
-          />
-        </label>
+        <Textarea
+          label="Justification du contournement d'affectation"
+          value={justification}
+          onChange={(event) => setJustification(event.target.value)}
+          rows={2}
+          placeholder="Motif : pourquoi agir sans affectation CLIENT_MANAGER sur ce client ?"
+        />
       ) : null}
-      <button
+      <Button
         type="button"
+        variant="primary"
         disabled={isPending || (requiresJustification && justification.trim().length === 0)}
         onClick={handlePromote}
-        className="self-start rounded bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
+        className="self-start"
       >
         {isPending ? "Promotion…" : "Promouvoir en appel d'offres"}
-      </button>
+      </Button>
     </section>
   );
 }

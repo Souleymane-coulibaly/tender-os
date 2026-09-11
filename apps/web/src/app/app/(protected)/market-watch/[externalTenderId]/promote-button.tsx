@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Alert, Button } from "../../../../../components/ui";
 import { promoteExternalTenderAction } from "../../../market-watch-actions";
 
 /** Mission §53/§55 — jamais automatique, toujours une action explicite. */
@@ -22,23 +23,23 @@ export function PromoteButton({ externalTenderId }: { externalTenderId: string }
   }
 
   if (promotedId) {
-    return <span className="text-sm font-medium text-green-700">Ajouté aux opportunités ✓</span>;
+    return <span className="text-sm font-medium text-success-fg">Ajouté aux opportunités ✓</span>;
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <button type="button" disabled={isPending} onClick={() => handlePromote()} className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+    <div className="flex max-w-xs flex-col gap-2">
+      <Button type="button" variant="primary" disabled={isPending} onClick={() => handlePromote()} className="self-start">
         {isPending ? "..." : "Ajouter à mes opportunités"}
-      </button>
+      </Button>
       {error === "ALREADY_PROMOTED" ? (
-        <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+        <Alert tone="warning">
           Ce marché a déjà été ajouté à vos opportunités.{" "}
-          <button type="button" onClick={() => handlePromote(true)} className="font-medium underline">
+          <Button type="button" variant="link" onClick={() => handlePromote(true)}>
             Ajouter quand même
-          </button>
-        </div>
+          </Button>
+        </Alert>
       ) : error ? (
-        <p className="text-xs text-red-600">{error}</p>
+        <p className="text-xs text-danger-fg">{error}</p>
       ) : null}
     </div>
   );

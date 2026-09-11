@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import Link from "next/link";
+import { Button, Card, Input, Select } from "../../../../../../components/ui";
 import { attachClientDocumentAction, type FormActionState } from "../../../../company-profile-actions";
 import type { DocumentClientAccountAssociation } from "../../../../../../lib/company-profile-types";
 
@@ -51,83 +52,83 @@ export function DocumentsSection({ clientId, documents }: { clientId: string; do
   const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-neutral-600">
-        Documents <strong>commerciaux</strong> de la relation client : contrats, briefs, comptes rendus. Les pièces de
-        candidature (Kbis, attestations, assurances, RIB) relèvent de l&apos;
-        <Link href="/app/candidate-companies" className="underline">
-          entreprise candidate
-        </Link>
-        , qui est l&apos;entité juridique répondant aux appels d&apos;offres.
-      </p>
-
-      {documents.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucun document rattaché.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="py-2 pr-4">Catégorie</th>
-                <th className="py-2 pr-4">Document</th>
-                <th className="py-2 pr-4">Rattaché le</th>
-              </tr>
-            </thead>
-            <tbody>
-              {documents.map((association) => (
-                <tr key={association.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4 text-neutral-600">{CATEGORY_LABELS[association.category as (typeof CATEGORIES)[number]] ?? LEGACY_CATEGORY_LABELS[association.category] ?? association.category}</td>
-                  <td className="py-2 pr-4">
-                    <Link href={`/app/documents/${association.documentId}`} className="text-neutral-700 hover:underline">
-                      Voir le document →
-                    </Link>
-                  </td>
-                  <td className="py-2 pr-4 text-neutral-600">{new Date(association.createdAt).toLocaleDateString("fr-FR")}</td>
+    <div className="flex flex-col gap-6">
+      <Card
+        title="Documents commerciaux"
+        description={
+          <>
+            Documents <strong>commerciaux</strong> de la relation client : contrats, briefs, comptes rendus. Les pièces de
+            candidature (Kbis, attestations, assurances, RIB) relèvent de l&apos;
+            <Link href="/app/candidate-companies" className="underline hover:text-tenderos-navy">
+              entreprise candidate
+            </Link>
+            , qui est l&apos;entité juridique répondant aux appels d&apos;offres.
+          </>
+        }
+      >
+        {documents.length === 0 ? (
+          <p className="text-sm text-tenderos-slate">Aucun document rattaché.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-tenderos-navy/10 text-left text-xs font-semibold uppercase tracking-wide text-tenderos-slate">
+                  <th scope="col" className="py-2 pr-4">Catégorie</th>
+                  <th scope="col" className="py-2 pr-4">Document</th>
+                  <th scope="col" className="py-2 pr-4">Rattaché le</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <form action={formAction} className="flex flex-col gap-3 rounded border border-neutral-200 p-3">
-        <h3 className="text-sm font-semibold text-neutral-900">Rattacher un document commercial</h3>
-        <p className="text-xs text-neutral-500">
-          Importez d&apos;abord le document depuis{" "}
-          <Link href="/app/documents/new" className="underline">
-            Documents
-          </Link>
-          , puis collez son identifiant ici.
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="documentId" className="text-xs text-neutral-600">
-              Identifiant du document *
-            </label>
-            <input id="documentId" name="documentId" required className="rounded border border-neutral-300 px-2 py-1.5 text-sm font-mono" />
+              </thead>
+              <tbody>
+                {documents.map((association) => (
+                  <tr key={association.id} className="border-b border-tenderos-navy/10 last:border-0">
+                    <td className="py-2 pr-4 text-tenderos-slate">{CATEGORY_LABELS[association.category as (typeof CATEGORIES)[number]] ?? LEGACY_CATEGORY_LABELS[association.category] ?? association.category}</td>
+                    <td className="py-2 pr-4">
+                      <Link href={`/app/documents/${association.documentId}`} className="text-tenderos-blue hover:underline">
+                        Voir le document →
+                      </Link>
+                    </td>
+                    <td className="py-2 pr-4 text-tenderos-slate">{new Date(association.createdAt).toLocaleDateString("fr-FR")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="category" className="text-xs text-neutral-600">
-              Catégorie *
-            </label>
-            <select id="category" name="category" required className="rounded border border-neutral-300 px-2 py-1.5 text-sm">
+        )}
+      </Card>
+
+      <Card
+        title="Rattacher un document commercial"
+        description={
+          <>
+            Importez d&apos;abord le document depuis{" "}
+            <Link href="/app/documents/new" className="underline hover:text-tenderos-navy">
+              Documents
+            </Link>
+            , puis collez son identifiant ici.
+          </>
+        }
+      >
+        <form action={formAction} className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Input id="documentId" name="documentId" label="Identifiant du document" required className="font-mono" />
+            <Select id="category" name="category" label="Catégorie" required>
               {CATEGORIES.map((category) => (
                 <option key={category} value={category}>
                   {CATEGORY_LABELS[category]}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
-        </div>
-        {state.error ? (
-          <p role="alert" className="text-sm text-red-600">
-            {state.error}
-          </p>
-        ) : null}
-        <button type="submit" disabled={isPending} className="self-start rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-          {isPending ? "Rattachement..." : "Rattacher"}
-        </button>
-      </form>
+          {state.error ? (
+            <p role="alert" className="text-sm text-danger-fg">
+              {state.error}
+            </p>
+          ) : null}
+          <Button type="submit" variant="primary" disabled={isPending} className="self-start">
+            {isPending ? "Rattachement..." : "Rattacher"}
+          </Button>
+        </form>
+      </Card>
     </div>
   );
 }

@@ -9,34 +9,34 @@
  * ne les montre : les masquer reviendrait a les faire disparaitre du produit.
  */
 import { INSURANCE_TYPE_LABELS, TEMPORAL_VALIDITY_LABELS, temporalValidityTone, type CompanyInsurance } from "../../../../../../lib/company-profile-types";
-import { Badge } from "../../../../../../components/ui";
+import { Badge, Card } from "../../../../../../components/ui";
 
 
 export function InsurancesSection({ insurances }: { clientId: string; insurances: CompanyInsurance[] }) {
 
   return (
-    <div className="flex flex-col gap-4">
+    <Card title="Assurances">
       {insurances.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucune assurance enregistrée.</p>
+        <p className="text-sm text-tenderos-slate">Aucune assurance enregistrée.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="py-2 pr-4">Type</th>
-                <th className="py-2 pr-4">Assureur</th>
-                <th className="py-2 pr-4">Échéance</th>
-                <th className="py-2 pr-4">Validité</th>
+              <tr className="border-b border-tenderos-navy/10 text-left text-xs font-semibold uppercase tracking-wide text-tenderos-slate">
+                <th scope="col" className="py-2 pr-4">Type</th>
+                <th scope="col" className="py-2 pr-4">Assureur</th>
+                <th scope="col" className="py-2 pr-4">Échéance</th>
+                <th scope="col" className="py-2 pr-4">Validité</th>
               </tr>
             </thead>
             <tbody>
               {insurances.map((insurance) => (
-                <tr key={insurance.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4 font-medium text-neutral-900">
+                <tr key={insurance.id} className="border-b border-tenderos-navy/10 last:border-0">
+                  <td className="py-2 pr-4 font-medium text-tenderos-navy">
                     {insurance.type === "OTHER" ? insurance.otherTypeLabel : INSURANCE_TYPE_LABELS[insurance.type]}
                   </td>
-                  <td className="py-2 pr-4 text-neutral-600">{insurance.insurer ?? "—"}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{insurance.expiresAt ? new Date(insurance.expiresAt).toLocaleDateString("fr-FR") : "—"}</td>
+                  <td className="py-2 pr-4 text-tenderos-slate">{insurance.insurer ?? "—"}</td>
+                  <td className="py-2 pr-4 text-tenderos-slate">{insurance.expiresAt ? new Date(insurance.expiresAt).toLocaleDateString("fr-FR") : "—"}</td>
                   <td className="py-2 pr-4">
                     {insurance.temporalStatus ? (
                       <Badge tone={temporalValidityTone(insurance.temporalStatus)}>{TEMPORAL_VALIDITY_LABELS[insurance.temporalStatus]}</Badge>
@@ -48,6 +48,6 @@ export function InsurancesSection({ insurances }: { clientId: string; insurances
           </table>
         </div>
       )}
-    </div>
+    </Card>
   );
 }

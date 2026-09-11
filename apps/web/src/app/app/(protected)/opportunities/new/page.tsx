@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PageHeader } from "../../../../../components/ui";
 import { appApiFetch } from "../../../../../lib/app-api-client";
 import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../../lib/client-portfolio-types";
 import { fetchCandidateCompanies } from "../../../candidate-company-actions";
@@ -21,13 +22,12 @@ export default async function NewOpportunityPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">Nouvelle opportunité</h1>
-        <p className="text-sm text-neutral-600">
-          Une opportunité peut être créée sans client ni entreprise candidate rattachés — le score et la décision restent possibles, avec confiance réduite tant qu&apos;aucun candidat n&apos;est résolu.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        breadcrumb={[{ label: "Opportunités", href: "/app/opportunities" }, { label: "Nouvelle" }]}
+        title="Nouvelle opportunité"
+        description="Une opportunité peut être créée sans client ni entreprise candidate rattachés — le score et la décision restent possibles, avec confiance réduite tant qu'aucun candidat n'est résolu."
+      />
       <CreateOpportunityForm clients={clients.items} candidateCompanies={candidateCompanies} />
     </div>
   );

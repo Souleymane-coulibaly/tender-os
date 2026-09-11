@@ -8,6 +8,7 @@
  * Legacy subsistent chez les clients sans entreprise candidate (registre CCV2-I.2) et rien d'autre
  * ne les montre : les masquer reviendrait a les faire disparaitre du produit.
  */
+import { Card } from "../../../../../../components/ui";
 import type { CompanyHumanResource, CompanyMaterialResource } from "../../../../../../lib/company-profile-types";
 
 
@@ -21,7 +22,7 @@ export function ResourcesSection({
   materialResources: CompanyMaterialResource[];
 }) {
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <HumanResourcesBlock clientId={clientId} resources={humanResources} />
       <MaterialResourcesBlock clientId={clientId} resources={materialResources} />
     </div>
@@ -31,69 +32,67 @@ export function ResourcesSection({
 function HumanResourcesBlock({ resources }: { clientId: string; resources: CompanyHumanResource[] }) {
 
   return (
-    <div className="flex flex-col gap-4">
-      <h3 className="text-sm font-semibold text-neutral-900">Moyens humains</h3>
+    <Card title="Moyens humains">
       {resources.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucun moyen humain enregistré.</p>
+        <p className="text-sm text-tenderos-slate">Aucun moyen humain enregistré.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="py-2 pr-4">Catégorie</th>
-                <th className="py-2 pr-4">Intitulé</th>
-                <th className="py-2 pr-4">Effectif</th>
-                <th className="py-2 pr-4">Qualification</th>
+              <tr className="border-b border-tenderos-navy/10 text-left text-xs font-semibold uppercase tracking-wide text-tenderos-slate">
+                <th scope="col" className="py-2 pr-4">Catégorie</th>
+                <th scope="col" className="py-2 pr-4">Intitulé</th>
+                <th scope="col" className="py-2 pr-4">Effectif</th>
+                <th scope="col" className="py-2 pr-4">Qualification</th>
               </tr>
             </thead>
             <tbody>
               {resources.map((resource) => (
-                <tr key={resource.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4 text-neutral-600">{resource.category}</td>
-                  <td className="py-2 pr-4 font-medium text-neutral-900">{resource.title}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{resource.headcount}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{resource.qualification ?? "—"}</td>
+                <tr key={resource.id} className="border-b border-tenderos-navy/10 last:border-0">
+                  <td className="py-2 pr-4 text-tenderos-slate">{resource.category}</td>
+                  <td className="py-2 pr-4 font-medium text-tenderos-navy">{resource.title}</td>
+                  <td className="py-2 pr-4 text-tenderos-slate">{resource.headcount}</td>
+                  <td className="py-2 pr-4 text-tenderos-slate">{resource.qualification ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
 function MaterialResourcesBlock({ resources }: { clientId: string; resources: CompanyMaterialResource[] }) {
 
   return (
-    <div className="flex flex-col gap-4">
-      <h3 className="text-sm font-semibold text-neutral-900">Moyens matériels</h3>
+    <Card title="Moyens matériels">
       {resources.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucun moyen matériel enregistré.</p>
+        <p className="text-sm text-tenderos-slate">Aucun moyen matériel enregistré.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="py-2 pr-4">Catégorie</th>
-                <th className="py-2 pr-4">Nom</th>
-                <th className="py-2 pr-4">Quantité</th>
-                <th className="py-2 pr-4">Disponibilité</th>
+              <tr className="border-b border-tenderos-navy/10 text-left text-xs font-semibold uppercase tracking-wide text-tenderos-slate">
+                <th scope="col" className="py-2 pr-4">Catégorie</th>
+                <th scope="col" className="py-2 pr-4">Nom</th>
+                <th scope="col" className="py-2 pr-4">Quantité</th>
+                <th scope="col" className="py-2 pr-4">Disponibilité</th>
               </tr>
             </thead>
             <tbody>
               {resources.map((resource) => (
-                <tr key={resource.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4 text-neutral-600">{resource.category}</td>
-                  <td className="py-2 pr-4 font-medium text-neutral-900">{resource.name}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{resource.quantity}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{resource.availabilityStatus}</td>
+                <tr key={resource.id} className="border-b border-tenderos-navy/10 last:border-0">
+                  <td className="py-2 pr-4 text-tenderos-slate">{resource.category}</td>
+                  <td className="py-2 pr-4 font-medium text-tenderos-navy">{resource.name}</td>
+                  <td className="py-2 pr-4 text-tenderos-slate">{resource.quantity}</td>
+                  <td className="py-2 pr-4 text-tenderos-slate">{resource.availabilityStatus}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-    </div>
+    </Card>
   );
 }

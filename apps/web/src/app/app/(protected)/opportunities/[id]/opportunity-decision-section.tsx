@@ -2,14 +2,27 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Alert, Badge, Button, Card, Textarea, type BadgeTone } from "../../../../../components/ui";
 import { recordOpportunityDecisionAction } from "../../../opportunity-actions";
-import { GO_NO_GO_DECISION_LABELS, goNoGoBadgeClass, type GoNoGoDecision, type GoNoGoDecisionValue } from "../../../../../lib/opportunity-types";
+import { GO_NO_GO_DECISION_LABELS, GO_NO_GO_TONE, type GoNoGoDecision, type GoNoGoDecisionValue } from "../../../../../lib/opportunity-types";
 
 const DECISION_CHOICES: { value: GoNoGoDecisionValue; label: string }[] = [
   { value: "GO", label: "GO" },
   { value: "GO_CONDITIONAL", label: "GO conditionnel" },
   { value: "NO_GO", label: "NO GO" },
 ];
+
+/** Bouton de choix sélectionné : teinte claire de l'état, dérivée de LA seule source sémantique
+ *  (`GO_NO_GO_TONE`), jamais un second choix de couleur par décision. Un bouton bascule n'est pas un
+ *  `Badge` (ni une variante de `Button`), d'où ce jeu de classes propre. */
+const SELECTED_CHOICE_CLASSES: Record<BadgeTone, string> = {
+  success: "bg-success-bg text-success-fg",
+  warning: "bg-warning-bg text-warning-fg",
+  danger: "bg-danger-bg text-danger-fg",
+  info: "bg-info-bg text-info-fg",
+  neutral: "bg-tenderos-light text-tenderos-navy",
+  gold: "bg-tenderos-gold/15 text-tenderos-navy",
+};
 
 /**
  * Décision humaine Niveau OPPORTUNITY (mission §18) — la recommandation IA n'existe pas encore à
@@ -79,94 +92,83 @@ export function OpportunityDecisionSection({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded border border-neutral-200 p-4">
-      <h2 className="text-sm font-semibold text-neutral-700">Décision GO / NO-GO</h2>
+    <Card title="Décision GO / NO-GO">
+      <div className="flex flex-col gap-3">
+        {canDecide && !decisionAllowedFromStatus ? (
+          <Alert tone="warning">
+            Cette opportunité doit d&apos;abord être <strong>qualifiée</strong> pour recevoir une décision GO/NO-GO. Utilisez le statut ci-dessus : «&nbsp;À qualifier&nbsp;» puis
+            «&nbsp;Qualifiée&nbsp;».
+          </Alert>
+        ) : null}
 
-      {canDecide && !decisionAllowedFromStatus ? (
-        <p className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          Cette opportunité doit d&apos;abord être <strong>qualifiée</strong> pour recevoir une décision GO/NO-GO. Utilisez le statut ci-dessus : «&nbsp;À qualifier&nbsp;» puis
-          «&nbsp;Qualifiée&nbsp;».
-        </p>
-      ) : null}
+        {canDecide && decisionAllowedFromStatus ? (
+          <div className="flex flex-col gap-2 rounded-lg bg-tenderos-light p-3">
+            {/* Boutons bascule (choix exclusif) : volontairement hors `Button`, dont aucune variante
+                ne porte la teinte d'état de la décision sélectionnée. */}
+            <div className="flex flex-wrap gap-2">
+              {DECISION_CHOICES.map((choice) => (
+                <button
+                  key={choice.value}
+                  type="button"
+                  onClick={() => setSelected(choice.value)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                    selected === choice.value
+                      ? SELECTED_CHOICE_CLASSES[GO_NO_GO_TONE[choice.value]]
+                      : "border border-tenderos-navy/15 bg-white text-tenderos-slate hover:bg-tenderos-light"
+                  }`}
+                >
+                  {choice.label}
+                </button>
+              ))}
+            </div>
 
-      {canDecide && decisionAllowedFromStatus ? (
-        <div className="flex flex-col gap-2 rounded border border-neutral-100 bg-neutral-50 p-3">
-          <div className="flex gap-2">
-            {DECISION_CHOICES.map((choice) => (
-              <button
-                key={choice.value}
-                type="button"
-                onClick={() => setSelected(choice.value)}
-                className={`rounded px-3 py-1.5 text-xs font-medium ${selected === choice.value ? goNoGoBadgeClass(choice.value) : "border border-neutral-300 text-neutral-600"}`}
-              >
-                {choice.label}
-              </button>
-            ))}
+            {selected === "NO_GO" ? (
+              <Textarea id="justification" label="Justification (obligatoire)" value={justification} onChange={(e) => setJustification(e.target.value)} rows={2} />
+            ) : null}
+
+            {selected === "GO_CONDITIONAL" ? (
+              <Textarea id="conditions" label="Conditions (obligatoire)" value={conditions} onChange={(e) => setConditions(e.target.value)} rows={2} />
+            ) : null}
+
+            {selected ? <Textarea id="comment" label="Commentaire (facultatif)" value={comment} onChange={(e) => setComment(e.target.value)} rows={2} /> : null}
+
+            {error ? (
+              <p role="alert" className="text-xs text-danger-fg">
+                {error}
+              </p>
+            ) : null}
+
+            {selected ? (
+              <Button type="button" variant="primary" size="sm" disabled={isPending} onClick={handleSubmit} className="self-start">
+                {isPending ? "Enregistrement…" : "Enregistrer la décision"}
+              </Button>
+            ) : null}
           </div>
-
-          {selected === "NO_GO" ? (
-            <div className="flex flex-col gap-1">
-              <label htmlFor="justification" className="text-xs font-medium text-neutral-700">
-                Justification (obligatoire)
-              </label>
-              <textarea id="justification" value={justification} onChange={(e) => setJustification(e.target.value)} rows={2} className="rounded border border-neutral-300 px-2 py-1 text-sm" />
-            </div>
-          ) : null}
-
-          {selected === "GO_CONDITIONAL" ? (
-            <div className="flex flex-col gap-1">
-              <label htmlFor="conditions" className="text-xs font-medium text-neutral-700">
-                Conditions (obligatoire)
-              </label>
-              <textarea id="conditions" value={conditions} onChange={(e) => setConditions(e.target.value)} rows={2} className="rounded border border-neutral-300 px-2 py-1 text-sm" />
-            </div>
-          ) : null}
-
-          {selected ? (
-            <div className="flex flex-col gap-1">
-              <label htmlFor="comment" className="text-xs font-medium text-neutral-700">
-                Commentaire (facultatif)
-              </label>
-              <textarea id="comment" value={comment} onChange={(e) => setComment(e.target.value)} rows={2} className="rounded border border-neutral-300 px-2 py-1 text-sm" />
-            </div>
-          ) : null}
-
-          {error ? (
-            <p role="alert" className="text-xs text-red-600">
-              {error}
-            </p>
-          ) : null}
-
-          {selected ? (
-            <button type="button" disabled={isPending} onClick={handleSubmit} className="self-start rounded bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
-              {isPending ? "Enregistrement…" : "Enregistrer la décision"}
-            </button>
-          ) : null}
-        </div>
-      ) : (
-        <p className="text-xs text-neutral-500">L&apos;enregistrement d&apos;une décision est réservé aux rôles OWNER / ADMIN / BID_MANAGER.</p>
-      )}
-
-      <div>
-        <h3 className="text-xs font-semibold uppercase text-neutral-500">Historique</h3>
-        {decisions.length === 0 ? (
-          <p className="mt-1 text-sm text-neutral-500">Aucune décision enregistrée.</p>
         ) : (
-          <ul className="mt-1 flex flex-col gap-2">
-            {decisions.map((decision) => (
-              <li key={decision.id} className="border-b border-neutral-100 py-1 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className={`rounded px-2 py-0.5 text-xs font-medium ${goNoGoBadgeClass(decision.decision)}`}>{GO_NO_GO_DECISION_LABELS[decision.decision]}</span>
-                  <span className="text-xs text-neutral-500">{new Date(decision.decidedAt).toLocaleString("fr-FR")}</span>
-                </div>
-                {decision.justification ? <p className="mt-1 text-xs text-neutral-700">{decision.justification}</p> : null}
-                {decision.conditions ? <p className="mt-1 text-xs text-neutral-700">Conditions : {decision.conditions}</p> : null}
-                {decision.comment ? <p className="mt-1 text-xs italic text-neutral-500">{decision.comment}</p> : null}
-              </li>
-            ))}
-          </ul>
+          <p className="text-xs text-tenderos-slate">L&apos;enregistrement d&apos;une décision est réservé aux rôles OWNER / ADMIN / BID_MANAGER.</p>
         )}
+
+        <div>
+          <h3 className="text-sm font-semibold text-tenderos-navy">Historique</h3>
+          {decisions.length === 0 ? (
+            <p className="mt-1 text-sm text-tenderos-slate">Aucune décision enregistrée.</p>
+          ) : (
+            <ul className="mt-1 flex flex-col gap-2">
+              {decisions.map((decision) => (
+                <li key={decision.id} className="border-b border-tenderos-navy/10 py-1 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Badge tone={GO_NO_GO_TONE[decision.decision]}>{GO_NO_GO_DECISION_LABELS[decision.decision]}</Badge>
+                    <span className="text-xs text-tenderos-slate">{new Date(decision.decidedAt).toLocaleString("fr-FR")}</span>
+                  </div>
+                  {decision.justification ? <p className="mt-1 text-xs text-tenderos-navy">{decision.justification}</p> : null}
+                  {decision.conditions ? <p className="mt-1 text-xs text-tenderos-navy">Conditions : {decision.conditions}</p> : null}
+                  {decision.comment ? <p className="mt-1 text-xs italic text-tenderos-slate">{decision.comment}</p> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
-    </section>
+    </Card>
   );
 }

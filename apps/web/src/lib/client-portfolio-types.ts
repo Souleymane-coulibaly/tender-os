@@ -1,4 +1,6 @@
-export type ClientPortfolioPage<T> = { items: T[]; nextCursor: string | null; total: number };
+import type { BadgeTone } from "../components/ui";
+
+export type ClientPortfolioPage<T> ={ items: T[]; nextCursor: string | null; total: number };
 
 export type ClientAccountStatus = "ACTIVE" | "INACTIVE" | "ARCHIVED";
 
@@ -8,16 +10,15 @@ export const CLIENT_ACCOUNT_STATUS_LABELS: Record<ClientAccountStatus, string> =
   ARCHIVED: "Archivé",
 };
 
-export function clientAccountStatusBadgeClass(status: ClientAccountStatus): string {
-  switch (status) {
-    case "ACTIVE":
-      return "bg-green-100 text-green-800";
-    case "INACTIVE":
-      return "bg-neutral-200 text-neutral-700";
-    case "ARCHIVED":
-      return "bg-neutral-100 text-neutral-500";
-  }
-}
+/**
+ * Design System — table STATUT → tone du `Badge`, remplace l'ancien `clientAccountStatusBadgeClass()`
+ * qui reproduisait à la main des classes de badge (vert pour actif, gris pour inactif/archivé).
+ */
+export const CLIENT_ACCOUNT_STATUS_TONE: Record<ClientAccountStatus, BadgeTone> = {
+  ACTIVE: "success",
+  INACTIVE: "neutral",
+  ARCHIVED: "neutral",
+};
 
 export type ClientAccountSummary = {
   id: string;

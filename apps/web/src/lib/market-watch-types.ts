@@ -1,3 +1,5 @@
+import type { BadgeTone } from "../components/ui";
+
 export type SavedSearchCriteria = {
   includeKeywords: readonly string[];
   excludeKeywords: readonly string[];
@@ -80,35 +82,34 @@ export const SOURCE_LABELS: Record<string, string> = {
 
 export const MARKET_TYPE_LABELS: Record<string, string> = { PUBLIC: "Public", PRIVATE: "Privé" };
 
-export function marketTypeBadgeClass(marketType: string): string {
-  return marketType === "PUBLIC" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800";
+/** Design System — ton de `Badge` du type de marché (remplace `marketTypeBadgeClass`). Public :
+ *  `info` (ancien bleu) ; tout autre type : `gold` (ancien violet, sans équivalent dans les jetons). */
+export function marketTypeTone(marketType: string): BadgeTone {
+  return marketType === "PUBLIC" ? "info" : "gold";
 }
 
-export function matchStatusBadgeClass(status: string): string {
-  switch (status) {
-    case "INTERESTED":
-      return "bg-green-100 text-green-800";
-    case "IGNORED":
-      return "bg-neutral-200 text-neutral-500";
-    default:
-      return "bg-amber-100 text-amber-800";
-  }
-}
+/** Design System — ton de `Badge` du statut d'un match (remplace `matchStatusBadgeClass`). */
+export const MATCH_STATUS_TONE: Record<SavedSearchMatchSummary["status"], BadgeTone> = {
+  NEW: "warning",
+  INTERESTED: "success",
+  IGNORED: "neutral",
+};
 
 /** Même convention que Dashboard Sprint 15 (`classify-deadline-bucket`) — urgence visuelle. */
 export function deadlineUrgencyClass(deadline: string | undefined): string {
-  if (!deadline) return "text-neutral-500";
+  if (!deadline) return "text-tenderos-slate";
   const days = (new Date(deadline).getTime() - Date.now()) / (24 * 60 * 60 * 1000);
-  if (days < 0) return "text-neutral-400";
-  if (days <= 7) return "text-red-600 font-semibold";
-  if (days <= 14) return "text-amber-600 font-medium";
-  return "text-neutral-700";
+  if (days < 0) return "text-tenderos-slate/70";
+  if (days <= 7) return "text-danger-fg font-semibold";
+  if (days <= 14) return "text-warning-fg font-medium";
+  return "text-tenderos-navy";
 }
 
-export function scoreBadgeClass(score: number): string {
-  if (score >= 70) return "bg-green-100 text-green-800";
-  if (score >= 40) return "bg-amber-100 text-amber-800";
-  return "bg-neutral-200 text-neutral-600";
+/** Design System — ton de `Badge` du score de pertinence (remplace `scoreBadgeClass`, mêmes seuils). */
+export function scoreTone(score: number): BadgeTone {
+  if (score >= 70) return "success";
+  if (score >= 40) return "warning";
+  return "neutral";
 }
 
 export type NotificationSummary = {
