@@ -24,7 +24,9 @@ export function buildTenderNavTabs(tenderId: string): readonly TabItem[] {
     // checklist ADMINISTRATIVE (documents DC1/DC2/DC4 requis, sous administrative-dossier/checklist)
     // — deux fonctionnalités réellement différentes (confirmé wave 1), jamais fusionnées.
     { label: "Checklist", href: `${base}/checklist` },
-    { label: "Workspace", href: `${base}/workspace` },
+    // « Tender Workspace » désigne l'espace du dossier ENTIER (UBIQUITOUS_LANGUAGE.md) : l'onglet
+    // de collaboration (commentaires, tâches, participants) porte donc son propre nom.
+    { label: "Collaboration", href: `${base}/workspace` },
     { label: "Assistant IA", href: `${base}/assistant` },
     { label: "Rédaction IA du mémoire", href: `${base}/technical-memo` },
     { label: "Dossier administratif", href: `${base}/administrative-dossier` },
@@ -40,8 +42,10 @@ export function buildTenderNavTabs(tenderId: string): readonly TabItem[] {
     { label: "Validation", href: `${base}/validation` },
     { label: "Signature", href: `${base}/signature` },
     { label: "Dossier de soumission", href: `${base}/submission-package` },
-    { label: "Dépôt", href: `${base}/submission` },
+    // Avant « Dépôt » : l'enregistrement d'un dépôt s'appuie sur le dossier de réponse (il refuse
+    // un dépôt dont le ZIP n'a jamais été généré) — l'ordre des onglets suit ce flux.
     { label: "Dossier final", href: `${base}/response-package` },
+    { label: "Dépôt", href: `${base}/submission` },
     { label: "Export", href: `${base}/export` },
   ] as const;
 }

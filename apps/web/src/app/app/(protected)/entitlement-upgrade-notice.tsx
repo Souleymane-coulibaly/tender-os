@@ -11,7 +11,7 @@ export function EntitlementUpgradeNotice({ featureLabel }: { featureLabel: strin
   return (
     <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
       <p>
-        <strong>{featureLabel}</strong> n&apos;est pas inclus dans votre offre actuelle.
+        <strong>{featureLabel}</strong> : fonctionnalité non incluse dans votre offre actuelle.
       </p>
       <p className="mt-1">
         <Link href="/app/subscription" className="font-medium underline hover:no-underline">

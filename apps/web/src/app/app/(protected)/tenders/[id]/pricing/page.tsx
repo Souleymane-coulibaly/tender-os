@@ -32,8 +32,8 @@ export default async function TenderPricingPage({ params }: { params: Promise<{ 
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
-        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Pricing & prévisions" }]}
-        title="Pricing & prévisions"
+        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Estimation & coûts IA" }]}
+        title="Estimation & coûts IA"
         description="Coût technique IA réel de ce Tender et estimations prévisionnelles indicatives. Aucun montant affiché ici n'est un prix réel garanti du marché."
       />
       <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/pricing`} />

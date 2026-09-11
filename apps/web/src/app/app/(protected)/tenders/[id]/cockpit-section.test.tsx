@@ -37,12 +37,12 @@ describe("CockpitSection", () => {
     expect(screen.getByText(/\(0\/9\)/)).toBeInTheDocument();
   });
 
-  it("links each module with a dedicated sub-route to that route, and leaves DCE/Analysis unlinked (they live on this same page)", () => {
+  it("links each module to its own screen — DCE included, since it has had a dedicated tab since 2.1-A5", () => {
     render(<CockpitSection tenderId="tender-1" cockpit={cockpit()} />);
     expect(screen.getByRole("link", { name: /Livrables/ })).toHaveAttribute("href", "/app/tenders/tender-1/deliverables");
     expect(screen.getByRole("link", { name: /Signature/ })).toHaveAttribute("href", "/app/tenders/tender-1/signature");
     expect(screen.getByRole("link", { name: /Dossier de soumission/ })).toHaveAttribute("href", "/app/tenders/tender-1/submission-package");
-    expect(screen.queryByRole("link", { name: /Documents & DCE/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Documents & DCE/ })).toHaveAttribute("href", "/app/tenders/tender-1/dce");
   });
 
   it("surfaces a BLOCKER alert with role=alert and its French label, never a raw code", () => {

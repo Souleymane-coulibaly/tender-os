@@ -36,7 +36,7 @@ test.describe.serial("Collaboration & validations — parcours principal", () =>
     await login(page, fixture);
 
     await page.goto(`/app/tenders/${fixture.tenderId}/workspace`);
-    await expect(page.getByRole("heading", { name: "Workspace collaboratif" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /^(Workspace|Espace) collaboratif$/ })).toBeVisible();
 
     const teamSection = page.locator("section", { has: page.getByRole("heading", { name: "Équipe" }) });
     await ensureParticipant(teamSection, fixture.userId, "TENDER_MANAGER", "Playwright E2E");

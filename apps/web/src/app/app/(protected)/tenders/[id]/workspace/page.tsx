@@ -9,7 +9,7 @@ import { ApiErrorState } from "../../../api-error-state";
 import { buildTenderNavTabs } from "../tender-nav-tabs";
 import { WorkspaceSection } from "./workspace-section";
 
-export const metadata: Metadata = { title: "Workspace — TenderOS" };
+export const metadata: Metadata = { title: "Collaboration — TenderOS" };
 
 export default async function TenderWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
   const { id: tenderId } = await params;
@@ -48,8 +48,8 @@ export default async function TenderWorkspacePage({ params }: { params: Promise<
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
-        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Workspace" }]}
-        title="Workspace collaboratif"
+        breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Collaboration" }]}
+        title="Espace collaboratif"
         description="Qui travaille sur ce dossier, quelles tâches restent à faire, quelles validations sont en attente — un score de complétude Workspace distinct du GO/NO-GO et de la checklist, jamais recalculé automatiquement."
       />
       <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/workspace`} />

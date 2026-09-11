@@ -38,8 +38,10 @@ export const COCKPIT_MODULE_LABELS: Record<string, string> = {
 };
 
 export const COCKPIT_MODULE_ROUTES: Record<string, string | undefined> = {
-  DCE: undefined, // section sur la page Tender elle-même, jamais une sous-route dédiée
-  ANALYSIS: undefined,
+  // DCE et Analyse ont leur propre écran depuis le Checkpoint 2.1-A5 (onglets « DCE » / « Analyse ») :
+  // leurs cartes y mènent comme les autres.
+  DCE: "dce",
+  ANALYSIS: "analysis",
   PRICING: "pricing",
   DELIVERABLES: "deliverables",
   EXPORT: "export",

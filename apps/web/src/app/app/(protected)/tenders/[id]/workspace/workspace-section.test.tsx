@@ -144,7 +144,7 @@ describe("WorkspaceSection", () => {
     renderSection({ hasApprovalWorkflowsEntitlement: false });
 
     expect(screen.queryByRole("button", { name: "Demander une validation" })).not.toBeInTheDocument();
-    expect(screen.getByText(/n'est pas inclus dans votre offre actuelle/i)).toBeInTheDocument();
+    expect(screen.getByText(/fonctionnalité non incluse dans votre offre actuelle/i)).toBeInTheDocument();
   });
 
   it("Checkpoint TENDEROS-2.1-P2.3-E1 — shows the request-approval form when the org holds the ApprovalWorkflows entitlement", () => {

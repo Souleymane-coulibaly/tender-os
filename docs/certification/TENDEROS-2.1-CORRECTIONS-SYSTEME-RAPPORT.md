@@ -107,6 +107,45 @@ paire écrite et relue à la main, avec son nombre d'occurrences vérifié avant
 
 ---
 
+## Navigation de la fiche AO (après commit 7a2abc5)
+
+Aucun document versionné ne spécifie la barre d'onglets V2.1 (le code cite une « mission §23 »
+non versionnée). Vérifications : les 19 onglets mènent tous à une page existante ; l'ordre suit le
+flux métier. Constats et corrections :
+
+- **« Dossier final » / « Dossier de soumission »** : deux fonctions réellement distinctes (dossier de
+  réponse assemblé par lot → ZIP ; package final immuable exigeant approbation et signature),
+  nommées ainsi par décision (mission §22, `tender-nav-tabs.test.ts`). L'incohérence venait de la
+  table W6, qui appelait « dossier final » le package de soumission : ses messages disent désormais
+  « dossier de soumission ».
+- **Ordre** (décision utilisateur) : « Dossier final » passe avant « Dépôt », qui s'appuie sur lui.
+- **« Workspace » → « Collaboration »** (décision utilisateur) : le glossaire réserve « Tender
+  Workspace » au dossier entier ; page « Espace collaboratif », specs e2e acceptant les deux titres.
+- Page « Pricing & prévisions » renommée « Estimation & coûts IA », comme son onglet (décision 2.1-A5).
+
+**Audit des onglets inutilisés** (demande utilisateur : supprimer les onglets non utilisés) : aucun
+onglet mort — les 18 pages appellent des routes d'API existantes, aucune n'est marquée
+décommissionnée. Trois recouvrements, conservés car encore requis : « Dossier de soumission » (le
+Dépôt exige son package ; l'API le qualifie de wrapper legacy — seul vrai candidat à une
+suppression, après que le Dépôt s'appuie sur le « Dossier final »), « Générations » (sources de
+l'Export et des révisions de livrables), « Documents générés » (sorties du mémoire et des formulaires
+DC1/DC2/DC4). Rien n'a été supprimé. Deux défauts corrigés au passage : les cartes « Documents &
+DCE » et « Analyse » du Cockpit mènent désormais à leurs écrans (elles n'avaient aucun lien depuis
+que le DCE a son onglet) ; la carte « Signature » du dossier administratif, qui affichait « Non gérée
+à ce stade (phase ultérieure) », renvoie vers l'onglet Signature. Le message d'offre non incluse
+s'accorde désormais quel que soit le libellé (« … : fonctionnalité non incluse dans votre offre »).
+
+E2E collaboration (après le renommage) : 2 réussis, 4 échecs **sans lien avec le renommage** (le
+titre « Espace collaboratif » est bien trouvé). Causes préexistantes, prouvées par l'instantané :
+(1) couplage d'ordre — `collaboration-validations.spec` ajoute déjà les participants sur le même
+Tender du seed, le formulaire d'ajout de `workspace-collaboration.spec` n'a plus de candidat et
+disparaît ; (2) jeu de données — les demandes de validation sont une fonctionnalité d'offre payante,
+et l'organisation du seed n'a volontairement aucune offre (même cause que le parcours DCE du Cockpit).
+Non corrigé : même décision de jeu de données que pour le Cockpit, à étendre si souhaité.
+
+Web : typecheck 0, lint 0 erreur, tests unitaires 560/560. Piste plus structurante, non engagée :
+regrouper les 19 onglets en 4 à 5 étapes (préparer, rédiger, chiffrer, valider et signer, déposer).
+
 ## Portes de qualité
 
 | Porte | Résultat |

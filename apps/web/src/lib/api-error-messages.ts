@@ -595,9 +595,9 @@ export const API_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   RECEIPT_CONFIRMATION_REQUIRES_EVIDENCE: "Pour confirmer la réception, indiquez une référence d'accusé de réception, ajoutez une preuve de dépôt, ou confirmez explicitement sans preuve.",
   RESPONSE_PACKAGE_ARTIFACT_MISSING: "Le dossier de réponse est validé, mais aucun fichier n'a été généré pour cette version. Générez-le avant d'enregistrer le dépôt.",
   SUBMISSION_DEADLINE_PASSED: "La date limite de dépôt est dépassée.",
-  SUBMISSION_PACKAGE_MISSING: "Le dossier final est introuvable.",
-  SUBMISSION_PACKAGE_OUTDATED: "Ce dossier final n'est plus à jour. Générez-en une nouvelle version avant d'enregistrer le dépôt.",
-  SUBMISSION_PACKAGE_VERSION_MISMATCH: "Cette version du dossier final ne correspond pas au dossier.",
+  SUBMISSION_PACKAGE_MISSING: "Le dossier de soumission est introuvable.",
+  SUBMISSION_PACKAGE_OUTDATED: "Ce dossier de soumission n'est plus à jour. Générez-en une nouvelle version avant d'enregistrer le dépôt.",
+  SUBMISSION_PACKAGE_VERSION_MISMATCH: "Cette version du dossier de soumission ne correspond pas au dossier.",
   SUBMISSION_PROOF_CROSS_ORGANIZATION: "Cette preuve de dépôt appartient à une autre organisation.",
   SUBMISSION_PROOF_NOT_FOUND: "Cette preuve de dépôt est introuvable.",
   TENDER_ARCHIVED_FOR_SUBMISSION: "Ce marché a été abandonné ou archivé : aucun dépôt ne peut plus y être enregistré.",
@@ -605,9 +605,9 @@ export const API_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   TENDER_SUBMISSION_ALREADY_REPLACED: "Ce dépôt a déjà été remplacé.",
   TENDER_SUBMISSION_NOT_FOUND: "Ce dépôt est introuvable.",
   TENDER_SUBMISSION_PERMISSION_MISSING: "Votre rôle ne permet pas d'enregistrer ce dépôt.",
-  // ---- Dossier final ----
-  PACKAGE_NOT_READY: "Le dossier final ne peut pas encore être créé : une approbation finale active et, le cas échéant, une signature vérifiée sont nécessaires.",
-  SUBMISSION_PACKAGE_NOT_FOUND: "Ce dossier final est introuvable.",
+  // ---- Dossier de soumission ----
+  PACKAGE_NOT_READY: "Le dossier de soumission ne peut pas encore être créé : une approbation finale active et, le cas échéant, une signature vérifiée sont nécessaires.",
+  SUBMISSION_PACKAGE_NOT_FOUND: "Ce dossier de soumission est introuvable.",
   // ---- Mémoire technique ----
   DUPLICATE_TECHNICAL_MEMO: "Un mémoire technique existe déjà pour cet appel d'offres (ou ce lot).",
   NO_HEADINGS_DETECTED: "Aucun titre n'a été détecté dans ce document : TenderOS ne peut pas en déduire la structure.",

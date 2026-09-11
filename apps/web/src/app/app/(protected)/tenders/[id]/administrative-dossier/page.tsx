@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
 import { ensureAdministrativeDossierAction } from "../../../../administrative-dossier-actions";
 import type {
@@ -241,7 +242,14 @@ export default async function AdministrativeDossierPage({
           </Card>
           <Card padding="tight">
             <span className="text-xs font-medium text-tenderos-slate">Signature</span>
-            <p className="text-sm text-tenderos-slate">Non gérée à ce stade (phase ultérieure)</p>
+            {/* La signature électronique a son propre écran (onglet « Signature ») : la carte y renvoie. */}
+            <p className="text-sm text-tenderos-slate">
+              Gérée dans l&apos;onglet{" "}
+              <Link href={`/app/tenders/${tenderId}/signature`} className="font-medium text-tenderos-blue hover:underline">
+                Signature
+              </Link>
+              .
+            </p>
           </Card>
         </div>
 
