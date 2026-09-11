@@ -31,6 +31,7 @@ import { Card } from "../../../../../../components/ui/card";
 import { PageHeader } from "../../../../../../components/ui/page-header";
 import { TabsNav } from "../../../../../../components/ui/tabs-nav";
 import { ApiErrorState } from "../../../api-error-state";
+import { asApiError } from "../../../../../../lib/page-load-error";
 import { buildTenderNavTabs } from "../tender-nav-tabs";
 import { OfficialFormsSection, type FormCardSpec } from "./official-forms-section";
 
@@ -79,8 +80,13 @@ export default async function AdministrativeDossierPage({
 }) {
   const { id: tenderId } = await params;
 
+  // Crée le dossier s'il manque. Son résultat est gardé : la création peut être refusée (droit actif
+  // manquant — abonnement, essai ou Pass —, permission), et sans lui la lecture ci-dessous ne dirait
+  // que « introuvable ». Jamais bloquant en soi : un rôle en lecture seule, qui ne peut pas créer,
+  // doit toujours pouvoir consulter un dossier qui existe déjà.
+  const ensured = await ensureAdministrativeDossierAction(tenderId);
+
   try {
-    await ensureAdministrativeDossierAction(tenderId);
     const [
       dossier,
       capabilities,
@@ -291,6 +297,14 @@ export default async function AdministrativeDossierPage({
       </div>
     );
   } catch (error) {
+    // Dossier absent PARCE QUE sa création a été refusée : on dit la vraie cause, pas « introuvable ».
+    if (ensured.error && asApiError(error)?.status === 404) {
+      return (
+        <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
+          {ensured.error}
+        </div>
+      );
+    }
     return <ApiErrorState error={error} />;
   }
 }

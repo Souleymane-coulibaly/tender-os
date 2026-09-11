@@ -6,6 +6,7 @@ import { APP_ORGANIZATION_COOKIE, APP_SESSION_COOKIE, AppApiError, appApiFetch, 
 import { createCheckoutSessionAction, type CheckoutTarget } from "../app/billing-actions";
 import { onboardingQueryString, parseOnboardingQuery, type OnboardingQuery } from "./onboarding-query";
 import { API_ERROR_MESSAGES, describeApiError } from "../../lib/api-error-messages";
+import { SERVICE_UNREACHABLE_MESSAGE } from "../../lib/page-load-error";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
@@ -158,7 +159,7 @@ export async function createOrganizationAction(_prevState: OrganizationStepState
     if (error instanceof AppApiError) {
       return { error: describeApiError(error, "Impossible de créer l'organisation. Réessayez.") };
     }
-    return { error: "Le service TenderOS est momentanément injoignable. Réessayez dans un instant." };
+    return { error: SERVICE_UNREACHABLE_MESSAGE };
   }
 
   const cookieStore = await cookies();

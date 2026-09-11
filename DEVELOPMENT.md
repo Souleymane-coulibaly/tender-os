@@ -105,6 +105,8 @@ Elle enchaîne, sans intervention manuelle :
 
 **Idempotente** : peut être relancée sans risque à chaque redéploiement (chaque étape n'écrit que ce qui manque encore, aucun doublon).
 
+**Automatique depuis septembre 2026** : les étapes 1 et 2 (`migrate deploy` puis le seed système) font partie du `preDeployCommand` de `railway.toml` et tournent à chaque déploiement. Une base recréée ne peut donc plus rester sans rôles système — ce qui cassait toute création de membre, onboarding compris. Seule l'étape 3 (comptes de démonstration) reste manuelle.
+
 Les commandes granulaires (`db:migrate:deploy`, `db:seed`, `db:seed:staging`) restent disponibles séparément si besoin — `db:seed:staging` réapplique elle-même le seed système en préambule (voir 8.2), donc elle fonctionne aussi bien seule qu'à l'intérieur de `db:init:staging`.
 
 ### 8.2. Comptes de démonstration (staging uniquement)

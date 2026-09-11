@@ -39,7 +39,11 @@ import { ExportTemplatesController } from "./interfaces/http/export-templates.co
  */
 @Module({
   imports: [IdentityModule, MembershipsModule, TendersModule, ClientPortfolioModule, GenerationModule, PricingModule, DocumentsModule],
-  controllers: [ExportController, ExportTemplatesController],
+  // ORDRE SIGNIFICATIF : Express sert la première route qui correspond. `ExportController` déclare
+  // `GET exports/:exportId` ; enregistré en premier, il captait `GET /exports/templates`
+  // (exportId = "templates", refusé par la validation UUID : 400) — la liste des modèles d'export,
+  // l'onglet Export et la configuration des modèles étaient en échec. Le chemin fixe passe d'abord.
+  controllers: [ExportTemplatesController, ExportController],
   providers: [
     CreateExportTemplateUseCase,
     CreateExportTemplateVersionUseCase,

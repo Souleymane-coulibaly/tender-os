@@ -154,10 +154,56 @@ n'apparaît pas dans les journaux locaux (environnement distant). Corrigé : un 
 par son code (table W6), une API injoignable l'est comme telle, et l'étape « Compte » passe aussi par
 la table pour les codes non traités. Ce correctif rend la cause visible ; il ne corrige pas une
 éventuelle panne de l'environnement distant, à diagnostiquer avec le nouveau message.
+
+**Cause réelle sur le staging** (journaux Railway, lecture seule — API déployée depuis la branche
+`v2.1-checklist-onboarding`, `f7015d5`) : `POST /api/v1/organizations` → 500,
+`prisma.role.findUniqueOrThrow()` — « No record was found for a query ». L'organisation est créée,
+puis l'ajout du créateur comme OWNER échoue : les **rôles système** (OWNER, ADMIN…) et leurs
+permissions sont des données de référence créées uniquement par `prisma/seed.ts`, qu'aucune migration
+ne crée et que Railway ne lançait pas (pré-déploiement = migrations seules) ; la base staging,
+redéployée le 2026-09-06, n'en contient pas. Même cause pour toute création de membre (invitation,
+transfert de propriété). **Correctif (décision utilisateur)** : `railway.toml` enchaîne désormais
+`prisma migrate deploy && prisma db seed` avant chaque déploiement — seed idempotent (upserts
+projetés depuis les constantes du domaine, aucune donnée de démonstration), commande vérifiée en
+local telle que Railway l'exécutera. Aucune écriture n'a été faite sur la base staging depuis ce
+poste : le staging sera réparé au prochain déploiement.
 Tests : `onboarding-actions.test.ts` (nouveau, 5 cas — refus par code, panne serveur, API
 injoignable, session expirée, nom vide) ; web 570/570. E2E `onboarding.spec` : 5 réussis au premier
 passage ; l'échec restant était un faux positif du test (il comptait l'annonceur de route de Next.js,
 qui porte aussi role="alert"), corrigé comme dans les autres specs — relance : **9/9 verts**.
+
+**« Une erreur inattendue est survenue. » sur Dossier administratif et Export** (signalé par
+l'utilisateur, sur un environnement distant : aucune trace de ses clics dans les journaux locaux).
+Ce message était le repli de l'écran d'erreur pour toute erreur qui n'était pas une instance
+d'`AppApiError` — sans rien journaliser. Deux causes possibles, toutes deux traitées :
+(1) API injoignable — observé en local (`TypeError: fetch failed … ECONNREFUSED`) pendant un
+redémarrage de l'API ; (2) un vrai refus de l'API non reconnu, `instanceof` échouant quand l'erreur
+vient d'une autre instance du module (actions serveur de Next.js). Corrigé dans les deux écrans
+(espace organisation et back-office) : erreur d'API reconnue par sa forme (statut + code), message
+« service momentanément injoignable » pour une panne réseau, et toute erreur inattendue journalisée
+côté serveur — la prochaine occurrence sur l'environnement distant laissera une trace exploitable.
+Module partagé `lib/page-load-error.ts` (réutilisé par l'onboarding). Tests : +10 (web 577/577 avant
+le nouveau test de l'écran, 15/15 sur les écrans d'erreur).
+
+Une fois l'écran rendu lisible, un diagnostic navigateur a révélé les **causes réelles** des deux
+pages :
+
+- **Export — route masquée (défaut présent depuis le Sprint 8A)** : `GET /api/v1/exports/templates`
+  répondait 400. `ExportController`, enregistré avant `ExportTemplatesController`, déclare
+  `GET exports/:exportId` et captait « templates » comme identifiant (refusé par la validation UUID).
+  La liste des modèles d'export était donc en échec partout (onglet Export, Configuration IA). Les
+  tests d'intégration ne faisaient que des `POST`, jamais ce `GET`. Corrigé : le contrôleur à chemin
+  fixe est enregistré en premier (ordre commenté), et une garde de non-régression vérifie le `GET` de
+  la liste dans `export-capabilities-http.integration.spec.ts` (4/4, PostgreSQL réel).
+- **Dossier administratif — cause masquée** : la page crée le dossier s'il manque, mais ignorait le
+  résultat. La création passe par le contrôle de droit (abonnement, essai ou Pass) ; refusée, elle
+  laissait la lecture répondre « introuvable ». La page dit désormais la vraie cause (« Votre
+  organisation n'a pas de droit actif… ») quand le dossier est absent parce que sa création a été
+  refusée — sans bloquer un rôle en lecture seule devant un dossier existant.
+
+Vérification navigateur après correction : l'Export se charge (« Export documentaire », « Nouvel
+aperçu », « Historique ») ; le Dossier administratif affiche la cause réelle. API : typecheck 0,
+lint 0 ; web : 581/581.
 
 E2E collaboration (après le renommage) : 2 réussis, 4 échecs **sans lien avec le renommage** (le
 titre « Espace collaboratif » est bien trouvé). Causes préexistantes, prouvées par l'instantané :

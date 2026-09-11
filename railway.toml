@@ -19,7 +19,15 @@ buildCommand = "pnpm --filter @tenderos/api build"
 # Les migrations s'exécutent avant que le nouveau code ne serve du trafic (mission
 # DEPLOYMENT_PATTERNS.md §"migrations en production") — jamais au sein du process applicatif
 # lui-même.
-preDeployCommand = "pnpm --filter @tenderos/api exec prisma migrate deploy"
+#
+# Puis le seed SYSTÈME (`prisma/seed.ts`) : les rôles (OWNER, ADMIN…) et permissions système sont des
+# données de référence qu'aucune migration ne crée. Sans elles, TOUTE création de membre échoue
+# (`role.findUniqueOrThrow` → « No record was found ») — c'est ce qui cassait l'onboarding sur une
+# base staging recréée (organisation créée puis compensée, 500). Le seed ne contient que des upserts
+# projetés depuis les constantes du domaine Memberships (aucune donnée de démonstration) : idempotent,
+# sûr à rejouer à chaque déploiement. `&&` : un seed en échec bloque le déploiement plutôt que de
+# mettre en ligne une API incapable de créer le moindre membre.
+preDeployCommand = "pnpm --filter @tenderos/api exec prisma migrate deploy && pnpm --filter @tenderos/api exec prisma db seed"
 # Commande directe `node`, jamais un script pnpm/workspace au démarrage : élimine toute
 # possibilité qu'un mécanisme pnpm (filtre, recursive, résolution de workspace) intervienne sur
 # le chemin critique de démarrage du process. `apps/api/dist/main.js` est le chemin réel confirmé

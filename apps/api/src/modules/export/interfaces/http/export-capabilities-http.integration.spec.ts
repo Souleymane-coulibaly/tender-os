@@ -68,6 +68,13 @@ describe("Export — capabilities endpoint, real HTTP + PostgreSQL", () => {
     });
     expect(createRes.status).toBe(201);
     const template = (await createRes.json()) as { id: string; versions: { id: string }[] };
+
+    // Garde de non-régression : `GET exports/:exportId` (ExportController) captait cette liste
+    // (exportId = "templates" → 400) tant qu'il était enregistré avant ExportTemplatesController.
+    const listRes = await fetch(`${baseUrl}/api/v1/exports/templates`, { headers: authHeaders(tokenOwner) });
+    expect(listRes.status).toBe(200);
+    expect(((await listRes.json()) as { id: string }[]).map((item) => item.id)).toContain(template.id);
+
     return { templateId: template.id, versionId: template.versions[0]!.id };
   }
 
