@@ -1,3 +1,4 @@
+import { Input } from "../../../../components/ui";
 import type { KnowledgeCategory } from "../../../../lib/knowledge-types";
 
 /**
@@ -23,8 +24,8 @@ export function KnowledgeMetadataFields({
 
   if (category === "CLIENT_REFERENCE") {
     return (
-      <fieldset className="flex flex-col gap-3 rounded border border-neutral-200 p-3">
-        <legend className="px-1 text-xs font-semibold text-neutral-600">Détails de la référence client</legend>
+      <fieldset className={FIELDSET_CLASSES}>
+        <legend className={LEGEND_CLASSES}>Détails de la référence client</legend>
         <div className="grid grid-cols-2 gap-3">
           <Field id="metadata.clientName" label="Nom du client" defaultValue={value("clientName")} />
           <Field id="metadata.sector" label="Secteur" defaultValue={value("sector")} />
@@ -41,8 +42,8 @@ export function KnowledgeMetadataFields({
 
   if (category === "CONSULTANT_PROFILE") {
     return (
-      <fieldset className="flex flex-col gap-3 rounded border border-neutral-200 p-3">
-        <legend className="px-1 text-xs font-semibold text-neutral-600">Profil du consultant</legend>
+      <fieldset className={FIELDSET_CLASSES}>
+        <legend className={LEGEND_CLASSES}>Profil du consultant</legend>
         <div className="grid grid-cols-2 gap-3">
           <Field id="metadata.fullName" label="Nom complet" defaultValue={value("fullName")} />
           <Field id="metadata.role" label="Rôle" defaultValue={value("role")} />
@@ -58,8 +59,8 @@ export function KnowledgeMetadataFields({
 
   if (category === "CERTIFICATION") {
     return (
-      <fieldset className="flex flex-col gap-3 rounded border border-neutral-200 p-3">
-        <legend className="px-1 text-xs font-semibold text-neutral-600">Détails de la certification</legend>
+      <fieldset className={FIELDSET_CLASSES}>
+        <legend className={LEGEND_CLASSES}>Détails de la certification</legend>
         <div className="grid grid-cols-2 gap-3">
           <Field id="metadata.name" label="Nom" defaultValue={value("name")} />
           <Field id="metadata.issuer" label="Organisme émetteur" defaultValue={value("issuer")} />
@@ -74,6 +75,9 @@ export function KnowledgeMetadataFields({
   return null;
 }
 
+const FIELDSET_CLASSES = "flex flex-col gap-3 rounded-lg border border-tenderos-navy/10 p-3";
+const LEGEND_CLASSES = "px-1 text-xs font-semibold text-tenderos-slate";
+
 function Field({
   id,
   label,
@@ -85,12 +89,5 @@ function Field({
   type?: string;
   defaultValue?: string | undefined;
 }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-xs text-neutral-600">
-        {label}
-      </label>
-      <input id={id} name={id} type={type} defaultValue={defaultValue} className="rounded border border-neutral-300 px-2 py-1 text-sm" />
-    </div>
-  );
+  return <Input label={label} id={id} name={id} type={type} defaultValue={defaultValue} />;
 }

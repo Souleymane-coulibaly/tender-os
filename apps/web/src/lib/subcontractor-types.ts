@@ -1,3 +1,5 @@
+import type { BadgeTone } from "../components/ui";
+
 export type SubcontractorProfileStatus = "TO_VERIFY" | "ACTIVE" | "INACTIVE" | "ARCHIVED";
 
 export const SUBCONTRACTOR_PROFILE_STATUSES: readonly SubcontractorProfileStatus[] = ["TO_VERIFY", "ACTIVE", "INACTIVE", "ARCHIVED"];
@@ -9,18 +11,13 @@ export const SUBCONTRACTOR_PROFILE_STATUS_LABELS: Record<SubcontractorProfileSta
   ARCHIVED: "Archivé",
 };
 
-export function subcontractorProfileStatusBadgeClass(status: SubcontractorProfileStatus): string {
-  switch (status) {
-    case "ACTIVE":
-      return "bg-green-100 text-green-800";
-    case "TO_VERIFY":
-      return "bg-amber-100 text-amber-800";
-    case "INACTIVE":
-      return "bg-neutral-200 text-neutral-700";
-    case "ARCHIVED":
-      return "bg-neutral-100 text-neutral-500";
-  }
-}
+/** Statut → ton de `Badge` (DESIGN_SYSTEM.md §4) : jamais des classes de badge écrites à la main. */
+export const SUBCONTRACTOR_PROFILE_STATUS_TONE: Record<SubcontractorProfileStatus, BadgeTone> = {
+  ACTIVE: "success",
+  TO_VERIFY: "warning",
+  INACTIVE: "neutral",
+  ARCHIVED: "neutral",
+};
 
 export type SubcontractorProfile = {
   id: string;

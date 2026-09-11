@@ -1,3 +1,4 @@
+import { Button, Card, Checkbox, Input, Select } from "../../../../components/ui";
 import type { ClientAccountSummary } from "../../../../lib/client-portfolio-types";
 import { TENDER_STATUS_LABELS, type TenderFiltersState } from "../../../../lib/tenders-types";
 
@@ -27,48 +28,32 @@ export function TenderFilters({
   clients?: ClientAccountSummary[] | undefined;
 }) {
   return (
-    <form method="GET" action={basePath} className="flex flex-wrap items-end gap-3 rounded border border-neutral-200 p-3">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="search" className="text-xs text-neutral-600">
-          Recherche
-        </label>
-        <input
+    <Card padding="tight">
+      <form method="GET" action={basePath} className="flex flex-wrap items-end gap-3">
+        <Input
+          label="Recherche"
           id="search"
           name="search"
           type="text"
           defaultValue={values.search}
           placeholder="Titre, référence, acheteur..."
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          wrapperClassName="min-w-[12rem] flex-1 sm:max-w-xs"
         />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="status" className="text-xs text-neutral-600">
-          Statut
-        </label>
-        <select
-          id="status"
-          name="status"
-          defaultValue={values.status ?? ""}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
-        >
+        <Select label="Statut" id="status" name="status" defaultValue={values.status ?? ""} wrapperClassName="basis-44">
           <option value="">Tous</option>
           {Object.entries(TENDER_STATUS_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
-      </div>
-      {clients && clients.length > 0 ? (
-        <div className="flex flex-col gap-1">
-          <label htmlFor="clientAccountId" className="text-xs text-neutral-600">
-            Client
-          </label>
-          <select
+        </Select>
+        {clients && clients.length > 0 ? (
+          <Select
+            label="Client"
             id="clientAccountId"
             name="clientAccountId"
             defaultValue={values.clientAccountId ?? ""}
-            className="rounded border border-neutral-300 px-2 py-1 text-sm"
+            wrapperClassName="basis-44"
           >
             <option value="">Tous</option>
             {clients.map((client) => (
@@ -76,86 +61,49 @@ export function TenderFilters({
                 {client.name}
               </option>
             ))}
-          </select>
-        </div>
-      ) : null}
-      <div className="flex flex-col gap-1">
-        <label htmlFor="internalOwnerId" className="text-xs text-neutral-600">
-          Responsable (ID)
-        </label>
-        <input
+          </Select>
+        ) : null}
+        <Input
+          label="Responsable (ID)"
           id="internalOwnerId"
           name="internalOwnerId"
           type="text"
           defaultValue={values.internalOwnerId}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          wrapperClassName="basis-40"
         />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="deadlineAfter" className="text-xs text-neutral-600">
-          Échéance après le
-        </label>
-        <input
+        <Input
+          label="Échéance après le"
           id="deadlineAfter"
           name="deadlineAfter"
           type="date"
           defaultValue={values.deadlineAfter?.slice(0, 10)}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          wrapperClassName="basis-40"
         />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="deadlineBefore" className="text-xs text-neutral-600">
-          Échéance avant le
-        </label>
-        <input
+        <Input
+          label="Échéance avant le"
           id="deadlineBefore"
           name="deadlineBefore"
           type="date"
           defaultValue={values.deadlineBefore?.slice(0, 10)}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          wrapperClassName="basis-40"
         />
-      </div>
-      <label className="flex items-center gap-1 pb-1.5 text-xs text-neutral-600">
-        <input type="checkbox" name="overdue" value="true" defaultChecked={values.overdue} /> Echeance depassee
-        uniquement
-      </label>
-      {sorting ? (
-        <>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="sort" className="text-xs text-neutral-600">
-              Tri
-            </label>
-            <select
-              id="sort"
-              name="sort"
-              defaultValue={sorting.sort}
-              className="rounded border border-neutral-300 px-2 py-1 text-sm"
-            >
+        <Checkbox name="overdue" value="true" defaultChecked={values.overdue} label="Echeance depassee uniquement" className="pb-2.5" />
+        {sorting ? (
+          <>
+            <Select label="Tri" id="sort" name="sort" defaultValue={sorting.sort} wrapperClassName="basis-44">
               <option value="createdAt">Date de création</option>
               <option value="submissionDeadline">Échéance</option>
               <option value="title">Titre</option>
               <option value="updatedAt">Dernière modification</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="sortDirection" className="text-xs text-neutral-600">
-              Ordre
-            </label>
-            <select
-              id="sortDirection"
-              name="sortDirection"
-              defaultValue={sorting.sortDirection}
-              className="rounded border border-neutral-300 px-2 py-1 text-sm"
-            >
+            </Select>
+            <Select label="Ordre" id="sortDirection" name="sortDirection" defaultValue={sorting.sortDirection} wrapperClassName="basis-36">
               <option value="desc">Descendant</option>
               <option value="asc">Ascendant</option>
-            </select>
-          </div>
-        </>
-      ) : null}
-      <button type="submit" className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100">
-        Filtrer
-      </button>
-    </form>
+            </Select>
+          </>
+        ) : null}
+        <Button type="submit">Filtrer</Button>
+      </form>
+    </Card>
   );
 }

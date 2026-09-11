@@ -7,8 +7,8 @@ d'écart, le code fait foi :
 - jetons : `apps/web/src/app/globals.css` (valeurs) et `apps/web/tailwind.config.ts` (noms Tailwind) ;
 - page de référence : la fiche appel d'offres (`app/(protected)/tenders/[id]`).
 
-Garde-fou : `app/(protected)/design-system.contract.test.ts` interdit le retour de l'ancien style
-dans les pages déjà migrées.
+Garde-fou : `app/(protected)/design-system.contract.test.ts` interdit, dans les pages migrées, les
+gris bruts, les couleurs brutes (verts, rouges, ambres…) et les titres de page écrits à la main.
 
 ---
 

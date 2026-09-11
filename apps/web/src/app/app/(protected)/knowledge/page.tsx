@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Badge, Button, EmptyState, PageHeader, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "../../../../components/ui";
 import { appApiFetch } from "../../../../lib/app-api-client";
 import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../lib/client-portfolio-types";
 import {
   KNOWLEDGE_CATEGORY_LABELS,
   KNOWLEDGE_STATUS_LABELS,
-  knowledgeStatusBadgeClass,
+  KNOWLEDGE_STATUS_TONE,
   type KnowledgeCategory,
   type KnowledgeEntryStatus,
   type KnowledgeEntrySummary,
@@ -55,23 +56,20 @@ export default async function KnowledgeBasePage({ searchParams }: { searchParams
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Base de connaissances</h1>
-          <p className="text-sm text-neutral-600">{page.total} entrée(s)</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/app/knowledge/search" className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100">
-            Rechercher
-          </Link>
-          <Link href="/app/knowledge/import" className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100">
-            Importer un document
-          </Link>
-          <Link href="/app/knowledge/new" className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
-            Nouvelle entrée
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Base de connaissances" }]}
+        title="Base de connaissances"
+        description={`${page.total} entrée(s)`}
+        actions={
+          <>
+            <Button href="/app/knowledge/search">Rechercher</Button>
+            <Button href="/app/knowledge/import">Importer un document</Button>
+            <Button href="/app/knowledge/new" variant="primary">
+              Nouvelle entrée
+            </Button>
+          </>
+        }
+      />
 
       <KnowledgeFilters
         values={{
@@ -86,75 +84,64 @@ export default async function KnowledgeBasePage({ searchParams }: { searchParams
 
       {topTags.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-neutral-500">Tags fréquents :</span>
+          <span className="text-xs text-tenderos-slate">Tags fréquents :</span>
           {topTags.map((tag) => (
-            <span key={tag.id} className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
-              {tag.displayLabel}
-            </span>
+            <Badge key={tag.id}>{tag.displayLabel}</Badge>
           ))}
         </div>
       ) : null}
 
       {page.items.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucune entrée à afficher.</p>
+        <EmptyState title="Aucune entrée à afficher." />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="py-2 pr-4">Titre</th>
-                <th className="py-2 pr-4">Portée</th>
-                <th className="py-2 pr-4">Catégorie</th>
-                <th className="py-2 pr-4">Tags</th>
-                <th className="py-2 pr-4">Statut</th>
-                <th className="py-2 pr-4">Documents</th>
-                <th className="py-2 pr-4">Version</th>
-                <th className="py-2 pr-4">Modifié le</th>
-              </tr>
-            </thead>
-            <tbody>
-              {page.items.map((entry) => (
-                <tr key={entry.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4">
-                    <Link href={`/app/knowledge/${entry.id}`} className="font-medium text-neutral-900 hover:underline">
-                      {entry.title}
-                    </Link>
-                  </td>
-                  <td className="py-2 pr-4">
-                    {entry.clientAccountId ? (
-                      <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
-                        {clientNameById.get(entry.clientAccountId) ?? "Client"}
-                      </span>
-                    ) : (
-                      <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">Globale</span>
-                    )}
-                  </td>
-                  <td className="py-2 pr-4 text-neutral-600">{KNOWLEDGE_CATEGORY_LABELS[entry.category]}</td>
-                  <td className="py-2 pr-4 text-neutral-600">
-                    {entry.tags.length > 0 ? entry.tags.map((tag) => tag.displayLabel).join(", ") : "—"}
-                  </td>
-                  <td className="py-2 pr-4">
-                    <span className={`rounded px-2 py-0.5 text-xs font-medium ${knowledgeStatusBadgeClass(entry.status)}`}>
-                      {KNOWLEDGE_STATUS_LABELS[entry.status]}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4 text-neutral-600">{entry.documentCount}</td>
-                  <td className="py-2 pr-4 text-neutral-600">v{entry.activeVersionNumber}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{new Date(entry.updatedAt).toLocaleDateString("fr-FR")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableHeaderCell>Titre</TableHeaderCell>
+              <TableHeaderCell>Portée</TableHeaderCell>
+              <TableHeaderCell>Catégorie</TableHeaderCell>
+              <TableHeaderCell>Tags</TableHeaderCell>
+              <TableHeaderCell>Statut</TableHeaderCell>
+              <TableHeaderCell>Documents</TableHeaderCell>
+              <TableHeaderCell>Version</TableHeaderCell>
+              <TableHeaderCell>Modifié le</TableHeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {page.items.map((entry) => (
+              <TableRow key={entry.id}>
+                <TableCell>
+                  <Link href={`/app/knowledge/${entry.id}`} className="font-medium text-tenderos-navy hover:underline">
+                    {entry.title}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  {entry.clientAccountId ? (
+                    <Badge tone="info">{clientNameById.get(entry.clientAccountId) ?? "Client"}</Badge>
+                  ) : (
+                    <Badge>Globale</Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-tenderos-slate">{KNOWLEDGE_CATEGORY_LABELS[entry.category]}</TableCell>
+                <TableCell className="text-tenderos-slate">
+                  {entry.tags.length > 0 ? entry.tags.map((tag) => tag.displayLabel).join(", ") : "—"}
+                </TableCell>
+                <TableCell>
+                  <Badge tone={KNOWLEDGE_STATUS_TONE[entry.status] ?? "neutral"}>{KNOWLEDGE_STATUS_LABELS[entry.status]}</Badge>
+                </TableCell>
+                <TableCell className="text-tenderos-slate">{entry.documentCount}</TableCell>
+                <TableCell className="text-tenderos-slate">v{entry.activeVersionNumber}</TableCell>
+                <TableCell className="text-tenderos-slate">{new Date(entry.updatedAt).toLocaleDateString("fr-FR")}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
 
       {page.nextCursor ? (
-        <Link
-          href={`/app/knowledge?${new URLSearchParams({ ...params, cursor: page.nextCursor }).toString()}`}
-          className="self-start text-sm text-neutral-700 hover:underline"
-        >
+        <Button variant="link" href={`/app/knowledge?${new URLSearchParams({ ...params, cursor: page.nextCursor }).toString()}`} className="self-start">
           Page suivante →
-        </Link>
+        </Button>
       ) : null}
     </div>
   );

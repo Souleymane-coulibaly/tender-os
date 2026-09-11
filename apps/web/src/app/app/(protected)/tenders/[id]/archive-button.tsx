@@ -23,7 +23,7 @@ export function ArchiveButton({ tenderId }: { tenderId: string }) {
   return (
     <form
       action={formAction}
-      className="flex flex-col gap-2 rounded-lg border border-red-200 bg-danger-bg p-3"
+      className="flex flex-col gap-2 rounded-lg bg-danger-bg p-3"
     >
       <p className="text-sm font-medium text-danger-fg">
         Confirmer l&apos;archivage de cet appel d&apos;offres ? Il ne pourra plus etre modifie

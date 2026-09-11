@@ -21,6 +21,7 @@ import {
 import { Badge, type BadgeTone } from "../../../../../components/ui/badge";
 import { Button } from "../../../../../components/ui/button";
 import { Card } from "../../../../../components/ui/card";
+import { Alert } from "../../../../../components/ui/alert";
 
 const DECISION_CHOICES: { value: GoNoGoDecisionValue; label: string }[] = [
   { value: "GO", label: "GO" },
@@ -304,27 +305,23 @@ export function GoNoGoSection({
             </div>
 
             {report.blockers.length > 0 ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3">
-                <p className="text-xs font-semibold text-danger-fg">
-                  Blocages détectés (facteurs, jamais un blocage automatique de la décision)
-                </p>
+              <Alert tone="danger" title="Blocages détectés (facteurs, jamais un blocage automatique de la décision)">
                 <ul className="mt-1 flex flex-col gap-1 text-xs text-danger-fg">
                   {report.blockers.map((blocker, i) => (
                     <li key={i}>{blocker.description}</li>
                   ))}
                 </ul>
-              </div>
+              </Alert>
             ) : null}
 
             {report.missingInfo.length > 0 ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs font-semibold text-warning-fg">Informations manquantes</p>
+              <Alert tone="warning" title="Informations manquantes">
                 <ul className="mt-1 flex flex-col gap-1 text-xs text-warning-fg">
                   {report.missingInfo.map((item, i) => (
                     <li key={i}>{item}</li>
                   ))}
                 </ul>
-              </div>
+              </Alert>
             ) : null}
 
             {report.subcontractingFlags.length > 0 ? (

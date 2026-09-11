@@ -11,6 +11,7 @@ import {
   type SubmissionPackageSummary,
 } from "../../../../../../lib/submission-package-types";
 import { Button } from "../../../../../../components/ui/button";
+import { Alert } from "../../../../../../components/ui/alert";
 
 export function SubmissionPackageSection({
   tenderId,
@@ -68,12 +69,12 @@ export function SubmissionPackageSection({
       ) : null}
 
       {latest?.status === "COMPLETED" ? (
-        <section className="rounded border border-green-200 bg-green-50 p-4">
+        <Alert tone="success">
           <p className="text-sm font-medium text-success-fg">
             Package v{latest.version} prêt —{" "}
             {PACKAGE_STATUS_LABELS[latest.readinessStatus] ?? latest.readinessStatus}
           </p>
-        </section>
+        </Alert>
       ) : null}
 
       <section className="rounded border border-tenderos-navy/10 p-4">

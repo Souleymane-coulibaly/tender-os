@@ -55,7 +55,7 @@ export function NotificationPreferencesCard({ initialPreferences }: { initialPre
         })}
       </div>
       {error ? (
-        <p role="alert" className="mt-3 text-sm text-red-600">
+        <p role="alert" className="mt-3 text-sm text-danger-fg">
           {error}
         </p>
       ) : null}

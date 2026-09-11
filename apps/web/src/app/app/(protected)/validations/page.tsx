@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PageHeader } from "../../../../components/ui";
 import { fetchMyApprovals } from "../../workspace-actions";
 import type { ApprovalStatus } from "../../../../lib/workspace-types";
 import { ApiErrorState } from "../api-error-state";
@@ -15,6 +16,12 @@ const STATUS_FILTERS: { value: ApprovalStatus; label: string }[] = [
   { value: "REJECTED", label: "Rejetées" },
   { value: "CHANGES_REQUESTED", label: "Modifications demandées" },
 ];
+
+/** Filtre de statut : l'actif est plein (navy), les autres discrets — liens de navigation (URL),
+ *  jamais des boutons d'action, donc hors `Button` (même convention que la liste des opportunités). */
+function filterClasses(active: boolean): string {
+  return `rounded-lg px-2 py-1 font-medium transition ${active ? "bg-tenderos-navy text-white" : "border border-tenderos-navy/15 text-tenderos-slate hover:bg-tenderos-light"}`;
+}
 
 /** V2 Sprint 18 (mission §63-65) — "Review Center" : par défaut, demandes où l'utilisateur courant
  *  est l'approbateur désigné (`ListMyApprovalsUseCase`, déjà ClientAccess-aware côté API — jamais
@@ -32,24 +39,18 @@ export default async function MyValidationsPage({ searchParams }: { searchParams
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">Mes validations</h1>
-        <p className="text-sm text-neutral-600">
-          Les demandes de validation où vous êtes désigné approbateur, tous appels d&apos;offres confondus — validation
-          interne TenderOS, jamais une signature électronique.
-        </p>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Mes validations" }]}
+        title="Mes validations"
+        description="Les demandes de validation où vous êtes désigné approbateur, tous appels d'offres confondus — validation interne TenderOS, jamais une signature électronique."
+      />
 
       <nav className="flex flex-wrap gap-2 text-xs">
-        <Link href="/app/validations" className={`rounded px-2 py-1 ${!status ? "bg-neutral-900 text-white" : "border border-neutral-300 text-neutral-700 hover:bg-neutral-100"}`}>
+        <Link href="/app/validations" className={filterClasses(!status)}>
           Toutes
         </Link>
         {STATUS_FILTERS.map((filter) => (
-          <Link
-            key={filter.value}
-            href={`/app/validations?status=${filter.value}`}
-            className={`rounded px-2 py-1 ${status === filter.value ? "bg-neutral-900 text-white" : "border border-neutral-300 text-neutral-700 hover:bg-neutral-100"}`}
-          >
+          <Link key={filter.value} href={`/app/validations?status=${filter.value}`} className={filterClasses(status === filter.value)}>
             {filter.label}
           </Link>
         ))}

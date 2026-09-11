@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Badge, Button, Card, Input } from "../../../../../components/ui";
 import { addKnowledgeTagAction, removeKnowledgeTagAction } from "../../../knowledge-actions";
 import type { KnowledgeTagSummary } from "../../../../../lib/knowledge-types";
 
@@ -45,52 +46,52 @@ export function KnowledgeTagsManager({
   }
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold text-neutral-700">Tags</h2>
-      <div className="flex flex-wrap items-center gap-2">
-        {currentTags.length === 0 ? <span className="text-sm text-neutral-500">Aucun tag.</span> : null}
-        {currentTags.map((tag) => (
-          <span key={tag.id} className="flex items-center gap-1 rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
-            {tag.displayLabel}
-            {canManage ? (
-              <button
-                type="button"
-                aria-label={`Retirer le tag ${tag.displayLabel}`}
-                onClick={() => handleRemove(tag.id)}
-                disabled={isPending}
-                className="text-neutral-400 hover:text-red-600"
-              >
-                ×
-              </button>
-            ) : null}
-          </span>
-        ))}
-      </div>
-      {canManage ? (
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={newLabel}
-            onChange={(event) => setNewLabel(event.target.value)}
-            placeholder="Ajouter un tag..."
-            aria-label="Nouveau tag"
-            className="rounded border border-neutral-300 px-2 py-1 text-sm"
-          />
-          <button
-            type="button"
-            onClick={handleAdd}
-            disabled={isPending || !newLabel.trim()}
-            className="rounded border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-100 disabled:opacity-50"
-          >
-            Ajouter
-          </button>
+    <Card title="Tags">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {currentTags.length === 0 ? <span className="text-sm text-tenderos-slate">Aucun tag.</span> : null}
+          {currentTags.map((tag) => (
+            <Badge key={tag.id}>
+              {tag.displayLabel}
+              {canManage ? (
+                // Bouton-icône « × » logé dans la pastille : `Button` (padding, hauteur de bouton)
+                // déborderait du badge — contrôle natif conservé, stylé uniquement par jetons.
+                <button
+                  type="button"
+                  aria-label={`Retirer le tag ${tag.displayLabel}`}
+                  onClick={() => handleRemove(tag.id)}
+                  disabled={isPending}
+                  className="text-tenderos-slate/70 transition hover:text-danger-fg disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  ×
+                </button>
+              ) : null}
+            </Badge>
+          ))}
         </div>
-      ) : null}
-      {error ? (
-        <p role="alert" className="text-xs text-red-600">
-          {error}
-        </p>
-      ) : null}
-    </section>
+        {canManage ? (
+          <div className="flex items-center gap-2">
+            {/* `Input` sans label rend le contrôle nu : la largeur est portée par ce conteneur. */}
+            <div className="min-w-0 flex-1 sm:max-w-xs">
+              <Input
+                type="text"
+                value={newLabel}
+                onChange={(event) => setNewLabel(event.target.value)}
+                placeholder="Ajouter un tag..."
+                aria-label="Nouveau tag"
+              />
+            </div>
+            <Button type="button" onClick={handleAdd} disabled={isPending || !newLabel.trim()} className="shrink-0">
+              Ajouter
+            </Button>
+          </div>
+        ) : null}
+        {error ? (
+          <p role="alert" className="text-xs text-danger-fg">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </Card>
   );
 }

@@ -297,7 +297,7 @@ export function CandidateCapabilitySection({
             })}
           </div>
           {state.error ? (
-            <p role="alert" className="text-sm text-tenderos-danger">
+            <p role="alert" className="text-sm text-danger-fg">
               {state.error}
             </p>
           ) : null}

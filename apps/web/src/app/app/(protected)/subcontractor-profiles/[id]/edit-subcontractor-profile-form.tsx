@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { updateSubcontractorProfileAction, type FormActionState } from "../../../subcontractor-actions";
 import type { SubcontractorProfile } from "../../../../../lib/subcontractor-types";
+import { Button, FieldWrapper, Input, Textarea } from "../../../../../components/ui";
 
 const INITIAL_STATE: FormActionState = {};
 
@@ -34,8 +35,8 @@ export function EditSubcontractorProfileForm({ profile, disabled }: { profile: S
         <Field label="Domaines d'intervention" name="domains" defaultValue={profile.domains} textarea />
         <Field label="Compétences" name="skills" defaultValue={profile.skills} textarea />
 
-        <div className="rounded border border-neutral-200 p-3">
-          <h3 className="mb-2 text-sm font-semibold text-neutral-900">Coordonnées bancaires</h3>
+        <div className="rounded-lg border border-tenderos-navy/10 p-3">
+          <h3 className="mb-2 text-sm font-semibold text-tenderos-navy">Coordonnées bancaires</h3>
           <div className="grid grid-cols-3 gap-4">
             <Field label="Titulaire" name="bankAccountHolder" defaultValue={profile.bankAccountHolder} />
             <Field label="IBAN" name="iban" defaultValue={profile.iban} mono />
@@ -44,20 +45,22 @@ export function EditSubcontractorProfileForm({ profile, disabled }: { profile: S
         </div>
 
         {state.error ? (
-          <p role="alert" className="text-sm text-red-600">
+          <p role="alert" className="text-sm text-danger-fg">
             {state.error}
           </p>
         ) : null}
 
-        <button type="submit" disabled={isPending} className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+        <Button type="submit" variant="primary" disabled={isPending} className="self-start">
           {isPending ? "Enregistrement..." : "Enregistrer"}
-        </button>
+        </Button>
       </fieldset>
-      {disabled ? <p className="text-xs text-neutral-500">Un sous-traitant archivé ne peut plus être modifié — restaurez-le d&apos;abord.</p> : null}
+      {disabled ? <p className="text-xs text-tenderos-slate">Un sous-traitant archivé ne peut plus être modifié — restaurez-le d&apos;abord.</p> : null}
     </form>
   );
 }
 
+/** `FieldWrapper` + contrôle nu : le libellé reste exactement le texte fourni (astérisque littéral
+ *  compris, jamais un second astérisque ajouté par le composant). */
 function Field({
   label,
   name,
@@ -78,23 +81,12 @@ function Field({
   mono?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={name} className="text-sm font-medium text-neutral-700">
-        {label}
-      </label>
+    <FieldWrapper label={label}>
       {textarea ? (
-        <textarea id={name} name={name} rows={2} defaultValue={defaultValue ?? ""} className="rounded border border-neutral-300 px-3 py-2 text-sm" />
+        <Textarea id={name} name={name} rows={2} defaultValue={defaultValue ?? ""} />
       ) : (
-        <input
-          id={name}
-          name={name}
-          type={type}
-          required={required}
-          maxLength={maxLength}
-          defaultValue={defaultValue ?? ""}
-          className={`rounded border border-neutral-300 px-3 py-2 text-sm ${mono ? "font-mono" : ""}`}
-        />
+        <Input id={name} name={name} type={type} required={required ?? false} maxLength={maxLength} defaultValue={defaultValue ?? ""} className={mono ? "font-mono" : ""} />
       )}
-    </div>
+    </FieldWrapper>
   );
 }

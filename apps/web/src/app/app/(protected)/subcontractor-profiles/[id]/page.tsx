@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { Badge, Card, PageHeader } from "../../../../../components/ui";
 import { appApiFetch } from "../../../../../lib/app-api-client";
-import { SUBCONTRACTOR_PROFILE_STATUS_LABELS, subcontractorProfileStatusBadgeClass, type SubcontractorCertification, type SubcontractorInsurance, type SubcontractorProfile, type SubcontractorProfileDocument, type SubcontractorReference } from "../../../../../lib/subcontractor-types";
+import { SUBCONTRACTOR_PROFILE_STATUS_LABELS, SUBCONTRACTOR_PROFILE_STATUS_TONE, type SubcontractorCertification, type SubcontractorInsurance, type SubcontractorProfile, type SubcontractorProfileDocument, type SubcontractorReference } from "../../../../../lib/subcontractor-types";
 import { ApiErrorState } from "../../api-error-state";
 import { EditSubcontractorProfileForm } from "./edit-subcontractor-profile-form";
 import { SubcontractorLifecycleActions } from "./subcontractor-lifecycle-actions";
@@ -34,39 +34,24 @@ export default async function SubcontractorProfileDetailPage({ params }: { param
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <Link href="/app/subcontractor-profiles" className="text-sm text-neutral-500 hover:underline">
-            ← Sous-traitants
-          </Link>
-          <h1 className="mt-1 text-xl font-semibold">{profile.legalName}</h1>
-          <span className={`mt-1 inline-block rounded px-2 py-0.5 text-xs font-medium ${subcontractorProfileStatusBadgeClass(profile.status)}`}>
-            {SUBCONTRACTOR_PROFILE_STATUS_LABELS[profile.status]}
-          </span>
-        </div>
-        <SubcontractorLifecycleActions subcontractorId={profile.id} status={profile.status} />
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Sous-traitants", href: "/app/subcontractor-profiles" }, { label: profile.legalName }]}
+        title={profile.legalName}
+        status={<Badge tone={SUBCONTRACTOR_PROFILE_STATUS_TONE[profile.status] ?? "neutral"}>{SUBCONTRACTOR_PROFILE_STATUS_LABELS[profile.status]}</Badge>}
+        actions={<SubcontractorLifecycleActions subcontractorId={profile.id} status={profile.status} />}
+      />
 
-      <section className="rounded border border-neutral-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-900">Informations générales</h2>
+      <Card title="Informations générales">
         <EditSubcontractorProfileForm profile={profile} disabled={profile.status === "ARCHIVED"} />
-      </section>
+      </Card>
 
-      <section className="rounded border border-neutral-200 p-4">
-        <SubcontractorReferencesSection subcontractorId={profile.id} references={references} />
-      </section>
+      <SubcontractorReferencesSection subcontractorId={profile.id} references={references} />
 
-      <section className="rounded border border-neutral-200 p-4">
-        <SubcontractorCertificationsSection subcontractorId={profile.id} certifications={certifications} />
-      </section>
+      <SubcontractorCertificationsSection subcontractorId={profile.id} certifications={certifications} />
 
-      <section className="rounded border border-neutral-200 p-4">
-        <SubcontractorInsurancesSection subcontractorId={profile.id} insurances={insurances} />
-      </section>
+      <SubcontractorInsurancesSection subcontractorId={profile.id} insurances={insurances} />
 
-      <section className="rounded border border-neutral-200 p-4">
-        <SubcontractorDocumentsSection subcontractorId={profile.id} documents={documents} />
-      </section>
+      <SubcontractorDocumentsSection subcontractorId={profile.id} documents={documents} />
     </div>
   );
 }

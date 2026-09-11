@@ -49,6 +49,7 @@ import { Button } from "../../../../../../components/ui/button";
 import { Input } from "../../../../../../components/ui/input";
 import { Textarea } from "../../../../../../components/ui/textarea";
 import { FileInput } from "../../../../../../components/ui/file-input";
+import { Alert } from "../../../../../../components/ui/alert";
 
 /** Formulaire de création (mission §63 — deux parcours) : soit un modèle DOCX uploadé
  *  (entreprise ou trame imposée par le DCE), soit "Générer sans modèle" (modèle système
@@ -97,9 +98,7 @@ function CreateMemoForm({
     >
       <h2 className="text-sm font-semibold">Créer le mémoire technique</h2>
       {error ? (
-        <p role="alert" className="rounded bg-red-50 p-2 text-xs text-danger-fg">
-          {error}
-        </p>
+        <Alert tone="danger">{error}</Alert>
       ) : null}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -328,9 +327,9 @@ function SectionCard({
       ) : null}
 
       {error ? (
-        <p role="alert" className="mt-2 rounded bg-red-50 p-2 text-xs text-danger-fg">
+        <Alert tone="danger" className="mt-2">
           {error}
-        </p>
+        </Alert>
       ) : null}
 
       {section.content ? (
@@ -390,10 +389,10 @@ function SectionCard({
       )}
 
       {missingDataNotes.length > 0 ? (
-        <div className="mt-2 rounded bg-amber-50 p-2 text-xs text-warning-fg">
+        <Alert tone="warning" className="mt-2">
           <span className="font-medium">Informations manquantes :</span>{" "}
           {missingDataNotes.join(" · ")}
-        </div>
+        </Alert>
       ) : null}
 
       {citations.length > 0 ? (
@@ -587,13 +586,11 @@ function MemoDetail({
       </div>
 
       {error ? (
-        <p role="alert" className="rounded bg-red-50 p-2 text-xs text-danger-fg">
-          {error}
-        </p>
+        <Alert tone="danger">{error}</Alert>
       ) : null}
 
       {exportRevision ? (
-        <div className="rounded border border-green-300 bg-green-50 p-3 text-xs text-success-fg">
+        <Alert tone="success">
           {exportRevision.status === "COMPLETED" ? (
             <>
               DOCX généré (révision #{exportRevision.revisionNumber}).{" "}
@@ -607,7 +604,7 @@ function MemoDetail({
           ) : (
             `Export en statut ${exportRevision.status}${exportRevision.errorMessage ? ` — ${exportRevision.errorMessage}` : ""}`
           )}
-        </div>
+        </Alert>
       ) : null}
 
       <CoveragePanel coverage={coverage} />
@@ -681,9 +678,7 @@ export function TechnicalMemoSection({
   return (
     <div className="flex flex-col gap-4">
       {error ? (
-        <p role="alert" className="rounded bg-red-50 p-2 text-xs text-danger-fg">
-          {error}
-        </p>
+        <Alert tone="danger">{error}</Alert>
       ) : null}
       {isLoading ? <p className="text-sm text-tenderos-slate">Chargement…</p> : null}
       {!isLoading ? (

@@ -17,6 +17,7 @@ import {
 import { formatProvenanceLocation } from "../../../../../../lib/knowledge-types";
 import { Button } from "../../../../../../components/ui/button";
 import { Input } from "../../../../../../components/ui/input";
+import { Alert } from "../../../../../../components/ui/alert";
 
 /** Correctif audit Codex P2 — un lien ouvrable vers la page de détail existante, jamais un nouveau
  *  viewer. La page cible revérifie l'accès (Server Component authentifié + RBAC backend réel, même
@@ -277,9 +278,7 @@ export function ChatSection({
 
       <section className="flex min-h-[420px] flex-col gap-3 rounded border border-tenderos-navy/10 p-3">
         {error ? (
-          <p role="alert" className="rounded bg-red-50 p-2 text-xs text-danger-fg">
-            {error}
-          </p>
+          <Alert tone="danger">{error}</Alert>
         ) : null}
 
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto">

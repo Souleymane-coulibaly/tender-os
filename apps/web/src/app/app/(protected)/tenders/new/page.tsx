@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Card, PageHeader } from "../../../../../components/ui";
 import { appApiFetch } from "../../../../../lib/app-api-client";
 import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../../lib/client-portfolio-types";
 import type { Buyer } from "../../../../../lib/tenders-types";
@@ -8,6 +9,8 @@ import { ApiErrorState } from "../../api-error-state";
 import { CreateTenderForm } from "./create-tender-form";
 
 export const metadata: Metadata = { title: "Nouvel appel d'offres — TenderOS" };
+
+const BREADCRUMB = [{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Nouveau" }];
 
 export default async function NewTenderPage() {
   // Mission Sprint 5.1 §"Tenders" — jamais un client archivé sélectionnable pour une nouvelle
@@ -31,14 +34,16 @@ export default async function NewTenderPage() {
   if (clients.items.length === 0) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-xl font-semibold">Nouvel appel d&apos;offres</h1>
-        <p className="text-sm text-neutral-600">
-          Aucun client accessible. Un appel d&apos;offres doit obligatoirement être rattaché à un client —{" "}
-          <Link href="/app/clients/new" className="text-neutral-900 underline">
-            créez d&apos;abord un client
-          </Link>{" "}
-          ou demandez à être affecté à un client existant.
-        </p>
+        <PageHeader breadcrumb={BREADCRUMB} title="Nouvel appel d'offres" />
+        <Card>
+          <p className="text-sm text-tenderos-slate">
+            Aucun client accessible. Un appel d&apos;offres doit obligatoirement être rattaché à un client —{" "}
+            <Link href="/app/clients/new" className="font-medium text-tenderos-blue underline">
+              créez d&apos;abord un client
+            </Link>{" "}
+            ou demandez à être affecté à un client existant.
+          </p>
+        </Card>
       </div>
     );
   }
@@ -49,23 +54,27 @@ export default async function NewTenderPage() {
   if (candidateCompanies.items.length === 0) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-xl font-semibold">Nouvel appel d&apos;offres</h1>
-        <p className="text-sm text-neutral-600">
-          Aucune entreprise candidate. Un appel d&apos;offres doit désormais désigner explicitement
-          l&apos;entité juridique qui y répond —{" "}
-          <Link href="/app/candidate-companies/new" className="text-neutral-900 underline">
-            créez d&apos;abord une entreprise candidate
-          </Link>
-          .
-        </p>
+        <PageHeader breadcrumb={BREADCRUMB} title="Nouvel appel d'offres" />
+        <Card>
+          <p className="text-sm text-tenderos-slate">
+            Aucune entreprise candidate. Un appel d&apos;offres doit désormais désigner explicitement
+            l&apos;entité juridique qui y répond —{" "}
+            <Link href="/app/candidate-companies/new" className="font-medium text-tenderos-blue underline">
+              créez d&apos;abord une entreprise candidate
+            </Link>
+            .
+          </p>
+        </Card>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Nouvel appel d&apos;offres</h1>
-      <CreateTenderForm clients={clients.items} buyers={buyers} candidateCompanies={candidateCompanies.items} />
+      <PageHeader breadcrumb={BREADCRUMB} title="Nouvel appel d'offres" />
+      <Card>
+        <CreateTenderForm clients={clients.items} buyers={buyers} candidateCompanies={candidateCompanies.items} />
+      </Card>
     </div>
   );
 }

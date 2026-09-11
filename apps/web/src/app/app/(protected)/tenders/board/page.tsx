@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Button, PageHeader } from "../../../../../components/ui";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import { canChangeTenderStatus, type TenderBoard, type TenderStatistics as TenderStatisticsData } from "../../../../../lib/tenders-types";
 import { ApiErrorState } from "../../api-error-state";
@@ -42,10 +43,18 @@ export default async function TendersBoardPage({ searchParams }: { searchParams:
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Appels d&apos;offres — Kanban</h1>
-        <TenderViewSwitcher active="board" queryString={queryString} />
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Appels d'offres" }]}
+        title="Appels d'offres — Kanban"
+        actions={
+          <>
+            <TenderViewSwitcher active="board" queryString={queryString} />
+            <Button href="/app/tenders/new" variant="primary">
+              Nouvel appel d&apos;offres
+            </Button>
+          </>
+        }
+      />
 
       <TenderStatistics stats={stats} />
 

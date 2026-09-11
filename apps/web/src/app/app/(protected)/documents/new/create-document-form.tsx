@@ -7,7 +7,7 @@ import {
   DOCUMENT_DOMAIN_LABELS,
   DOCUMENT_ORIGIN_LABELS,
 } from "../../../../../lib/documents-types";
-import { FileInput } from "../../../../../components/ui/file-input";
+import { Button, Card, FieldWrapper, FileInput, Input, Select, Textarea } from "../../../../../components/ui";
 
 const INITIAL_STATE: FormActionState = {};
 
@@ -15,116 +15,74 @@ export function CreateDocumentForm() {
   const [state, formAction, isPending] = useActionState(createDocumentAction, INITIAL_STATE);
 
   return (
-    <form action={formAction} className="flex max-w-xl flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="title" className="text-sm font-medium text-neutral-700">
-          Titre *
-        </label>
-        <input
-          id="title"
-          name="title"
-          type="text"
-          required
-          className="rounded border border-neutral-300 px-3 py-2 text-sm"
-        />
-      </div>
+    <Card>
+      <form action={formAction} className="flex max-w-xl flex-col gap-4">
+        {/* `FieldWrapper` + contrôle nu plutôt que `label required` : le libellé visible et le nom
+            accessible restent exactement « Titre * » (le composant ajouterait son propre astérisque). */}
+        <FieldWrapper label="Titre *">
+          <Input id="title" name="title" type="text" required />
+        </FieldWrapper>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="description" className="text-sm font-medium text-neutral-700">
-          Description
-        </label>
-        <textarea
-          id="description"
-          name="description"
-          rows={2}
-          className="rounded border border-neutral-300 px-3 py-2 text-sm"
-        />
-      </div>
+        <Textarea label="Description" id="description" name="description" rows={2} />
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="origin" className="text-sm font-medium text-neutral-700">
-            Origine *
-          </label>
-          <select
-            id="origin"
-            name="origin"
-            required
-            defaultValue="USER_UPLOAD"
-            className="rounded border border-neutral-300 px-3 py-2 text-sm"
-          >
-            {Object.entries(DOCUMENT_ORIGIN_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+        <div className="grid grid-cols-2 gap-4">
+          <FieldWrapper label="Origine *">
+            <Select id="origin" name="origin" required defaultValue="USER_UPLOAD">
+              {Object.entries(DOCUMENT_ORIGIN_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </FieldWrapper>
+          <FieldWrapper label="Domaine *">
+            <Select id="domain" name="domain" required defaultValue="ORGANIZATION">
+              {Object.entries(DOCUMENT_DOMAIN_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </FieldWrapper>
         </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="domain" className="text-sm font-medium text-neutral-700">
-            Domaine *
-          </label>
-          <select
-            id="domain"
-            name="domain"
-            required
-            defaultValue="ORGANIZATION"
-            className="rounded border border-neutral-300 px-3 py-2 text-sm"
-          >
-            {Object.entries(DOCUMENT_DOMAIN_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
+
+        <div className="flex flex-col gap-1.5">
+          <Input
+            label="Catégorie"
+            id="category"
+            name="category"
+            type="text"
+            list="category-suggestions"
+            placeholder="RC, CCTP, KBIS..."
+            hint="Liste indicative — vous pouvez saisir une valeur libre."
+          />
+          <datalist id="category-suggestions">
+            {DOCUMENT_CATEGORY_SUGGESTIONS.map((suggestion) => (
+              <option key={suggestion} value={suggestion} />
             ))}
-          </select>
+          </datalist>
         </div>
-      </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="category" className="text-sm font-medium text-neutral-700">
-          Catégorie
-        </label>
-        <input
-          id="category"
-          name="category"
-          type="text"
-          list="category-suggestions"
-          placeholder="RC, CCTP, KBIS..."
-          className="rounded border border-neutral-300 px-3 py-2 text-sm"
-        />
-        <datalist id="category-suggestions">
-          {DOCUMENT_CATEGORY_SUGGESTIONS.map((suggestion) => (
-            <option key={suggestion} value={suggestion} />
-          ))}
-        </datalist>
-        <p className="text-xs text-neutral-500">
-          Liste indicative — vous pouvez saisir une valeur libre.
-        </p>
-      </div>
+        {/* `FileInput` rend déjà son propre `<label>` : le libellé reste un `<label htmlFor>` séparé
+            (jamais un label imbriqué dans un autre). */}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="file" className="text-sm font-medium text-tenderos-navy">
+            Fichier *
+          </label>
+          <FileInput id="file" name="file" required />
+          <p className="text-xs text-tenderos-slate">Formats acceptes : PDF, Word, Excel, CSV, texte, PNG, JPEG.</p>
+        </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="file" className="text-sm font-medium text-neutral-700">
-          Fichier *
-        </label>
-        <FileInput id="file" name="file" required />
-        <p className="text-xs text-neutral-500">
-          Formats acceptes : PDF, Word, Excel, CSV, texte, PNG, JPEG.
-        </p>
-      </div>
+        {state.error ? (
+          <p role="alert" className="text-sm text-danger-fg">
+            {state.error}
+          </p>
+        ) : null}
 
-      {state.error ? (
-        <p role="alert" className="text-sm text-red-600">
-          {state.error}
-        </p>
-      ) : null}
-
-      <button
-        type="submit"
-        disabled={isPending}
-        className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
-        {isPending ? "Dépôt en cours..." : "Déposer le document"}
-      </button>
-    </form>
+        <Button type="submit" variant="primary" disabled={isPending} className="self-start">
+          {isPending ? "Dépôt en cours..." : "Déposer le document"}
+        </Button>
+      </form>
+    </Card>
   );
 }

@@ -262,7 +262,7 @@ export default async function AdministrativeDossierPage({
               <li
                 key={index}
                 role="alert"
-                className="rounded-2xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-danger-fg shadow-sm"
+                className="rounded-2xl bg-danger-bg px-3 py-1.5 text-xs text-danger-fg shadow-sm"
               >
                 {blocker}
               </li>
@@ -297,7 +297,7 @@ export default async function AdministrativeDossierPage({
     // Dossier absent PARCE QUE sa création a été refusée : on dit la vraie cause, pas « introuvable ».
     if (ensureError && asApiError(error)?.status === 404) {
       return (
-        <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
+        <div role="alert" className="rounded-2xl bg-warning-bg p-4 text-sm text-warning-fg shadow-sm">
           {ensureError}
         </div>
       );

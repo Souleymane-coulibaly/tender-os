@@ -7,6 +7,7 @@ import {
   restoreDocumentAction,
 } from "../../../documents-actions";
 import type { DocumentSummary } from "../../../../../lib/documents-types";
+import { Button } from "../../../../../components/ui";
 
 export function LifecycleActions({ doc }: { doc: DocumentSummary }) {
   const [error, setError] = useState<string | undefined>();
@@ -36,56 +37,33 @@ export function LifecycleActions({ doc }: { doc: DocumentSummary }) {
     <div className="flex flex-col items-end gap-2">
       <div className="flex items-center gap-2">
         {doc.status === "ACTIVE" ? (
-          <button
-            type="button"
-            onClick={handleArchive}
-            disabled={isPending}
-            className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
-          >
+          <Button type="button" variant="danger" onClick={handleArchive} disabled={isPending}>
             Archiver
-          </button>
+          </Button>
         ) : (
-          <button
-            type="button"
-            onClick={handleRestore}
-            disabled={isPending}
-            className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
-          >
+          <Button type="button" onClick={handleRestore} disabled={isPending}>
             Restaurer
-          </button>
+          </Button>
         )}
 
         {!confirmingDelete ? (
-          <button
-            type="button"
-            onClick={() => setConfirmingDelete(true)}
-            className="rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
-          >
+          <Button type="button" variant="danger" onClick={() => setConfirmingDelete(true)}>
             Supprimer
-          </button>
+          </Button>
         ) : (
-          <div className="flex items-center gap-2 rounded border border-red-200 p-2">
-            <span className="text-xs text-red-800">Confirmer la suppression ?</span>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={isPending}
-              className="rounded bg-red-700 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
-            >
+          <div className="flex items-center gap-2 rounded-lg bg-danger-bg p-2">
+            <span className="text-xs text-danger-fg">Confirmer la suppression ?</span>
+            <Button type="button" variant="danger" size="sm" onClick={handleDelete} disabled={isPending}>
               Confirmer
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmingDelete(false)}
-              className="rounded px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100"
-            >
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmingDelete(false)}>
               Annuler
-            </button>
+            </Button>
           </div>
         )}
       </div>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}

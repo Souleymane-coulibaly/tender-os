@@ -240,7 +240,7 @@ function TaskRow({
               <span>Échéance : {new Date(task.dueDate).toLocaleDateString("fr-FR")}</span>
             ) : null}
             {task.checklistItemId ? (
-              <span className="rounded bg-purple-100 px-1.5 py-0.5 text-purple-800">
+              <span className="rounded bg-info-bg px-1.5 py-0.5 text-info-fg">
                 Depuis la checklist
               </span>
             ) : null}
@@ -324,7 +324,7 @@ function TaskRow({
                   </span>{" "}
                   — {comment.body}
                   {comment.mentionedUserIds.length > 0 ? (
-                    <span className="ml-1 text-purple-700">
+                    <span className="ml-1 text-info-fg">
                       {comment.mentionedUserIds.map((id) => `@${getName(id)}`).join(" ")}
                     </span>
                   ) : null}
@@ -609,7 +609,7 @@ function ApprovalsPanel({
                         value={rejectReason}
                         onChange={(event) => setRejectReason(event.target.value)}
                         placeholder="Raison du rejet (obligatoire)"
-                        className="border-red-300"
+                        className="border-danger-fg"
                       />
                       <Button
                         type="button"

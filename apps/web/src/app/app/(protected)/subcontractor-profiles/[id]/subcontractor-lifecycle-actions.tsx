@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { archiveSubcontractorProfileAction, restoreSubcontractorProfileAction } from "../../../subcontractor-actions";
 import type { SubcontractorProfileStatus } from "../../../../../lib/subcontractor-types";
+import { Button } from "../../../../../components/ui";
 
 export function SubcontractorLifecycleActions({ subcontractorId, status }: { subcontractorId: string; status: SubcontractorProfileStatus }) {
   const router = useRouter();
@@ -29,16 +30,16 @@ export function SubcontractorLifecycleActions({ subcontractorId, status }: { sub
   return (
     <div className="flex flex-col items-end gap-1">
       {status === "ARCHIVED" ? (
-        <button type="button" onClick={handleRestore} disabled={isPending} className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50">
+        <Button type="button" onClick={handleRestore} disabled={isPending}>
           {isPending ? "..." : "Restaurer"}
-        </button>
+        </Button>
       ) : (
-        <button type="button" onClick={handleArchive} disabled={isPending} className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50">
+        <Button type="button" variant="danger" onClick={handleArchive} disabled={isPending}>
           {isPending ? "..." : "Archiver"}
-        </button>
+        </Button>
       )}
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}

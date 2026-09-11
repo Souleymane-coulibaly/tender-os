@@ -259,7 +259,7 @@ export function CandidateCompanyTabs({ dossier, capabilities }: { dossier: Candi
 }
 
 function SummaryTile({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "warning" | "danger" }) {
-  const toneClass = tone === "danger" ? "text-tenderos-danger" : tone === "warning" ? "text-amber-600" : "text-tenderos-navy";
+  const toneClass = tone === "danger" ? "text-danger-fg" : tone === "warning" ? "text-warning-fg" : "text-tenderos-navy";
   return (
     <div className="rounded-lg border border-tenderos-mist bg-white p-4">
       <p className="text-xs font-semibold uppercase text-tenderos-slate">{label}</p>

@@ -1,3 +1,4 @@
+import { Button, Card, Checkbox, Input, Select } from "../../../../components/ui";
 import type { ClientAccountSummary } from "../../../../lib/client-portfolio-types";
 import { KNOWLEDGE_CATEGORY_LABELS, KNOWLEDGE_STATUS_LABELS, type KnowledgeCategory, type KnowledgeEntryStatus } from "../../../../lib/knowledge-types";
 
@@ -15,61 +16,35 @@ export type KnowledgeFiltersState = {
  *  de verite des filtres actifs (mission §"filtrer par categorie/tag/statut/date"). */
 export function KnowledgeFilters({ values, clients }: { values: KnowledgeFiltersState; clients?: ClientAccountSummary[] | undefined }) {
   return (
-    <form
-      method="GET"
-      action="/app/knowledge"
-      className="flex flex-wrap items-end gap-3 rounded border border-neutral-200 p-3"
-    >
-      <div className="flex flex-col gap-1">
-        <label htmlFor="titleSearch" className="text-xs text-neutral-600">
-          Recherche par titre
-        </label>
-        <input
+    <Card padding="tight">
+      <form method="GET" action="/app/knowledge" className="flex flex-wrap items-end gap-3">
+        <Input
+          label="Recherche par titre"
           id="titleSearch"
           name="titleSearch"
           type="text"
           defaultValue={values.titleSearch}
           placeholder="Titre..."
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          wrapperClassName="min-w-[12rem] flex-1 sm:max-w-xs"
         />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="category" className="text-xs text-neutral-600">
-          Catégorie
-        </label>
-        <select id="category" name="category" defaultValue={values.category ?? ""} className="rounded border border-neutral-300 px-2 py-1 text-sm">
+        <Select label="Catégorie" id="category" name="category" defaultValue={values.category ?? ""} wrapperClassName="basis-52">
           <option value="">Toutes</option>
           {Object.entries(KNOWLEDGE_CATEGORY_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="status" className="text-xs text-neutral-600">
-          Statut
-        </label>
-        <select id="status" name="status" defaultValue={values.status ?? ""} className="rounded border border-neutral-300 px-2 py-1 text-sm">
+        </Select>
+        <Select label="Statut" id="status" name="status" defaultValue={values.status ?? ""} wrapperClassName="basis-44">
           <option value="">Tous</option>
           {Object.entries(KNOWLEDGE_STATUS_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
-      </div>
-      {clients && clients.length > 0 ? (
-        <div className="flex flex-col gap-1">
-          <label htmlFor="clientAccountId" className="text-xs text-neutral-600">
-            Client
-          </label>
-          <select
-            id="clientAccountId"
-            name="clientAccountId"
-            defaultValue={values.clientAccountId ?? ""}
-            className="rounded border border-neutral-300 px-2 py-1 text-sm"
-          >
+        </Select>
+        {clients && clients.length > 0 ? (
+          <Select label="Client" id="clientAccountId" name="clientAccountId" defaultValue={values.clientAccountId ?? ""} wrapperClassName="basis-64">
             <option value="">Toutes (globales + clients accessibles)</option>
             <option value="GLOBAL">Globales uniquement</option>
             {clients.map((client) => (
@@ -77,16 +52,11 @@ export function KnowledgeFilters({ values, clients }: { values: KnowledgeFilters
                 {client.name}
               </option>
             ))}
-          </select>
-        </div>
-      ) : null}
-      <label className="flex items-center gap-2 pb-1.5 text-xs text-neutral-600">
-        <input type="checkbox" name="includeArchived" value="true" defaultChecked={values.includeArchived} />
-        Inclure les archives
-      </label>
-      <button type="submit" className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100">
-        Filtrer
-      </button>
-    </form>
+          </Select>
+        ) : null}
+        <Checkbox name="includeArchived" value="true" defaultChecked={values.includeArchived} label="Inclure les archives" className="pb-2.5" />
+        <Button type="submit">Filtrer</Button>
+      </form>
+    </Card>
   );
 }

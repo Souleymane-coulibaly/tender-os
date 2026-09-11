@@ -1,3 +1,4 @@
+import { Button, Card, Input, Select } from "../../../../components/ui";
 import {
   DOCUMENT_DOMAIN_LABELS,
   DOCUMENT_ORIGIN_LABELS,
@@ -18,81 +19,43 @@ export type DocumentFiltersState = {
  *  l'URL reste la source de verite des filtres actifs. */
 export function DocumentFilters({ values }: { values: DocumentFiltersState }) {
   return (
-    <form
-      method="GET"
-      action="/app/documents"
-      className="flex flex-wrap items-end gap-3 rounded border border-neutral-200 p-3"
-    >
-      <div className="flex flex-col gap-1">
-        <label htmlFor="search" className="text-xs text-neutral-600">
-          Recherche
-        </label>
-        <input
+    <Card padding="tight">
+      <form method="GET" action="/app/documents" className="flex flex-wrap items-end gap-3">
+        <Input
+          label="Recherche"
           id="search"
           name="search"
           type="text"
           defaultValue={values.search}
           placeholder="Titre ou nom de fichier..."
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          wrapperClassName="min-w-[12rem] flex-1 sm:max-w-xs"
         />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="status" className="text-xs text-neutral-600">
-          Statut
-        </label>
-        <select
-          id="status"
-          name="status"
-          defaultValue={values.status ?? ""}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
-        >
+        <Select label="Statut" id="status" name="status" defaultValue={values.status ?? ""} wrapperClassName="basis-40">
           <option value="">Tous</option>
           {Object.entries(DOCUMENT_STATUS_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="origin" className="text-xs text-neutral-600">
-          Origine
-        </label>
-        <select
-          id="origin"
-          name="origin"
-          defaultValue={values.origin ?? ""}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
-        >
+        </Select>
+        <Select label="Origine" id="origin" name="origin" defaultValue={values.origin ?? ""} wrapperClassName="basis-48">
           <option value="">Toutes</option>
           {Object.entries(DOCUMENT_ORIGIN_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="domain" className="text-xs text-neutral-600">
-          Domaine
-        </label>
-        <select
-          id="domain"
-          name="domain"
-          defaultValue={values.domain ?? ""}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
-        >
+        </Select>
+        <Select label="Domaine" id="domain" name="domain" defaultValue={values.domain ?? ""} wrapperClassName="basis-48">
           <option value="">Tous</option>
           {Object.entries(DOCUMENT_DOMAIN_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
-      </div>
-      <button type="submit" className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100">
-        Filtrer
-      </button>
-    </form>
+        </Select>
+        <Button type="submit">Filtrer</Button>
+      </form>
+    </Card>
   );
 }

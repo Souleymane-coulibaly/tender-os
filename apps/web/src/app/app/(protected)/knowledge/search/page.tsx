@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Badge, Button, Card, Checkbox, EmptyState, FieldWrapper, Input, PageHeader, Select } from "../../../../../components/ui";
 import { appApiFetch } from "../../../../../lib/app-api-client";
 import {
   KNOWLEDGE_CATEGORY_LABELS,
@@ -29,7 +30,7 @@ function HighlightedSnippet({ snippet, query }: { snippet: string; query: string
   return (
     <>
       {snippet.slice(0, index)}
-      <mark className="rounded bg-yellow-200 px-0.5">{snippet.slice(index, index + query.length)}</mark>
+      <mark className="rounded bg-warning-bg px-0.5 text-tenderos-navy">{snippet.slice(index, index + query.length)}</mark>
       {snippet.slice(index + query.length)}
     </>
   );
@@ -56,92 +57,87 @@ export default async function KnowledgeSearchPage({ searchParams }: { searchPara
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Rechercher dans la base de connaissances</h1>
+      <PageHeader
+        breadcrumb={[{ label: "Base de connaissances", href: "/app/knowledge" }, { label: "Rechercher" }]}
+        title="Rechercher dans la base de connaissances"
+      />
 
-      <form method="GET" action="/app/knowledge/search" className="flex flex-wrap items-end gap-3 rounded border border-neutral-200 p-3">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="query" className="text-xs text-neutral-600">
-            Recherche
-          </label>
-          <input
-            id="query"
-            name="query"
-            type="text"
-            required
-            defaultValue={params.query}
-            placeholder="Nom de client, technologie, certification..."
-            className="w-72 rounded border border-neutral-300 px-2 py-1 text-sm"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="category" className="text-xs text-neutral-600">
-            Catégorie
-          </label>
-          <select id="category" name="category" defaultValue={params.category ?? ""} className="rounded border border-neutral-300 px-2 py-1 text-sm">
+      <Card padding="tight">
+        <form method="GET" action="/app/knowledge/search" className="flex flex-wrap items-end gap-3">
+          {/* `FieldWrapper` + contrôle nu : le libellé reste exactement « Recherche » (`Input required`
+              ajouterait un astérisque). */}
+          <FieldWrapper label="Recherche" className="min-w-[12rem] flex-1 sm:max-w-sm">
+            <Input
+              id="query"
+              name="query"
+              type="text"
+              required
+              defaultValue={params.query}
+              placeholder="Nom de client, technologie, certification..."
+            />
+          </FieldWrapper>
+          <Select label="Catégorie" id="category" name="category" defaultValue={params.category ?? ""} wrapperClassName="basis-52">
             <option value="">Toutes</option>
             {Object.entries(KNOWLEDGE_CATEGORY_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
-        </div>
-        <label className="flex items-center gap-2 pb-1.5 text-xs text-neutral-600">
-          <input type="checkbox" name="validatedOnly" value="true" defaultChecked={params.validatedOnly === "true"} />
-          Validées uniquement
-        </label>
-        <button type="submit" className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
-          Rechercher
-        </button>
-      </form>
+          </Select>
+          <Checkbox name="validatedOnly" value="true" defaultChecked={params.validatedOnly === "true"} label="Validées uniquement" className="pb-2.5" />
+          <Button type="submit" variant="primary">
+            Rechercher
+          </Button>
+        </form>
+      </Card>
 
-      {!query ? <p className="text-sm text-neutral-600">Saisissez une recherche pour consulter la base de connaissances.</p> : null}
+      {!query ? <EmptyState title="Saisissez une recherche pour consulter la base de connaissances." /> : null}
 
       {error ? <ApiErrorState error={error} /> : null}
 
       {results ? (
         results.items.length === 0 ? (
-          <p className="text-sm text-neutral-600">Aucun résultat pour « {query} ».</p>
+          <EmptyState title={<>Aucun résultat pour « {query} ».</>} />
         ) : (
           <div className="flex flex-col gap-3">
-            <p className="text-sm text-neutral-600">{results.total} résultat(s)</p>
+            <p className="text-sm text-tenderos-slate">{results.total} résultat(s)</p>
             <ul className="flex flex-col gap-3">
               {results.items.map((item, index) => {
                 const location = formatProvenanceLocation(item);
                 return (
-                  <li key={`${item.knowledgeEntryId}-${item.knowledgeDocumentId ?? "manual"}-${item.chunkSequence ?? index}`} className="rounded border border-neutral-200 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-neutral-900">{item.title}</span>
-                        <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
-                          {KNOWLEDGE_CATEGORY_LABELS[item.category]}
-                        </span>
-                        <span className="rounded bg-neutral-50 px-1.5 py-0.5 text-xs text-neutral-500">
-                          {MATCH_LOCATION_LABELS[item.matchLocation] ?? item.matchLocation}
-                        </span>
+                  <li key={`${item.knowledgeEntryId}-${item.knowledgeDocumentId ?? "manual"}-${item.chunkSequence ?? index}`}>
+                    <Card padding="tight">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium text-tenderos-navy">{item.title}</span>
+                          <Badge>{KNOWLEDGE_CATEGORY_LABELS[item.category]}</Badge>
+                          <span className="rounded bg-tenderos-light px-1.5 py-0.5 text-xs text-tenderos-slate">
+                            {MATCH_LOCATION_LABELS[item.matchLocation] ?? item.matchLocation}
+                          </span>
+                        </div>
+                        <span className="text-xs text-tenderos-slate">v{item.activeVersionNumber}</span>
                       </div>
-                      <span className="text-xs text-neutral-500">v{item.activeVersionNumber}</span>
-                    </div>
-                    {item.tags.length > 0 ? (
-                      <p className="mt-1 text-xs text-neutral-500">{item.tags.join(", ")}</p>
-                    ) : null}
-                    <p className="mt-2 text-sm italic text-neutral-700">
-                      &laquo;&nbsp;<HighlightedSnippet snippet={item.snippet} query={query ?? ""} />&nbsp;&raquo;
-                    </p>
-                    {location ? <p className="mt-1 text-xs text-neutral-500">Source : {location}</p> : null}
-                    <div className="mt-2 flex items-center gap-3">
-                      <Link href={`/app/knowledge/${item.knowledgeEntryId}`} className="text-xs font-medium text-neutral-700 hover:underline">
-                        Ouvrir l&apos;entrée
-                      </Link>
-                      {item.knowledgeDocumentId ? (
-                        <Link
-                          href={`/app/knowledge/${item.knowledgeEntryId}#document-${item.knowledgeDocumentId}`}
-                          className="text-xs text-neutral-500 hover:underline"
-                        >
-                          Voir la source
-                        </Link>
+                      {item.tags.length > 0 ? (
+                        <p className="mt-1 text-xs text-tenderos-slate">{item.tags.join(", ")}</p>
                       ) : null}
-                    </div>
+                      <p className="mt-2 text-sm italic text-tenderos-navy">
+                        &laquo;&nbsp;<HighlightedSnippet snippet={item.snippet} query={query ?? ""} />&nbsp;&raquo;
+                      </p>
+                      {location ? <p className="mt-1 text-xs text-tenderos-slate">Source : {location}</p> : null}
+                      <div className="mt-2 flex items-center gap-3">
+                        <Link href={`/app/knowledge/${item.knowledgeEntryId}`} className="text-xs font-medium text-tenderos-blue hover:underline">
+                          Ouvrir l&apos;entrée
+                        </Link>
+                        {item.knowledgeDocumentId ? (
+                          <Link
+                            href={`/app/knowledge/${item.knowledgeEntryId}#document-${item.knowledgeDocumentId}`}
+                            className="text-xs text-tenderos-slate hover:text-tenderos-navy hover:underline"
+                          >
+                            Voir la source
+                          </Link>
+                        ) : null}
+                      </div>
+                    </Card>
                   </li>
                 );
               })}

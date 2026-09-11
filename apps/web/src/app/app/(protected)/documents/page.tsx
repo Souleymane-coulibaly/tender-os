@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Badge, Button, EmptyState, PageHeader, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "../../../../components/ui";
 import { appApiFetch } from "../../../../lib/app-api-client";
 import {
   DOCUMENT_DOMAIN_LABELS,
@@ -43,15 +44,15 @@ export default async function DocumentsLibraryPage({ searchParams }: { searchPar
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Documents</h1>
-        <Link
-          href="/app/documents/new"
-          className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
-        >
-          Nouveau document
-        </Link>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Documents" }]}
+        title="Documents"
+        actions={
+          <Button href="/app/documents/new" variant="primary">
+            Nouveau document
+          </Button>
+        }
+      />
 
       <DocumentFilters
         values={{
@@ -63,61 +64,54 @@ export default async function DocumentsLibraryPage({ searchParams }: { searchPar
       />
 
       {page.items.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucun document a afficher.</p>
+        <EmptyState title="Aucun document a afficher." />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="py-2 pr-4">Titre</th>
-                <th className="py-2 pr-4">Catégorie</th>
-                <th className="py-2 pr-4">Domaine</th>
-                <th className="py-2 pr-4">Origine</th>
-                <th className="py-2 pr-4">Statut</th>
-                <th className="py-2 pr-4">Version</th>
-                <th className="py-2 pr-4">Taille</th>
-                <th className="py-2 pr-4">Modifié le</th>
-              </tr>
-            </thead>
-            <tbody>
-              {page.items.map((document) => (
-                <tr key={document.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4">
-                    <Link href={`/app/documents/${document.id}`} className="font-medium text-neutral-900 hover:underline">
-                      {document.title}
-                    </Link>
-                  </td>
-                  <td className="py-2 pr-4 text-neutral-600">{document.category ?? "—"}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{DOCUMENT_DOMAIN_LABELS[document.domain]}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{DOCUMENT_ORIGIN_LABELS[document.origin]}</td>
-                  <td className="py-2 pr-4">
-                    <span
-                      className={`rounded px-2 py-0.5 text-xs font-medium ${
-                        document.status === "ARCHIVED" ? "bg-neutral-200 text-neutral-700" : "bg-green-100 text-green-800"
-                      }`}
-                    >
-                      {DOCUMENT_STATUS_LABELS[document.status]}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4 text-neutral-600">v{document.currentVersionNumber}</td>
-                  <td className="py-2 pr-4 text-neutral-600">
-                    {document.currentVersion ? formatFileSize(document.currentVersion.sizeBytes) : "—"}
-                  </td>
-                  <td className="py-2 pr-4 text-neutral-600">{new Date(document.updatedAt).toLocaleDateString("fr-FR")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableHeaderCell>Titre</TableHeaderCell>
+              <TableHeaderCell>Catégorie</TableHeaderCell>
+              <TableHeaderCell>Domaine</TableHeaderCell>
+              <TableHeaderCell>Origine</TableHeaderCell>
+              <TableHeaderCell>Statut</TableHeaderCell>
+              <TableHeaderCell>Version</TableHeaderCell>
+              <TableHeaderCell>Taille</TableHeaderCell>
+              <TableHeaderCell>Modifié le</TableHeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {page.items.map((document) => (
+              <TableRow key={document.id}>
+                <TableCell>
+                  <Link href={`/app/documents/${document.id}`} className="font-medium text-tenderos-navy hover:underline">
+                    {document.title}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-tenderos-slate">{document.category ?? "—"}</TableCell>
+                <TableCell className="text-tenderos-slate">{DOCUMENT_DOMAIN_LABELS[document.domain]}</TableCell>
+                <TableCell className="text-tenderos-slate">{DOCUMENT_ORIGIN_LABELS[document.origin]}</TableCell>
+                <TableCell>
+                  <Badge tone={document.status === "ARCHIVED" ? "neutral" : "success"}>{DOCUMENT_STATUS_LABELS[document.status]}</Badge>
+                </TableCell>
+                <TableCell className="text-tenderos-slate">v{document.currentVersionNumber}</TableCell>
+                <TableCell className="text-tenderos-slate">
+                  {document.currentVersion ? formatFileSize(document.currentVersion.sizeBytes) : "—"}
+                </TableCell>
+                <TableCell className="text-tenderos-slate">{new Date(document.updatedAt).toLocaleDateString("fr-FR")}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
 
       {page.pageInfo.hasNextPage && page.pageInfo.nextCursor ? (
-        <Link
+        <Button
+          variant="link"
           href={`/app/documents?${new URLSearchParams({ ...params, cursor: page.pageInfo.nextCursor }).toString()}`}
-          className="self-start text-sm text-neutral-700 hover:underline"
+          className="self-start"
         >
           Page suivante →
-        </Link>
+        </Button>
       ) : null}
     </div>
   );

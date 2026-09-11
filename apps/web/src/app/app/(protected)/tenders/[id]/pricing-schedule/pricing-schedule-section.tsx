@@ -26,6 +26,7 @@ import {
 import type { DceDocumentSummary } from "../../../../../../lib/dce-types";
 import { Button } from "../../../../../../components/ui/button";
 import { Input } from "../../../../../../components/ui/input";
+import { Alert } from "../../../../../../components/ui/alert";
 
 type DetailState = {
   schedule: PricingSchedule;
@@ -83,9 +84,7 @@ function ControlsPanel({ controls }: { controls: PricingControlsResult | undefin
   if (!controls) return null;
   if (controls.findings.length === 0) {
     return (
-      <p className="rounded border border-green-200 bg-green-50 p-3 text-xs text-success-fg">
-        Aucune anomalie détectée sur cette version.
-      </p>
+      <Alert tone="success">Aucune anomalie détectée sur cette version.</Alert>
     );
   }
   return (
@@ -299,9 +298,7 @@ function ScheduleDetail({
       </div>
 
       {actionError ? (
-        <p role="alert" className="rounded bg-red-50 p-2 text-xs text-danger-fg">
-          {actionError}
-        </p>
+        <Alert tone="danger">{actionError}</Alert>
       ) : null}
 
       {!currentVersion ? (

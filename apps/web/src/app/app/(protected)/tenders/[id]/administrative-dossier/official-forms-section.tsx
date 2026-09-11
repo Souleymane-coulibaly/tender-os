@@ -191,7 +191,7 @@ export function OfficialFormCard({ spec }: { spec: FormCardSpec }) {
       {confirmingPartial ? (
         <div
           role="alert"
-          className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-warning-fg"
+          className="mt-2 rounded bg-warning-bg p-2 text-xs text-warning-fg"
         >
           <p>
             {missingRequired.length} champ(s) important(s) sont manquants ou à confirmer (

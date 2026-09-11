@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Badge, Card, PageHeader } from "../../../../../components/ui";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import type { ClientAccountSummary } from "../../../../../lib/client-portfolio-types";
 import {
   canValidateKnowledgeEntry,
   KNOWLEDGE_CATEGORY_LABELS,
   KNOWLEDGE_STATUS_LABELS,
-  knowledgeStatusBadgeClass,
+  KNOWLEDGE_STATUS_TONE,
   type KnowledgeDocumentSummary,
   type KnowledgeEntrySummary,
   type KnowledgeEntryVersionSummary,
@@ -57,16 +58,17 @@ export default async function KnowledgeEntryDetailPage({ params }: { params: Pro
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">{entry.title}</h1>
-          <p className="text-sm text-neutral-600">
-            {KNOWLEDGE_CATEGORY_LABELS[entry.category]} — v{entry.activeVersionNumber}
-            {entry.language ? ` — ${entry.language}` : ""}
-          </p>
-          <div className="mt-1">
+      <PageHeader
+        breadcrumb={[{ label: "Base de connaissances", href: "/app/knowledge" }, { label: entry.title }]}
+        title={entry.title}
+        description={
+          <span className="flex flex-wrap items-center gap-2">
+            <span>
+              {KNOWLEDGE_CATEGORY_LABELS[entry.category]} — v{entry.activeVersionNumber}
+              {entry.language ? ` — ${entry.language}` : ""}
+            </span>
             {entry.clientAccountId ? (
-              <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+              <Badge tone="info">
                 {client ? (
                   <Link href={`/app/clients/${entry.clientAccountId}`} className="hover:underline">
                     {client.name}
@@ -74,43 +76,45 @@ export default async function KnowledgeEntryDetailPage({ params }: { params: Pro
                 ) : (
                   "Client"
                 )}
-              </span>
+              </Badge>
             ) : (
-              <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">Globale</span>
+              <Badge>Globale</Badge>
             )}
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className={`rounded px-2 py-1 text-xs font-medium ${knowledgeStatusBadgeClass(entry.status)}`}>
-            {KNOWLEDGE_STATUS_LABELS[entry.status]}
           </span>
-          {entry.validatedAt ? (
-            <span className="rounded bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800">
-              Validée le {new Date(entry.validatedAt).toLocaleDateString("fr-FR")}
-            </span>
-          ) : null}
-          {canManageLifecycle ? <KnowledgeLifecycleActions entry={entry} canDelete={canDelete} canValidate={canValidate} /> : null}
-        </div>
-      </div>
+        }
+        status={
+          <>
+            <Badge tone={KNOWLEDGE_STATUS_TONE[entry.status] ?? "neutral"}>{KNOWLEDGE_STATUS_LABELS[entry.status]}</Badge>
+            {entry.validatedAt ? <Badge tone="success">Validée le {new Date(entry.validatedAt).toLocaleDateString("fr-FR")}</Badge> : null}
+          </>
+        }
+        actions={canManageLifecycle ? <KnowledgeLifecycleActions entry={entry} canDelete={canDelete} canValidate={canValidate} /> : undefined}
+      />
 
-      {entry.description ? <p className="text-sm text-neutral-700">{entry.description}</p> : null}
+      {entry.description || entry.sourceTenderId ? (
+        <Card padding="tight">
+          <div className="flex flex-col gap-2">
+            {entry.description ? <p className="text-sm text-tenderos-navy">{entry.description}</p> : null}
 
-      {entry.sourceTenderId ? (
-        <p className="text-xs text-neutral-500">
-          Promue depuis{" "}
-          <Link href={`/app/tenders/${entry.sourceTenderId}`} className="hover:underline">
-            un appel d&apos;offres
-          </Link>
-          {entry.promotedAt ? ` le ${new Date(entry.promotedAt).toLocaleDateString("fr-FR")}` : ""}.
-        </p>
+            {entry.sourceTenderId ? (
+              <p className="text-xs text-tenderos-slate">
+                Promue depuis{" "}
+                <Link href={`/app/tenders/${entry.sourceTenderId}`} className="text-tenderos-blue hover:underline">
+                  un appel d&apos;offres
+                </Link>
+                {entry.promotedAt ? ` le ${new Date(entry.promotedAt).toLocaleDateString("fr-FR")}` : ""}.
+              </p>
+            ) : null}
+          </div>
+        </Card>
       ) : null}
 
       <KnowledgeTagsManager entryId={entry.id} tags={entry.tags} canManage={canEdit} />
 
-      <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <KnowledgeDocumentsSection entryId={entry.id} initialDocuments={documents} canManage={canEdit} />
         <KnowledgeVersionsSection entryId={entry.id} initialVersions={versions} canRestore={canEdit} />
-      </section>
+      </div>
 
       {canEdit ? (
         <>

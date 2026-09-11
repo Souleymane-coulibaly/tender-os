@@ -81,7 +81,7 @@ function FileReadinessSummary({
           {blocking.map((reason) => (
             <li
               key={reason.code}
-              className="flex flex-wrap items-center justify-between gap-2 rounded bg-red-50 px-2 py-1"
+              className="flex flex-wrap items-center justify-between gap-2 rounded bg-danger-bg px-2 py-1"
             >
               <span>{reason.message}</span>
               {reason.action ? (
@@ -101,7 +101,7 @@ function FileReadinessSummary({
           {warning.map((reason) => (
             <li
               key={reason.code}
-              className="flex flex-wrap items-center justify-between gap-2 rounded bg-amber-50 px-2 py-1"
+              className="flex flex-wrap items-center justify-between gap-2 rounded bg-warning-bg px-2 py-1"
             >
               <span>{reason.message}</span>
               {reason.action ? (
@@ -467,7 +467,7 @@ function ActiveSubmissionCard({
       </div>
 
       {capabilities.canWithdrawSubmission ? (
-        <div className="flex flex-col gap-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs">
+        <div className="flex flex-col gap-1 rounded bg-warning-bg p-2 text-xs">
           <p className="text-warning-fg">
             Cette action enregistre le retrait dans TenderOS. Elle ne réalise pas automatiquement le
             retrait sur la plateforme acheteur.

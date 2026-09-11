@@ -295,7 +295,7 @@ export function CandidateDocumentsSection({
             </div>
           </div>
           {state.error ? (
-            <p role="alert" className="text-sm text-tenderos-danger">
+            <p role="alert" className="text-sm text-danger-fg">
               {state.error}
             </p>
           ) : null}
@@ -375,7 +375,7 @@ function DocumentVersionsDisclosure({
           </p>
           {isLoading ? <p className="text-sm text-tenderos-slate">Chargement…</p> : null}
           {error ? (
-            <p role="alert" className="text-sm text-tenderos-danger">
+            <p role="alert" className="text-sm text-danger-fg">
               {error}
             </p>
           ) : null}

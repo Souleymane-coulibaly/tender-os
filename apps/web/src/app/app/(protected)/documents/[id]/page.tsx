@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Badge, Card, PageHeader } from "../../../../../components/ui";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import {
   DOCUMENT_DOMAIN_LABELS,
@@ -38,73 +39,64 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">{doc.title}</h1>
-          <p className="text-sm text-neutral-600">
+      <PageHeader
+        breadcrumb={[{ label: "Documents", href: "/app/documents" }, { label: doc.title }]}
+        title={doc.title}
+        description={
+          <>
             {DOCUMENT_DOMAIN_LABELS[doc.domain]} — {DOCUMENT_ORIGIN_LABELS[doc.origin]}
             {doc.category ? ` — ${doc.category}` : ""}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span
-            className={`rounded px-2 py-1 text-xs font-medium ${
-              doc.status === "ARCHIVED" ? "bg-neutral-200 text-neutral-700" : "bg-green-100 text-green-800"
-            }`}
-          >
-            {DOCUMENT_STATUS_LABELS[doc.status]}
-          </span>
-          {canManage ? <LifecycleActions doc={doc} /> : null}
-        </div>
-      </div>
+            {doc.description ? <span className="mt-1 block text-tenderos-navy">{doc.description}</span> : null}
+          </>
+        }
+        status={<Badge tone={doc.status === "ARCHIVED" ? "neutral" : "success"}>{DOCUMENT_STATUS_LABELS[doc.status]}</Badge>}
+        actions={canManage ? <LifecycleActions doc={doc} /> : undefined}
+      />
 
-      {doc.description ? <p className="text-sm text-neutral-700">{doc.description}</p> : null}
-
-      <section className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-neutral-700">Versions</h2>
-          <a
-            href={`/app/documents/${doc.id}/download`}
-            className="text-sm text-neutral-700 hover:underline"
-          >
+      <Card
+        title="Versions"
+        actions={
+          <a href={`/app/documents/${doc.id}/download`} className="text-sm text-tenderos-blue hover:underline">
             Télécharger la version courante
           </a>
-        </div>
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-neutral-200 text-left text-neutral-500">
-              <th className="py-2 pr-4">Version</th>
-              <th className="py-2 pr-4">Fichier</th>
-              <th className="py-2 pr-4">Taille</th>
-              <th className="py-2 pr-4">Déposé le</th>
-              <th className="py-2 pr-4">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {versions.map((version) => (
-              <tr key={version.id} className="border-b border-neutral-100">
-                <td className="py-2 pr-4">
-                  v{version.versionNumber}
-                  {version.versionNumber === doc.currentVersionNumber ? (
-                    <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-800">courante</span>
-                  ) : null}
-                </td>
-                <td className="py-2 pr-4 text-neutral-600">{version.originalFilename}</td>
-                <td className="py-2 pr-4 text-neutral-600">{formatFileSize(version.sizeBytes)}</td>
-                <td className="py-2 pr-4 text-neutral-600">{new Date(version.createdAt).toLocaleString("fr-FR")}</td>
-                <td className="py-2 pr-4">
-                  <a
-                    href={`/app/documents/${doc.id}/download?versionId=${version.id}`}
-                    className="text-neutral-700 hover:underline"
-                  >
-                    Télécharger
-                  </a>
-                </td>
+        }
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-tenderos-navy/10 text-left text-xs font-semibold uppercase tracking-wide text-tenderos-slate">
+                <th scope="col" className="py-2 pr-4">Version</th>
+                <th scope="col" className="py-2 pr-4">Fichier</th>
+                <th scope="col" className="py-2 pr-4">Taille</th>
+                <th scope="col" className="py-2 pr-4">Déposé le</th>
+                <th scope="col" className="py-2 pr-4">Action</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+            </thead>
+            <tbody>
+              {versions.map((version) => (
+                <tr key={version.id} className="border-b border-tenderos-navy/10 last:border-0">
+                  <td className="py-2 pr-4 text-tenderos-navy">
+                    v{version.versionNumber}
+                    {version.versionNumber === doc.currentVersionNumber ? (
+                      <span className="ml-2">
+                        <Badge tone="info">courante</Badge>
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="py-2 pr-4 text-tenderos-slate">{version.originalFilename}</td>
+                  <td className="py-2 pr-4 text-tenderos-slate">{formatFileSize(version.sizeBytes)}</td>
+                  <td className="py-2 pr-4 text-tenderos-slate">{new Date(version.createdAt).toLocaleString("fr-FR")}</td>
+                  <td className="py-2 pr-4">
+                    <a href={`/app/documents/${doc.id}/download?versionId=${version.id}`} className="text-tenderos-blue hover:underline">
+                      Télécharger
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       {canEdit && doc.status === "ACTIVE" ? (
         <>

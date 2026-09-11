@@ -3,23 +3,21 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Badge, Button, Card, EmptyState, Input, type BadgeTone } from "../../../../components/ui";
 import { approveApprovalAction, rejectApprovalAction, requestApprovalChangesAction } from "../../workspace-actions";
-import { APPROVAL_ENTITY_TYPE_LABELS, APPROVAL_STATUS_LABELS, type ApprovalRequest } from "../../../../lib/workspace-types";
+import { APPROVAL_ENTITY_TYPE_LABELS, APPROVAL_STATUS_LABELS, type ApprovalRequest, type ApprovalStatus } from "../../../../lib/workspace-types";
 
-function statusBadgeClass(status: ApprovalRequest["status"]): string {
-  switch (status) {
-    case "APPROVED":
-      return "bg-green-100 text-green-800";
-    case "REJECTED":
-      return "bg-red-100 text-red-800";
-    case "CHANGES_REQUESTED":
-      return "bg-amber-100 text-amber-800";
-    case "CANCELLED":
-      return "bg-neutral-200 text-neutral-500";
-    default:
-      return "bg-blue-100 text-blue-800";
-  }
-}
+/**
+ * Design System — remplace l'ancien `statusBadgeClass()` local (classes de badge écrites à la main)
+ * par une table STATUT → tone consommée par `Badge`. Mêmes couleurs sémantiques qu'avant.
+ */
+const APPROVAL_STATUS_TONE: Record<ApprovalStatus, BadgeTone> = {
+  PENDING: "info",
+  APPROVED: "success",
+  REJECTED: "danger",
+  CHANGES_REQUESTED: "warning",
+  CANCELLED: "neutral",
+};
 
 function ValidationRow({ approval }: { approval: ApprovalRequest }) {
   const router = useRouter();
@@ -30,30 +28,34 @@ function ValidationRow({ approval }: { approval: ApprovalRequest }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <li className="flex flex-col gap-2 rounded border border-neutral-200 p-3 text-sm">
+    <li className="flex flex-col gap-2 px-4 py-3 text-sm">
+      {/* En-tête de ligne dépliable (pleine largeur, contenu à gauche) : pas un `Button`, dont le
+          style centré d'action ne convient pas à une ligne de liste. */}
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex flex-wrap items-center justify-between gap-2 text-left">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-700">{APPROVAL_ENTITY_TYPE_LABELS[approval.entityType]}</span>
-          <span className={`rounded px-1.5 py-0.5 text-xs ${statusBadgeClass(approval.status)}`}>{APPROVAL_STATUS_LABELS[approval.status]}</span>
-          <span className="text-xs text-neutral-500">Demandé le {new Date(approval.requestedAt).toLocaleDateString("fr-FR")}</span>
+          <Badge tone="neutral">{APPROVAL_ENTITY_TYPE_LABELS[approval.entityType]}</Badge>
+          <Badge tone={APPROVAL_STATUS_TONE[approval.status] ?? "info"}>{APPROVAL_STATUS_LABELS[approval.status]}</Badge>
+          <span className="text-xs text-tenderos-slate">Demandé le {new Date(approval.requestedAt).toLocaleDateString("fr-FR")}</span>
         </div>
-        <Link href={`/app/tenders/${approval.tenderId}/workspace`} className="text-xs font-medium text-blue-700 underline" onClick={(event) => event.stopPropagation()}>
+        <Link href={`/app/tenders/${approval.tenderId}/workspace`} className="text-xs font-medium text-tenderos-blue underline" onClick={(event) => event.stopPropagation()}>
           Ouvrir le Tender
         </Link>
       </button>
 
       {open ? (
-        <div className="flex flex-col gap-2 border-t border-neutral-100 pt-2">
-          {approval.comment ? <p className="text-xs italic text-neutral-600">{approval.comment}</p> : null}
+        <div className="flex flex-col gap-2 border-t border-tenderos-navy/10 pt-2">
+          {approval.comment ? <p className="text-xs italic text-tenderos-slate">{approval.comment}</p> : null}
           {error ? (
-            <p role="alert" className="text-xs text-red-600">
+            <p role="alert" className="text-xs text-danger-fg">
               {error}
             </p>
           ) : null}
           {approval.status === "PENDING" ? (
             <div className="flex flex-wrap items-center gap-2">
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="sm"
                 disabled={isPending}
                 onClick={async () => {
                   setIsPending(true);
@@ -62,12 +64,12 @@ function ValidationRow({ approval }: { approval: ApprovalRequest }) {
                   setError(result.error);
                   if (!result.error) router.refresh();
                 }}
-                className="rounded border border-green-300 bg-green-50 px-2 py-1 text-xs text-green-800 hover:bg-green-100 disabled:opacity-50"
               >
                 Approuver
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="sm"
                 disabled={isPending}
                 onClick={async () => {
                   setIsPending(true);
@@ -76,21 +78,22 @@ function ValidationRow({ approval }: { approval: ApprovalRequest }) {
                   setError(result.error);
                   if (!result.error) router.refresh();
                 }}
-                className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 hover:bg-amber-100 disabled:opacity-50"
               >
                 Demander des modifications
-              </button>
+              </Button>
               {showReject ? (
                 <>
-                  <input
+                  <Input
                     aria-label="Raison du rejet"
                     value={rejectReason}
                     onChange={(event) => setRejectReason(event.target.value)}
                     placeholder="Raison du rejet (obligatoire)"
-                    className="rounded border border-red-300 px-2 py-1 text-xs"
+                    className="min-w-[12rem] flex-1 border-danger-fg"
                   />
-                  <button
+                  <Button
                     type="button"
+                    variant="danger"
+                    size="sm"
                     disabled={isPending || rejectReason.trim().length === 0}
                     onClick={async () => {
                       setIsPending(true);
@@ -103,15 +106,14 @@ function ValidationRow({ approval }: { approval: ApprovalRequest }) {
                         router.refresh();
                       }
                     }}
-                    className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-800 hover:bg-red-100 disabled:opacity-50"
                   >
                     Confirmer le rejet
-                  </button>
+                  </Button>
                 </>
               ) : (
-                <button type="button" disabled={isPending} onClick={() => setShowReject(true)} className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-800 hover:bg-red-100">
+                <Button type="button" variant="danger" size="sm" disabled={isPending} onClick={() => setShowReject(true)}>
                   Rejeter
-                </button>
+                </Button>
               )}
             </div>
           ) : null}
@@ -123,14 +125,16 @@ function ValidationRow({ approval }: { approval: ApprovalRequest }) {
 
 export function ValidationsList({ initialApprovals }: { initialApprovals: ApprovalRequest[] }) {
   if (initialApprovals.length === 0) {
-    return <p className="rounded border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500">Aucune demande de validation ne correspond à ce filtre.</p>;
+    return <EmptyState title="Aucune demande de validation ne correspond à ce filtre." />;
   }
 
   return (
-    <ul className="flex flex-col gap-2">
-      {initialApprovals.map((approval) => (
-        <ValidationRow key={approval.id} approval={approval} />
-      ))}
-    </ul>
+    <Card padding="none">
+      <ul className="divide-y divide-tenderos-navy/10">
+        {initialApprovals.map((approval) => (
+          <ValidationRow key={approval.id} approval={approval} />
+        ))}
+      </ul>
+    </Card>
   );
 }

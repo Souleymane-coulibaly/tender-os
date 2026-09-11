@@ -2,18 +2,21 @@
 
 import { useDraggable } from "@dnd-kit/core";
 import Link from "next/link";
+import { Badge, type BadgeTone } from "../../../../../components/ui";
 import type { TenderBoardItem } from "../../../../../lib/tenders-types";
 
-function readinessBadgeClass(status: TenderBoardItem["readinessStatus"]): string {
+/** Statut de preparation -> tone du badge de score (memes seuils que l'ancien
+ *  `readinessBadgeClass` local). */
+function readinessTone(status: TenderBoardItem["readinessStatus"]): BadgeTone {
   switch (status) {
     case "READY":
-      return "bg-green-100 text-green-800";
+      return "success";
     case "READY_WITH_WARNINGS":
-      return "bg-amber-100 text-amber-800";
+      return "warning";
     case "IN_PROGRESS":
-      return "bg-blue-100 text-blue-800";
+      return "info";
     default:
-      return "bg-red-100 text-red-800";
+      return "danger";
   }
 }
 
@@ -31,6 +34,7 @@ export function TenderKanbanCard({
     disabled: !canDrag || isPending,
   });
 
+  // Seul style en ligne conserve : la translation calculee par dnd-kit pendant le glisser.
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 10 }
     : undefined;
@@ -39,35 +43,35 @@ export function TenderKanbanCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex flex-col gap-1.5 rounded border border-neutral-200 bg-white p-2.5 text-xs shadow-sm ${
+      className={`flex flex-col gap-1.5 rounded-xl border border-tenderos-navy/10 bg-white p-3 text-xs shadow-sm transition hover:shadow-md ${
         isDragging ? "opacity-50" : ""
       } ${isPending ? "animate-pulse opacity-70" : ""}`}
       {...(canDrag && !isPending ? { ...listeners, ...attributes, tabIndex: 0, role: "button" } : {})}
       aria-roledescription={canDrag ? "carte deplacable" : undefined}
     >
       <div className="flex items-start justify-between gap-2">
-        <Link href={`/app/tenders/${item.id}`} className="font-medium text-neutral-900 hover:underline">
+        <Link href={`/app/tenders/${item.id}`} className="text-sm font-semibold text-tenderos-navy hover:text-tenderos-blue hover:underline">
           {item.title}
         </Link>
-        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${readinessBadgeClass(item.readinessStatus)}`}>
-          {item.readinessScore}
+        <span className="shrink-0">
+          <Badge tone={readinessTone(item.readinessStatus)}>{item.readinessScore}</Badge>
         </span>
       </div>
-      {item.reference ? <span className="text-neutral-500">{item.reference}</span> : null}
-      {item.buyerName ? <span className="text-neutral-600">{item.buyerName}</span> : null}
-      <div className="flex flex-wrap items-center gap-2 text-neutral-500">
+      {item.reference ? <span className="text-tenderos-slate">{item.reference}</span> : null}
+      {item.buyerName ? <span className="text-tenderos-slate">{item.buyerName}</span> : null}
+      <div className="flex flex-wrap items-center gap-2 text-tenderos-slate">
         {item.submissionDeadline ? (
-          <span className={item.overdue ? "font-medium text-red-700" : undefined}>
+          <span className={item.overdue ? "font-medium text-danger-fg" : undefined}>
             {new Date(item.submissionDeadline).toLocaleDateString("fr-FR")}
             {item.overdue ? " (retard)" : ""}
           </span>
         ) : null}
-        {item.openRisksCount > 0 ? <span className="text-red-700">{item.openRisksCount} risque(s)</span> : null}
+        {item.openRisksCount > 0 ? <span className="text-danger-fg">{item.openRisksCount} risque(s)</span> : null}
         {item.incompleteChecklistCount > 0 ? (
           <span>{item.incompleteChecklistCount} a faire</span>
         ) : null}
       </div>
-      {!canDrag ? <span className="text-[10px] italic text-neutral-400">Lecture seule</span> : null}
+      {!canDrag ? <span className="text-xs italic text-tenderos-slate/70">Lecture seule</span> : null}
     </div>
   );
 }

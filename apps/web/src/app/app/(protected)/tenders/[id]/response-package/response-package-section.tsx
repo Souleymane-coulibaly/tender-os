@@ -43,6 +43,7 @@ import {
 import { Button } from "../../../../../../components/ui/button";
 import { Input } from "../../../../../../components/ui/input";
 import { Select } from "../../../../../../components/ui/select";
+import { Alert } from "../../../../../../components/ui/alert";
 
 type DetailState = {
   responsePackage: ResponsePackage;
@@ -286,7 +287,7 @@ function FinalApprovalPanel({
   );
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-blue-200 bg-blue-50 p-3">
+    <div className="flex flex-col gap-2 rounded-lg bg-info-bg p-3">
       <h4 className="text-xs font-semibold text-tenderos-blue">Validation finale avant dépôt</h4>
       <p className="text-xs text-info-fg">
         Validation interne TenderOS — ce n&apos;est pas une signature électronique.
@@ -318,7 +319,6 @@ function FinalApprovalPanel({
             value={reviewerId}
             onChange={(event) => setReviewerId(event.target.value)}
             required
-            className="border-blue-300"
           >
             <option value="">Choisir l&apos;approbateur…</option>
             {participants.map((p) => (
@@ -367,7 +367,7 @@ function FinalApprovalPanel({
                     value={rejectReason}
                     onChange={(event) => setRejectReason(event.target.value)}
                     placeholder="Raison (obligatoire)"
-                    className="border-red-300"
+                    className="border-danger-fg"
                   />
                   <Button
                     type="button"
@@ -525,9 +525,7 @@ function PackageDetail({
       </div>
 
       {actionError ? (
-        <p role="alert" className="rounded bg-red-50 p-2 text-xs text-danger-fg">
-          {actionError}
-        </p>
+        <Alert tone="danger">{actionError}</Alert>
       ) : null}
 
       <Button

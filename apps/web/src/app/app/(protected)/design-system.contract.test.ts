@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 const PROTECTED = fileURLToPath(new URL(".", import.meta.url));
 
 const MIGRATED = [
-  "tenders/[id]",
+  "tenders",
   "candidate-companies",
   "members",
   "notifications",
@@ -25,6 +25,14 @@ const MIGRATED = [
   "clients",
   "opportunities",
   "market-watch",
+  // Lot 3 (dossiers, puis composants isolés de l'en-tête)
+  "knowledge",
+  "documents",
+  "subcontractor-profiles",
+  "validations",
+  "me",
+  "notification-bell.tsx",
+  "restart-tour-button.tsx",
 ];
 
 /** Gris bruts (jetons : tenderos-navy / tenderos-slate / tenderos-light), noir brut des anciens
@@ -32,9 +40,15 @@ const MIGRATED = [
 const LEGACY_PATTERNS: readonly { label: string; pattern: RegExp }[] = [
   { label: "gris brut", pattern: /\b(?:text|bg|border|ring|divide|placeholder|hover:bg|hover:text)-(?:neutral|gray|zinc|stone)-\d{2,3}\b/ },
   { label: "titre écrit à la main", pattern: /<h1 className="text-xl font-semibold/ },
+  // Jeton inventé : la palette `tenderos-*` n'a ni danger, ni success… (tailwind.config.ts). Tailwind
+  // ignore la classe sans rien signaler — un message d'erreur s'affichait ainsi sans couleur.
+  { label: "jeton inexistant", pattern: /\b(?:text|bg|border|ring|fill|stroke|divide|outline|placeholder)-tenderos-(?:danger|success|warning|info|error|red|green|amber|orange|yellow|purple|gray|grey|dark|primary|secondary|muted)\b/ },
+  // Couleurs brutes : jetons d'état (success/warning/danger/info) ou `Alert` à la place.
+  { label: "couleur brute", pattern: /\b(?:text|bg|border|ring|hover:bg|hover:text)-(?:green|red|amber|yellow|blue|emerald|orange|rose|sky|indigo|purple)-\d{2,3}\b/ },
 ];
 
 function sourceFiles(dir: string): string[] {
+  if (statSync(dir).isFile()) return dir.endsWith(".tsx") && !dir.endsWith(".test.tsx") ? [dir] : [];
   const files: string[] = [];
   for (const entry of readdirSync(dir)) {
     const path = join(dir, entry);

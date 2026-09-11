@@ -285,7 +285,7 @@ function ChecklistItemRow({
       <div className="flex flex-wrap items-center gap-2">
         {item.complianceStatus !== "VALIDATED" ? (
           // Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2, audit hardcode) — remplace
-          // `border-green-200 bg-green-50 text-success-fg` (couleur brute) par les jetons sémantiques
+          // l'ancien fond et l'ancienne bordure verts bruts (palette Tailwind) par les jetons sémantiques
           // `success` (Checkpoint A/B), les mêmes que `Badge tone="success"` — jamais un vert propre
           // à cet écran.
           <button

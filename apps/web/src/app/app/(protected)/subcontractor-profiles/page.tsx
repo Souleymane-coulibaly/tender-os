@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Badge, Button, Card, EmptyState, Input, PageHeader, Select, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "../../../../components/ui";
 import { appApiFetch } from "../../../../lib/app-api-client";
-import { SUBCONTRACTOR_PROFILE_STATUSES, SUBCONTRACTOR_PROFILE_STATUS_LABELS, subcontractorProfileStatusBadgeClass, type SubcontractorProfile } from "../../../../lib/subcontractor-types";
+import { SUBCONTRACTOR_PROFILE_STATUSES, SUBCONTRACTOR_PROFILE_STATUS_LABELS, SUBCONTRACTOR_PROFILE_STATUS_TONE, type SubcontractorProfile } from "../../../../lib/subcontractor-types";
 import { ApiErrorState } from "../api-error-state";
 
 export const metadata: Metadata = { title: "Sous-traitants — TenderOS" };
@@ -28,80 +29,74 @@ export default async function SubcontractorProfilesListPage({ searchParams }: { 
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Sous-traitants</h1>
-          <p className="text-sm text-neutral-600">{profiles.length} sous-traitant(s) — répertoire de l&apos;organisation, réutilisable pour tous vos appels d&apos;offres.</p>
-        </div>
-        <Link href="/app/subcontractor-profiles/new" className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
-          Nouveau sous-traitant
-        </Link>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Sous-traitants" }]}
+        title="Sous-traitants"
+        description={<>{profiles.length} sous-traitant(s) — répertoire de l&apos;organisation, réutilisable pour tous vos appels d&apos;offres.</>}
+        actions={
+          <Button href="/app/subcontractor-profiles/new" variant="primary">
+            Nouveau sous-traitant
+          </Button>
+        }
+      />
 
-      <form className="flex flex-wrap items-end gap-3" action="/app/subcontractor-profiles">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="search" className="text-xs text-neutral-600">
-            Recherche
-          </label>
-          <input id="search" name="search" defaultValue={params.search} placeholder="Raison sociale..." className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="status" className="text-xs text-neutral-600">
-            Statut
-          </label>
-          <select id="status" name="status" defaultValue={params.status ?? ""} className="rounded border border-neutral-300 px-2 py-1.5 text-sm">
+      <Card padding="tight">
+        <form className="flex flex-wrap items-end gap-3" action="/app/subcontractor-profiles">
+          <Input
+            label="Recherche"
+            id="search"
+            name="search"
+            defaultValue={params.search}
+            placeholder="Raison sociale..."
+            wrapperClassName="min-w-[12rem] flex-1 sm:max-w-xs"
+          />
+          <Select label="Statut" id="status" name="status" defaultValue={params.status ?? ""} wrapperClassName="basis-40">
             <option value="">Tous</option>
             {SUBCONTRACTOR_PROFILE_STATUSES.map((status) => (
               <option key={status} value={status}>
                 {SUBCONTRACTOR_PROFILE_STATUS_LABELS[status]}
               </option>
             ))}
-          </select>
-        </div>
-        <button type="submit" className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">
-          Filtrer
-        </button>
-      </form>
+          </Select>
+          <Button type="submit">Filtrer</Button>
+        </form>
+      </Card>
 
       {profiles.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucun sous-traitant ne correspond à ces critères.</p>
+        <EmptyState title="Aucun sous-traitant ne correspond à ces critères." />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="py-2 pr-4">Raison sociale</th>
-                <th className="py-2 pr-4">SIRET</th>
-                <th className="py-2 pr-4">Domaines</th>
-                <th className="py-2 pr-4">Statut</th>
-                <th className="py-2 pr-4">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {profiles.map((profile) => (
-                <tr key={profile.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4">
-                    <Link href={`/app/subcontractor-profiles/${profile.id}`} className="font-medium text-neutral-900 hover:underline">
-                      {profile.legalName}
-                    </Link>
-                  </td>
-                  <td className="py-2 pr-4 font-mono text-neutral-600">{profile.siret ?? "—"}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{profile.domains ?? "—"}</td>
-                  <td className="py-2 pr-4">
-                    <span className={`rounded px-2 py-0.5 text-xs font-medium ${subcontractorProfileStatusBadgeClass(profile.status)}`}>
-                      {SUBCONTRACTOR_PROFILE_STATUS_LABELS[profile.status]}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4">
-                    <Link href={`/app/subcontractor-profiles/${profile.id}`} className="text-neutral-700 hover:underline">
-                      Ouvrir
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableHeaderCell>Raison sociale</TableHeaderCell>
+              <TableHeaderCell>SIRET</TableHeaderCell>
+              <TableHeaderCell>Domaines</TableHeaderCell>
+              <TableHeaderCell>Statut</TableHeaderCell>
+              <TableHeaderCell>Actions</TableHeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {profiles.map((profile) => (
+              <TableRow key={profile.id}>
+                <TableCell>
+                  <Link href={`/app/subcontractor-profiles/${profile.id}`} className="font-medium text-tenderos-navy hover:underline">
+                    {profile.legalName}
+                  </Link>
+                </TableCell>
+                <TableCell className="font-mono text-tenderos-slate">{profile.siret ?? "—"}</TableCell>
+                <TableCell className="text-tenderos-slate">{profile.domains ?? "—"}</TableCell>
+                <TableCell>
+                  <Badge tone={SUBCONTRACTOR_PROFILE_STATUS_TONE[profile.status] ?? "neutral"}>{SUBCONTRACTOR_PROFILE_STATUS_LABELS[profile.status]}</Badge>
+                </TableCell>
+                <TableCell>
+                  <Link href={`/app/subcontractor-profiles/${profile.id}`} className="text-tenderos-blue hover:underline">
+                    Ouvrir
+                  </Link>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

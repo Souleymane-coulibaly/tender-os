@@ -9,6 +9,7 @@ import {
 } from "../../../subcontractor-actions";
 import type { SubcontractorInsurance } from "../../../../../lib/subcontractor-types";
 import { INSURANCE_TYPE_LABELS } from "../../../../../lib/company-profile-types";
+import { Button, Card, FieldWrapper, Input } from "../../../../../components/ui";
 
 const INITIAL_STATE: FormActionState = {};
 
@@ -34,91 +35,62 @@ export function SubcontractorInsurancesSection({
   const active = insurances.filter((insurance) => insurance.status !== "ARCHIVED");
 
   return (
-    <div className="flex flex-col gap-4">
-      <h2 className="text-sm font-semibold text-neutral-900">Assurances</h2>
-      {active.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucune assurance enregistrée.</p>
-      ) : (
-        <ul className="flex flex-col gap-2 text-sm">
-          {active.map((insurance) => (
-            <li
-              key={insurance.id}
-              className="flex items-center justify-between rounded border border-neutral-100 px-3 py-2"
-            >
-              <span>
-                <span className="font-medium text-neutral-900">
-                  {(INSURANCE_TYPE_LABELS as Record<string, string>)[insurance.type] ??
-                    insurance.type}
-                </span>
-                {insurance.insurer ? (
-                  <span className="text-neutral-600"> — {insurance.insurer}</span>
-                ) : null}
-                {insurance.expiresAt ? (
-                  <span className="text-neutral-500">
-                    {" "}
-                    (jusqu&apos;au {new Date(insurance.expiresAt).toLocaleDateString("fr-FR")})
-                  </span>
-                ) : null}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleArchive(insurance.id)}
-                disabled={archivingId === insurance.id}
-                className="text-red-700 hover:underline disabled:opacity-50"
+    <Card title="Assurances">
+      <div className="flex flex-col gap-4">
+        {active.length === 0 ? (
+          <p className="text-sm text-tenderos-slate">Aucune assurance enregistrée.</p>
+        ) : (
+          <ul className="flex flex-col gap-2 text-sm">
+            {active.map((insurance) => (
+              <li
+                key={insurance.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-tenderos-navy/10 px-3 py-2"
               >
-                Archiver
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <form action={formAction} className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="type" className="text-xs text-neutral-600">
-            Type *
-          </label>
-          <input
-            id="type"
-            name="type"
-            required
-            placeholder="ex. RC pro"
-            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="insurer" className="text-xs text-neutral-600">
-            Assureur
-          </label>
-          <input
-            id="insurer"
-            name="insurer"
-            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="expiresAt" className="text-xs text-neutral-600">
-            Échéance
-          </label>
-          <input
-            id="expiresAt"
-            name="expiresAt"
-            type="date"
-            className="rounded border border-neutral-300 px-2 py-1.5 text-sm"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {isPending ? "Ajout..." : "Ajouter"}
-        </button>
-        {state.error ? (
-          <p role="alert" className="w-full text-sm text-red-600">
-            {state.error}
-          </p>
-        ) : null}
-      </form>
-    </div>
+                <span>
+                  <span className="font-medium text-tenderos-navy">
+                    {(INSURANCE_TYPE_LABELS as Record<string, string>)[insurance.type] ??
+                      insurance.type}
+                  </span>
+                  {insurance.insurer ? (
+                    <span className="text-tenderos-slate"> — {insurance.insurer}</span>
+                  ) : null}
+                  {insurance.expiresAt ? (
+                    <span className="text-tenderos-slate">
+                      {" "}
+                      (jusqu&apos;au {new Date(insurance.expiresAt).toLocaleDateString("fr-FR")})
+                    </span>
+                  ) : null}
+                </span>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  onClick={() => handleArchive(insurance.id)}
+                  disabled={archivingId === insurance.id}
+                  className="shrink-0"
+                >
+                  Archiver
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action={formAction} className="flex flex-wrap items-end gap-3">
+          <FieldWrapper label="Type *" className="basis-48">
+            <Input id="type" name="type" required placeholder="ex. RC pro" />
+          </FieldWrapper>
+          <Input label="Assureur" id="insurer" name="insurer" wrapperClassName="basis-48" />
+          <Input label="Échéance" id="expiresAt" name="expiresAt" type="date" wrapperClassName="basis-40" />
+          <Button type="submit" disabled={isPending}>
+            {isPending ? "Ajout..." : "Ajouter"}
+          </Button>
+          {state.error ? (
+            <p role="alert" className="w-full text-sm text-danger-fg">
+              {state.error}
+            </p>
+          ) : null}
+        </form>
+      </div>
+    </Card>
   );
 }

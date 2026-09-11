@@ -2,6 +2,7 @@
 
 import { DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { useState } from "react";
+import { Alert } from "../../../../../components/ui";
 import { changeTenderStatusDirectAction } from "../../../actions";
 import { TENDER_STATUS_LABELS, type TenderBoard, type TenderStatus } from "../../../../../lib/tenders-types";
 import { TenderKanbanColumnView } from "./tender-kanban-column";
@@ -71,13 +72,9 @@ export function TenderKanbanBoard({ board, canDrag }: { board: TenderBoard; canD
 
   return (
     <div className="flex flex-col gap-3">
-      {error ? (
-        <div role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-          {error}
-        </div>
-      ) : null}
+      {error ? <Alert tone="danger">{error}</Alert> : null}
       {!canDrag ? (
-        <p className="text-xs italic text-neutral-500">
+        <p className="text-xs italic text-tenderos-slate">
           Lecture seule : votre rôle ne permet pas de changer le statut d&apos;un appel d&apos;offres.
         </p>
       ) : null}

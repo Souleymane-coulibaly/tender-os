@@ -1,3 +1,5 @@
+import type { BadgeTone } from "../components/ui";
+
 export type KnowledgePage<T> = { items: T[]; nextCursor: string | null; total: number };
 
 export type KnowledgeCategory =
@@ -156,20 +158,16 @@ export const KNOWLEDGE_DOCUMENT_STATUS_LABELS: Record<KnowledgeDocumentStatus, s
   FAILED: "Échec",
 };
 
-export function knowledgeStatusBadgeClass(status: KnowledgeEntryStatus): string {
-  switch (status) {
-    case "READY":
-      return "bg-green-100 text-green-800";
-    case "PARTIALLY_READY":
-      return "bg-amber-100 text-amber-800";
-    case "FAILED":
-      return "bg-red-100 text-red-800";
-    case "ARCHIVED":
-      return "bg-neutral-200 text-neutral-700";
-    default:
-      return "bg-blue-100 text-blue-800";
-  }
-}
+/** Ton du `Badge` de statut d'une entrée (design system : une table `STATUT → tone`, jamais des
+ *  classes de badge écrites à la main). */
+export const KNOWLEDGE_STATUS_TONE: Record<KnowledgeEntryStatus, BadgeTone> = {
+  DRAFT: "info",
+  PROCESSING: "info",
+  READY: "success",
+  PARTIALLY_READY: "warning",
+  FAILED: "danger",
+  ARCHIVED: "neutral",
+};
 
 /** Miroir cote UI de ROLE_KNOWLEDGE_PERMISSIONS (knowledge-permission.ts) — sert uniquement a
  *  griser/masquer une action ; la seule autorite reelle reste la revalidation backend. */

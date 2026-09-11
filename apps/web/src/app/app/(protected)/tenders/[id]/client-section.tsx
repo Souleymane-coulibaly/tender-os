@@ -56,7 +56,7 @@ export function ClientSection({
           open ? (
             <form
               action={formAction}
-              className="mt-2 flex w-full min-w-0 flex-col gap-2 rounded-lg border border-amber-200 bg-warning-bg p-3"
+              className="mt-2 flex w-full min-w-0 flex-col gap-2 rounded-lg bg-warning-bg p-3"
             >
               <Select
                 name="clientAccountId"

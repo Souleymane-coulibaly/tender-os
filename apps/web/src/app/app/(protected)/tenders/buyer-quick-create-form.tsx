@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Button, Input } from "../../../../components/ui";
 import { createBuyerAction, type FormActionState } from "../../actions";
 
 const INITIAL_STATE: FormActionState = {};
@@ -18,49 +19,37 @@ export function BuyerQuickCreateForm({ tenderId }: { tenderId?: string }) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="self-start text-xs font-medium text-neutral-700 underline hover:text-neutral-900"
-      >
+      <Button type="button" variant="link" onClick={() => setOpen(true)} className="self-start text-xs">
         + Créer un nouvel acheteur
-      </button>
+      </Button>
     );
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-2 rounded border border-neutral-200 bg-neutral-50 p-3">
+    <form action={formAction} className="flex flex-col gap-2 rounded-lg border border-tenderos-navy/10 bg-tenderos-light p-3">
+      {/* Champs sans libelle visible (placeholder seul, comme avant la migration) : `Input` sans
+          `label` rend le controle nu, `col-span-2` passe donc directement sur le champ. */}
       <div className="grid grid-cols-2 gap-2">
-        <input
-          name="name"
-          type="text"
-          required
-          placeholder="Nom de l'acheteur *"
-          className="col-span-2 rounded border border-neutral-300 px-2 py-1 text-sm"
-        />
-        <input name="siret" type="text" placeholder="SIRET (si connu)" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
-        <input name="city" type="text" placeholder="Ville" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
-        <input name="contactEmail" type="email" placeholder="Email de contact" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
-        <input name="contactPhone" type="text" placeholder="Téléphone de contact" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
+        <Input name="name" type="text" required placeholder="Nom de l'acheteur *" className="col-span-2" />
+        <Input name="siret" type="text" placeholder="SIRET (si connu)" />
+        <Input name="city" type="text" placeholder="Ville" />
+        <Input name="contactEmail" type="email" placeholder="Email de contact" />
+        <Input name="contactPhone" type="text" placeholder="Téléphone de contact" />
       </div>
       {state.error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {state.error}
         </p>
       ) : null}
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-        >
+        <Button type="submit" variant="secondary" size="sm" disabled={isPending}>
           {isPending ? "Création..." : "Créer l'acheteur"}
-        </button>
-        <button type="button" onClick={() => setOpen(false)} className="rounded px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-100">
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
           Annuler
-        </button>
+        </Button>
       </div>
-      <p className="text-xs text-neutral-500">
+      <p className="text-xs text-tenderos-slate">
         L&apos;acheteur cree apparaitra dans la liste deroulante ci-dessus apres actualisation de la page.
       </p>
     </form>

@@ -59,7 +59,7 @@ export function CandidateIdentityForm({ company }: { company: CandidateCompanySu
         Le SIRET se déclare au niveau de l&apos;établissement, dans l&apos;onglet Établissements.
       </p>
       {state.error ? (
-        <p role="alert" className="text-sm text-tenderos-danger">
+        <p role="alert" className="text-sm text-danger-fg">
           {state.error}
         </p>
       ) : null}

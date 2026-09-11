@@ -445,6 +445,48 @@ utilisateur : migration par lots validés un à un ; `DESIGN_SYSTEM.md` rédigé
   affectés en double bordure (tableau dans une carte) ; 9 onglets du profil d'entreprise sur deux
   lignes ; la rubrique « Pricing & prévisions » de la fiche client garde son libellé.
 
+**Homogénéisation visuelle — lot 3 : Base de connaissances, Documents, Sous-traitants, appels
+d'offres (liste, création, Kanban), Validations, Mes tâches, en-tête, fiche AO** (même méthode).
+
+- Pages autonomes : `PageHeader` (fil d'Ariane, statut, action principale), filtres en `Card`,
+  tableaux en `Table`, listes vides en `EmptyState`, sections et formulaires en `Card`, actions
+  destructrices en `danger`. Kanban : colonnes et cartes aux jetons (états de glisser-déposer
+  conservés ; la carte reste un `div` car `Card` ne transmet pas la référence du glisser-déposer).
+  Cloche de notifications et bouton de visite guidée de l'en-tête aux jetons.
+- Tables de tons : statut d'entrée de la base de connaissances, statut de document rattaché,
+  statut de sous-traitant, préparation (Kanban, mêmes seuils), statut de validation ; statut
+  d'appel d'offres : `TenderStatusBadge` existant réutilisé.
+- Fiche AO : les 44 couleurs brutes restantes (encadrés teintés) converties — messages en `Alert`
+  (erreurs, informations manquantes, blocages GO/NO-GO, succès), encadrés contenant un formulaire
+  en fonds d'état (`bg-*-bg`) ; rôles d'accessibilité conservés là où un test les interroge. Les
+  helpers `*BadgeClass` de la fiche AO ne sont pas refondus (chantier distinct).
+- Corrections en chemin : « Créer l'acheteur » ramené en `secondary` (un seul bouton principal) ;
+  compteur des colonnes du Kanban en `info` (contraste) ; **jeton inexistant
+  `text-tenderos-danger`** (6 occurrences, fiche entreprise candidate : messages d'erreur rendus sans
+  couleur, Tailwind ignorant la classe) remplacé par `text-danger-fg` ; 2 couleurs brutes dans des
+  pages migrées avant ce chantier (onglets entreprise candidate, préférences de notification).
+- Garde-fou étendu : tout le dossier `tenders`, les dossiers du lot 3 et les deux composants de
+  l'en-tête ; nouvelles règles « couleur brute » et « jeton inexistant » sur toutes les pages
+  migrées. `DESIGN_SYSTEM.md` mis à jour.
+- Choix assumés : libellés « * » interrogés par les tests gardés en champs natifs ; liens de
+  téléchargement natifs ; lignes dépliables (validations, notifications) en boutons natifs aux
+  jetons ; émoji de la cloche conservé (pas d'icône cloche dans `icons.tsx`).
+- Signalé, non modifié : formulaire d'acheteur imbriqué dans le formulaire de création d'AO (HTML
+  invalide, existant) ; identifiant `expiresAt` en double sur la fiche sous-traitant (existant) ;
+  encadré d'export du mémoire technique toujours en succès même pour un export échoué (existant).
+- Web : typecheck 0, lint 0 erreur, 100/100 fichiers de tests (contrat compris) ; tests ciblés des
+  agents verts (connaissances 24, documents et sous-traitants 6, appels d'offres 15, fiche AO et
+  en-tête 99).
+- Navigateur (serveur local, 1280 px) : 13 pages (listes, créations, recherche, import, Kanban,
+  Validations, Mes tâches) et les 21 onglets de la fiche AO (organisation abonnée) sans page blanche
+  ni écran d'erreur, un seul titre chacune ; fiches connaissance, document et sous-traitant non
+  ouvertes (listes vides dans les données de test). Captures relues : même anatomie partout. Notés :
+  liste des AO serrée à 1280 px (colonnes « Objet » sur plusieurs lignes, badge de statut replié sur
+  deux lignes, colonne Actions atteinte par défilement horizontal) ; les listes déroulantes
+  obligatoires du formulaire de création d'AO gardent la flèche native du navigateur (champs
+  laissés natifs pour les tests) ; l'onglet Dépôt affiche encore le code « BLOCKED » non traduit
+  (existant).
+
 **Abonnement staging désynchronisé de Stripe** (constaté en même temps : « Essai Starter — 0 jours
 restants », échéance au 05/09/2026 déjà passée). Établi : les variables Stripe du service API
 staging sont toutes définies (clé, secret de webhook, 7 prix, `APP_BASE_URL`) et les webhooks
