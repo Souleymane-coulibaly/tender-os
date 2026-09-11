@@ -36,6 +36,17 @@ export async function getAppOrganizationId(): Promise<string | undefined> {
   return cookieStore.get(APP_ORGANIZATION_COOKIE)?.value;
 }
 
+/**
+ * Corps d'une réponse réussie. Une route qui renvoie `null` (ressource facultative encore absente :
+ * groupement, DC1, DC2, DUME, acte d'engagement…) répond 200 avec un corps VIDE — NestJS n'écrit
+ * rien pour `null`. `response.json()` échouerait alors (« Unexpected end of JSON input ») et la page
+ * entière tomberait sur l'écran d'erreur générique : un corps vide vaut donc `null`.
+ */
+async function readJsonBody<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  return (text ? JSON.parse(text) : null) as T;
+}
+
 async function parseErrorBody(response: Response): Promise<never> {
   const body: unknown = await response.json().catch(() => null);
   const errorBody = body as { error?: { code?: string; message?: string; details?: Record<string, unknown> } } | null;
@@ -91,7 +102,7 @@ export async function appApiFetch<T>(path: string, init?: RequestInit, options?:
     return parseErrorBody(response);
   }
 
-  return (await response.json()) as T;
+  return readJsonBody<T>(response);
 }
 
 /**
@@ -139,5 +150,5 @@ export async function appApiFetchWithToken<T>(token: string, path: string, init?
     return parseErrorBody(response);
   }
 
-  return (await response.json()) as T;
+  return readJsonBody<T>(response);
 }

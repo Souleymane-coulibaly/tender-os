@@ -230,6 +230,30 @@ la fiche AO (19 onglets + checklist et vue structurée du dossier administratif)
 exception serveur ; le dossier administratif s'affiche aussi au second chargement (dossier déjà
 créé). Web : typecheck 0, lint 0 erreur, 581/581.
 
+**Dossier structuré (« Groupement, DC1/DC2/DUME, sous-traitance… ») — « Une erreur inattendue est
+survenue. »** (signalé sur staging, reproduit en local avec les deux organisations du seed). Le
+parcours précédent ne cherchait que la page blanche, pas l'écran d'erreur de chargement : il avait
+laissé passer ce défaut, **présent depuis la création de la page (Sprint 8C)**. Cause : les routes
+GET du groupement, du DC1, du DC2, du DUME et de l'acte d'engagement renvoient `null` tant que
+l'élément n'existe pas ; NestJS répond alors 200 avec un corps **vide** (`isNil(body)` →
+`response.send()`), et `appApiFetch` échouait sur `response.json()` (« Unexpected end of JSON
+input ») — erreur qui n'est pas une réponse d'API, d'où l'écran générique, sur tout Tender dont le
+dossier structuré n'est pas encore rempli. Corrigé dans le client (`readJsonBody`, partagé par
+`appApiFetch` et `appApiFetchWithToken`) : un corps vide vaut `null`, ce que la page attend déjà.
+Tests : `app-api-client.test.ts` (nouveau, 5 tests : corps vide, JSON, 204, erreur d'API, variante
+à jeton). `public-api-client` et `platform-api-client` lisent aussi `response.json()` sans garde :
+même risque théorique, non modifiés (aucun cas observé).
+
+Vérification navigateur (organisation abonnée du seed e2e), en détectant cette fois la page blanche
+**et** l'écran d'erreur de chargement : les 21 pages de la fiche AO s'affichent sans erreur (seules
+alertes : les états vides « aucun prompt » sur Générations et « aucun modèle d'export » sur Export) ;
+clic « Groupement, DC1/DC2/DUME… » depuis le dossier administratif → page structurée sans erreur ;
+puis création, section par section, du groupement, du DC1, du DC2, du DUME, d'une sous-traitance
+(DC4), de l'acte d'engagement et d'un pouvoir de signature — chaque action et chaque rechargement
+sans erreur. Organisation sans droit actif : page structurée sans erreur. (Deux premiers passages
+interrompus par l'environnement : mise en veille du poste sur batterie critique à 12:27, redémarrage
+de l'API locale à la reprise — sans lien avec le code.)
+
 E2E collaboration (après le renommage) : 2 réussis, 4 échecs **sans lien avec le renommage** (le
 titre « Espace collaboratif » est bien trouvé). Causes préexistantes, prouvées par l'instantané :
 (1) couplage d'ordre — `collaboration-validations.spec` ajoute déjà les participants sur le même
