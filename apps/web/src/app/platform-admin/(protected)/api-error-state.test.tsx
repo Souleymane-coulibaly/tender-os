@@ -7,7 +7,17 @@ describe("ApiErrorState", () => {
   it("renders an access-denied message for a 403 error", () => {
     render(<ApiErrorState error={new PlatformApiError(403, "PLATFORM_CAPABILITY_MISSING", "Missing capability")} />);
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Accès refusé");
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Vos droits d'administration ne permettent pas cette action.");
+    expect(alert).not.toHaveTextContent("Missing capability");
+  });
+
+  it("renders a French access-denied message for a 403 whose code is unknown, never the raw message", () => {
+    render(<ApiErrorState error={new PlatformApiError(403, "SOME_FUTURE_CODE", "Raw backend text")} />);
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Accès refusé");
+    expect(alert).not.toHaveTextContent("Raw backend text");
   });
 
   it("renders a session-expired message for a 401 error", () => {

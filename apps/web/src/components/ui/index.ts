@@ -8,16 +8,35 @@ export { Dialog } from "./dialog";
 export { Dropdown, DropdownItem } from "./dropdown";
 export { EmptyState } from "./empty-state";
 export { FieldWrapper, fieldControlClasses } from "./field-wrapper";
+export { FileInput } from "./file-input";
 export { FilterBar } from "./filter-bar";
-export { CheckIcon, ChevronDownIcon, CloseIcon, DangerIcon, InfoIcon, TrendDownIcon, TrendUpIcon, WarningIcon } from "./icons";
+export {
+  CheckIcon,
+  ChevronDownIcon,
+  CloseIcon,
+  DangerIcon,
+  InfoIcon,
+  TrendDownIcon,
+  TrendUpIcon,
+  WarningIcon,
+} from "./icons";
 export { Input } from "./input";
 export { PageHeader, type Breadcrumb } from "./page-header";
+export { SearchSelect, type SearchSelectOption } from "./search-select";
 export { Section } from "./section";
 export { Select } from "./select";
 export { CardSkeleton, Skeleton, TableSkeleton } from "./skeleton";
 export { StatCard, type StatVariation, type StatVariationDirection } from "./stat-card";
 export { Switch } from "./switch";
-export { Table, TableBody, TableCell, TableHead, TableHeaderCell, TablePagination, TableRow } from "./table";
+export {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TablePagination,
+  TableRow,
+} from "./table";
 export { TabsNav, type TabItem } from "./tabs-nav";
 export { Textarea } from "./textarea";
 export { ToastProvider, useToast } from "./toast";

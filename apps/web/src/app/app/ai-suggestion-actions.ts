@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { AiSuggestion, ConflictResolution } from "../../lib/ai-suggestion-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type MapSuggestionsResult = { analysisVersion?: number; alreadyMapped: boolean; createdCount: number; skippedCount: number };
 
@@ -15,6 +16,8 @@ export type AiSuggestionActionState = { error?: string; conflict?: boolean };
 function describeAiSuggestionActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] AiSuggestion action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
@@ -23,11 +26,8 @@ function describeAiSuggestionActionError(error: unknown): string {
       case 404:
         return "Cette suggestion n'existe plus ou n'est plus accessible.";
       case 409:
-        if (error.code === "AI_SUGGESTION_ALREADY_PROCESSED") return "Cette suggestion a déjà été traitée.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
-        if (error.code === "AI_SUGGESTION_MERGE_NOT_ALLOWED") return "La fusion n'est pas autorisée pour ce champ — choisissez conserver ou remplacer.";
-        if (error.code === "AI_SUGGESTION_BRIDGE_UNSUPPORTED_ENTITY_TYPE") return "Ce type de suggestion ne peut pas encore être appliqué automatiquement.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

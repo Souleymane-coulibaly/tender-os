@@ -1,16 +1,17 @@
 import { AppApiError } from "../../../lib/app-api-client";
+import { apiErrorMessage, describeApiError } from "../../../lib/api-error-messages";
 
 /**
  * État "erreur" / "accès refusé" partagé par les pages de l'espace organisation — même
- * motif que platform-admin/(protected)/api-error-state.tsx. N'affiche jamais le détail
- * technique brut, seulement le message déjà pensé pour l'utilisateur final côté API.
+ * motif que platform-admin/(protected)/api-error-state.tsx. N'affiche jamais le texte renvoyé
+ * par l'API : le message vient de la table française des codes d'erreur (lib/api-error-messages.ts).
  */
 export function ApiErrorState({ error }: { error: unknown }) {
   if (error instanceof AppApiError) {
     if (error.status === 404) {
       return (
         <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
-          Introuvable ou accès refusé : {error.message}
+          {apiErrorMessage(error) ?? "Cet élément est introuvable, ou vous n'y avez pas accès."}
         </div>
       );
     }
@@ -38,7 +39,7 @@ export function ApiErrorState({ error }: { error: unknown }) {
 
     return (
       <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm">
-        {error.message}
+        {describeApiError(error)}
       </div>
     );
   }

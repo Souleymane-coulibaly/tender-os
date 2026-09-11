@@ -87,7 +87,7 @@ describe("generation-actions", () => {
 
       const result = await createPromptTemplateAction({}, formData);
 
-      expect(result.error).toBe("Un template existe déjà pour ce type de tâche.");
+      expect(result.error).toBe("Un modèle de prompt existe déjà pour ce type de contenu dans votre organisation.");
       expect(redirectMock).not.toHaveBeenCalled();
     });
   });
@@ -135,7 +135,7 @@ describe("generation-actions", () => {
 
       const result = await activatePromptVersionAction("template-1", "version-1");
 
-      expect(result.error).toBe("Une autre activation est déjà en cours ; réessayez.");
+      expect(result.error).toBe("Une autre activation de ce modèle est en cours. Réessayez dans un instant.");
     });
 
     it("archives a template and revalidates both the list and the detail page", async () => {
@@ -168,7 +168,7 @@ describe("generation-actions", () => {
 
       const result = await launchGenerationAction("tender-1", "EXECUTIVE_SUMMARY");
 
-      expect(result.error).toBe("Une génération est déjà en cours pour cette tâche.");
+      expect(result.error).toBe("Une génération est déjà en cours pour ce contenu.");
       expect(result.generationId).toBeUndefined();
     });
 
@@ -177,7 +177,7 @@ describe("generation-actions", () => {
 
       const result = await launchGenerationAction("tender-1", "EXECUTIVE_SUMMARY");
 
-      expect(result.error).toBe("Cette action entre en conflit avec l'état actuel de la ressource.");
+      expect(result.error).toBe("Aucune règle de choix du modèle n'est active pour ce contenu. Demandez à un administrateur d'en activer une.");
       expect(result.error).not.toContain("NO_ACTIVE_ROUTING_POLICY");
     });
 
@@ -255,7 +255,7 @@ describe("generation-actions", () => {
 
       const result = await rejectGenerationAction("tender-1", "gen-1");
 
-      expect(result.error).toBe("Cette génération a déjà été validée et ne peut plus être rejetée.");
+      expect(result.error).toBe("Cette génération a déjà été validée : elle ne peut plus être rejetée.");
     });
 
     it("maps a 409 GENERATION_NOT_REJECTABLE to a comprehensible French message", async () => {
@@ -263,7 +263,7 @@ describe("generation-actions", () => {
 
       const result = await rejectGenerationAction("tender-1", "gen-1");
 
-      expect(result.error).toBe("Seule une génération produite peut être rejetée.");
+      expect(result.error).toBe("Seule une génération terminée avec succès peut être rejetée.");
     });
 
     it("maps a 404 to a comprehensible French message (cross-tenant/cross-client)", async () => {
@@ -271,7 +271,7 @@ describe("generation-actions", () => {
 
       const result = await rejectGenerationAction("tender-1", "gen-1");
 
-      expect(result.error).toBe("Ressource introuvable.");
+      expect(result.error).toBe("Cette génération est introuvable.");
     });
 
     it("maps a 403 to a comprehensible French message (not the actor's own generation)", async () => {
@@ -279,7 +279,7 @@ describe("generation-actions", () => {
 
       const result = await rejectGenerationAction("tender-1", "gen-1");
 
-      expect(result.error).toBe("Vous n'avez pas les droits nécessaires pour cette action.");
+      expect(result.error).toBe("Vous ne pouvez valider ou rejeter que les générations que vous avez lancées.");
     });
   });
 });

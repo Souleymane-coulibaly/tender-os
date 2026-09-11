@@ -3,12 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { TenderSubmissionCapabilities, TenderSubmissionReadinessResult, TenderSubmissionSummary } from "../../lib/submission-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
 function describeSubmissionActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Submission action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -19,18 +22,8 @@ function describeSubmissionActionError(error: unknown): string {
       case 404:
         return "Ressource introuvable.";
       case 409:
-        if (error.code === "ACTIVE_TENDER_SUBMISSION_ALREADY_EXISTS") return "Une soumission est déjà en cours pour ce marché — remplacez-la explicitement avant d'en enregistrer une nouvelle.";
-        if (error.code === "TENDER_SUBMISSION_ALREADY_REPLACED") return "Cette soumission a déjà été remplacée.";
-        if (error.code === "INVALID_TENDER_SUBMISSION_STATUS_TRANSITION") return "Cette transition de statut n'est plus possible dans l'état actuel — rechargez la page.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
-        if (error.code === "SUBMISSION_PACKAGE_MISSING") return "Le package final est introuvable.";
-        if (error.code === "SUBMISSION_PACKAGE_OUTDATED") return "Ce package n'est plus à jour. Générez une nouvelle version avant d'enregistrer le dépôt.";
-        if (error.code === "SUBMISSION_PACKAGE_VERSION_MISMATCH") return "Cette version du package ne correspond pas au dossier.";
-        if (error.code === "SUBMISSION_DEADLINE_PASSED") return "La date limite de dépôt est dépassée.";
-        if (error.code === "TENDER_NOT_READY_FOR_SUBMISSION") return "Le dossier n'est pas prêt pour le dépôt.";
-        if (error.code === "RECEIPT_CONFIRMATION_REQUIRES_EVIDENCE") return "Ajoutez une référence de reçu ou une preuve avant de confirmer, ou confirmez explicitement sans preuve.";
-        if (error.code === "DOCUMENT_NOT_USABLE_FOR_SUBMISSION_PROOF") return "Ce document ne peut pas être utilisé comme preuve (introuvable ou sans version exploitable).";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

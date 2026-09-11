@@ -19,10 +19,11 @@ import { EntitlementUpgradeNotice } from "../../../entitlement-upgrade-notice";
 import {
   APPROVAL_ENTITY_TYPE_LABELS,
   APPROVAL_STATUS_LABELS,
-  canManageWorkspace,
-  canValidateWorkspaceOrgTier,
+  TASK_PRIORITY_LABELS,
   TASK_STATUS_LABELS,
   TENDER_COLLABORATIVE_ROLE_LABELS,
+  canManageWorkspace,
+  canValidateWorkspaceOrgTier,
   type ApprovalRequest,
   type Comment,
   type Task,
@@ -231,7 +232,9 @@ function TaskRow({
         <div className="flex flex-col gap-0.5">
           <span className="font-medium text-tenderos-navy">{task.title}</span>
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-tenderos-slate">
-            <span className="rounded bg-tenderos-light px-1.5 py-0.5">{task.priority}</span>
+            <span className="rounded bg-tenderos-light px-1.5 py-0.5">
+              {TASK_PRIORITY_LABELS[task.priority]}
+            </span>
             <span>Responsable : {getName(task.assigneeId)}</span>
             {task.dueDate ? (
               <span>Échéance : {new Date(task.dueDate).toLocaleDateString("fr-FR")}</span>
@@ -469,7 +472,7 @@ function TasksPanel({
           <Select name="priority" defaultValue="MEDIUM">
             {PRIORITIES.map((priority) => (
               <option key={priority} value={priority}>
-                {priority}
+                {TASK_PRIORITY_LABELS[priority]}
               </option>
             ))}
           </Select>

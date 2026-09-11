@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { CostComparison, PreviewGenerationCostResult, PricingEstimateSummary } from "../../lib/pricing-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
@@ -23,6 +24,8 @@ export type PricingAssumptionsInput = {
 function describePricingActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Pricing action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -33,8 +36,6 @@ function describePricingActionError(error: unknown): string {
       case 404:
         return "Ressource introuvable.";
       case 409:
-        if (error.code === "PRICING_ESTIMATE_ARCHIVED") return "Cette estimation est archivée et ne peut plus être recalculée.";
-        if (error.code === "PRICING_ESTIMATE_CONCURRENT_RECALCULATION") return "Un autre recalcul est en cours ; rechargez et réessayez.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
         return "Certaines hypothèses sont invalides (vérifiez les montants et volumes saisis).";

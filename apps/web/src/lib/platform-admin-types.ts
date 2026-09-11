@@ -39,3 +39,18 @@ export type PlatformMetrics = {
   usersByStatus: Record<string, number>;
   platformAdministratorsByRole: Record<string, number>;
 };
+
+/** Statut d'une organisation. */
+export const ORGANIZATION_STATUS_LABELS: Record<string, string> = {
+  TRIAL: "Essai",
+  ACTIVE: "Active",
+  SUSPENDED: "Suspendue",
+  CLOSED: "Fermée",
+};
+
+/** Résultat d'une action journalisée — un résultat inconnu s'affiche tel quel, jamais masqué. */
+export const PLATFORM_AUDIT_RESULT_LABELS: Record<string, string> = {
+  SUCCESS: "Réussi",
+  FAILURE: "Échec",
+  DENIED: "Refusé",
+};

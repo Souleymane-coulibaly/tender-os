@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { Conversation, Message } from "../../lib/chat-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type ChatActionState = { error?: string };
 
@@ -11,6 +12,8 @@ export type ChatActionState = { error?: string };
 function describeChatActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Chat action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
@@ -19,8 +22,6 @@ function describeChatActionError(error: unknown): string {
       case 404:
         return "Introuvable ou accès refusé.";
       case 409:
-        if (error.code === "CONVERSATION_GENERATION_IN_PROGRESS") return "Une réponse est déjà en cours de génération pour cette conversation. Veuillez patienter.";
-        if (error.code === "CONVERSATION_ARCHIVED") return "Cette conversation est archivée et ne peut plus recevoir de message.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
         return "Certains champs sont invalides.";

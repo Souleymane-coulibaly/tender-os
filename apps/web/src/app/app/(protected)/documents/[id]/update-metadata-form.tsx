@@ -12,7 +12,7 @@ export function UpdateMetadataForm({ document }: { document: DocumentSummary }) 
 
   return (
     <form action={formAction} className="flex flex-col gap-3 rounded border border-neutral-200 p-4">
-      <h2 className="text-sm font-semibold text-neutral-700">Modifier les metadonnees</h2>
+      <h2 className="text-sm font-semibold text-neutral-700">Modifier les métadonnées</h2>
       <div className="flex flex-col gap-1">
         <label htmlFor="title" className="text-xs text-neutral-600">
           Titre
@@ -57,7 +57,7 @@ export function UpdateMetadataForm({ document }: { document: DocumentSummary }) 
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="category" className="text-xs text-neutral-600">
-            Categorie
+            Catégorie
           </label>
           <input
             id="category"

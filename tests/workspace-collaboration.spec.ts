@@ -144,7 +144,7 @@ test.describe("Workspace collaboratif — isolation multi-tenant", () => {
 
     await page.goto(`/app/tenders/${fixture.tenderId}/workspace`);
 
-    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("Introuvable ou accès refusé");
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText(/introuvable/i);
     await expect(page.getByRole("heading", { name: "Workspace collaboratif" })).not.toBeVisible();
     await expect(page.getByText("Préparer les pièces administratives")).not.toBeVisible();
   });
@@ -161,7 +161,7 @@ test.describe("Workspace collaboratif — isolation multi-tenant", () => {
 
     await page.goto(`/app/tenders/${fixture.tenderInOtherClientId}/workspace`);
 
-    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("Introuvable ou accès refusé");
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText(/introuvable/i);
     await expect(page.getByRole("heading", { name: "Workspace collaboratif" })).not.toBeVisible();
 
     // Preuve inverse : le même compte PEUT bien ouvrir le Workspace du Tender de son propre client

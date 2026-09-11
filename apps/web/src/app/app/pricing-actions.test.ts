@@ -74,13 +74,13 @@ describe("pricing-actions", () => {
     it("maps a 422 to a French message about invalid assumptions", async () => {
       appApiFetchMock.mockRejectedValue(new FakeAppApiError(422, "INVALID_PRICING_ASSUMPTION", "invalid"));
       const result = await createPricingEstimateAction("tender-1", undefined, {});
-      expect(result.error).toBe("Certaines hypothèses sont invalides (vérifiez les montants et volumes saisis).");
+      expect(result.error).toBe("Une hypothèse de l'estimation n'est pas valide.");
     });
 
     it("maps a 404 (cross-tenant/cross-client) to a French message", async () => {
       appApiFetchMock.mockRejectedValue(new FakeAppApiError(404, "TENDER_NOT_FOUND", "not found"));
       const result = await createPricingEstimateAction("tender-1", undefined, {});
-      expect(result.error).toBe("Ressource introuvable.");
+      expect(result.error).toBe("Cet appel d'offres est introuvable.");
     });
   });
 
@@ -103,13 +103,13 @@ describe("pricing-actions", () => {
     it("maps a 409 PRICING_ESTIMATE_ARCHIVED to a comprehensible French message", async () => {
       appApiFetchMock.mockRejectedValue(new FakeAppApiError(409, "PRICING_ESTIMATE_ARCHIVED", "archived"));
       const result = await recalculatePricingEstimateAction("tender-1", "estimate-1", undefined, {}, "x");
-      expect(result.error).toBe("Cette estimation est archivée et ne peut plus être recalculée.");
+      expect(result.error).toBe("Cette estimation est archivée : elle ne peut plus être recalculée.");
     });
 
     it("maps a 409 PRICING_ESTIMATE_CONCURRENT_RECALCULATION to a comprehensible French message", async () => {
       appApiFetchMock.mockRejectedValue(new FakeAppApiError(409, "PRICING_ESTIMATE_CONCURRENT_RECALCULATION", "conflict"));
       const result = await recalculatePricingEstimateAction("tender-1", "estimate-1", undefined, {}, "x");
-      expect(result.error).toBe("Un autre recalcul est en cours ; rechargez et réessayez.");
+      expect(result.error).toBe("Un autre recalcul de cette estimation est en cours. Rechargez la page et réessayez.");
     });
   });
 

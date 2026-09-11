@@ -60,7 +60,9 @@ export function isReadyForAnalysis(status: DceDocumentProcessingStatus): boolean
   return status === "READY_FOR_ANALYSIS" || status === "READY_FOR_ANALYSIS_WITH_WARNINGS";
 }
 
-export type DceImportRejection = { originalFilename: string; reason: string };
+/** `code` : à traduire (lib/api-error-messages.ts) ; `reason` : détail technique de l'API, jamais
+ *  affiché. `code` manque sur un résultat d'import ZIP enregistré avant son introduction. */
+export type DceImportRejection = { originalFilename: string; code?: string; reason: string };
 
 export type DceImportResult = {
   accepted: DceDocumentSummary[];

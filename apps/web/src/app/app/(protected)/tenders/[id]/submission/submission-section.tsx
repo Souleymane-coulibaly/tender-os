@@ -25,6 +25,7 @@ import {
 import { Button } from "../../../../../../components/ui/button";
 import { Input } from "../../../../../../components/ui/input";
 import { Select } from "../../../../../../components/ui/select";
+import { FileInput } from "../../../../../../components/ui/file-input";
 
 const PLATFORM_REQUIRING_CUSTOM_NAME = new Set(["OTHER", "PLATEFORME_ACHETEUR"]);
 const IN_FLIGHT_STATUSES = new Set(["SUBMISSION_IN_PROGRESS", "SUBMITTED", "RECEIPT_CONFIRMED"]);
@@ -322,10 +323,10 @@ function ProofUploadForm({
           ))}
         </Select>
       </label>
-      <label className="flex flex-col gap-1 text-tenderos-slate">
-        Fichier
-        <Input type="file" name="file" required />
-      </label>
+      <div className="flex flex-col gap-1 text-tenderos-slate">
+        <span>Fichier</span>
+        <FileInput name="file" required aria-label="Fichier de preuve" />
+      </div>
       <Button type="submit" disabled={isPending} variant="secondary" size="sm">
         Ajouter la preuve
       </Button>

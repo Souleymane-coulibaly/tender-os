@@ -290,14 +290,27 @@ async function main(): Promise<void> {
 
     const other = await createOrgWithOwnerAndTender({ runId, label: "other", passwordHasher, userRepository, membershipRepository, prisma });
 
+    // Parcours DCE du Cockpit — les opérations « cœur AO » (initialiser/importer le DCE, analyser)
+    // exigent un droit actif (abonnement, essai ou Pass : P2.3-E1.3). L'organisation principale n'en
+    // a VOLONTAIREMENT aucun (`billing-subscription.spec.ts` prouve l'écran « sans offre active ») :
+    // ce parcours a donc sa propre organisation, abonnée, plutôt que de changer le sens de l'autre.
+    const cockpit = await createOrgWithOwnerAndTender({ runId, label: "cockpit", passwordHasher, userRepository, membershipRepository, prisma });
+    await prisma.organizationSubscription.create({
+      data: { id: randomUUID(), organizationId: cockpit.organizationId, planTier: "ENTERPRISE", billingInterval: "MONTHLY", status: "ACTIVE", source: "MANUAL" },
+    });
+    await prisma.tender.update({ where: { id: cockpit.tenderId }, data: { candidateCompanyId: cockpit.candidateCompanyId } });
+
     // V2 Sprint 5 (GO/NO-GO IA) — un second Tender de la MÊME organisation, avec une analyse IA du
     // DCE déjà réussie (`TenderAnalysisSummary` + `AnalysisJob` seedés directement, sans dépendre
     // d'une clé API IA réelle — absente de cet environnement Playwright, voir `cockpit.spec.ts`).
     // Donne au scénario E2E Niveau 2 (`opportunity-go-no-go.spec.ts`) un Tender pour lequel générer
     // un vrai `GoNoGoReport` via l'UI, sans jamais simuler la génération elle-même côté test.
+    // CCV2-I — le rapprochement documentaire de la checklist exige l'entreprise candidate du Tender
+    // (`CANDIDATE_COMPANY_REQUIRED`) : ce Tender « courant » en porte une, comme tout Tender créé par
+    // le produit. Seul `legacyTenderId` ci-dessus reste volontairement sans candidat.
     const tenderWithAnalysisId = randomUUID();
     await prisma.tender.create({
-      data: { id: tenderWithAnalysisId, organizationId, clientAccountId, title: `Marché Playwright avec analyse ${runId}`, status: "IN_ANALYSIS", tags: [], createdBy: userId },
+      data: { id: tenderWithAnalysisId, organizationId, clientAccountId, candidateCompanyId, title: `Marché Playwright avec analyse ${runId}`, status: "IN_ANALYSIS", tags: [], createdBy: userId },
     });
     const analysisJobId = randomUUID();
     await prisma.analysisJob.create({
@@ -388,6 +401,7 @@ async function main(): Promise<void> {
         secondCandidateCompanyId,
         legacyTenderId,
         other,
+        cockpit,
       }),
     );
   } finally {

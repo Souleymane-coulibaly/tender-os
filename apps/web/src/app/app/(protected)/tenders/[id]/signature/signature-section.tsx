@@ -30,6 +30,7 @@ import type { ExportJobSummary } from "../../../../../../lib/export-types";
 import { Button } from "../../../../../../components/ui/button";
 import { Input } from "../../../../../../components/ui/input";
 import { Select } from "../../../../../../components/ui/select";
+import { FileInput } from "../../../../../../components/ui/file-input";
 
 function RequirementsPanel({
   tenderId,
@@ -487,9 +488,9 @@ function TransactionRow({
           <span className="text-xs text-tenderos-slate">
             Ou importer manuellement un document déjà signé :
           </span>
-          <Input
-            type="file"
+          <FileInput
             accept="application/pdf"
+            aria-label="Document signé (PDF)"
             onChange={(e) => setImportFile(e.target.files?.[0])}
           />
           <Button

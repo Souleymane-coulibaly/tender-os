@@ -10,7 +10,11 @@ import {
   markMilestoneDoneAction,
   type FormActionState,
 } from "../../../actions";
-import type { Milestone, MilestoneType } from "../../../../../lib/tenders-types";
+import {
+  MILESTONE_TYPE_LABELS,
+  type Milestone,
+  type MilestoneType,
+} from "../../../../../lib/tenders-types";
 
 const INITIAL_STATE: FormActionState = {};
 const TYPES: MilestoneType[] = [
@@ -80,10 +84,10 @@ export function MilestonesSection({
   const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
 
   return (
-    <Card title="Echeances">
+    <Card title="Échéances">
       <div className="flex flex-col gap-2">
         {milestones.length === 0 ? (
-          <p className="text-sm text-tenderos-slate">Aucune echeance.</p>
+          <p className="text-sm text-tenderos-slate">Aucune échéance.</p>
         ) : (
           <ul>
             {milestones.map((milestone) => (
@@ -103,22 +107,26 @@ export function MilestonesSection({
             name="date"
             type="date"
             required
-            aria-label="Date de l'echeance"
+            aria-label="Date de l'échéance"
             className="shrink-0 grow-0 basis-36"
           />
-          {/* Largeur portee par un conteneur : `Select` sans `label` ignore `wrapperClassName`. */}
-          <div className="shrink-0 grow-0 basis-44">
-            <Select name="type" defaultValue="CUSTOM" aria-label="Type d'echeance">
-              {TYPES.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </Select>
+          {/* W4 — type et bouton passent à la ligne ENSEMBLE : mesuré à 1512 px, la rangée demandait
+              570 px pour 550 disponibles et « Ajouter » glissait seul sur une ligne. */}
+          <div className="flex shrink-0 grow-0 items-end gap-2">
+            {/* Largeur portee par un conteneur : `Select` sans `label` ignore `wrapperClassName`. */}
+            <div className="w-44">
+              <Select name="type" defaultValue="CUSTOM" aria-label="Type d'échéance">
+                {TYPES.map((value) => (
+                  <option key={value} value={value}>
+                    {MILESTONE_TYPE_LABELS[value]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <Button type="submit" size="sm" loading={isPending}>
+              Ajouter
+            </Button>
           </div>
-          <Button type="submit" size="sm" loading={isPending}>
-            Ajouter
-          </Button>
           {state.error ? (
             <p role="alert" className="text-xs text-danger-fg">
               {state.error}

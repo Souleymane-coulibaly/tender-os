@@ -8,6 +8,8 @@ import {
   platformApiFetch,
   platformApiFetchWithToken,
 } from "../../lib/platform-api-client";
+import { describeApiError } from "../../lib/api-error-messages";
+import { describeLoginFailure } from "../../lib/login-error";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
@@ -34,7 +36,7 @@ export async function loginAction(_prevState: LoginActionState, formData: FormDa
   });
 
   if (!loginResponse.ok) {
-    return { error: "Identifiants invalides." };
+    return { error: await describeLoginFailure(loginResponse) };
   }
 
   const loginBody = (await loginResponse.json()) as { accessToken: string; expiresAt: string };
@@ -88,7 +90,8 @@ export async function suspendOrganizationAction(
       body: JSON.stringify(typeof reason === "string" && reason.trim() ? { reason: reason.trim() } : {}),
     });
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Une erreur est survenue." };
+    console.error("[TenderOS] Platform Admin suspend action failed:", error);
+    return { error: describeApiError(error) };
   }
 
   revalidatePath(`/platform-admin/organizations/${organizationId}`);
@@ -101,7 +104,8 @@ export async function reactivateOrganizationAction(organizationId: string): Prom
   try {
     await platformApiFetch(`/api/v1/admin/organizations/${organizationId}/reactivate`, { method: "POST" });
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Une erreur est survenue." };
+    console.error("[TenderOS] Platform Admin reactivate action failed:", error);
+    return { error: describeApiError(error) };
   }
 
   revalidatePath(`/platform-admin/organizations/${organizationId}`);

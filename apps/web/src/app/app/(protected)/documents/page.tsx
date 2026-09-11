@@ -70,13 +70,13 @@ export default async function DocumentsLibraryPage({ searchParams }: { searchPar
             <thead>
               <tr className="border-b border-neutral-200 text-left text-neutral-500">
                 <th className="py-2 pr-4">Titre</th>
-                <th className="py-2 pr-4">Categorie</th>
+                <th className="py-2 pr-4">Catégorie</th>
                 <th className="py-2 pr-4">Domaine</th>
                 <th className="py-2 pr-4">Origine</th>
                 <th className="py-2 pr-4">Statut</th>
                 <th className="py-2 pr-4">Version</th>
                 <th className="py-2 pr-4">Taille</th>
-                <th className="py-2 pr-4">Modifie le</th>
+                <th className="py-2 pr-4">Modifié le</th>
               </tr>
             </thead>
             <tbody>

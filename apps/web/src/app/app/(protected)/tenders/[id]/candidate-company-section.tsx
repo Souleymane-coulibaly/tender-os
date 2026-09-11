@@ -111,7 +111,7 @@ export function CandidateCompanySection({
               wrapperClassName="w-full min-w-0"
             >
               <option value="" disabled>
-                Selectionner...
+                Sélectionner...
               </option>
               {otherCandidates.map((company) => (
                 <option key={company.id} value={company.id}>

@@ -7,7 +7,11 @@ import { Card } from "../../../../../components/ui/card";
 import { Input } from "../../../../../components/ui/input";
 import { Select } from "../../../../../components/ui/select";
 import { createAlertAction, resolveAlertAction, type FormActionState } from "../../../actions";
-import type { Alert, AlertSeverity } from "../../../../../lib/tenders-types";
+import {
+  ALERT_SEVERITY_LABELS,
+  type Alert,
+  type AlertSeverity,
+} from "../../../../../lib/tenders-types";
 
 const INITIAL_STATE: FormActionState = {};
 const SEVERITIES: AlertSeverity[] = ["INFO", "WARNING", "CRITICAL"];
@@ -32,7 +36,7 @@ function AlertRow({ tenderId, alert }: { tenderId: string; alert: Alert }) {
   return (
     <li className="flex items-center justify-between gap-3 border-b border-tenderos-navy/10 py-2 text-sm">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Badge tone={SEVERITY_TONE[alert.severity]}>{alert.severity}</Badge>
+        <Badge tone={SEVERITY_TONE[alert.severity]}>{ALERT_SEVERITY_LABELS[alert.severity]}</Badge>
         <span className="text-tenderos-navy">{alert.message}</span>
         {resolved ? <span className="text-xs text-success-fg">resolue</span> : null}
         {error ? (
@@ -59,7 +63,7 @@ function AlertRow({ tenderId, alert }: { tenderId: string; alert: Alert }) {
             }
           }}
         >
-          Resoudre
+          Résoudre
         </Button>
       ) : null}
     </li>
@@ -93,10 +97,10 @@ export function AlertsSection({ tenderId, alerts }: { tenderId: string; alerts: 
           {/* `Select` sans `label` rend le controle nu et n'applique PAS `wrapperClassName` — la
               largeur doit donc etre portee par un conteneur explicite, jamais par cette prop. */}
           <div className="shrink-0 grow-0 basis-36">
-            <Select name="severity" defaultValue="WARNING" aria-label="Gravite de l'alerte">
+            <Select name="severity" defaultValue="WARNING" aria-label="Gravité de l'alerte">
               {SEVERITIES.map((value) => (
                 <option key={value} value={value}>
-                  {value}
+                  {ALERT_SEVERITY_LABELS[value]}
                 </option>
               ))}
             </Select>

@@ -14,6 +14,7 @@ import type {
   TenderCollaborativeRole,
   TenderParticipant,
 } from "../../lib/workspace-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type WorkspaceActionState = { error?: string };
 
@@ -22,24 +23,18 @@ export type WorkspaceActionState = { error?: string };
 function describeWorkspaceActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Workspace action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
       case 403:
-        if (error.code === "COMMENT_EDIT_FORBIDDEN") return "Seul l'auteur peut modifier ce commentaire.";
         return "Vous n'avez pas les droits nécessaires pour cette action.";
       case 404:
         return "Introuvable ou accès refusé.";
       case 409:
-        if (error.code === "TENDER_PARTICIPANT_ALREADY_ACTIVE") return "Cet utilisateur est déjà participant de ce Tender.";
-        if (error.code === "APPROVAL_REQUEST_ALREADY_REVIEWED") return "Cette demande de validation a déjà été traitée.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
-        if (error.code === "INVALID_TASK_ASSIGNEE") return "Le responsable doit être un participant actif de ce Tender.";
-        if (error.code === "INVALID_MENTION_TARGET") return "Cet utilisateur ne peut pas être mentionné : il n'a pas accès à ce Tender.";
-        if (error.code === "APPROVAL_AUTO_VALIDATION_FORBIDDEN") return "Vous ne pouvez pas être votre propre validateur.";
-        if (error.code === "TENDER_PARTICIPANT_BYPASS_JUSTIFICATION_REQUIRED") return "Une justification est requise pour cette affectation.";
-        if (error.code === "INVALID_TENDER_PARTICIPANT_CANDIDATE") return "Cet utilisateur ne peut pas être affecté à ce Tender.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

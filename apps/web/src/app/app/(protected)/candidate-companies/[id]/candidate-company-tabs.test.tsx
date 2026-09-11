@@ -68,7 +68,7 @@ describe("CCV2-F — fiche CandidateCompany pilotée par les permissions", () =>
 
   it("les onglets métier restent accessibles à tous les rôles en lecture", () => {
     render(<CandidateCompanyTabs dossier={buildDossier()} capabilities={resolveCandidateUiCapabilities("READ_ONLY")} />);
-    for (const label of ["Vue d'ensemble", "Identité", "Établissements", "Représentants", "Certifications", "Documents"]) {
+    for (const label of ["Vue d'ensemble", "Identité", "Établissements", "Représentants", "Certifications", "Documents de candidature"]) {
       expect(screen.getByRole("button", { name: label })).toBeTruthy();
     }
   });

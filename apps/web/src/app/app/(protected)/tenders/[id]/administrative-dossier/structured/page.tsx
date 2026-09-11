@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { appApiFetch } from "../../../../../../../lib/app-api-client";
 import type {
+  AdministrativeDocumentListItem,
   AdministrativeDossierCapabilities,
   ConsortiumSummary,
   Dc1DeclarationSummary,
@@ -37,31 +38,44 @@ export default async function AdministrativeStructuredPage({
   const { id: tenderId } = await params;
 
   try {
-    const [capabilities, consortium, dc1, dc2, dume, subcontractors, engagementAct, signingPowers] =
-      await Promise.all([
-        appApiFetch<AdministrativeDossierCapabilities>(
-          `/api/v1/tenders/${tenderId}/administrative-dossier/capabilities`,
-        ),
-        fetchOrNull<ConsortiumSummary | null>(
-          `/api/v1/tenders/${tenderId}/administrative-consortium`,
-        ),
-        fetchOrNull<Dc1DeclarationSummary | null>(`/api/v1/tenders/${tenderId}/administrative-dc1`),
-        fetchOrNull<Dc2DeclarationWithVersions | null>(
-          `/api/v1/tenders/${tenderId}/administrative-dc2`,
-        ),
-        fetchOrNull<DumeDeclarationWithVersions | null>(
-          `/api/v1/tenders/${tenderId}/administrative-dume`,
-        ),
-        appApiFetch<SubcontractorDeclarationSummary[]>(
-          `/api/v1/tenders/${tenderId}/administrative-subcontractors`,
-        ),
-        fetchOrNull<EngagementActSummary | null>(
-          `/api/v1/tenders/${tenderId}/administrative-engagement-act`,
-        ),
-        appApiFetch<SigningPowerSummary[]>(
-          `/api/v1/tenders/${tenderId}/administrative-signing-powers`,
-        ),
-      ]);
+    const [
+      capabilities,
+      consortium,
+      dc1,
+      dc2,
+      dume,
+      subcontractors,
+      engagementAct,
+      signingPowers,
+      administrativeDocuments,
+    ] = await Promise.all([
+      appApiFetch<AdministrativeDossierCapabilities>(
+        `/api/v1/tenders/${tenderId}/administrative-dossier/capabilities`,
+      ),
+      fetchOrNull<ConsortiumSummary | null>(
+        `/api/v1/tenders/${tenderId}/administrative-consortium`,
+      ),
+      fetchOrNull<Dc1DeclarationSummary | null>(`/api/v1/tenders/${tenderId}/administrative-dc1`),
+      fetchOrNull<Dc2DeclarationWithVersions | null>(
+        `/api/v1/tenders/${tenderId}/administrative-dc2`,
+      ),
+      fetchOrNull<DumeDeclarationWithVersions | null>(
+        `/api/v1/tenders/${tenderId}/administrative-dume`,
+      ),
+      appApiFetch<SubcontractorDeclarationSummary[]>(
+        `/api/v1/tenders/${tenderId}/administrative-subcontractors`,
+      ),
+      fetchOrNull<EngagementActSummary | null>(
+        `/api/v1/tenders/${tenderId}/administrative-engagement-act`,
+      ),
+      appApiFetch<SigningPowerSummary[]>(
+        `/api/v1/tenders/${tenderId}/administrative-signing-powers`,
+      ),
+      // Source du sélecteur « document preuve » des pouvoirs de signature.
+      appApiFetch<AdministrativeDocumentListItem[]>(
+        "/api/v1/tenders/" + tenderId + "/administrative-documents",
+      ),
+    ]);
 
     return (
       <div className="flex flex-col gap-4">
@@ -82,6 +96,7 @@ export default async function AdministrativeStructuredPage({
           subcontractors={subcontractors}
           engagementAct={engagementAct}
           signingPowers={signingPowers}
+          administrativeDocuments={administrativeDocuments}
         />
       </div>
     );

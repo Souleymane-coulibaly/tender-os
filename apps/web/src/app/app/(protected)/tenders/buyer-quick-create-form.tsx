@@ -23,7 +23,7 @@ export function BuyerQuickCreateForm({ tenderId }: { tenderId?: string }) {
         onClick={() => setOpen(true)}
         className="self-start text-xs font-medium text-neutral-700 underline hover:text-neutral-900"
       >
-        + Creer un nouvel acheteur
+        + Créer un nouvel acheteur
       </button>
     );
   }
@@ -41,7 +41,7 @@ export function BuyerQuickCreateForm({ tenderId }: { tenderId?: string }) {
         <input name="siret" type="text" placeholder="SIRET (si connu)" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
         <input name="city" type="text" placeholder="Ville" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
         <input name="contactEmail" type="email" placeholder="Email de contact" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
-        <input name="contactPhone" type="text" placeholder="Telephone de contact" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
+        <input name="contactPhone" type="text" placeholder="Téléphone de contact" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
       </div>
       {state.error ? (
         <p role="alert" className="text-xs text-red-600">
@@ -54,7 +54,7 @@ export function BuyerQuickCreateForm({ tenderId }: { tenderId?: string }) {
           disabled={isPending}
           className="rounded bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
         >
-          {isPending ? "Creation..." : "Creer l'acheteur"}
+          {isPending ? "Création..." : "Créer l'acheteur"}
         </button>
         <button type="button" onClick={() => setOpen(false)} className="rounded px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-100">
           Annuler

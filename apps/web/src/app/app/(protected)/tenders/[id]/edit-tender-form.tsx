@@ -68,7 +68,7 @@ export function EditTenderForm({ tender, buyers }: { tender: Tender; buyers: Buy
 
       <div className="flex flex-col gap-1">
         <label htmlFor="edit-reference" className="text-sm font-medium text-tenderos-navy">
-          Reference
+          Référence
         </label>
         <Input
           id="edit-reference"
@@ -118,7 +118,7 @@ export function EditTenderForm({ tender, buyers }: { tender: Tender; buyers: Buy
               Type d&apos;attribution
             </label>
             <Select id="edit-awardType" name="awardType" defaultValue={tender.awardType ?? ""}>
-              <option value="">— Non precise —</option>
+              <option value="">— Non précisé —</option>
               {AWARD_TYPES.map((value) => (
                 <option key={value} value={value}>
                   {AWARD_TYPE_LABELS[value]}
@@ -208,7 +208,7 @@ export function EditTenderForm({ tender, buyers }: { tender: Tender; buyers: Buy
               name="visitMandatory"
               defaultValue={toBooleanSelectValue(tender.visitMandatory)}
             >
-              <option value="">— Non precise —</option>
+              <option value="">— Non précisé —</option>
               <option value="true">Oui</option>
               <option value="false">Non</option>
             </Select>
@@ -225,7 +225,7 @@ export function EditTenderForm({ tender, buyers }: { tender: Tender; buyers: Buy
               name="isFrameworkAgreement"
               defaultValue={toBooleanSelectValue(tender.isFrameworkAgreement)}
             >
-              <option value="">— Non precise —</option>
+              <option value="">— Non précisé —</option>
               <option value="true">Oui</option>
               <option value="false">Non</option>
             </Select>
@@ -235,14 +235,14 @@ export function EditTenderForm({ tender, buyers }: { tender: Tender; buyers: Buy
               htmlFor="edit-variantsAllowed"
               className="text-sm font-medium text-tenderos-navy"
             >
-              Variantes autorisees
+              Variantes autorisées
             </label>
             <Select
               id="edit-variantsAllowed"
               name="variantsAllowed"
               defaultValue={toBooleanSelectValue(tender.variantsAllowed)}
             >
-              <option value="">— Non precise —</option>
+              <option value="">— Non précisé —</option>
               <option value="true">Oui</option>
               <option value="false">Non</option>
             </Select>
@@ -254,7 +254,7 @@ export function EditTenderForm({ tender, buyers }: { tender: Tender; buyers: Buy
             htmlFor="edit-submissionPlatformUrl"
             className="text-sm font-medium text-tenderos-navy"
           >
-            URL de la plateforme de depot
+            URL de la plateforme de dépôt
           </label>
           <Input
             id="edit-submissionPlatformUrl"
@@ -280,7 +280,7 @@ export function EditTenderForm({ tender, buyers }: { tender: Tender; buyers: Buy
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1">
           <label htmlFor="edit-procedureType" className="text-sm font-medium text-tenderos-navy">
-            Type de procedure
+            Type de procédure
           </label>
           <Input
             id="edit-procedureType"
@@ -291,7 +291,7 @@ export function EditTenderForm({ tender, buyers }: { tender: Tender; buyers: Buy
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="edit-marketType" className="text-sm font-medium text-tenderos-navy">
-            Type de marche *
+            Type de marché *
           </label>
           <Select
             id="edit-marketType"
@@ -311,7 +311,7 @@ export function EditTenderForm({ tender, buyers }: { tender: Tender; buyers: Buy
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1">
           <label htmlFor="edit-estimatedAmount" className="text-sm font-medium text-tenderos-navy">
-            Montant estime
+            Montant estimé
           </label>
           <Input
             id="edit-estimatedAmount"

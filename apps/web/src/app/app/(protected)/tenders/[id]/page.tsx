@@ -52,7 +52,7 @@ import { RisksSection } from "./risks-section";
 import { StatusChangeForm } from "./status-change-form";
 import { buildTenderNavTabs } from "./tender-nav-tabs";
 
-export const metadata: Metadata = { title: "Detail de l'appel d'offres — TenderOS" };
+export const metadata: Metadata = { title: "Détail de l'appel d'offres — TenderOS" };
 
 function readinessTone(status: Readiness["status"]): BadgeTone {
   switch (status) {

@@ -64,7 +64,7 @@ export function TenderKanbanBoard({ board, canDrag }: { board: TenderBoard; canD
     if (result.error) {
       setColumns(previousColumns);
       setError(
-        `Deplacement de "${item.title}" vers ${TENDER_STATUS_LABELS[targetStatus]} refuse : ${result.error}`,
+        `Déplacement de "${item.title}" vers ${TENDER_STATUS_LABELS[targetStatus]} refusé : ${result.error}`,
       );
     }
   }

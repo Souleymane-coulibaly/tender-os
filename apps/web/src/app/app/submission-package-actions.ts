@@ -3,10 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { SubmissionPackageSummary } from "../../lib/submission-package-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 function describeSubmissionPackageActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] SubmissionPackage action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -17,10 +20,8 @@ function describeSubmissionPackageActionError(error: unknown): string {
       case 404:
         return "Ressource introuvable.";
       case 409:
-        if (error.code === "DUPLICATE_ARCHIVE_PATH") return "Deux fichiers portent le même nom dans le package — conflit interne.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
-        if (error.code === "PACKAGE_NOT_READY") return "Le dossier n'est pas encore prêt : une approbation finale active et, le cas échéant, une signature vérifiée sont requises.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

@@ -11,12 +11,20 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { archiveBankAccountAction } from "../../../../company-profile-actions";
-import type { CompanyBankAccount } from "../../../../../../lib/company-profile-types";
-
+import {
+  SATELLITE_STATUS_LABELS,
+  type CompanyBankAccount,
+} from "../../../../../../lib/company-profile-types";
 
 /** Mission §4.4/§7 — l'IBAN complet n'est jamais visible ici : l'API masque déjà la liste (droit
  *  bancaire dédié requis même pour la lecture). Archivage uniquement, jamais de suppression. */
-export function BankAccountsSection({ clientId, bankAccounts }: { clientId: string; bankAccounts: CompanyBankAccount[] }) {
+export function BankAccountsSection({
+  clientId,
+  bankAccounts,
+}: {
+  clientId: string;
+  bankAccounts: CompanyBankAccount[];
+}) {
   const router = useRouter();
   const [archivingId, setArchivingId] = useState<string | undefined>();
   const [archiveError, setArchiveError] = useState<string | undefined>();
@@ -48,10 +56,14 @@ export function BankAccountsSection({ clientId, bankAccounts }: { clientId: stri
             <tbody>
               {bankAccounts.map((account) => (
                 <tr key={account.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4 font-medium text-neutral-900">{account.accountHolder}</td>
+                  <td className="py-2 pr-4 font-medium text-neutral-900">
+                    {account.accountHolder}
+                  </td>
                   <td className="py-2 pr-4 font-mono text-neutral-600">{account.iban}</td>
                   <td className="py-2 pr-4 text-neutral-600">{account.bankName ?? "—"}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{account.status}</td>
+                  <td className="py-2 pr-4 text-neutral-600">
+                    {SATELLITE_STATUS_LABELS[account.status] ?? account.status}
+                  </td>
                   <td className="py-2 pr-4">
                     {account.status === "ACTIVE" ? (
                       <button

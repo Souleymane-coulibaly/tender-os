@@ -45,13 +45,13 @@ test.describe.serial("Staging visual flow — tender + DCE + analysis", () => {
 
     await page.getByLabel("Titre *").fill(title);
     await visiblePause(page, 400);
-    await page.getByLabel("Reference").fill(`VISUAL-${Date.now()}`);
+    await page.getByLabel(/^R[ée]f[ée]rence$/).fill(`VISUAL-${Date.now()}`);
     await visiblePause(page, 400);
     await page.getByLabel("Acheteur (texte libre)").fill("Ville de démonstration");
     await visiblePause(page, 400);
     await page.getByLabel("Date limite de remise").fill(futureDate);
     await visiblePause(page, 600);
-    await page.getByRole("button", { name: /Creer l'appel d'offres|Créer l'appel d’offres/i }).click();
+    await page.getByRole("button", { name: /Cr[ée]er l['’]appel d['’]offres/i }).click();
     await page.waitForLoadState("networkidle").catch(() => undefined);
     await visiblePause(page, 1500);
 

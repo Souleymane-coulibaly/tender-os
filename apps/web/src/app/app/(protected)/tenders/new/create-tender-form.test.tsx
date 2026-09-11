@@ -40,17 +40,17 @@ describe("CreateTenderForm", () => {
 
     expect(screen.getByLabelText("Client *")).toBeRequired();
     expect(screen.getByLabelText("Titre *")).toBeRequired();
-    expect(screen.getByRole("button", { name: "Creer l'appel d'offres" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Créer l'appel d'offres" })).toBeInTheDocument();
   });
 
   it("renders the optional fields described by the mission (reference, buyer, procedure, amounts, deadline)", () => {
     render(<CreateTenderForm clients={CLIENTS} buyers={[]} candidateCompanies={CANDIDATES} />);
 
-    expect(screen.getByLabelText("Reference")).toBeInTheDocument();
+    expect(screen.getByLabelText("Référence")).toBeInTheDocument();
     expect(screen.getByLabelText("Acheteur (texte libre)")).toBeInTheDocument();
-    expect(screen.getByLabelText("Type de procedure")).toBeInTheDocument();
-    expect(screen.getByLabelText("Type de marche *")).toBeInTheDocument();
-    expect(screen.getByLabelText("Montant estime")).toBeInTheDocument();
+    expect(screen.getByLabelText("Type de procédure")).toBeInTheDocument();
+    expect(screen.getByLabelText("Type de marché *")).toBeInTheDocument();
+    expect(screen.getByLabelText("Montant estimé")).toBeInTheDocument();
     expect(screen.getByLabelText("Date limite de remise")).toBeInTheDocument();
   });
 
@@ -69,7 +69,7 @@ describe("CreateTenderForm", () => {
     expect(screen.getByLabelText("Pays *")).toHaveValue("FR");
     expect(screen.getByLabelText("Langue *")).toHaveValue("fr");
     expect(screen.getByLabelText("Devise *")).toHaveValue("EUR");
-    expect(screen.getByLabelText("Type de marche *")).toHaveValue("PUBLIC");
+    expect(screen.getByLabelText("Type de marché *")).toHaveValue("PUBLIC");
     expect(screen.getByLabelText("Source")).toHaveValue("MANUAL");
   });
 
@@ -91,7 +91,7 @@ describe("CreateTenderForm", () => {
     // selection, le formulaire ne se soumet meme pas et l'action serveur n'est jamais atteinte.
     // Ce test porte sur l'affichage de l'erreur BACKEND, il doit donc franchir cette etape.
     await user.selectOptions(screen.getByLabelText("Entreprise candidate *"), "candidate-alpha");
-    await user.click(screen.getByRole("button", { name: "Creer l'appel d'offres" }));
+    await user.click(screen.getByRole("button", { name: "Créer l'appel d'offres" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Le titre est obligatoire.");
   });
@@ -111,7 +111,7 @@ describe("CreateTenderForm", () => {
     expect(select).toHaveValue("");
 
     await user.type(screen.getByLabelText("Titre *"), "Marche sans candidat");
-    await user.click(screen.getByRole("button", { name: "Creer l'appel d'offres" }));
+    await user.click(screen.getByRole("button", { name: "Créer l'appel d'offres" }));
 
     // L'action serveur (mockee) n'a pas ete appelee : aucune alerte d'erreur backend n'apparait.
     expect(screen.queryByRole("alert")).toBeNull();

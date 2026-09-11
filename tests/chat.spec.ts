@@ -48,7 +48,7 @@ test.describe("Chat IA conversationnel — isolation multi-tenant", () => {
 
     await page.goto(`/app/tenders/${fixture.tenderId}/assistant`);
 
-    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("Introuvable ou accès refusé");
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText(/introuvable/i);
     await expect(page.getByRole("heading", { name: "Assistant IA" })).not.toBeVisible();
   });
 
@@ -61,7 +61,7 @@ test.describe("Chat IA conversationnel — isolation multi-tenant", () => {
 
     await page.goto(`/app/tenders/${fixture.tenderInOtherClientId}/assistant`);
 
-    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("Introuvable ou accès refusé");
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText(/introuvable/i);
     await expect(page.getByRole("heading", { name: "Assistant IA" })).not.toBeVisible();
 
     // Preuve inverse : le même compte PEUT bien ouvrir l'Assistant IA du Tender de son propre

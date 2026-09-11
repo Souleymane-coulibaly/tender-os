@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { CandidateCompanyPage, CandidateCompanySummary, CandidateEstablishmentSummary } from "../../lib/candidate-company-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type CandidateEstablishmentPage = { items: CandidateEstablishmentSummary[] };
 
@@ -12,6 +13,8 @@ export type CandidateCompanyActionState = { error?: string };
 function describeCandidateCompanyActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] CandidateCompany action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";

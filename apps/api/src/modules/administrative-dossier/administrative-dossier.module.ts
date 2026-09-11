@@ -33,6 +33,7 @@ import {
   AttachAdministrativeDocumentRevisionUseCase,
   CreateAdministrativeDocumentUseCase,
   GetAdministrativeDocumentUseCase,
+  ListTenderAdministrativeDocumentsUseCase,
   RejectAdministrativeDocumentUseCase,
   ValidateAdministrativeDocumentUseCase,
 } from "./application/use-cases/administrative-document.use-cases";
@@ -152,6 +153,7 @@ import { AdministrativeDossierStructuredController } from "./interfaces/http/adm
     GetAdministrativeDocumentTypeCatalogUseCase,
     CreateAdministrativeDocumentUseCase,
     GetAdministrativeDocumentUseCase,
+  ListTenderAdministrativeDocumentsUseCase,
     AttachAdministrativeDocumentRevisionUseCase,
     ValidateAdministrativeDocumentUseCase,
     RejectAdministrativeDocumentUseCase,

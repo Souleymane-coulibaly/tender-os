@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { ClientAccountSummary, ClientAssignmentSummary } from "../../lib/client-portfolio-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
@@ -16,6 +17,8 @@ export type FormActionState = { error?: string };
 function describeClientPortfolioActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Client portfolio action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -26,14 +29,8 @@ function describeClientPortfolioActionError(error: unknown): string {
       case 404:
         return "Ce client est introuvable ou vous n'y avez pas accès.";
       case 409:
-        if (error.code === "DUPLICATE_CLIENT_ACCOUNT_NAME") return "Un client porte déjà ce nom dans votre organisation.";
-        if (error.code === "DUPLICATE_CLIENT_ASSIGNMENT") return "Cet utilisateur est déjà affecté à ce client.";
-        if (error.code === "CLIENT_ACCOUNT_HAS_DEPENDENCIES") return "Ce client contient encore des appels d'offres ou des connaissances : suppression impossible.";
-        if (error.code === "CLIENT_ACCOUNT_NOT_ARCHIVED") return "Ce client doit d'abord être archivé avant d'être supprimé définitivement.";
         return "Cette action entre en conflit avec l'état actuel de ce client.";
       case 422:
-        if (error.code === "CROSS_ORGANIZATION_USER") return "Cet utilisateur n'appartient pas à votre organisation.";
-        if (error.code === "CLIENT_ACCOUNT_ARCHIVED") return "Ce client est archivé : cette action n'est plus possible.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

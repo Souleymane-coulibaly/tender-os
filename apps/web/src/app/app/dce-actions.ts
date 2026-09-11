@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { DceDocumentSummary, DceImportJobSummary, DceImportResult, DceSummary } from "../../lib/dce-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 export type ImportActionState = { error?: string; result?: DceImportResult };
@@ -13,6 +14,8 @@ export type ImportActionState = { error?: string; result?: DceImportResult };
 function describeDceActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] DCE action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -23,16 +26,12 @@ function describeDceActionError(error: unknown): string {
       case 404:
         return "Ressource introuvable.";
       case 409:
-        if (error.code === "DCE_ALREADY_EXISTS") return "Le DCE de cet appel d'offres existe déjà.";
-        if (error.code === "TENDER_ARCHIVED_FOR_DCE_MUTATION") return "Cet appel d'offres est archivé : aucune modification du DCE n'est possible.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 413:
         return "Le fichier dépasse la taille maximale autorisée.";
       case 415:
         return "Ce type de fichier n'est pas pris en charge.";
       case 422:
-        if (error.code === "ZIP_SECURITY_VIOLATION") return "L'archive ZIP a été refusée pour des raisons de sécurité (contenu suspect).";
-        if (error.code === "TOO_MANY_FILES") return "Trop de fichiers dans cet import.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

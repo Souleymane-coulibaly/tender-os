@@ -48,6 +48,7 @@ import type { GeneratedDocumentRevisionSummary } from "../../../../../../lib/doc
 import { Button } from "../../../../../../components/ui/button";
 import { Input } from "../../../../../../components/ui/input";
 import { Textarea } from "../../../../../../components/ui/textarea";
+import { FileInput } from "../../../../../../components/ui/file-input";
 
 /** Formulaire de création (mission §63 — deux parcours) : soit un modèle DOCX uploadé
  *  (entreprise ou trame imposée par le DCE), soit "Générer sans modèle" (modèle système
@@ -134,12 +135,11 @@ function CreateMemoForm({
           <label htmlFor="memo-file" className="block text-xs font-medium text-tenderos-slate">
             Fichier .docx
           </label>
-          <Input
+          <FileInput
             id="memo-file"
-            type="file"
             accept=".docx"
             onChange={(event) => setFile(event.target.files?.[0])}
-            className="mt-1 block"
+            className="mt-1"
           />
         </div>
       ) : null}

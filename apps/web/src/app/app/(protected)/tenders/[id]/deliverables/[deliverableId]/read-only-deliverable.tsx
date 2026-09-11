@@ -1,6 +1,8 @@
 import { appApiFetch } from "../../../../../../../lib/app-api-client";
 import type { DeliverableSummary } from "../../../../../../../lib/deliverable-types";
 import { ApiErrorState } from "../../../../api-error-state";
+import { SIGNATURE_REQUIREMENT_STATUS_LABELS } from "../../../../../../../lib/signature-types";
+import { PACKAGE_STATUS_LABELS } from "../../../../../../../lib/submission-package-types";
 
 type ValidationReport = {
   readiness: { status: string };
@@ -128,7 +130,9 @@ export async function ReadOnlyDeliverable({
               {view.requirements.map((r) => (
                 <li key={r.id} className="flex justify-between">
                   <span>{r.documentKind}</span>
-                  <span className="text-tenderos-slate">{r.status}</span>
+                  <span className="text-tenderos-slate">
+                    {SIGNATURE_REQUIREMENT_STATUS_LABELS[r.status] ?? r.status}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -164,7 +168,9 @@ export async function ReadOnlyDeliverable({
             {packages.map((p) => (
               <li key={p.id} className="flex justify-between">
                 <span>Version {p.version}</span>
-                <span className="text-tenderos-slate">{p.status}</span>
+                <span className="text-tenderos-slate">
+                  {PACKAGE_STATUS_LABELS[p.status] ?? p.status}
+                </span>
               </li>
             ))}
           </ul>

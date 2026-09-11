@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { OrganizationMemberResponse, PageResponse } from "../../lib/membership-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 /**
  * Checkpoint TENDEROS-2.1-P2.3-E1 (mission §14, problème E) — le backend (`memberships` module,
@@ -18,24 +19,23 @@ import type { OrganizationMemberResponse, PageResponse } from "../../lib/members
 function describeMembershipActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Membership action failed (${error.status} ${error.code}): ${error.message}`);
+    // Propre à l'invitation par e-mail : ici, USER_NOT_FOUND veut dire "personne n'a de compte avec
+    // cette adresse" — plus précis que le message générique de la table.
+    if (error.code === "USER_NOT_FOUND") return "Aucun compte TenderOS n'existe avec cette adresse e-mail. Cette personne doit d'abord créer un compte, puis vous pourrez l'inviter.";
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
       case 402:
-        if (error.code === "SEAT_LIMIT_EXCEEDED") return "Votre organisation a atteint le nombre maximum d'utilisateurs prévu par son offre. Passez à une offre supérieure pour inviter davantage de membres.";
         return "Cette action nécessite une offre supérieure.";
       case 403:
         return "Cette action est réservée au Propriétaire ou à l'Administrateur de l'organisation.";
       case 404:
-        if (error.code === "USER_NOT_FOUND") return "Aucun compte TenderOS n'existe avec cette adresse email. Cette personne doit d'abord créer un compte, puis vous pourrez l'inviter.";
         return "Introuvable ou accès refusé.";
       case 409:
-        if (error.code === "MEMBERSHIP_ALREADY_EXISTS") return "Cette personne est déjà membre de l'organisation.";
-        if (error.code === "LAST_ORGANIZATION_ADMIN_REQUIRED") return "Impossible : l'organisation doit toujours conserver au moins un Administrateur actif.";
-        if (error.code === "LAST_ORGANIZATION_OWNER_REQUIRED") return "Impossible : l'organisation doit toujours conserver exactement un Propriétaire actif.";
         return "Cette action entre en conflit avec l'état actuel du membre.";
       case 422:
-        if (error.code === "OWNERSHIP_REQUIRES_TRANSFER") return "Le rôle Propriétaire ne peut être attribué que via un transfert de propriété dédié.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

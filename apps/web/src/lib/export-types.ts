@@ -1,3 +1,4 @@
+import { VERSION_STATUS_LABELS } from "./version-status";
 export type ExportTemplateVersionSummary = {
   id: string;
   exportTemplateId: string;
@@ -57,7 +58,15 @@ export type ExportJobSummary = {
   artifact?: ExportArtifactSummary;
 };
 
-export const EXPORT_DOCUMENT_TYPES = ["TECHNICAL_MEMO", "EXECUTIVE_SUMMARY", "COMPLIANCE_MATRIX", "CHECKLIST", "VALIDATION_REPORT", "COST_REPORT", "SIGNATURE_PACKAGE"] as const;
+export const EXPORT_DOCUMENT_TYPES = [
+  "TECHNICAL_MEMO",
+  "EXECUTIVE_SUMMARY",
+  "COMPLIANCE_MATRIX",
+  "CHECKLIST",
+  "VALIDATION_REPORT",
+  "COST_REPORT",
+  "SIGNATURE_PACKAGE",
+] as const;
 
 export const EXPORT_DOCUMENT_TYPE_LABELS: Record<string, string> = {
   TECHNICAL_MEMO: "Mémoire technique",
@@ -78,11 +87,8 @@ export const EXPORT_SECTION_SOURCE_LABELS: Record<string, string> = {
   ANNEX: "Annexe",
 };
 
-export const EXPORT_TEMPLATE_VERSION_STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Brouillon",
-  ACTIVE: "Active",
-  ARCHIVED: "Archivée",
-};
+/** Conservé pour les appelants existants — même table que `VERSION_STATUS_LABELS`. */
+export const EXPORT_TEMPLATE_VERSION_STATUS_LABELS = VERSION_STATUS_LABELS;
 
 export const EXPORT_JOB_STATUS_LABELS: Record<string, string> = {
   PENDING: "En attente",
@@ -132,8 +138,10 @@ export type ExportCapabilities = {
  *  français". Codes alignés sur `GetExportCapabilitiesUseCase` (backend), jamais un second
  *  vocabulaire divergent. */
 export const EXPORT_CAPABILITY_BLOCKER_LABELS: Record<string, string> = {
-  EXPORT_TEMPLATE_MISSING: "Aucun modèle d'export n'a encore été créé pour cette organisation. Un administrateur doit en créer un dans Configuration IA.",
-  TEMPLATE_VERSION_MISSING: "Aucune version de modèle d'export n'est active. Un administrateur doit en activer une dans Configuration IA.",
+  EXPORT_TEMPLATE_MISSING:
+    "Aucun modèle d'export n'a encore été créé pour cette organisation. Un administrateur doit en créer un dans Configuration IA.",
+  TEMPLATE_VERSION_MISSING:
+    "Aucune version de modèle d'export n'est active. Un administrateur doit en activer une dans Configuration IA.",
 };
 
 const ORG_TIER = ["OWNER", "ORGANIZATION_ADMIN"];

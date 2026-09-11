@@ -40,7 +40,7 @@ describe("dce-actions — French error mapping (bug #10)", () => {
 
     const result = await initDceAction("tender-1");
 
-    expect(result.error).toBe("Le DCE de cet appel d'offres existe déjà.");
+    expect(result.error).toBe("Cet appel d'offres a déjà un DCE.");
     expect(result.error).not.toContain("already exists");
   });
 
@@ -49,7 +49,7 @@ describe("dce-actions — French error mapping (bug #10)", () => {
 
     const result = await deleteDceDocumentAction("tender-1", "doc-1");
 
-    expect(result.error).toBe("Cet appel d'offres est archivé : aucune modification du DCE n'est possible.");
+    expect(result.error).toBe("Cet appel d'offres est archivé : son DCE ne peut plus être modifié.");
   });
 
   it("maps a 422 ZIP_SECURITY_VIOLATION to a comprehensible French message", async () => {
@@ -59,7 +59,7 @@ describe("dce-actions — French error mapping (bug #10)", () => {
 
     const result = await startDceZipImportAction("tender-1", formData);
 
-    expect(result.error).toBe("L'archive ZIP a été refusée pour des raisons de sécurité (contenu suspect).");
+    expect(result.error).toBe("L'archive ZIP a été refusée pour des raisons de sécurité.");
     expect(result.error).not.toContain("zip slip");
   });
 
@@ -68,7 +68,8 @@ describe("dce-actions — French error mapping (bug #10)", () => {
 
     const result = await initDceAction("tender-1");
 
-    expect(result.error).toBe("Ressource introuvable.");
+    expect(result.error).toBe("Cet élément est introuvable, ou vous n'y avez pas accès.");
+    expect(result.error).not.toMatch(/client/i);
   });
 
   it("maps an unexpected non-AppApiError to a network error message, never exposing the raw error", async () => {

@@ -42,6 +42,10 @@ test.describe.serial("Checklist intelligente DCE — flux principal", () => {
     await requirementSuggestion.getByRole("button", { name: "Appliquer" }).click();
     await expect(requirementSuggestion).not.toBeVisible({ timeout: 15000 });
 
+    // Depuis la consolidation v2.1 (be5f1fe), la checklist a son propre écran : la suggestion
+    // s'applique depuis le Cockpit, son résultat se vérifie sur l'écran Checklist.
+    await page.goto(`/app/tenders/${fixture.tenderWithAnalysisId}/checklist`);
+
     const checklistSection = page.locator("section", { has: page.getByRole("heading", { name: "Checklist", exact: true }) });
     await expect(checklistSection).toBeVisible();
 
@@ -63,8 +67,11 @@ test.describe.serial("Checklist intelligente DCE — flux principal", () => {
     await expect(aiItemRowAfterReload.getByRole("button", { name: "Valider" })).not.toBeVisible();
 
     // Création manuelle — origine MANUAL, jamais issue d'une suggestion IA (mission §21).
-    await checklistSection.getByPlaceholder("Nouvel element...").fill("Pièce complémentaire test E2E");
-    await checklistSection.getByRole("button", { name: "Ajouter" }).click();
+    // Le formulaire d'ajout manuel est désigné par SON champ : la section porte d'autres boutons
+    // « Ajouter » (une seule recherche par nom serait ambiguë).
+    const manualAddForm = checklistSection.locator("form", { has: page.getByPlaceholder(/Nouvel [ée]l[ée]ment\.\.\./) });
+    await manualAddForm.getByPlaceholder(/Nouvel [ée]l[ée]ment\.\.\./).fill("Pièce complémentaire test E2E");
+    await manualAddForm.getByRole("button", { name: "Ajouter" }).click();
     const manualItemRow = checklistSection.locator("li", { hasText: "Pièce complémentaire test E2E" });
     await expect(manualItemRow).toBeVisible({ timeout: 15000 });
 
@@ -97,7 +104,7 @@ test.describe("Checklist intelligente DCE — isolation multi-tenant", () => {
 
     await page.goto(`/app/tenders/${fixture.tenderWithAnalysisId}`);
 
-    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("Introuvable ou accès refusé");
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText(/introuvable/i);
     await expect(page.getByRole("heading", { name: "Checklist", exact: true })).not.toBeVisible();
     await expect(page.getByText("Attestation d'assurance responsabilité civile professionnelle")).not.toBeVisible();
   });

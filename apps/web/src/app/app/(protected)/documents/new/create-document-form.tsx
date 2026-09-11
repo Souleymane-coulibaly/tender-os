@@ -2,7 +2,12 @@
 
 import { useActionState } from "react";
 import { createDocumentAction, type FormActionState } from "../../../documents-actions";
-import { DOCUMENT_CATEGORY_SUGGESTIONS, DOCUMENT_DOMAIN_LABELS, DOCUMENT_ORIGIN_LABELS } from "../../../../../lib/documents-types";
+import {
+  DOCUMENT_CATEGORY_SUGGESTIONS,
+  DOCUMENT_DOMAIN_LABELS,
+  DOCUMENT_ORIGIN_LABELS,
+} from "../../../../../lib/documents-types";
+import { FileInput } from "../../../../../components/ui/file-input";
 
 const INITIAL_STATE: FormActionState = {};
 
@@ -15,14 +20,25 @@ export function CreateDocumentForm() {
         <label htmlFor="title" className="text-sm font-medium text-neutral-700">
           Titre *
         </label>
-        <input id="title" name="title" type="text" required className="rounded border border-neutral-300 px-3 py-2 text-sm" />
+        <input
+          id="title"
+          name="title"
+          type="text"
+          required
+          className="rounded border border-neutral-300 px-3 py-2 text-sm"
+        />
       </div>
 
       <div className="flex flex-col gap-1">
         <label htmlFor="description" className="text-sm font-medium text-neutral-700">
           Description
         </label>
-        <textarea id="description" name="description" rows={2} className="rounded border border-neutral-300 px-3 py-2 text-sm" />
+        <textarea
+          id="description"
+          name="description"
+          rows={2}
+          className="rounded border border-neutral-300 px-3 py-2 text-sm"
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -30,7 +46,13 @@ export function CreateDocumentForm() {
           <label htmlFor="origin" className="text-sm font-medium text-neutral-700">
             Origine *
           </label>
-          <select id="origin" name="origin" required defaultValue="USER_UPLOAD" className="rounded border border-neutral-300 px-3 py-2 text-sm">
+          <select
+            id="origin"
+            name="origin"
+            required
+            defaultValue="USER_UPLOAD"
+            className="rounded border border-neutral-300 px-3 py-2 text-sm"
+          >
             {Object.entries(DOCUMENT_ORIGIN_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -42,7 +64,13 @@ export function CreateDocumentForm() {
           <label htmlFor="domain" className="text-sm font-medium text-neutral-700">
             Domaine *
           </label>
-          <select id="domain" name="domain" required defaultValue="ORGANIZATION" className="rounded border border-neutral-300 px-3 py-2 text-sm">
+          <select
+            id="domain"
+            name="domain"
+            required
+            defaultValue="ORGANIZATION"
+            className="rounded border border-neutral-300 px-3 py-2 text-sm"
+          >
             {Object.entries(DOCUMENT_DOMAIN_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -54,7 +82,7 @@ export function CreateDocumentForm() {
 
       <div className="flex flex-col gap-1">
         <label htmlFor="category" className="text-sm font-medium text-neutral-700">
-          Categorie
+          Catégorie
         </label>
         <input
           id="category"
@@ -69,15 +97,19 @@ export function CreateDocumentForm() {
             <option key={suggestion} value={suggestion} />
           ))}
         </datalist>
-        <p className="text-xs text-neutral-500">Liste indicative — vous pouvez saisir une valeur libre.</p>
+        <p className="text-xs text-neutral-500">
+          Liste indicative — vous pouvez saisir une valeur libre.
+        </p>
       </div>
 
       <div className="flex flex-col gap-1">
         <label htmlFor="file" className="text-sm font-medium text-neutral-700">
           Fichier *
         </label>
-        <input id="file" name="file" type="file" required className="text-sm" />
-        <p className="text-xs text-neutral-500">Formats acceptes : PDF, Word, Excel, CSV, texte, PNG, JPEG.</p>
+        <FileInput id="file" name="file" required />
+        <p className="text-xs text-neutral-500">
+          Formats acceptes : PDF, Word, Excel, CSV, texte, PNG, JPEG.
+        </p>
       </div>
 
       {state.error ? (
@@ -91,7 +123,7 @@ export function CreateDocumentForm() {
         disabled={isPending}
         className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
       >
-        {isPending ? "Depot en cours..." : "Deposer le document"}
+        {isPending ? "Dépôt en cours..." : "Déposer le document"}
       </button>
     </form>
   );

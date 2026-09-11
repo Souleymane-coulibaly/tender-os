@@ -39,6 +39,9 @@ export type E2eFixture = E2eOtherOrgFixture & {
   secondCandidateCompanyId: string;
   /** Checkpoint CCV2-G.1 — Tender HISTORIQUE sans entreprise candidate (transition explicite). */
   legacyTenderId: string;
+  /** Organisation ABONNÉE dédiée au parcours DCE du Cockpit : initialiser/importer le DCE exige un
+   *  droit actif, que l'organisation principale n'a volontairement pas. */
+  cockpit: E2eOtherOrgFixture;
 };
 
 /** Correctif audit Codex P2-003 — relit les identifiants réellement créés en base par

@@ -143,6 +143,28 @@ describe("DceSection", () => {
     expect(await screen.findByText("En file d'attente")).toBeInTheDocument();
   });
 
+  it("shows each rejected file with its French reason from the error code, never the raw API text", async () => {
+    importDceFilesAction.mockResolvedValueOnce({
+      result: {
+        accepted: [],
+        rejected: [
+          { originalFilename: "scan.pdf", code: "DCE_FILE_CONTENT_MISMATCH", reason: "the file content does not match its declared extension." },
+          { originalFilename: "ancien.pdf", reason: "legacy result recorded without a code" },
+        ],
+      },
+    });
+    const user = userEvent.setup();
+    render(<DceSection tenderId="tender-1" dce={dce} documents={documents} canManage={true} canDelete={true} canAnalyze={true} />);
+
+    const fileInput = document.querySelector('input[name="files"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["%PDF-1.7"], "scan.pdf", { type: "application/pdf" }));
+    await user.click(screen.getByRole("button", { name: "Importer" }));
+
+    expect(await screen.findByText("scan.pdf — refusé : Le contenu de ce fichier ne correspond pas à son extension.")).toBeInTheDocument();
+    expect(screen.getByText("ancien.pdf — refusé : Ce fichier n'a pas pu être importé.")).toBeInTheDocument();
+    expect(screen.queryByText(/declared extension|legacy result/)).not.toBeInTheDocument();
+  });
+
   it("calls deleteDceDocumentAction when Supprimer is clicked", async () => {
     const user = userEvent.setup();
     render(<DceSection tenderId="tender-1" dce={dce} documents={documents} canManage={true} canDelete={true} canAnalyze={true} />);

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { ConsortiumSummary, OfficialFormGeneratedDocumentSummary, OfficialFormReadiness } from "../../lib/official-form-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
@@ -11,6 +12,8 @@ export type FormActionState = { error?: string };
 function describeOfficialFormActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Official form action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
@@ -19,8 +22,6 @@ function describeOfficialFormActionError(error: unknown): string {
       case 404:
         return "Introuvable ou accès refusé.";
       case 422:
-        if (error.code === "OFFICIAL_FORM_TEMPLATE_NOT_CONFIGURED") return "Le gabarit officiel de ce formulaire n'a pas encore été importé pour cette organisation.";
-        if (error.code === "REQUIRED_FIELDS_MISSING") return "Des champs obligatoires manquent et ce formulaire n'autorise pas la génération partielle.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

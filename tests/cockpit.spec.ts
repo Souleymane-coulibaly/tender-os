@@ -51,10 +51,12 @@ test.describe("Cockpit — navigation clavier vers les sous-écrans (accessibili
 });
 
 test.describe.serial("Cockpit — parcours DCE jusqu'à l'analyse (correction bug #2 élargie)", () => {
+  // Organisation abonnée dédiée (fixture.cockpit) : le DCE exige un droit actif (P2.3-E1.3).
   test("initialise le DCE puis importe un document PDF réellement extractible", async ({ page }) => {
-    const fixture = readFixture();
+    const fixture = readFixture().cockpit;
     await login(page, fixture);
-    await page.goto(`/app/tenders/${fixture.tenderId}`);
+    // Le DCE a son propre écran depuis la consolidation v2.1 (be5f1fe).
+    await page.goto(`/app/tenders/${fixture.tenderId}/dce`);
 
     await page.getByRole("button", { name: "Initialiser le DCE" }).click();
     await expect(page.getByText("Aucun document du DCE.")).toBeVisible();
@@ -63,14 +65,15 @@ test.describe.serial("Cockpit — parcours DCE jusqu'à l'analyse (correction bu
     await page.locator('input[name="files"]').setInputFiles({ name: "cctp-cockpit.pdf", mimeType: "application/pdf", buffer: pdfBytes });
     await page.getByRole("button", { name: "Importer", exact: true }).click();
 
-    await expect(page.getByText("cctp-cockpit.pdf — importe")).toBeVisible();
+    await expect(page.getByText(/cctp-cockpit\.pdf — import[ée]/)).toBeVisible();
     await expect(page.getByText("cctp-cockpit.pdf")).toBeVisible();
   });
 
   test("l'extraction se déclenche automatiquement sans action manuelle, jusqu'à Prêt pour analyse", async ({ page }) => {
-    const fixture = readFixture();
+    const fixture = readFixture().cockpit;
     await login(page, fixture);
-    await page.goto(`/app/tenders/${fixture.tenderId}`);
+    // Le DCE a son propre écran depuis la consolidation v2.1 (be5f1fe).
+    await page.goto(`/app/tenders/${fixture.tenderId}/dce`);
 
     // Mission Sprint 8A.2 (correction bug #2 élargie) — jamais un déclenchement manuel de
     // l'extraction ici : seul "Actualiser" relit l'état déjà déclenché en arrière-plan par
@@ -82,9 +85,10 @@ test.describe.serial("Cockpit — parcours DCE jusqu'à l'analyse (correction bu
   });
 
   test("le bouton Analyser se déclenche une fois l'extraction terminée, et affiche un statut en français", async ({ page }) => {
-    const fixture = readFixture();
+    const fixture = readFixture().cockpit;
     await login(page, fixture);
-    await page.goto(`/app/tenders/${fixture.tenderId}`);
+    // Le DCE a son propre écran depuis la consolidation v2.1 (be5f1fe).
+    await page.goto(`/app/tenders/${fixture.tenderId}/dce`);
 
     await expect(async () => {
       await page.getByRole("button", { name: "Actualiser" }).first().click();
@@ -100,12 +104,12 @@ test.describe.serial("Cockpit — parcours DCE jusqu'à l'analyse (correction bu
     // libellés FRANÇAIS (ANALYSIS_STATUS_LABELS), jamais un code technique brut affiché tel quel
     // (bug #10) : "En attente"/"En file d'attente"/"En cours" puis un état terminal.
     await expect(
-      page.getByText(/En attente|En file d'attente|En cours|Echouee|Terminee|Annulee/),
+      page.getByText(/En attente|En file d'attente|En cours|[ÉE]chou[ée]e|Termin[ée]e|Annul[ée]e/),
     ).toBeVisible({ timeout: 15000 });
   });
 
   test("le Cockpit reflète la progression réelle : DCE Terminé, étape Analyse IA", async ({ page }) => {
-    const fixture = readFixture();
+    const fixture = readFixture().cockpit;
     await login(page, fixture);
     await page.goto(`/app/tenders/${fixture.tenderId}`);
 

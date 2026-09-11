@@ -16,6 +16,7 @@ import {
 import { createTaskFromChecklistItemAction } from "../../../workspace-actions";
 import { KNOWLEDGE_CATEGORY_LABELS } from "../../../../../lib/knowledge-types";
 import {
+  CHECKLIST_CRITICALITY_LABELS,
   CHECKLIST_FRESHNESS_LABELS,
   type ChecklistComplianceStatus,
   type ChecklistDocumentMatchResult,
@@ -196,7 +197,9 @@ function ChecklistItemRow({
           <span className="font-semibold text-tenderos-navy">{item.title}</span>
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge tone="neutral">{typeLabel(item.type)}</Badge>
-            <Badge tone={criticalityTone(item.criticality)}>{item.criticality}</Badge>
+            <Badge tone={criticalityTone(item.criticality)}>
+              {CHECKLIST_CRITICALITY_LABELS[item.criticality]}
+            </Badge>
             <Badge tone="neutral">{requirementLevelLabel(item.requirementLevel)}</Badge>
             <Badge tone={complianceTone(item.complianceStatus)}>
               {complianceStatusLabel(item.complianceStatus)}
@@ -613,7 +616,7 @@ export function ChecklistSection({
             name="title"
             type="text"
             required
-            placeholder="Nouvel element..."
+            placeholder="Nouvel élément..."
             className={`text-sm ${INPUT_CLASS}`}
           />
           <select name="type" defaultValue="OTHER" className={INPUT_CLASS}>
@@ -633,7 +636,7 @@ export function ChecklistSection({
           <select name="criticality" defaultValue="MEDIUM" className={INPUT_CLASS}>
             {CRITICALITIES.map((criticality) => (
               <option key={criticality} value={criticality}>
-                {criticality}
+                {CHECKLIST_CRITICALITY_LABELS[criticality]}
               </option>
             ))}
           </select>

@@ -12,6 +12,7 @@ import type {
   PricingSnapshotSummary,
   RoutingPolicySummary,
 } from "../../lib/ai-configuration-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
@@ -20,6 +21,8 @@ export type FormActionState = { error?: string };
 function describeAiConfigurationActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] AI configuration action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -30,23 +33,8 @@ function describeAiConfigurationActionError(error: unknown): string {
       case 404:
         return "Ressource introuvable.";
       case 409:
-        if (error.code === "DUPLICATE_AI_MODEL") return "Ce modèle est déjà enregistré dans le registre.";
-        if (error.code === "PRICING_SNAPSHOT_OVERLAP") return "Un tarif est déjà en vigueur pour ce modèle.";
-        if (error.code === "BENCHMARK_SUITE_NOT_DRAFT") return "Cette suite est déjà publiée : créez une nouvelle version pour la modifier.";
-        if (error.code === "BENCHMARK_RUN_NOT_CANCELLABLE") return "Ce benchmark a déjà atteint un état final : annulation impossible.";
-        if (error.code === "MODEL_RECOMMENDATION_NOT_DRAFT") return "Cette recommandation a déjà été approuvée ou rejetée.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
-        if (error.code === "MODEL_KEY_NOT_ALLOWED") return "Ce modèle ne fait pas partie de la liste autorisée.";
-        if (error.code === "AI_MODEL_DISABLED") return "Ce modèle est désactivé.";
-        if (error.code === "BENCHMARK_SUITE_EMPTY") return "Ajoutez au moins un cas avant de publier cette suite.";
-        if (error.code === "AI_MODEL_NOT_ENABLED_FOR_BENCHMARK") return "Ce modèle n'est pas autorisé pour les benchmarks.";
-        if (error.code === "BENCHMARK_COST_CEILING_EXCEEDED") return "Le coût estimé dépasse le plafond autorisé pour ce lancement.";
-        if (error.code === "PRICING_SNAPSHOT_NOT_FOUND") return "Aucun tarif actif pour l'un des modèles sélectionnés.";
-        if (error.code === "BENCHMARK_RUN_NOT_COMPLETED") return "Ce benchmark doit être terminé avant de générer une recommandation.";
-        if (error.code === "NO_ADMISSIBLE_MODEL") return "Tous les modèles de ce benchmark ont été éliminés : aucune recommandation possible.";
-        if (error.code === "ROUTING_POLICY_MODEL_NOT_ELIGIBLE")
-          return "Le modèle principal ou le modèle d'escalade de cette politique n'est pas activé et autorisé en production. Vérifiez-le dans Configuration IA → Modèles.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

@@ -37,7 +37,7 @@ export function TenderFilters({
           name="search"
           type="text"
           defaultValue={values.search}
-          placeholder="Titre, reference, acheteur..."
+          placeholder="Titre, référence, acheteur..."
           className="rounded border border-neutral-300 px-2 py-1 text-sm"
         />
       </div>
@@ -93,7 +93,7 @@ export function TenderFilters({
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="deadlineAfter" className="text-xs text-neutral-600">
-          Echeance apres le
+          Échéance après le
         </label>
         <input
           id="deadlineAfter"
@@ -105,7 +105,7 @@ export function TenderFilters({
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="deadlineBefore" className="text-xs text-neutral-600">
-          Echeance avant le
+          Échéance avant le
         </label>
         <input
           id="deadlineBefore"
@@ -131,10 +131,10 @@ export function TenderFilters({
               defaultValue={sorting.sort}
               className="rounded border border-neutral-300 px-2 py-1 text-sm"
             >
-              <option value="createdAt">Date de creation</option>
-              <option value="submissionDeadline">Echeance</option>
+              <option value="createdAt">Date de création</option>
+              <option value="submissionDeadline">Échéance</option>
               <option value="title">Titre</option>
-              <option value="updatedAt">Derniere modification</option>
+              <option value="updatedAt">Dernière modification</option>
             </select>
           </div>
           <div className="flex flex-col gap-1">

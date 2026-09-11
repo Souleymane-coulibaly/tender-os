@@ -103,7 +103,14 @@ export type AdministrativeDocumentSummary = {
 
 // --- Sprint 8C Phase 2 ---
 
-export type ConsortiumMember = { memberId: string; name: string; legalIdentifier?: string; role: string; scopeDescription?: string; percentage?: number };
+export type ConsortiumMember = {
+  memberId: string;
+  name: string;
+  legalIdentifier?: string;
+  role: string;
+  scopeDescription?: string;
+  percentage?: number;
+};
 
 export type ConsortiumSummary = {
   id: string;
@@ -143,13 +150,45 @@ export type StructuredCapacityStatement = {
   additionalInfo?: string;
 };
 
-export type Dc2DeclarationSummary = { id: string; tenderId: string; currentVersionNumber: number; createdAt: string; updatedAt: string };
-export type Dc2DeclarationVersionSummary = { id: string; dc2DeclarationId: string; version: number; data: StructuredCapacityStatement; createdBy: string; createdAt: string };
-export type Dc2DeclarationWithVersions = { declaration: Dc2DeclarationSummary; versions: Dc2DeclarationVersionSummary[] };
+export type Dc2DeclarationSummary = {
+  id: string;
+  tenderId: string;
+  currentVersionNumber: number;
+  createdAt: string;
+  updatedAt: string;
+};
+export type Dc2DeclarationVersionSummary = {
+  id: string;
+  dc2DeclarationId: string;
+  version: number;
+  data: StructuredCapacityStatement;
+  createdBy: string;
+  createdAt: string;
+};
+export type Dc2DeclarationWithVersions = {
+  declaration: Dc2DeclarationSummary;
+  versions: Dc2DeclarationVersionSummary[];
+};
 
-export type DumeDeclarationSummary = { id: string; tenderId: string; currentVersionNumber: number; createdAt: string; updatedAt: string };
-export type DumeDeclarationVersionSummary = { id: string; dumeDeclarationId: string; version: number; data: StructuredCapacityStatement; createdBy: string; createdAt: string };
-export type DumeDeclarationWithVersions = { declaration: DumeDeclarationSummary; versions: DumeDeclarationVersionSummary[] };
+export type DumeDeclarationSummary = {
+  id: string;
+  tenderId: string;
+  currentVersionNumber: number;
+  createdAt: string;
+  updatedAt: string;
+};
+export type DumeDeclarationVersionSummary = {
+  id: string;
+  dumeDeclarationId: string;
+  version: number;
+  data: StructuredCapacityStatement;
+  createdBy: string;
+  createdAt: string;
+};
+export type DumeDeclarationWithVersions = {
+  declaration: DumeDeclarationSummary;
+  versions: DumeDeclarationVersionSummary[];
+};
 
 export type SubcontractorDeclarationSummary = {
   id: string;
@@ -180,7 +219,14 @@ export type OfficialFormFieldIssue = {
 };
 
 export type OfficialFormReferenceTemplate =
-  | { kind: "OFFICIAL"; officialTemplateId: string; officialName: string; version: number; fileDocumentId: string; fileDocumentVersionId: string }
+  | {
+      kind: "OFFICIAL";
+      officialTemplateId: string;
+      officialName: string;
+      version: number;
+      fileDocumentId: string;
+      fileDocumentVersionId: string;
+    }
   | { kind: "BUYER"; fileDocumentId: string; fileDocumentVersionId: string };
 
 export type OfficialFormPreparationResult = {
@@ -235,10 +281,26 @@ export type SigningPowerSummary = {
   updatedAt: string;
 };
 
-export const CONSORTIUM_TYPE_LABELS: Record<string, string> = { JOINT: "Groupement conjoint", SOLIDARITY: "Groupement solidaire", OTHER: "Autre" };
-export const DC1_CANDIDATE_TYPE_LABELS: Record<string, string> = { INDIVIDUAL: "Candidat individuel", CONSORTIUM: "Groupement" };
-export const SIGNING_POWER_STATUS_LABELS: Record<string, string> = { UNVERIFIED: "Non vérifié", VALID: "Valide", EXPIRED: "Expiré" };
-export const ADMINISTRATIVE_SIGNATURE_MODE_LABELS: Record<string, string> = { NOT_REQUIRED: "Non requise", MANUAL: "Manuelle", ELECTRONIC: "Électronique", EXTERNAL: "Preuve externe" };
+export const CONSORTIUM_TYPE_LABELS: Record<string, string> = {
+  JOINT: "Groupement conjoint",
+  SOLIDARITY: "Groupement solidaire",
+  OTHER: "Autre",
+};
+export const DC1_CANDIDATE_TYPE_LABELS: Record<string, string> = {
+  INDIVIDUAL: "Candidat individuel",
+  CONSORTIUM: "Groupement",
+};
+export const SIGNING_POWER_STATUS_LABELS: Record<string, string> = {
+  UNVERIFIED: "Non vérifié",
+  VALID: "Valide",
+  EXPIRED: "Expiré",
+};
+export const ADMINISTRATIVE_SIGNATURE_MODE_LABELS: Record<string, string> = {
+  NOT_REQUIRED: "Non requise",
+  MANUAL: "Manuelle",
+  ELECTRONIC: "Électronique",
+  EXTERNAL: "Preuve externe",
+};
 export const ADMINISTRATIVE_SIGNATURE_STATUS_LABELS: Record<string, string> = {
   NOT_REQUIRED: "Non requise",
   PENDING: "En attente",
@@ -300,3 +362,21 @@ export function administrativeChecklistStateBadgeClass(state: string): string {
       return "bg-neutral-100 text-neutral-700";
   }
 }
+
+/** Statut d'une révision générée d'un formulaire officiel — `GeneratedDocumentRevisionStatus` côté API. */
+export const GENERATED_REVISION_STATUS_LABELS: Record<string, string> = {
+  PENDING: "En attente",
+  GENERATING: "Génération en cours",
+  COMPLETED: "Terminée",
+  FAILED: "Échec",
+};
+
+/** Élément léger d'une liste de documents administratifs (sélecteur du document preuve) — sans les
+ *  révisions, qu'un sélecteur n'affiche pas. */
+export type AdministrativeDocumentListItem = {
+  id: string;
+  label: string;
+  documentType: string;
+  validatedRevisionId?: string;
+  signatureStatus: string;
+};

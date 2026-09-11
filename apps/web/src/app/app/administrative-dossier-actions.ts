@@ -18,12 +18,15 @@ import type {
   StructuredCapacityStatement,
   SubcontractorDeclarationSummary,
 } from "../../lib/administrative-dossier-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
 function describeAdministrativeDossierActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Administrative dossier action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -34,24 +37,8 @@ function describeAdministrativeDossierActionError(error: unknown): string {
       case 404:
         return "Ressource introuvable.";
       case 409:
-        if (error.code === "ADMINISTRATIVE_DOCUMENT_ALREADY_VALIDATED_WITH_DIFFERENT_REVISION")
-          return "Une autre révision est déjà validée pour ce document — attachez une nouvelle révision pour la remplacer avant de revalider.";
-        if (error.code === "INVALID_ADMINISTRATIVE_REQUIREMENT_VALIDATION_STATUS_TRANSITION" || error.code === "INVALID_ADMINISTRATIVE_DOCUMENT_REVISION_STATUS_TRANSITION")
-          return "Cette action n'est plus possible dans l'état actuel — rechargez la page.";
-        if (error.code === "ENGAGEMENT_ACT_PRICING_ALREADY_FROZEN") return "Un montant est déjà gelé — dégelez-le explicitement avant d'en sélectionner un autre.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
-        if (error.code === "ADMINISTRATIVE_DOCUMENT_NOT_READY_FOR_VALIDATION") return "Aucun fichier n'est attaché à cette révision — attachez un document avant de valider.";
-        if (error.code === "DOCUMENT_NOT_USABLE_FOR_ADMINISTRATIVE_DOCUMENT") return "Ce document ne peut pas être attaché (introuvable ou sans version exploitable).";
-        if (error.code === "CONSORTIUM_MANDATAIRE_NOT_A_MEMBER") return "Le mandataire doit être un membre déclaré du groupement.";
-        if (error.code === "CONSORTIUM_MEMBER_PERCENTAGES_EXCEED_100") return "La somme des pourcentages des membres ne peut pas dépasser 100 %.";
-        if (error.code === "SUBCONTRACTOR_AMOUNT_INCONSISTENT_WITH_PRICING") return "Ce montant/pourcentage est incohérent avec le montant gelé de l'acte d'engagement.";
-        if (error.code === "PRICING_ESTIMATE_NOT_FOR_THIS_TENDER") return "Cette estimation de pricing n'appartient pas à ce marché.";
-        if (error.code === "ADMINISTRATIVE_SIGNATURE_NOT_REQUIRED") return "Aucune signature n'est requise pour cette pièce.";
-        if (error.code === "ENGAGEMENT_ACT_PRICING_NOT_FROZEN") return "Gelez d'abord un montant de pricing avant de générer l'acte d'engagement.";
-        if (error.code === "DC2_DECLARATION_HAS_NO_VERSION" || error.code === "DUME_DECLARATION_HAS_NO_VERSION") return "Créez d'abord une version avant de générer le document.";
-        if (error.code === "ADMINISTRATIVE_FORM_NOT_READY_FOR_GENERATION") return "Certains champs obligatoires manquent ou aucun gabarit officiel n'est configuré — complétez le formulaire avant de générer l'Annexe.";
-        if (error.code === "UNSUPPORTED_ADMINISTRATIVE_FORM_TYPE") return "Ce type de formulaire officiel n'est pas encore pris en charge.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

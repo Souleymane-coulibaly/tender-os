@@ -3,12 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { ApiKeyScope, ApiKeySummary, WebhookDeliveryPage, WebhookSubscriptionSummary } from "../../lib/integrations-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 /** Ne laisse jamais un message backend brut atteindre un composant — même motif que
  *  `describeWorkspaceActionError`. */
 function describeIntegrationsActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Integrations action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
@@ -17,12 +20,8 @@ function describeIntegrationsActionError(error: unknown): string {
       case 404:
         return "Introuvable ou accès refusé.";
       case 409:
-        if (error.code === "WEBHOOK_DELIVERY_NOT_RETRYABLE") return "Cette livraison a déjà réussi ou n'est pas dans un état permettant une nouvelle tentative.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
-        if (error.code === "UNSAFE_WEBHOOK_ENDPOINT_URL") return "Cette URL n'est pas autorisée comme cible de webhook (réseau privé/local, ou HTTPS requis).";
-        if (error.code === "INVALID_WEBHOOK_EVENT_TYPE") return "Un des événements sélectionnés n'est pas valide.";
-        if (error.code === "INVALID_API_KEY_CLIENT_SCOPE") return "Un des clients sélectionnés n'existe pas dans cette organisation.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

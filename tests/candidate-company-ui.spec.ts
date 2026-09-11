@@ -54,12 +54,12 @@ test.describe("CCV2-F.1 — fiche entreprise candidate (preuves navigateur)", ()
     await ensureLoggedIn(page, fixture);
     await openCandidate(page, fixture.candidateCompanyId);
 
-    for (const label of ["Vue d'ensemble", "Identité", "Établissements", "Représentants", "Certifications", "Assurances", "Références", "Moyens", "Documents"]) {
+    for (const label of ["Vue d'ensemble", "Identité", "Établissements", "Représentants", "Certifications", "Assurances", "Références", "Moyens", "Documents de candidature"]) {
       await expect(page.getByRole("button", { name: label, exact: true })).toBeVisible();
     }
     await expect(page.getByRole("button", { name: "Coordonnées bancaires", exact: true })).toBeVisible();
 
-    await openTab(page, "Documents");
+    await openTab(page, "Documents de candidature");
     await expect(page.getByRole("button", { name: "Ajouter le document" })).toBeVisible();
   });
 
@@ -67,7 +67,7 @@ test.describe("CCV2-F.1 — fiche entreprise candidate (preuves navigateur)", ()
     const fixture = readFixture();
     await ensureLoggedIn(page, fixture);
     await openCandidate(page, fixture.candidateCompanyId);
-    await openTab(page, "Documents");
+    await openTab(page, "Documents de candidature");
 
     // Le champ « Identifiant du document » a disparu — c'est précisément l'objet du gap F2.
     await expect(page.getByLabel("Identifiant du document *")).toHaveCount(0);
@@ -84,7 +84,7 @@ test.describe("CCV2-F.1 — fiche entreprise candidate (preuves navigateur)", ()
     const fixture = readFixture();
     await ensureLoggedIn(page, fixture);
     await openCandidate(page, fixture.candidateCompanyId);
-    await openTab(page, "Documents");
+    await openTab(page, "Documents de candidature");
 
     const label = `Kbis navigateur ${Date.now()}`;
     await page.getByLabel("Fichier *").setInputFiles({
@@ -156,7 +156,7 @@ test.describe("CCV2-F.1 — fiche entreprise candidate (preuves navigateur)", ()
 
     await openCandidate(page, fixture.candidateCompanyId);
 
-    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("Introuvable ou accès refusé");
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText(/introuvable/i);
     // Ni le nom, ni la raison sociale, ni le SIREN de l'entreprise d'autrui.
     const html = await page.content();
     expect(html).not.toContain("CANDIDATE E2E ALPHA SAS");
@@ -178,8 +178,8 @@ test.describe("CCV2-F.1 — fiche entreprise candidate (preuves navigateur)", ()
       expect(overflow, `débordement horizontal à ${width}px`).toBeLessThanOrEqual(1);
 
       // Les onglets restent atteignables à toutes les largeurs (la barre défile, elle ne tronque pas).
-      await openTab(page, "Documents");
-      await expect(page.getByRole("button", { name: "Documents", exact: true })).toBeVisible();
+      await openTab(page, "Documents de candidature");
+      await expect(page.getByRole("button", { name: "Documents de candidature", exact: true })).toBeVisible();
       await openTab(page, "Vue d'ensemble");
     }
   });
@@ -194,8 +194,8 @@ test.describe("CCV2-F.1 — fiche entreprise candidate (preuves navigateur)", ()
 
     // L'onglet actif est annoncé aux technologies d'assistance, pas seulement coloré.
     await expect(page.getByRole("button", { name: "Vue d'ensemble", exact: true })).toHaveAttribute("aria-current", "page");
-    await openTab(page, "Documents");
-    await expect(page.getByRole("button", { name: "Documents", exact: true })).toHaveAttribute("aria-current", "page");
+    await openTab(page, "Documents de candidature");
+    await expect(page.getByRole("button", { name: "Documents de candidature", exact: true })).toHaveAttribute("aria-current", "page");
 
     // Chaque champ du formulaire d'ajout porte un nom accessible — jamais un placeholder seul.
     const controls = page.locator("form input:not([type=hidden]), form select");
@@ -232,9 +232,9 @@ test.describe("CCV2-F.1 — fiche entreprise candidate (preuves navigateur)", ()
     await openCandidate(page, fixture.candidateCompanyId);
 
     await expect(page.getByRole("button", { name: "Coordonnées bancaires", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Documents", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Documents de candidature", exact: true })).toBeVisible();
 
-    await openTab(page, "Documents");
+    await openTab(page, "Documents de candidature");
     await expect(page.getByRole("button", { name: "Ajouter le document" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Dissocier" })).toHaveCount(0);
 
@@ -255,7 +255,7 @@ test.describe("CCV2-F.1 — fiche entreprise candidate (preuves navigateur)", ()
 
         await expect(page.getByRole("button", { name: "Coordonnées bancaires", exact: true })).toHaveCount(0);
 
-        await openTab(page, "Documents");
+        await openTab(page, "Documents de candidature");
         await expect(page.getByRole("button", { name: "Ajouter le document" })).toHaveCount(0);
         await expect(page.getByRole("button", { name: "Dissocier" })).toHaveCount(0);
 

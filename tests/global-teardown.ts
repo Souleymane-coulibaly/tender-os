@@ -20,9 +20,10 @@ export default async function globalTeardown(): Promise<void> {
     organizationId: string;
     userId: string;
     other?: { organizationId: string; userId: string };
+    cockpit?: { organizationId: string; userId: string };
   };
-  const organizationIds = [fixture.organizationId, fixture.other?.organizationId].filter((id): id is string => Boolean(id));
-  const userIds = [fixture.userId, fixture.other?.userId].filter((id): id is string => Boolean(id));
+  const organizationIds = [fixture.organizationId, fixture.other?.organizationId, fixture.cockpit?.organizationId].filter((id): id is string => Boolean(id));
+  const userIds = [fixture.userId, fixture.other?.userId, fixture.cockpit?.userId].filter((id): id is string => Boolean(id));
 
   const prisma = new PrismaClient();
   try {
@@ -101,6 +102,8 @@ export default async function globalTeardown(): Promise<void> {
       // qu'assez d'événements s'accumulaient (FK `outbox_events_organization_id_fkey`).
       await prisma.outboxEvent.deleteMany({ where: { organizationId } });
       await prisma.organizationMembership.deleteMany({ where: { organizationId } });
+      // Organisation `cockpit` (abonnée) — l'abonnement seedé doit partir avant l'organisation.
+      await prisma.organizationSubscription.deleteMany({ where: { organizationId } });
       await prisma.organization.deleteMany({ where: { id: organizationId } });
     }
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });

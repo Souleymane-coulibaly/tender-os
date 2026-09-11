@@ -49,7 +49,7 @@ test.describe("Page Livrables — erreur d'accès", () => {
     await login(page, fixture);
 
     await page.goto(`/app/tenders/${fixture.tenderId}/deliverables/00000000-0000-0000-0000-000000000000`);
-    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("Introuvable ou accès refusé");
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText(/introuvable/i);
   });
 });
 

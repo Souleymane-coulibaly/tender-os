@@ -35,7 +35,12 @@ export type DeliverableSummary = {
   sections?: DeliverableSectionSummary[];
 };
 
-export type RichTextRun = { text: string; bold?: boolean | undefined; italic?: boolean | undefined; href?: string | undefined };
+export type RichTextRun = {
+  text: string;
+  bold?: boolean | undefined;
+  italic?: boolean | undefined;
+  href?: string | undefined;
+};
 
 export type RenderableBlock =
   | { kind: "heading"; level: 1 | 2 | 3; text: string }
@@ -94,7 +99,13 @@ export const DELIVERABLE_TYPES = [
  *  réponse tapée" : les 5 statuts réels supportés par le backend
  *  (`ComplianceCoverageStatus`, deliverables/domain/compliance-coverage-status.ts), jamais un
  *  sous-ensemble recopié à la main. */
-export const COMPLIANCE_COVERAGE_STATUSES = ["COVERED", "PARTIALLY_COVERED", "NOT_COVERED", "NOT_APPLICABLE", "TO_CONFIRM"] as const;
+export const COMPLIANCE_COVERAGE_STATUSES = [
+  "COVERED",
+  "PARTIALLY_COVERED",
+  "NOT_COVERED",
+  "NOT_APPLICABLE",
+  "TO_CONFIRM",
+] as const;
 
 export const COMPLIANCE_COVERAGE_STATUS_LABELS: Record<string, string> = {
   COVERED: "Couvert",
@@ -118,7 +129,12 @@ export const DELIVERABLE_TYPE_LABELS: Record<string, string> = {
 
 export const STRUCTURED_DELIVERABLE_TYPES = new Set(["TECHNICAL_MEMO", "EXECUTIVE_SUMMARY"]);
 export const OVERLAY_DELIVERABLE_TYPES = new Set(["COMPLIANCE_MATRIX", "CHECKLIST", "ANNEXES"]);
-export const READ_ONLY_DELIVERABLE_TYPES = new Set(["VALIDATION_REPORT", "COST_REPORT", "SIGNATURE_DOCUMENTS", "SUBMISSION_PACKAGE"]);
+export const READ_ONLY_DELIVERABLE_TYPES = new Set([
+  "VALIDATION_REPORT",
+  "COST_REPORT",
+  "SIGNATURE_DOCUMENTS",
+  "SUBMISSION_PACKAGE",
+]);
 
 export const DELIVERABLE_STATUS_LABELS: Record<string, string> = {
   NOT_STARTED: "Non démarré",
@@ -185,7 +201,12 @@ export function canManageDeliverable(role: string | undefined): boolean {
 
 /** Vérification UI uniquement — le backend revalide toujours via `ClientPermission.ValidateDeliverable`. */
 export function canValidateDeliverable(role: string | undefined): boolean {
-  return role !== undefined && role !== "READ_ONLY" && role !== "EXTERNAL_CONSULTANT" && role !== "CONTRIBUTOR";
+  return (
+    role !== undefined &&
+    role !== "READ_ONLY" &&
+    role !== "EXTERNAL_CONSULTANT" &&
+    role !== "CONTRIBUTOR"
+  );
 }
 
 /** Vérification UI uniquement — le backend revalide toujours via `DeliverablePermission.ManageDeliverableTemplates`/
@@ -206,7 +227,9 @@ export function blocksToPreviewText(blocks: RenderableBlock[]): string {
         case "list":
           return block.items.join("\n");
         case "table":
-          return [block.headerRow?.join(" | "), ...block.rows.map((r) => r.join(" | "))].filter(Boolean).join("\n");
+          return [block.headerRow?.join(" | "), ...block.rows.map((r) => r.join(" | "))]
+            .filter(Boolean)
+            .join("\n");
         default:
           return "";
       }
@@ -214,3 +237,19 @@ export function blocksToPreviewText(blocks: RenderableBlock[]): string {
     .filter(Boolean)
     .join("\n\n");
 }
+
+/** Statut d'une pièce dans la checklist d'un livrable — `ChecklistPieceStatus` côté API. */
+export const CHECKLIST_PIECE_STATUS_LABELS: Record<string, string> = {
+  MISSING: "Manquante",
+  PROVIDED: "Fournie",
+  EXPIRED: "Expirée",
+  REJECTED: "Rejetée",
+  VALID: "Valide",
+};
+
+/** Statut d'une annexe d'un livrable — `AnnexStatus` côté API. */
+export const ANNEX_STATUS_LABELS: Record<string, string> = {
+  PENDING: "En attente",
+  PROVIDED: "Fournie",
+  VALIDATED: "Validée",
+};

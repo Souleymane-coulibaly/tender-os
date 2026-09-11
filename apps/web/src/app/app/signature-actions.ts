@@ -3,10 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { SignatorySummary, SignatureRequirementSummary, SignatureTransactionSummary } from "../../lib/signature-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 function describeSignatureActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Signature action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -19,8 +22,6 @@ function describeSignatureActionError(error: unknown): string {
       case 409:
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
-        if (error.code === "SIGNATORY_NOT_VERIFIED") return "Le pouvoir de ce signataire n'a pas encore été vérifié.";
-        if (error.code === "EXPORT_NOT_ELIGIBLE_FOR_SIGNATURE") return "Ce document n'est pas éligible à la signature (export final requis).";
         return "Certains champs sont invalides.";
       case 503:
         return "Le prestataire de signature n'est pas configuré ou est mal configuré — contactez un administrateur.";

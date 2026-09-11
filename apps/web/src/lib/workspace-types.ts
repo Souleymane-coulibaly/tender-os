@@ -1,14 +1,35 @@
-export type TenderCollaborativeRole = "TENDER_MANAGER" | "ADMINISTRATIVE_RESPONSIBLE" | "TECHNICAL_WRITER" | "FINANCIAL_RESPONSIBLE" | "REVIEWER" | "SIGNATORY" | "VIEWER";
+export type TenderCollaborativeRole =
+  | "TENDER_MANAGER"
+  | "ADMINISTRATIVE_RESPONSIBLE"
+  | "TECHNICAL_WRITER"
+  | "FINANCIAL_RESPONSIBLE"
+  | "REVIEWER"
+  | "SIGNATORY"
+  | "VIEWER";
 
 export type TaskStatus = "TODO" | "IN_PROGRESS" | "BLOCKED" | "IN_REVIEW" | "DONE" | "CANCELLED";
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+
+/** Priorité d'une tâche, telle qu'affichée. */
+export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
+  LOW: "Basse",
+  MEDIUM: "Normale",
+  HIGH: "Haute",
+  URGENT: "Urgente",
+};
 export type CommentEntityType = "TENDER" | "TASK" | "CHECKLIST_ITEM" | "LOT";
 /** V2 Sprint 18 (mission §24-31) — les trois cibles documentaires ciblent une VERSION déjà
  *  immuable (une révision de section mémoire technique, ou une version Pricing/ResponsePackage déjà
  *  VALIDATED), jamais "latest". */
-export type ApprovalEntityType = "TASK" | "CHECKLIST_ITEM" | "TECHNICAL_MEMO_SECTION_REVISION" | "PRICING_SCHEDULE_VERSION" | "RESPONSE_PACKAGE_VERSION";
+export type ApprovalEntityType =
+  | "TASK"
+  | "CHECKLIST_ITEM"
+  | "TECHNICAL_MEMO_SECTION_REVISION"
+  | "PRICING_SCHEDULE_VERSION"
+  | "RESPONSE_PACKAGE_VERSION";
 /** V2 Sprint 18 (mission §27/§34) — REJECTED ajouté, distinct de CHANGES_REQUESTED. */
-export type ApprovalStatus = "PENDING" | "APPROVED" | "CHANGES_REQUESTED" | "REJECTED" | "CANCELLED";
+export type ApprovalStatus =
+  "PENDING" | "APPROVED" | "CHANGES_REQUESTED" | "REJECTED" | "CANCELLED";
 
 export type TenderParticipant = {
   id: string;
@@ -101,7 +122,12 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
  *  jamais une autorité : chaque mutation reste revalidée côté API (mission §41). Checkpoint
  *  TENDEROS-2.1-P2.3-E6 — source canonique ; `dashboard-permissions.ts` ré-exporte cette même
  *  fonction (audit §12/§42 : deux définitions indépendantes et identiques trouvées). */
-const ROLES_ALLOWED_TO_MANAGE_WORKSPACE = ["OWNER", "ORGANIZATION_ADMIN", "BID_MANAGER", "CONTRIBUTOR"];
+const ROLES_ALLOWED_TO_MANAGE_WORKSPACE = [
+  "OWNER",
+  "ORGANIZATION_ADMIN",
+  "BID_MANAGER",
+  "CONTRIBUTOR",
+];
 export function canManageWorkspace(role: string | undefined): boolean {
   return role !== undefined && ROLES_ALLOWED_TO_MANAGE_WORKSPACE.includes(role);
 }

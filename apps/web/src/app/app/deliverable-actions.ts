@@ -3,12 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { DeliverableCommentSummary, DeliverableRevisionSummary, RenderableBlock } from "../../lib/deliverable-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
 function describeDeliverableActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Deliverable action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -19,16 +22,8 @@ function describeDeliverableActionError(error: unknown): string {
       case 404:
         return "Ressource introuvable.";
       case 409:
-        if (error.code === "DELIVERABLE_REVISION_EDIT_CONFLICT") return "Cette révision a été modifiée par quelqu'un d'autre entre-temps. Rechargez la page et réappliquez vos changements.";
-        if (error.code === "IMMUTABLE_DELIVERABLE_REVISION") return "Cette révision n'est plus modifiable — créez-en une nouvelle.";
-        if (error.code === "DELIVERABLE_TEMPLATE_VERSION_ACTIVATION_CONFLICT" || error.code === "DOCUMENT_THEME_VERSION_ACTIVATION_CONFLICT")
-          return "Une autre version vient d'être activée simultanément ; rechargez et réessayez.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
-        if (error.code === "DELIVERABLE_REVISION_NOT_VALIDATED_FOR_EXPORT") return "Seule une révision validée peut être sélectionnée pour l'export.";
-        if (error.code === "SECTION_TASK_TYPE_NOT_CONFIGURED") return "Aucun type de génération IA n'est configuré pour cette section.";
-        if (error.code === "GENERATION_NOT_USABLE_FOR_REVISION") return "Cette génération n'est pas utilisable pour créer une révision (pas encore terminée, ou d'une autre section/client).";
-        if (error.code === "DELIVERABLE_NOT_READY_FOR_APPROVAL") return "Toutes les sections visibles doivent être validées avant d'approuver ce livrable.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

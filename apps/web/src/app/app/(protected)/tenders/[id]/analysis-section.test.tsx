@@ -55,8 +55,8 @@ describe("AnalysisSection", () => {
   it("shows empty states and a launch button when no analysis has ever run", () => {
     render(<AnalysisSection tenderId="tender-1" initialData={EMPTY_DATA} canTrigger={true} />);
 
-    expect(screen.getByText("Aucune analyse lancee")).toBeInTheDocument();
-    expect(screen.getByText("Aucune synthese disponible pour le moment.")).toBeInTheDocument();
+    expect(screen.getByText("Aucune analyse lancée")).toBeInTheDocument();
+    expect(screen.getByText("Aucune synthèse disponible pour le moment.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lancer l'analyse" })).toBeInTheDocument();
   });
 
@@ -97,7 +97,10 @@ describe("AnalysisSection", () => {
       />,
     );
 
-    expect(screen.getByText("Echouee — AI_PROVIDER_NOT_CONFIGURED")).toBeInTheDocument();
+    // La cause s'affiche en français, sous l'en-tête, jamais par son code technique.
+    expect(screen.getByText("Échouée")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("La génération IA n'est pas configurée pour ce type de contenu.");
+    expect(screen.queryByText(/AI_PROVIDER_NOT_CONFIGURED/)).not.toBeInTheDocument();
     const retryButton = screen.getByRole("button", { name: "Relancer" });
     await user.click(retryButton);
 
@@ -127,8 +130,8 @@ describe("AnalysisSection", () => {
     render(<AnalysisSection tenderId="tender-1" initialData={data} canTrigger={true} />);
 
     expect(screen.getByText("Marche de nettoyage, complexite moderee.")).toBeInTheDocument();
-    expect(screen.getByText("Favorable avec reserves")).toBeInTheDocument();
-    expect(screen.getByText("Complexite : Moyenne")).toBeInTheDocument();
+    expect(screen.getByText("Favorable avec réserves")).toBeInTheDocument();
+    expect(screen.getByText("Complexité : Moyenne")).toBeInTheDocument();
     expect(screen.getByText(/non contraignante/)).toBeInTheDocument();
     expect(screen.getByText("Format du DPGF non precise")).toBeInTheDocument();
   });
@@ -190,7 +193,9 @@ describe("AnalysisSection", () => {
     render(<AnalysisSection tenderId="tender-1" initialData={data} canTrigger={true} />);
 
     expect(screen.getByText("Clauses contractuelles (1)")).toBeInTheDocument();
-    expect(screen.getByText("PENALTY")).toBeInTheDocument();
+    // La catégorie s'affiche par son libellé français, jamais par son code technique.
+    expect(screen.getByText("Pénalités")).toBeInTheDocument();
+    expect(screen.queryByText("PENALTY")).not.toBeInTheDocument();
     expect(screen.getByText("Penalites de retard de 1/1000e par jour.")).toBeInTheDocument();
     expect(screen.getByText(/penalites de retard/)).toBeInTheDocument();
   });
@@ -221,6 +226,6 @@ describe("AnalysisSection", () => {
     await user.click(screen.getByRole("button", { name: "Actualiser" }));
 
     expect(fetchAnalysisSectionData).toHaveBeenCalledWith("tender-1");
-    expect(await screen.findByText("Terminee")).toBeInTheDocument();
+    expect(await screen.findByText("Terminée")).toBeInTheDocument();
   });
 });

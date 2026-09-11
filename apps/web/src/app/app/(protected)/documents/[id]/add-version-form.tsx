@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { addDocumentVersionAction, type FormActionState } from "../../../documents-actions";
+import { FileInput } from "../../../../../components/ui/file-input";
 
 const INITIAL_STATE: FormActionState = {};
 
@@ -15,14 +16,14 @@ export function AddVersionForm({ documentId }: { documentId: string }) {
         <label htmlFor="version-file" className="text-xs text-neutral-600">
           Nouvelle version (fichier)
         </label>
-        <input id="version-file" name="file" type="file" required className="text-sm" />
+        <FileInput id="version-file" name="file" required />
       </div>
       <button
         type="submit"
         disabled={isPending}
         className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
       >
-        {isPending ? "Depot en cours..." : "Deposer une nouvelle version"}
+        {isPending ? "Dépôt en cours..." : "Déposer une nouvelle version"}
       </button>
       {state.error ? (
         <p role="alert" className="text-xs text-red-600">

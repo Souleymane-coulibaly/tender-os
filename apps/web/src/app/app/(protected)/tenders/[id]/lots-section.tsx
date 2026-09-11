@@ -243,7 +243,7 @@ export function LotsSection({
               type="text"
               required
               placeholder="N°"
-              aria-label="Numero du lot"
+              aria-label="Numéro du lot"
               className="shrink-0 grow-0 basis-20"
             />
             <Input

@@ -11,14 +11,16 @@ import type {
   PassPurchasePage,
   SubscriptionPlanTier,
 } from "../../lib/billing-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 /** Ne laisse jamais un message backend brut atteindre un composant — même motif que
  *  `describeIntegrationsActionError`. */
 function describeBillingAdminActionError(error: unknown): string {
   if (error instanceof PlatformApiError) {
     console.error(`[TenderOS] Platform Admin billing action failed (${error.status} ${error.code}): ${error.message}`);
-    if (error.status === 403) return "Cette action nécessite une capacité SubscriptionsManage (ADMIN/OWNER).";
-    if (error.status === 422) return error.message;
+    const known = apiErrorMessage(error);
+    if (known) return known;
+    if (error.status === 403) return "Cette action est réservée aux administrateurs de la plateforme habilités à gérer les abonnements.";
     return "Une erreur est survenue.";
   }
   console.error("[TenderOS] Unexpected error during a Platform Admin billing action:", error);

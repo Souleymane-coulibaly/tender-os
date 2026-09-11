@@ -117,7 +117,7 @@ test.describe("Base de connaissances — isolation same-org cross-client (missio
     await login(collaboratorPage, { email: fixture.collaboratorEmail, password: fixture.collaboratorPassword });
 
     await collaboratorPage.goto(entryUrl);
-    await expect(collaboratorPage.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("Introuvable ou accès refusé");
+    await expect(collaboratorPage.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText(/introuvable/i);
     await expect(collaboratorPage.getByRole("heading", { name: secretTitle })).not.toBeVisible();
 
     // La liste et la recherche ne doivent jamais non plus laisser fuiter son existence.

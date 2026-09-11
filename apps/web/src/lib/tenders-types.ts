@@ -95,14 +95,20 @@ export const AWARD_TYPE_LABELS: Record<AwardType, string> = {
 };
 
 /** V2 Sprint 3 §15 — indicateur de completude par categorie, jamais un score global ni GO/NO-GO. */
-export const TENDER_COMPLETENESS_STATUSES = ["COMPLETE", "PARTIAL", "MISSING", "INCONSISTENT", "TO_VERIFY"] as const;
+export const TENDER_COMPLETENESS_STATUSES = [
+  "COMPLETE",
+  "PARTIAL",
+  "MISSING",
+  "INCONSISTENT",
+  "TO_VERIFY",
+] as const;
 export type TenderCompletenessStatus = (typeof TENDER_COMPLETENESS_STATUSES)[number];
 export const TENDER_COMPLETENESS_STATUS_LABELS: Record<TenderCompletenessStatus, string> = {
   COMPLETE: "Complet",
   PARTIAL: "Partiel",
   MISSING: "Manquant",
-  INCONSISTENT: "Incoherent",
-  TO_VERIFY: "A verifier",
+  INCONSISTENT: "Incohérent",
+  TO_VERIFY: "À vérifier",
 };
 
 export type TenderCompleteness = {
@@ -118,7 +124,7 @@ export type TenderCompleteness = {
 };
 
 export const TENDER_COMPLETENESS_CATEGORY_LABELS: Record<keyof TenderCompleteness, string> = {
-  generalInformation: "Informations generales",
+  generalInformation: "Informations générales",
   // Checkpoint 2.1-A5 — ce champ backend s'appelle "candidate" par convention historique (avant
   // l'introduction de CandidateCompany, A1-A4) mais porte en réalité la complétude de la fiche
   // légale du CLIENT (ClientAccount). Libellé corrigé ici ; la clé reste inchangée pour matcher le
@@ -127,7 +133,7 @@ export const TENDER_COMPLETENESS_CATEGORY_LABELS: Record<keyof TenderCompletenes
   buyer: "Acheteur",
   dates: "Dates",
   lots: "Lots",
-  criteria: "Criteres",
+  criteria: "Critères",
   checklist: "Checklist",
   milestones: "Jalons",
   risks: "Risques",
@@ -158,7 +164,7 @@ export const MARKET_TYPES = ["PUBLIC", "PRIVATE"] as const;
 export type MarketType = (typeof MARKET_TYPES)[number];
 export const MARKET_TYPE_LABELS: Record<MarketType, string> = {
   PUBLIC: "Public",
-  PRIVATE: "Prive",
+  PRIVATE: "Privé",
 };
 
 export const TENDER_COUNTRIES = ["FR", "BE", "DE", "ES", "IT", "LU", "NL", "EU", "OTHER"] as const;
@@ -277,11 +283,27 @@ export type ChecklistItemType =
   | "OTHER";
 export type ChecklistRequirementLevel = "MANDATORY" | "CONDITIONAL" | "INFORMATIONAL";
 export type ChecklistItemCriticality = "BLOCKING" | "HIGH" | "MEDIUM" | "LOW";
-export type ChecklistComplianceStatus = "TO_REVIEW" | "NON_COMPLIANT" | "READY" | "VALIDATED" | "NOT_APPLICABLE";
+
+/** Criticité d'un élément de checklist, telle qu'affichée. */
+export const CHECKLIST_CRITICALITY_LABELS: Record<ChecklistItemCriticality, string> = {
+  BLOCKING: "Bloquante",
+  HIGH: "Élevée",
+  MEDIUM: "Moyenne",
+  LOW: "Faible",
+};
+export type ChecklistComplianceStatus =
+  "TO_REVIEW" | "NON_COMPLIANT" | "READY" | "VALIDATED" | "NOT_APPLICABLE";
 export type ChecklistDocumentStatus = "MISSING" | "AVAILABLE" | "EXPIRED";
 export type ChecklistItemOrigin = "MANUAL" | "AI_SUGGESTION" | "SYSTEM";
-export type ChecklistSubjectType = "CANDIDATE" | "GROUP_MEMBER" | "SUBCONTRACTOR" | "ANY_MEMBER" | "TENDER" | "LOT";
-export type ChecklistDocumentMatchStatus = "NOT_SEARCHED" | "EXACT_MATCH" | "PROBABLE_MATCH" | "MULTIPLE_CANDIDATES" | "NO_MATCH" | "MANUALLY_ATTACHED";
+export type ChecklistSubjectType =
+  "CANDIDATE" | "GROUP_MEMBER" | "SUBCONTRACTOR" | "ANY_MEMBER" | "TENDER" | "LOT";
+export type ChecklistDocumentMatchStatus =
+  | "NOT_SEARCHED"
+  | "EXACT_MATCH"
+  | "PROBABLE_MATCH"
+  | "MULTIPLE_CANDIDATES"
+  | "NO_MATCH"
+  | "MANUALLY_ATTACHED";
 
 /** Checkpoint 2.1-P2.1-FIX-B — axe ORTHOGONAL à `complianceStatus` (jamais confondus, mission
  *  §15) : reflète si CETTE exigence a été retrouvée dans la dernière analyse réconciliée, jamais
@@ -340,10 +362,11 @@ export const CHECKLIST_FRESHNESS_LABELS: Record<ChecklistFreshness, string> = {
   RECONCILIATION_REQUIRED: "Réconciliation requise",
 };
 
-export const CHECKLIST_REQUIREMENT_FRESHNESS_LABELS: Record<ChecklistRequirementFreshness, string> = {
-  CURRENT: "Retrouvée dans la dernière analyse",
-  STALE: "Absente de la dernière analyse",
-};
+export const CHECKLIST_REQUIREMENT_FRESHNESS_LABELS: Record<ChecklistRequirementFreshness, string> =
+  {
+    CURRENT: "Retrouvée dans la dernière analyse",
+    STALE: "Absente de la dernière analyse",
+  };
 
 export type ChecklistProgressCounts = {
   totalApplicable: number;
@@ -395,6 +418,15 @@ export type MilestoneType =
   | "MANDATORY_VISIT"
   | "INTERNAL_VALIDATION"
   | "CUSTOM";
+
+/** Type d'échéance, tel qu'affiché. */
+export const MILESTONE_TYPE_LABELS: Record<MilestoneType, string> = {
+  SUBMISSION_DEADLINE: "Date limite de dépôt",
+  QUESTION_DEADLINE: "Date limite des questions",
+  MANDATORY_VISIT: "Visite obligatoire",
+  INTERNAL_VALIDATION: "Validation interne",
+  CUSTOM: "Autre",
+};
 export type MilestoneStatus = "PENDING" | "DONE";
 
 export type Milestone = {
@@ -414,7 +446,23 @@ export type Milestone = {
 };
 
 export type RiskSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+/** Gravité d'un risque, telle qu'affichée. */
+export const RISK_SEVERITY_LABELS: Record<RiskSeverity, string> = {
+  LOW: "Faible",
+  MEDIUM: "Moyenne",
+  HIGH: "Élevée",
+  CRITICAL: "Critique",
+};
 export type RiskStatus = "OPEN" | "MITIGATED" | "RESOLVED" | "ACCEPTED";
+
+/** Statut d'un risque, tel qu'affiché. */
+export const RISK_STATUS_LABELS: Record<RiskStatus, string> = {
+  OPEN: "Ouvert",
+  MITIGATED: "Atténué",
+  RESOLVED: "Résolu",
+  ACCEPTED: "Accepté",
+};
 
 export type Risk = {
   id: string;
@@ -435,6 +483,13 @@ export type Risk = {
 };
 
 export type AlertSeverity = "CRITICAL" | "WARNING" | "INFO";
+
+/** Gravité d'une alerte, telle qu'affichée. */
+export const ALERT_SEVERITY_LABELS: Record<AlertSeverity, string> = {
+  CRITICAL: "Critique",
+  WARNING: "Avertissement",
+  INFO: "Information",
+};
 
 export type Alert = {
   id: string;
@@ -488,13 +543,13 @@ export type MyMembership = {
 export const TENDER_STATUS_LABELS: Record<TenderStatus, string> = {
   DRAFT: "Brouillon",
   IN_ANALYSIS: "En analyse",
-  READY: "Pret",
-  IN_PREPARATION: "En preparation",
-  READY_TO_SUBMIT: "Pret a soumettre",
+  READY: "Prêt",
+  IN_PREPARATION: "En préparation",
+  READY_TO_SUBMIT: "Prêt à soumettre",
   SUBMITTED: "Soumis",
-  WON: "Gagne",
+  WON: "Gagné",
   LOST: "Perdu",
-  ARCHIVED: "Archive",
+  ARCHIVED: "Archivé",
 };
 
 export const ALLOWED_TENDER_TRANSITIONS: Record<TenderStatus, TenderStatus[]> = {
@@ -513,9 +568,9 @@ export const ALLOWED_TENDER_TRANSITIONS: Record<TenderStatus, TenderStatus[]> = 
 
 /** Colonnes actives du Kanban — ARCHIVED est un statut terminal retire du pilotage actif,
  *  meme decision que le backend (get-tender-board.use-case.ts). */
-export const BOARD_STATUSES: TenderStatus[] = (Object.keys(TENDER_STATUS_LABELS) as TenderStatus[]).filter(
-  (status) => status !== "ARCHIVED",
-);
+export const BOARD_STATUSES: TenderStatus[] = (
+  Object.keys(TENDER_STATUS_LABELS) as TenderStatus[]
+).filter((status) => status !== "ARCHIVED");
 
 export type TenderBoardItem = {
   id: string;

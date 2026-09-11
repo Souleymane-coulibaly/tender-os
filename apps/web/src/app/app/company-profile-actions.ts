@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 /**
  * Checkpoint TENDEROS-2.1-CCV2-I.4 — 7 actions d'ECRITURE de candidature ont ete retirees ici
@@ -20,6 +21,8 @@ export type FormActionState = { error?: string };
 function describeCompanyProfileActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Company profile action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -30,11 +33,8 @@ function describeCompanyProfileActionError(error: unknown): string {
       case 404:
         return "Cette ressource est introuvable ou vous n'y avez pas accès.";
       case 409:
-        if (error.code === "DUPLICATE_SIRET_IN_ORGANIZATION") return "Un autre client de votre organisation utilise déjà ce SIRET.";
         return "Cette action entre en conflit avec l'état actuel de cette ressource.";
       case 422:
-        if (error.code === "INVALID_COMPANY_IDENTIFIER_FORMAT") return "Le format du SIREN/SIRET/TVA saisi est invalide.";
-        if (error.code === "DOCUMENT_NOT_USABLE_FOR_COMPANY_PROFILE") return "Ce document n'a pas encore de version exploitable.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

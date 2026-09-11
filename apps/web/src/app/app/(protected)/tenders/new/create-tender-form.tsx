@@ -104,7 +104,7 @@ export function CreateTenderForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="reference" className="text-sm font-medium text-neutral-700">
-          Reference
+          Référence
         </label>
         <input id="reference" name="reference" type="text" className="rounded border border-neutral-300 px-3 py-2 text-sm" />
       </div>
@@ -134,7 +134,7 @@ export function CreateTenderForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1">
           <label htmlFor="procedureType" className="text-sm font-medium text-neutral-700">
-            Type de procedure
+            Type de procédure
           </label>
           <input
             id="procedureType"
@@ -145,7 +145,7 @@ export function CreateTenderForm({
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="marketType" className="text-sm font-medium text-neutral-700">
-            Type de marche *
+            Type de marché *
           </label>
           <select
             id="marketType"
@@ -166,7 +166,7 @@ export function CreateTenderForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1">
           <label htmlFor="estimatedAmount" className="text-sm font-medium text-neutral-700">
-            Montant estime
+            Montant estimé
           </label>
           <input
             id="estimatedAmount"
@@ -276,7 +276,7 @@ export function CreateTenderForm({
         disabled={isPending}
         className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
       >
-        {isPending ? "Creation..." : "Creer l'appel d'offres"}
+        {isPending ? "Création..." : "Créer l'appel d'offres"}
       </button>
     </form>
   );

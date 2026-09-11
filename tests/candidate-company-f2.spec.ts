@@ -342,7 +342,7 @@ test.describe("CCV2-F.2 — clôture fonctionnelle (preuves navigateur)", () => 
 
     // --- §13 : URL DIRECTE de l'entreprise candidate A depuis l'organisation B.
     await page.goto(`/app/candidate-companies/${fixture.candidateCompanyId}`);
-    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("Introuvable ou accès refusé");
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText(/introuvable/i);
 
     const detailHtml = await page.content();
     expect(detailHtml, "identité A").not.toContain("CANDIDATE E2E ALPHA SAS");

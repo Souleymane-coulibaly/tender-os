@@ -4,12 +4,15 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { SubcontractorProfile } from "../../lib/subcontractor-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
 function describeSubcontractorActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Subcontractor action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -22,9 +25,6 @@ function describeSubcontractorActionError(error: unknown): string {
       case 409:
         return "Cette action entre en conflit avec l'état actuel de ce sous-traitant.";
       case 422:
-        if (error.code === "INVALID_SUBCONTRACTOR_IDENTIFIER_FORMAT") {
-          return error.message.includes("doublon") ? "Un autre sous-traitant de votre organisation utilise déjà ce SIRET." : "Le format du SIREN/SIRET saisi est invalide.";
-        }
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

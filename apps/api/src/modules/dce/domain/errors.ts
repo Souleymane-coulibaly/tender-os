@@ -92,6 +92,31 @@ export class InvalidFilenameError extends DomainError {
   }
 }
 
+/*
+ * Refus d'UN fichier d'un import (conception §5) : jamais levés vers le client, ils sont reportés
+ * dans `rejected` avec leur code — l'écran traduit le code, jamais le message technique.
+ */
+export class DceArchiveRequiresZipImportError extends DomainError {
+  readonly code = "DCE_ARCHIVE_REQUIRES_ZIP_IMPORT";
+  constructor() {
+    super("ZIP archives must be imported via the archive import, not the file import.");
+  }
+}
+
+export class DceFileContentMismatchError extends DomainError {
+  readonly code = "DCE_FILE_CONTENT_MISMATCH";
+  constructor() {
+    super("the file content does not match its declared extension.");
+  }
+}
+
+export class DuplicateDceFileError extends DomainError {
+  readonly code = "DCE_DUPLICATE_FILE";
+  constructor(input: { existingFilename: string }) {
+    super(`duplicate of an already imported file (${input.existingFilename}).`);
+  }
+}
+
 export class DceImportJobNotFoundError extends DomainError {
   readonly code = "DCE_IMPORT_JOB_NOT_FOUND";
   constructor() {

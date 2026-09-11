@@ -16,6 +16,7 @@ import type {
   RiskFinding,
   TenderAnalysisSummary,
 } from "../../lib/analysis-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
@@ -25,6 +26,8 @@ export type FormActionState = { error?: string };
 function describeAnalysisActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Analysis action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -33,13 +36,8 @@ function describeAnalysisActionError(error: unknown): string {
       case 403:
         return "Vous n'avez pas les droits nécessaires pour cette action.";
       case 404:
-        if (error.code === "DOCUMENT_EXTRACTION_NOT_FOUND") return "Aucune extraction n'a encore été effectuée pour ce document.";
         return "Ressource introuvable.";
       case 409:
-        if (error.code === "EXTRACTION_NOT_READY_FOR_ANALYSIS") return "L'extraction de ce document n'est pas encore terminée : l'analyse n'est pas encore possible.";
-        if (error.code === "ANALYSIS_ALREADY_RUNNING") return "Une analyse est déjà en cours pour cet appel d'offres.";
-        if (error.code === "ANALYSIS_NOT_RETRYABLE") return "Cette analyse ne peut pas être relancée dans son état actuel.";
-        if (error.code === "ANALYSIS_RETRY_LIMIT_EXCEEDED") return "Le nombre maximal de tentatives a été atteint pour cette analyse.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
         return "Certains champs sont invalides.";

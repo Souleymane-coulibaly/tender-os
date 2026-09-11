@@ -9,7 +9,14 @@ import { GetTenderUseCase } from "../../../tenders";
 import { classifyDceDocument } from "../../domain/dce-document-classifier";
 import { DceDocument } from "../../domain/dce-document.entity";
 import { determineDceDocumentProcessingStatus } from "../../domain/dce-document-processing-status";
-import { DceNotFoundError, TooManyFilesError } from "../../domain/errors";
+import { DomainError } from "../../../../shared-kernel/domain-error";
+import {
+  DceArchiveRequiresZipImportError,
+  DceFileContentMismatchError,
+  DceNotFoundError,
+  DuplicateDceFileError,
+  TooManyFilesError,
+} from "../../domain/errors";
 import { isSignatureCompatibleWithExtension } from "../../domain/allowed-file-types";
 import { DcePermission } from "../../domain/dce-permission";
 import { assertHasDcePermission } from "../policies/dce-authorization.policy";
@@ -38,7 +45,13 @@ export type ImportDceFilesCommand = Readonly<{
   requestId?: string | undefined;
 }>;
 
-export type ImportDceFilesRejection = Readonly<{ originalFilename: string; reason: string }>;
+/** `code` : code d'erreur stable, traduit par l'écran ; `reason` : détail technique (journaux,
+ *  intégrations). Un résultat d'import ZIP enregistré avant l'ajout de `code` n'en porte pas. */
+export type ImportDceFilesRejection = Readonly<{ originalFilename: string; code: string; reason: string }>;
+
+function rejectionOf(originalFilename: string, error: DomainError): ImportDceFilesRejection {
+  return { originalFilename, code: error.code, reason: error.message };
+}
 
 export type ImportDceFilesResult = Readonly<{
   accepted: DceDocumentSummary[];
@@ -127,24 +140,21 @@ export class ImportDceFilesUseCase {
       try {
         validated = validateIncomingDceFile(file, command.maxFileSizeBytes);
       } catch (error) {
-        rejected.push({ originalFilename: file.originalFilename, reason: (error as Error).message });
+        // Seul un refus de FORMAT (erreur de domaine) est reporté ; tout autre échec est inattendu
+        // et interrompt l'import (voir la stratégie d'atomicité ci-dessus).
+        if (!(error instanceof DomainError)) throw error;
+        rejected.push(rejectionOf(file.originalFilename, error));
         continue;
       }
 
       if (validated.extension === "zip") {
-        rejected.push({
-          originalFilename: file.originalFilename,
-          reason: "ZIP archives must be imported via the archive import, not the file import.",
-        });
+        rejected.push(rejectionOf(file.originalFilename, new DceArchiveRequiresZipImportError()));
         continue;
       }
 
       const detected = this.signatureDetector.detect(file.buffer);
       if (!isSignatureCompatibleWithExtension(detected?.mimeType ?? null, validated.extension)) {
-        rejected.push({
-          originalFilename: file.originalFilename,
-          reason: "the file content does not match its declared extension.",
-        });
+        rejected.push(rejectionOf(file.originalFilename, new DceFileContentMismatchError()));
         continue;
       }
 
@@ -263,10 +273,9 @@ export class ImportDceFilesUseCase {
       });
 
       if (outcome.kind === "duplicate") {
-        rejected.push({
-          originalFilename: file.originalFilename,
-          reason: `duplicate of an already imported file (${outcome.duplicate.originalFilename}).`,
-        });
+        rejected.push(
+          rejectionOf(file.originalFilename, new DuplicateDceFileError({ existingFilename: outcome.duplicate.originalFilename })),
+        );
         continue;
       }
 

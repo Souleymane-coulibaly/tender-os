@@ -11,9 +11,11 @@ import {
   updateDeliverableAnnexAction,
 } from "../../../../../deliverable-actions";
 import {
-  canManageDeliverable,
+  ANNEX_STATUS_LABELS,
+  CHECKLIST_PIECE_STATUS_LABELS,
   COMPLIANCE_COVERAGE_STATUSES,
   COMPLIANCE_COVERAGE_STATUS_LABELS,
+  canManageDeliverable,
   type DeliverableSummary,
 } from "../../../../../../../lib/deliverable-types";
 import { Button } from "../../../../../../../components/ui/button";
@@ -296,7 +298,9 @@ function ChecklistRow({
     <li className="flex flex-col gap-2 rounded border border-tenderos-navy/10 px-3 py-2 text-sm">
       <div className="flex items-center justify-between">
         <span>{entry.name}</span>
-        <span className="text-xs text-tenderos-slate">{entry.status}</span>
+        <span className="text-xs text-tenderos-slate">
+          {CHECKLIST_PIECE_STATUS_LABELS[entry.status] ?? entry.status}
+        </span>
       </div>
       {canEdit && entry.status === "MISSING" ? (
         documents.length > 0 ? (
@@ -432,7 +436,9 @@ function AnnexRow({
     <li className="flex flex-col gap-2 rounded border border-tenderos-navy/10 px-3 py-2 text-sm">
       <div className="flex items-center justify-between">
         <span>{entry.label}</span>
-        <span className="text-xs text-tenderos-slate">{entry.status}</span>
+        <span className="text-xs text-tenderos-slate">
+          {ANNEX_STATUS_LABELS[entry.status] ?? entry.status}
+        </span>
       </div>
       {canEdit && entry.status === "PENDING" ? (
         documents.length > 0 ? (

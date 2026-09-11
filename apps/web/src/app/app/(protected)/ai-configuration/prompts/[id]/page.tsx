@@ -1,9 +1,18 @@
 import type { Metadata } from "next";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
-import { GENERATION_TASK_TYPE_LABELS, type PromptTemplateSummary, type PromptVersionSummary } from "../../../../../../lib/generation-types";
+import {
+  GENERATION_TASK_TYPE_LABELS,
+  type PromptTemplateSummary,
+  type PromptVersionSummary,
+} from "../../../../../../lib/generation-types";
 import { isOrganizationAdmin } from "../../../../../../lib/authorization";
 import { ApiErrorState } from "../../../api-error-state";
-import { ArchivePromptTemplateButton, CreatePromptVersionForm, PromptVersionActivateButton } from "./prompt-template-actions";
+import {
+  ArchivePromptTemplateButton,
+  CreatePromptVersionForm,
+  PromptVersionActivateButton,
+} from "./prompt-template-actions";
+import { VERSION_STATUS_LABELS } from "../../../../../../lib/version-status";
 
 export const metadata: Metadata = { title: "Template de prompt — TenderOS" };
 
@@ -16,14 +25,20 @@ function versionStatusBadgeClass(status: string): string {
   return "bg-amber-100 text-amber-800";
 }
 
-export default async function PromptTemplateDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PromptTemplateDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
 
   let data: { template: PromptTemplateSummary; versions: PromptVersionSummary[] };
   let actorRole: string | undefined;
   try {
     [data, actorRole] = await Promise.all([
-      appApiFetch<{ template: PromptTemplateSummary; versions: PromptVersionSummary[] }>(`/api/v1/prompt-templates/${id}`),
+      appApiFetch<{ template: PromptTemplateSummary; versions: PromptVersionSummary[] }>(
+        `/api/v1/prompt-templates/${id}`,
+      ),
       getCurrentMembershipRole(),
     ]);
   } catch (error) {
@@ -38,19 +53,27 @@ export default async function PromptTemplateDetailPage({ params }: { params: Pro
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">{template.name}</h1>
-          <p className="text-sm text-neutral-600">{GENERATION_TASK_TYPE_LABELS[template.taskType] ?? template.taskType}</p>
+          <p className="text-sm text-neutral-600">
+            {GENERATION_TASK_TYPE_LABELS[template.taskType] ?? template.taskType}
+          </p>
         </div>
-        {canManage && !template.archivedAt ? <ArchivePromptTemplateButton templateId={template.id} /> : null}
+        {canManage && !template.archivedAt ? (
+          <ArchivePromptTemplateButton templateId={template.id} />
+        ) : null}
       </div>
 
       {template.archivedAt ? (
-        <p className="rounded bg-neutral-100 px-3 py-2 text-sm text-neutral-600">Ce template est archivé.</p>
+        <p className="rounded bg-neutral-100 px-3 py-2 text-sm text-neutral-600">
+          Ce template est archivé.
+        </p>
       ) : null}
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-neutral-900">Versions</h2>
         {versions.length === 0 ? (
-          <p className="text-sm text-neutral-600">Aucune version pour l&apos;instant — créez-en une ci-dessous.</p>
+          <p className="text-sm text-neutral-600">
+            Aucune version pour l&apos;instant — créez-en une ci-dessous.
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
@@ -68,13 +91,22 @@ export default async function PromptTemplateDetailPage({ params }: { params: Pro
                   <tr key={version.id} className="border-b border-neutral-100 align-top">
                     <td className="py-2 pr-4 font-medium text-neutral-900">v{version.version}</td>
                     <td className="py-2 pr-4">
-                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${versionStatusBadgeClass(version.status)}`}>{version.status}</span>
+                      <span
+                        className={`rounded px-2 py-0.5 text-xs font-medium ${versionStatusBadgeClass(version.status)}`}
+                      >
+                        {VERSION_STATUS_LABELS[version.status] ?? version.status}
+                      </span>
                     </td>
                     <td className="py-2 pr-4 text-neutral-600">{version.authorUserId}</td>
-                    <td className="py-2 pr-4 text-neutral-600">{new Date(version.createdAt).toLocaleString("fr-FR")}</td>
+                    <td className="py-2 pr-4 text-neutral-600">
+                      {new Date(version.createdAt).toLocaleString("fr-FR")}
+                    </td>
                     <td className="py-2 pr-4">
                       {canManage && version.status === "DRAFT" ? (
-                        <PromptVersionActivateButton templateId={template.id} versionId={version.id} />
+                        <PromptVersionActivateButton
+                          templateId={template.id}
+                          versionId={version.id}
+                        />
                       ) : null}
                     </td>
                   </tr>
@@ -85,7 +117,9 @@ export default async function PromptTemplateDetailPage({ params }: { params: Pro
         )}
       </div>
 
-      {canManage && !template.archivedAt ? <CreatePromptVersionForm templateId={template.id} /> : null}
+      {canManage && !template.archivedAt ? (
+        <CreatePromptVersionForm templateId={template.id} />
+      ) : null}
     </div>
   );
 }

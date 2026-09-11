@@ -15,7 +15,7 @@ import { AddVersionForm } from "./add-version-form";
 import { LifecycleActions } from "./lifecycle-actions";
 import { UpdateMetadataForm } from "./update-metadata-form";
 
-export const metadata: Metadata = { title: "Detail du document — TenderOS" };
+export const metadata: Metadata = { title: "Détail du document — TenderOS" };
 
 export default async function DocumentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -67,7 +67,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
             href={`/app/documents/${doc.id}/download`}
             className="text-sm text-neutral-700 hover:underline"
           >
-            Telecharger la version courante
+            Télécharger la version courante
           </a>
         </div>
         <table className="w-full border-collapse text-sm">
@@ -76,7 +76,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
               <th className="py-2 pr-4">Version</th>
               <th className="py-2 pr-4">Fichier</th>
               <th className="py-2 pr-4">Taille</th>
-              <th className="py-2 pr-4">Depose le</th>
+              <th className="py-2 pr-4">Déposé le</th>
               <th className="py-2 pr-4">Action</th>
             </tr>
           </thead>
@@ -97,7 +97,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
                     href={`/app/documents/${doc.id}/download?versionId=${version.id}`}
                     className="text-neutral-700 hover:underline"
                   >
-                    Telecharger
+                    Télécharger
                   </a>
                 </td>
               </tr>

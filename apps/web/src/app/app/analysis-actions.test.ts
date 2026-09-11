@@ -40,7 +40,7 @@ describe("analysis-actions — French error mapping (bug #10)", () => {
 
     const result = await startDocumentAnalysisAction("tender-1", "doc-1");
 
-    expect(result.error).toBe("L'extraction de ce document n'est pas encore terminée : l'analyse n'est pas encore possible.");
+    expect(result.error).toBe("L'extraction de ce document n'est pas encore prête pour l'analyse.");
     expect(result.error).not.toContain("PENDING");
   });
 
@@ -49,7 +49,7 @@ describe("analysis-actions — French error mapping (bug #10)", () => {
 
     const result = await startTenderAnalysisAction("tender-1");
 
-    expect(result.error).toBe("Une analyse est déjà en cours pour cet appel d'offres.");
+    expect(result.error).toBe("Une analyse est déjà en cours.");
   });
 
   it("maps a 503 AI_PROVIDER_UNAVAILABLE to a comprehensible French message", async () => {
@@ -57,7 +57,7 @@ describe("analysis-actions — French error mapping (bug #10)", () => {
 
     const result = await retryDocumentAnalysisAction("analysis-1");
 
-    expect(result.error).toBe("Le service d'intelligence artificielle est momentanément indisponible. Veuillez réessayer plus tard.");
+    expect(result.error).toBe("Le service d'IA est momentanément indisponible. Réessayez dans quelques minutes.");
   });
 
   it("maps a 404 DOCUMENT_EXTRACTION_NOT_FOUND to a comprehensible French message", async () => {
@@ -65,7 +65,7 @@ describe("analysis-actions — French error mapping (bug #10)", () => {
 
     const result = await startDocumentAnalysisAction("tender-1", "doc-1");
 
-    expect(result.error).toBe("Aucune extraction n'a encore été effectuée pour ce document.");
+    expect(result.error).toBe("L'extraction de ce document est introuvable.");
   });
 
   it("maps an unexpected non-AppApiError to a network error message, never exposing the raw error", async () => {

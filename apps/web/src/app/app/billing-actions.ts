@@ -12,12 +12,15 @@ import type {
   PublicPlanCatalogEntry,
   SubscriptionPlanTier,
 } from "../../lib/billing-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 /** Ne laisse jamais un message backend brut atteindre un composant — même motif que
  *  `describeIntegrationsActionError`. */
 function describeBillingActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Billing action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
@@ -28,8 +31,6 @@ function describeBillingActionError(error: unknown): string {
       case 404:
         return "Introuvable ou accès refusé.";
       case 422:
-        if (error.code === "NO_STRIPE_CUSTOMER_FOR_ORGANIZATION") return "Aucun abonnement actif à gérer — le Pass AO ne dispose pas de Portail Client.";
-        if (error.code === "STRIPE_PRICE_NOT_CONFIGURED") return "Ce plan n'est pas encore disponible à l'achat. Contactez le support.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

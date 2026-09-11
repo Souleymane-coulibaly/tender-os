@@ -12,6 +12,7 @@ import type {
   TechnicalMemoTemplateOrigin,
 } from "../../lib/technical-memo-types";
 import type { GeneratedDocumentRevisionSummary } from "../../lib/document-generation-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type TechnicalMemoActionState = { error?: string };
 
@@ -20,6 +21,8 @@ export type TechnicalMemoActionState = { error?: string };
 function describeTechnicalMemoActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Technical memo action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
@@ -28,19 +31,12 @@ function describeTechnicalMemoActionError(error: unknown): string {
       case 404:
         return "Introuvable ou accès refusé.";
       case 409:
-        if (error.code === "DUPLICATE_TECHNICAL_MEMO") return "Un mémoire technique existe déjà pour ce Tender (et ce lot).";
-        if (error.code === "TECHNICAL_MEMO_SECTION_ALREADY_VALIDATED") return "Cette section est déjà validée — régénérez-la explicitement si vous voulez la remplacer.";
-        if (error.code === "TECHNICAL_MEMO_TEMPLATE_NOT_READY") return "Le gabarit du mémoire n'est pas encore prêt — préparez-le avant d'exporter.";
-        if (error.code === "TECHNICAL_MEMO_ANALYSIS_NOT_CURRENT") return "Le DCE a changé depuis la dernière analyse : actualisez l'analyse avant de générer cette section.";
-        if (error.code === "TECHNICAL_MEMO_STALE_EXPORT_BLOCKED") return "Ce mémoire n'est pas à jour — actualisez puis régénérez les sections obsolètes avant d'exporter la version finale.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 413:
         return "Le fichier est trop volumineux.";
       case 415:
         return "Ce type de fichier n'est pas pris en charge — un fichier .docx est attendu.";
       case 422:
-        if (error.code === "NO_HEADINGS_DETECTED") return "Aucun titre n'a pu être détecté dans ce document — impossible d'en analyser la structure automatiquement.";
-        if (error.code === "TECHNICAL_MEMO_CITATION_VALIDATION_FAILED") return "La génération a produit une source non vérifiable et a été rejetée. Réessayez.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

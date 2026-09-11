@@ -1,9 +1,35 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, UseFilters, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  UseFilters,
+  UseGuards,
+} from "@nestjs/common";
 import { AuthenticatedGuard, CurrentActor, type AuthenticatedActor } from "../../../identity";
-import { CurrentMembershipContext, OrganizationMembershipGuard, type MembershipContext } from "../../../memberships";
+import {
+  CurrentMembershipContext,
+  OrganizationMembershipGuard,
+  type MembershipContext,
+} from "../../../memberships";
 import { ZodValidationPipe } from "../../../../shared-kernel/zod-validation.pipe";
-import { AttachAdministrativeDocumentRevisionUseCase, CreateAdministrativeDocumentUseCase, GetAdministrativeDocumentUseCase, RejectAdministrativeDocumentUseCase, ValidateAdministrativeDocumentUseCase } from "../../application/use-cases/administrative-document.use-cases";
-import { CreateAdministrativeRequirementUseCase, ListAdministrativeRequirementsUseCase, UpdateAdministrativeRequirementUseCase } from "../../application/use-cases/administrative-requirement.use-cases";
+import {
+  AttachAdministrativeDocumentRevisionUseCase,
+  CreateAdministrativeDocumentUseCase,
+  GetAdministrativeDocumentUseCase,
+  ListTenderAdministrativeDocumentsUseCase,
+  RejectAdministrativeDocumentUseCase,
+  ValidateAdministrativeDocumentUseCase,
+} from "../../application/use-cases/administrative-document.use-cases";
+import {
+  CreateAdministrativeRequirementUseCase,
+  ListAdministrativeRequirementsUseCase,
+  UpdateAdministrativeRequirementUseCase,
+} from "../../application/use-cases/administrative-requirement.use-cases";
 import { EnsureAdministrativeDossierUseCase } from "../../application/use-cases/ensure-administrative-dossier.use-case";
 import { GetAdministrativeChecklistUseCase } from "../../application/use-cases/get-administrative-checklist.use-case";
 import { GetAdministrativeDocumentTypeCatalogUseCase } from "../../application/use-cases/get-administrative-document-type-catalog.use-case";
@@ -46,6 +72,7 @@ export class AdministrativeDossierController {
     private readonly getChecklistUseCase: GetAdministrativeChecklistUseCase,
     private readonly createDocumentUseCase: CreateAdministrativeDocumentUseCase,
     private readonly getDocumentUseCase: GetAdministrativeDocumentUseCase,
+    private readonly listDocumentsUseCase: ListTenderAdministrativeDocumentsUseCase,
     private readonly attachRevisionUseCase: AttachAdministrativeDocumentRevisionUseCase,
     private readonly validateDocumentUseCase: ValidateAdministrativeDocumentUseCase,
     private readonly rejectDocumentUseCase: RejectAdministrativeDocumentUseCase,
@@ -61,24 +88,60 @@ export class AdministrativeDossierController {
   }
 
   @Get("tenders/:tenderId/administrative-dossier")
-  async getDossier(@CurrentActor() actor: AuthenticatedActor, @CurrentMembershipContext() membership: MembershipContext, @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string) {
-    return this.getDossierUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId });
+  async getDossier(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    return this.getDossierUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      tenderId,
+    });
   }
 
   @Post("tenders/:tenderId/administrative-dossier")
   @HttpCode(HttpStatus.OK)
-  async ensureDossier(@CurrentActor() actor: AuthenticatedActor, @CurrentMembershipContext() membership: MembershipContext, @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string) {
-    return this.ensureDossierUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId });
+  async ensureDossier(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    return this.ensureDossierUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      tenderId,
+    });
   }
 
   @Get("tenders/:tenderId/administrative-dossier/capabilities")
-  async capabilities(@CurrentActor() actor: AuthenticatedActor, @CurrentMembershipContext() membership: MembershipContext, @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string) {
-    return this.getCapabilitiesUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId });
+  async capabilities(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    return this.getCapabilitiesUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      tenderId,
+    });
   }
 
   @Get("tenders/:tenderId/administrative-requirements")
-  async listRequirements(@CurrentActor() actor: AuthenticatedActor, @CurrentMembershipContext() membership: MembershipContext, @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string) {
-    return this.listRequirementsUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId });
+  async listRequirements(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    return this.listRequirementsUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      tenderId,
+    });
   }
 
   @Post("tenders/:tenderId/administrative-requirements")
@@ -87,9 +150,16 @@ export class AdministrativeDossierController {
     @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
-    @Body(new ZodValidationPipe(CreateAdministrativeRequirementBodySchema)) body: CreateAdministrativeRequirementBody,
+    @Body(new ZodValidationPipe(CreateAdministrativeRequirementBodySchema))
+    body: CreateAdministrativeRequirementBody,
   ) {
-    return this.createRequirementUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId, ...body });
+    return this.createRequirementUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      tenderId,
+      ...body,
+    });
   }
 
   @Patch("administrative-requirements/:id")
@@ -97,14 +167,44 @@ export class AdministrativeDossierController {
     @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("id", new ZodValidationPipe(IdParamSchema)) requirementId: string,
-    @Body(new ZodValidationPipe(UpdateAdministrativeRequirementBodySchema)) body: UpdateAdministrativeRequirementBody,
+    @Body(new ZodValidationPipe(UpdateAdministrativeRequirementBodySchema))
+    body: UpdateAdministrativeRequirementBody,
   ) {
-    return this.updateRequirementUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, requirementId, ...body });
+    return this.updateRequirementUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      requirementId,
+      ...body,
+    });
   }
 
   @Get("tenders/:tenderId/administrative-checklist")
-  async checklist(@CurrentActor() actor: AuthenticatedActor, @CurrentMembershipContext() membership: MembershipContext, @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string) {
-    return this.getChecklistUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId });
+  async checklist(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    return this.getChecklistUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      tenderId,
+    });
+  }
+
+  @Get("tenders/:tenderId/administrative-documents")
+  async listDocuments(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
+  ) {
+    return this.listDocumentsUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      tenderId,
+    });
   }
 
   @Post("tenders/:tenderId/administrative-documents")
@@ -113,14 +213,30 @@ export class AdministrativeDossierController {
     @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("tenderId", new ZodValidationPipe(IdParamSchema)) tenderId: string,
-    @Body(new ZodValidationPipe(CreateAdministrativeDocumentBodySchema)) body: CreateAdministrativeDocumentBody,
+    @Body(new ZodValidationPipe(CreateAdministrativeDocumentBodySchema))
+    body: CreateAdministrativeDocumentBody,
   ) {
-    return this.createDocumentUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, tenderId, ...body });
+    return this.createDocumentUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      tenderId,
+      ...body,
+    });
   }
 
   @Get("administrative-documents/:id")
-  async getDocument(@CurrentActor() actor: AuthenticatedActor, @CurrentMembershipContext() membership: MembershipContext, @Param("id", new ZodValidationPipe(IdParamSchema)) documentId: string) {
-    return this.getDocumentUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, administrativeDocumentId: documentId });
+  async getDocument(
+    @CurrentActor() actor: AuthenticatedActor,
+    @CurrentMembershipContext() membership: MembershipContext,
+    @Param("id", new ZodValidationPipe(IdParamSchema)) documentId: string,
+  ) {
+    return this.getDocumentUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      administrativeDocumentId: documentId,
+    });
   }
 
   @Post("administrative-documents/:id/revisions")
@@ -129,9 +245,16 @@ export class AdministrativeDossierController {
     @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("id", new ZodValidationPipe(IdParamSchema)) documentId: string,
-    @Body(new ZodValidationPipe(AttachAdministrativeDocumentRevisionBodySchema)) body: AttachAdministrativeDocumentRevisionBody,
+    @Body(new ZodValidationPipe(AttachAdministrativeDocumentRevisionBodySchema))
+    body: AttachAdministrativeDocumentRevisionBody,
   ) {
-    return this.attachRevisionUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, administrativeDocumentId: documentId, ...body });
+    return this.attachRevisionUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      administrativeDocumentId: documentId,
+      ...body,
+    });
   }
 
   @Post("administrative-documents/:id/validate")
@@ -140,9 +263,16 @@ export class AdministrativeDossierController {
     @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("id", new ZodValidationPipe(IdParamSchema)) documentId: string,
-    @Body(new ZodValidationPipe(ValidateAdministrativeDocumentBodySchema)) body: ValidateAdministrativeDocumentBody,
+    @Body(new ZodValidationPipe(ValidateAdministrativeDocumentBodySchema))
+    body: ValidateAdministrativeDocumentBody,
   ) {
-    return this.validateDocumentUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, administrativeDocumentId: documentId, ...body });
+    return this.validateDocumentUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      administrativeDocumentId: documentId,
+      ...body,
+    });
   }
 
   @Post("administrative-documents/:id/reject")
@@ -151,8 +281,15 @@ export class AdministrativeDossierController {
     @CurrentActor() actor: AuthenticatedActor,
     @CurrentMembershipContext() membership: MembershipContext,
     @Param("id", new ZodValidationPipe(IdParamSchema)) documentId: string,
-    @Body(new ZodValidationPipe(RejectAdministrativeDocumentBodySchema)) body: RejectAdministrativeDocumentBody,
+    @Body(new ZodValidationPipe(RejectAdministrativeDocumentBodySchema))
+    body: RejectAdministrativeDocumentBody,
   ) {
-    return this.rejectDocumentUseCase.execute({ organizationId: membership.organizationId, actorId: actor.userId, actorRole: membership.role, administrativeDocumentId: documentId, ...body });
+    return this.rejectDocumentUseCase.execute({
+      organizationId: membership.organizationId,
+      actorId: actor.userId,
+      actorRole: membership.role,
+      administrativeDocumentId: documentId,
+      ...body,
+    });
   }
 }

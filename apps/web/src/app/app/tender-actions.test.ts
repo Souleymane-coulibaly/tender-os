@@ -45,6 +45,7 @@ describe("createTenderAction", () => {
   function buildValidFormData(overrides: Record<string, string> = {}): FormData {
     const data: Record<string, string> = {
       clientAccountId: "client-1",
+      candidateCompanyId: "candidate-1",
       title: "Maintenance et support informatique",
       reference: "AO-2026-001",
       buyerName: "Mairie de Lyon",
@@ -75,6 +76,7 @@ describe("createTenderAction", () => {
     const sentBody = JSON.parse((call[1] as { body: string }).body) as Record<string, unknown>;
     expect(sentBody).toEqual({
       clientAccountId: "client-1",
+      candidateCompanyId: "candidate-1",
       title: "Maintenance et support informatique",
       reference: "AO-2026-001",
       buyerName: "Mairie de Lyon",
@@ -118,24 +120,31 @@ describe("createTenderAction", () => {
     expect(appApiFetchMock).not.toHaveBeenCalled();
   });
 
+  it("rejects a missing candidate company (CCV2-G.1 — POLICY A) before ever calling the API", async () => {
+    const result = await createTenderAction({}, buildValidFormData({ candidateCompanyId: "" }));
+
+    expect(result.error).toBe("L'entreprise candidate est obligatoire.");
+    expect(appApiFetchMock).not.toHaveBeenCalled();
+  });
+
   it("rejects an invalid enum value (marketType) before ever calling the API", async () => {
     const result = await createTenderAction({}, buildValidFormData({ marketType: "OUVERT" }));
 
-    expect(result.error).toBe("Type de marche invalide.");
+    expect(result.error).toBe("Type de marché invalide.");
     expect(appApiFetchMock).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid estimated amount (non-numeric) before ever calling the API", async () => {
     const result = await createTenderAction({}, buildValidFormData({ estimatedAmount: "50 000,00 euros" }));
 
-    expect(result.error).toContain("Montant estime invalide");
+    expect(result.error).toContain("Montant estimé invalide");
     expect(appApiFetchMock).not.toHaveBeenCalled();
   });
 
   it("rejects a non-positive estimated amount", async () => {
     const result = await createTenderAction({}, buildValidFormData({ estimatedAmount: "0" }));
 
-    expect(result.error).toContain("Montant estime invalide");
+    expect(result.error).toContain("Montant estimé invalide");
     expect(appApiFetchMock).not.toHaveBeenCalled();
   });
 
@@ -144,7 +153,7 @@ describe("createTenderAction", () => {
 
     const result = await createTenderAction({}, buildValidFormData());
 
-    expect(result.error).toBe("Certains champs de l'appel d'offres sont invalides.");
+    expect(result.error).toBe("Certaines informations envoyées ne sont pas valides.");
     expect(result.error).not.toContain("Unexpected error");
   });
 
@@ -153,7 +162,8 @@ describe("createTenderAction", () => {
 
     const result = await createTenderAction({}, buildValidFormData());
 
-    expect(result.error).toBe("Vous n'avez pas les droits necessaires pour cette action.");
+    expect(result.error).toBe("Votre rôle ne permet pas cette action sur l'appel d'offres.");
+    expect(result.error).not.toContain("tender:create");
   });
 
   it("SECURITY: ignores a falsified source=TED in FormData and always sends MANUAL", async () => {

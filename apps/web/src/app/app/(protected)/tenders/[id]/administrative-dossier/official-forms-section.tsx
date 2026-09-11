@@ -16,6 +16,7 @@ import {
   type OfficialFormReadiness,
 } from "../../../../../../lib/official-form-types";
 import { Button } from "../../../../../../components/ui/button";
+import { GENERATED_REVISION_STATUS_LABELS } from "../../../../../../lib/administrative-dossier-types";
 
 export type FormCardSpec = {
   key: string;
@@ -273,7 +274,9 @@ export function OfficialFormCard({ spec }: { spec: FormCardSpec }) {
               {revisions.map((revision) => (
                 <tr key={revision.id} className="border-b border-tenderos-navy/10">
                   <td className="py-1 pr-4">R{revision.revisionNumber}</td>
-                  <td className="py-1 pr-4">{revision.status}</td>
+                  <td className="py-1 pr-4">
+                    {GENERATED_REVISION_STATUS_LABELS[revision.status] ?? revision.status}
+                  </td>
                   <td className="py-1 pr-4">
                     {new Date(revision.createdAt).toLocaleString("fr-FR")}
                   </td>

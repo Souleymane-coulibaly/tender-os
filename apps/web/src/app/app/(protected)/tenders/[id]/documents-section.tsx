@@ -7,10 +7,13 @@ import { Input } from "../../../../../components/ui/input";
 import {
   attachExistingDocumentToTenderAction,
   detachDocumentFromTenderAction,
+  searchLibraryDocumentsAction,
   uploadAndAttachDocumentToTenderAction,
   type FormActionState,
 } from "../../../documents-actions";
 import { formatFileSize, type DocumentSummary } from "../../../../../lib/documents-types";
+import { FileInput } from "../../../../../components/ui/file-input";
+import { SearchSelect } from "../../../../../components/ui/search-select";
 
 const INITIAL_STATE: FormActionState = {};
 
@@ -32,7 +35,7 @@ function DetachButton({ tenderId, documentId }: { tenderId: string; documentId: 
           setError(result.error);
         }}
       >
-        Detacher
+        Détacher
       </Button>
       {error ? (
         <p role="alert" className="text-xs text-danger-fg">
@@ -44,9 +47,8 @@ function DetachButton({ tenderId, documentId }: { tenderId: string; documentId: 
 }
 
 /** Section "Documents" de la fiche Tender — attache par depot direct (creation + association
- *  composees, voir uploadAndAttachDocumentToTenderAction) ou par ID d'un document existant
- *  (aucun selecteur de recherche dans cette tranche — la bibliotheque /app/documents reste le
- *  point d'entree pour retrouver l'identifiant d'un document deja depose). */
+ *  composees, voir uploadAndAttachDocumentToTenderAction) ou en choisissant un document existant
+ *  de la bibliotheque par son titre (`SearchSelect`), jamais en recopiant un identifiant. */
 export function DocumentsSection({
   tenderId,
   documents,
@@ -66,7 +68,7 @@ export function DocumentsSection({
     <Card title="Documents">
       <div className="flex flex-col gap-2">
         {documents.length === 0 ? (
-          <p className="text-sm text-tenderos-slate">Aucun document rattache.</p>
+          <p className="text-sm text-tenderos-slate">Aucun document rattaché.</p>
         ) : (
           <ul>
             {documents.map((doc) => (
@@ -92,7 +94,7 @@ export function DocumentsSection({
                     href={`/app/documents/${doc.id}/download`}
                     className="text-xs text-tenderos-blue underline-offset-2 hover:underline"
                   >
-                    Telecharger
+                    Télécharger
                   </a>
                   {canManage ? <DetachButton tenderId={tenderId} documentId={doc.id} /> : null}
                 </div>
@@ -129,19 +131,18 @@ export function DocumentsSection({
               <Input
                 name="category"
                 type="text"
-                placeholder="Categorie"
+                placeholder="Catégorie"
                 className="min-w-[8rem] flex-1"
               />
-              <Input
-                name="file"
-                type="file"
-                required
-                aria-label="Fichier a deposer"
-                className="min-w-[12rem] max-w-full flex-1"
-              />
-              <Button type="submit" size="sm" loading={isUploading}>
-                Deposer et rattacher
-              </Button>
+              {/* W4 — le fichier et son bouton passent à la ligne ENSEMBLE. Mesuré à 1024 et 1512 px :
+                  le bouton glissait seul sur une ligne, loin du champ qu'il valide. Le plancher
+                  (18rem) laisse au champ la place de son bouton « Choisir un fichier ». */}
+              <div className="flex min-w-[18rem] flex-1 items-end gap-2">
+                <FileInput name="file" required aria-label="Fichier à déposer" className="min-w-0 flex-1" />
+                <Button type="submit" size="sm" loading={isUploading} className="shrink-0">
+                  Déposer et rattacher
+                </Button>
+              </div>
               {uploadState.error ? (
                 <p role="alert" className="text-xs text-danger-fg">
                   {uploadState.error}
@@ -150,15 +151,20 @@ export function DocumentsSection({
             </form>
 
             <form action={attachFormAction} className="flex flex-wrap items-end gap-2">
-              <Input
-                name="documentId"
-                type="text"
-                placeholder="ID d'un document existant..."
-                className="min-w-[10rem] flex-1"
-              />
-              <Button type="submit" size="sm" loading={isAttaching}>
-                Rattacher
-              </Button>
+              {/* W4 — même motif : recherche et bouton sur une ligne commune (mesuré à 1024 px, le
+                  plancher de 14rem renvoyait « Rattacher » seul à la ligne). */}
+              <div className="flex min-w-0 flex-1 basis-full items-end gap-2">
+                <SearchSelect
+                  name="documentId"
+                  ariaLabel="Document de la bibliothèque"
+                  placeholder="Rechercher un document de la bibliothèque…"
+                  search={searchLibraryDocumentsAction}
+                  className="min-w-[10rem] flex-1"
+                />
+                <Button type="submit" size="sm" loading={isAttaching} className="shrink-0">
+                  Rattacher
+                </Button>
+              </div>
               {attachState.error ? (
                 <p role="alert" className="text-xs text-danger-fg">
                   {attachState.error}

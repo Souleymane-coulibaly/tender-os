@@ -46,24 +46,24 @@ export type DocumentTenderAssociationSummary = {
 };
 
 export const DOCUMENT_ORIGIN_LABELS: Record<DocumentOrigin, string> = {
-  USER_UPLOAD: "Depose par un utilisateur",
+  USER_UPLOAD: "Déposé par un utilisateur",
   DCE: "Issu du DCE",
-  TEMPLATE: "Modele",
-  GENERATED: "Genere",
-  IMPORTED: "Importe",
+  TEMPLATE: "Modèle",
+  GENERATED: "Généré",
+  IMPORTED: "Importé",
 };
 
 export const DOCUMENT_DOMAIN_LABELS: Record<DocumentDomain, string> = {
   TENDER: "Appel d'offres",
   ORGANIZATION: "Organisation",
   KNOWLEDGE: "Base de connaissances",
-  TEMPLATE: "Modele",
-  GENERATED: "Genere",
+  TEMPLATE: "Modèle",
+  GENERATED: "Généré",
 };
 
 export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
   ACTIVE: "Actif",
-  ARCHIVED: "Archive",
+  ARCHIVED: "Archivé",
 };
 
 /** Suggestions d'autocompletion cote frontend uniquement — `category` reste une chaine libre
@@ -77,11 +77,11 @@ export const DOCUMENT_CATEGORY_SUGGESTIONS = [
   "DPGF",
   "KBIS",
   "CV",
-  "Memoire technique",
+  "Mémoire technique",
   "Attestation fiscale",
   "Attestation sociale",
   "Assurance",
-  "Reference",
+  "Référence",
 ];
 
 /** Miroir cote UI de ROLE_DOCUMENT_PERMISSIONS (document-permission.ts) — sert uniquement a

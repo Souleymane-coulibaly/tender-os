@@ -29,37 +29,48 @@ import {
   type ChecklistDocumentMatchResult,
   type ChecklistProgress,
 } from "../../lib/tenders-types";
+import { apiErrorMessage, describeApiError } from "../../lib/api-error-messages";
+import { describeLoginFailure } from "../../lib/login-error";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
+/** Toujours un message français, jamais le texte brut d'une erreur de l'API ou du réseau
+ *  (voir lib/api-error-messages.ts). Le détail reste journalisé pour l'analyse. */
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Une erreur est survenue.";
+  if (error instanceof AppApiError) {
+    console.error(`[TenderOS] Action failed (${error.status} ${error.code}): ${error.message}`);
+  } else {
+    console.error("[TenderOS] Unexpected action error:", error);
+  }
+  return describeApiError(error);
 }
 
 /**
  * Distingue les erreurs API par statut (mission "Erreurs API") — jamais uniquement
  * "Unexpected error" : un message utilisateur comprehensible en francais, les details
  * techniques (statut, code, message brut) restant dans les logs serveur (console.error, jamais
- * affiches a l'utilisateur). Reserve aux actions Tender create/update pour rester dans le
- * perimetre de cette mission ; les autres actions du fichier gardent errorMessage() inchange.
+ * affiches a l'utilisateur). Reserve aux actions Tender create/update ; les autres actions du
+ * fichier passent par errorMessage(). Les deux consultent d'abord la table des codes d'erreur.
  */
 function describeTenderActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Tender action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs de l'appel d'offres sont invalides.";
       case 401:
-        return "Votre session a expire. Veuillez vous reconnecter.";
+        return "Votre session a expiré. Veuillez vous reconnecter.";
       case 403:
-        return "Vous n'avez pas les droits necessaires pour cette action.";
+        return "Vous n'avez pas les droits nécessaires pour cette action.";
       case 404:
         return "Cet appel d'offres est introuvable.";
       case 409:
-        return "Cette action entre en conflit avec l'etat actuel de l'appel d'offres.";
+        return "Cette action entre en conflit avec l'état actuel de l'appel d'offres.";
       default:
         return error.status >= 500
-          ? "Une erreur serveur est survenue. Veuillez reessayer."
+          ? "Une erreur serveur est survenue. Veuillez réessayer."
           : "Une erreur est survenue lors de l'enregistrement de l'appel d'offres.";
     }
   }
@@ -130,7 +141,7 @@ function optionalBoolean(value: FormDataEntryValue | null): boolean | undefined 
 function parseTenderFormFields(formData: FormData): { error: string } | { fields: ParsedTenderFields } {
   const marketType = optional(formData.get("marketType"));
   if (marketType && !(MARKET_TYPES as readonly string[]).includes(marketType)) {
-    return { error: "Type de marche invalide." };
+    return { error: "Type de marché invalide." };
   }
   const country = optional(formData.get("country"));
   if (country && !(TENDER_COUNTRIES as readonly string[]).includes(country)) {
@@ -146,7 +157,7 @@ function parseTenderFormFields(formData: FormData): { error: string } | { fields
   }
   const estimatedAmount = optional(formData.get("estimatedAmount"));
   if (estimatedAmount && !isValidEstimatedAmount(estimatedAmount)) {
-    return { error: "Montant estime invalide (nombre positif attendu, par exemple 50000 ou 50000.50)." };
+    return { error: "Montant estimé invalide (nombre positif attendu, par exemple 50000 ou 50000.50)." };
   }
   const minimumAmount = optional(formData.get("minimumAmount"));
   if (minimumAmount && !isValidEstimatedAmount(minimumAmount)) {
@@ -234,7 +245,7 @@ export async function loginAction(_prevState: LoginActionState, formData: FormDa
   });
 
   if (!loginResponse.ok) {
-    return { error: "Identifiants invalides." };
+    return { error: await describeLoginFailure(loginResponse) };
   }
 
   const loginBody = (await loginResponse.json()) as { accessToken: string; expiresAt: string };
@@ -486,7 +497,7 @@ export async function changeTenderStatusDirectAction(
   try {
     await appApiFetch(`/api/v1/tenders/${tenderId}/status`, {
       method: "POST",
-      body: JSON.stringify({ status, reason: "Deplacement Kanban" }),
+      body: JSON.stringify({ status, reason: "Déplacement Kanban" }),
     });
   } catch (error) {
     return { error: errorMessage(error) };
@@ -557,7 +568,7 @@ export async function changeTenderClientAction(
 ): Promise<FormActionState> {
   const clientAccountId = formData.get("clientAccountId");
   if (typeof clientAccountId !== "string" || !clientAccountId.trim()) {
-    return { error: "Selectionnez un client." };
+    return { error: "Sélectionnez un client." };
   }
 
   try {
@@ -585,7 +596,7 @@ export async function changeTenderCandidateCompanyAction(
 ): Promise<FormActionState> {
   const candidateCompanyId = formData.get("candidateCompanyId");
   if (typeof candidateCompanyId !== "string" || !candidateCompanyId.trim()) {
-    return { error: "Selectionnez une entreprise candidate." };
+    return { error: "Sélectionnez une entreprise candidate." };
   }
 
   try {
@@ -651,7 +662,7 @@ export async function createLotAction(
   const lotNumber = formData.get("lotNumber");
   const title = formData.get("title");
   if (typeof lotNumber !== "string" || !lotNumber || typeof title !== "string" || !title) {
-    return { error: "Numero et titre du lot requis." };
+    return { error: "Numéro et titre du lot requis." };
   }
 
   try {
@@ -970,7 +981,7 @@ export async function createRiskAction(
   const title = formData.get("title");
   const severity = formData.get("severity");
   if (typeof title !== "string" || !title || typeof severity !== "string" || !severity) {
-    return { error: "Titre et gravite requis." };
+    return { error: "Titre et gravité requis." };
   }
 
   try {
@@ -1011,7 +1022,7 @@ export async function createAlertAction(
   const message = formData.get("message");
   const severity = formData.get("severity");
   if (typeof message !== "string" || !message || typeof severity !== "string" || !severity) {
-    return { error: "Message et gravite requis." };
+    return { error: "Message et gravité requis." };
   }
 
   try {

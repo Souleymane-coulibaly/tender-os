@@ -54,7 +54,7 @@ test.describe.serial("Staging admin connected smoke tests", () => {
     await assertNoServerError(page);
     await expect(page.getByRole("heading", { name: /^Bonjour/i })).toBeVisible();
 
-    await expect(page.locator("body")).toContainText(/Appels d'offres|Echeances|Dossiers|Opportunites|utilisation/i);
+    await expect(page.locator("body")).toContainText(/Appels d'offres|[ÉE]ch[ée]ances|Dossiers|Opportunit[ée]s|utilisation/i);
     const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
     expect(hasHorizontalOverflow).toBe(false);
   });

@@ -3,25 +3,23 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { BrowseResult, ConnectorProvider, ExternalConnectionSummary } from "../../lib/connectors-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 function describeConnectorsActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Connectors action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
       case 403:
         return "Vous n'avez pas les droits nécessaires pour cette action.";
       case 404:
-        if (error.code === "EXTERNAL_CONNECTION_CLIENT_NOT_ALLOWED") return "Cette connexion n'est pas autorisée pour ce client.";
         return "Introuvable ou accès refusé.";
       case 409:
-        if (error.code === "EXTERNAL_CONNECTION_ALREADY_EXISTS") return "Une connexion existe déjà pour ce provider — déconnectez-la d'abord.";
-        if (error.code === "EXTERNAL_CONNECTION_NOT_USABLE") return "Cette connexion nécessite une reconnexion.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
-        if (error.code === "UNSUPPORTED_REMOTE_FILE_TYPE") return "Ce type de fichier (Google natif) ne peut pas être importé automatiquement.";
-        if (error.code === "TENDER_DEADLINE_NOT_SET") return "Cet appel d'offres n'a pas de date limite définie.";
         return "Certains champs sont invalides.";
       case 429:
         return "Le provider limite le nombre de requêtes — réessayez dans quelques instants.";

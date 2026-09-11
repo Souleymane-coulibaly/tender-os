@@ -9,31 +9,63 @@ import {
   type FormActionState,
   type UploadTemplateVersionFieldMapping,
 } from "../../../document-generation-actions";
-import { canManageDocumentTemplates, FIELD_TYPE_LABELS, type DocumentTemplateDetail, type DocumentTemplateSummary, type FieldType } from "../../../../../lib/document-generation-types";
+import {
+  canManageDocumentTemplates,
+  FIELD_TYPE_LABELS,
+  type DocumentTemplateDetail,
+  type DocumentTemplateSummary,
+  type FieldType,
+} from "../../../../../lib/document-generation-types";
+import { VERSION_STATUS_LABELS } from "../../../../../lib/version-status";
+import { FileInput } from "../../../../../components/ui/file-input";
 
 const INITIAL_STATE: FormActionState = {};
 const FIELD_TYPES = Object.keys(FIELD_TYPE_LABELS) as FieldType[];
 
 function CreateTemplateForm() {
-  const [state, formAction, isPending] = useActionState(createDocumentTemplateAction, INITIAL_STATE);
+  const [state, formAction, isPending] = useActionState(
+    createDocumentTemplateAction,
+    INITIAL_STATE,
+  );
   return (
-    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded border border-neutral-200 p-3">
+    <form
+      action={formAction}
+      className="flex flex-wrap items-end gap-2 rounded border border-neutral-200 p-3"
+    >
       <div className="flex flex-col gap-1">
         <label className="text-xs text-neutral-600">Nom</label>
-        <input name="name" type="text" required placeholder="Modèle de mémoire technique..." className="rounded border border-neutral-300 px-2 py-1 text-sm" />
+        <input
+          name="name"
+          type="text"
+          required
+          placeholder="Modèle de mémoire technique..."
+          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+        />
       </div>
       <div className="flex flex-col gap-1">
         <label className="text-xs text-neutral-600">Portée</label>
-        <select name="scope" defaultValue="ORGANIZATION" className="rounded border border-neutral-300 px-2 py-1 text-sm">
+        <select
+          name="scope"
+          defaultValue="ORGANIZATION"
+          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+        >
           <option value="ORGANIZATION">Organisation</option>
           <option value="SYSTEM">Système</option>
         </select>
       </div>
       <div className="flex flex-col gap-1">
         <label className="text-xs text-neutral-600">Description</label>
-        <input name="description" type="text" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
+        <input
+          name="description"
+          type="text"
+          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+        />
       </div>
-      <button type="submit" disabled={isPending} className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+      <button
+        type="submit"
+        disabled={isPending}
+        className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+      >
         {isPending ? "Création..." : "Créer le template"}
       </button>
       {state.error ? (
@@ -45,7 +77,13 @@ function CreateTemplateForm() {
   );
 }
 
-function FieldMappingEditor({ rows, onChange }: { rows: UploadTemplateVersionFieldMapping[]; onChange: (rows: UploadTemplateVersionFieldMapping[]) => void }) {
+function FieldMappingEditor({
+  rows,
+  onChange,
+}: {
+  rows: UploadTemplateVersionFieldMapping[];
+  onChange: (rows: UploadTemplateVersionFieldMapping[]) => void;
+}) {
   function updateRow(index: number, patch: Partial<UploadTemplateVersionFieldMapping>) {
     onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   }
@@ -59,7 +97,8 @@ function FieldMappingEditor({ rows, onChange }: { rows: UploadTemplateVersionFie
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs text-neutral-600">
-        Field Mapping — un placeholder doit correspondre EXACTEMENT à un tag présent dans le fichier (ex. <code className="rounded bg-neutral-100 px-1">tender.reference</code> pour{" "}
+        Field Mapping — un placeholder doit correspondre EXACTEMENT à un tag présent dans le fichier
+        (ex. <code className="rounded bg-neutral-100 px-1">tender.reference</code> pour{" "}
         <code className="rounded bg-neutral-100 px-1">{"{{tender.reference}}"}</code>).
       </p>
       {rows.map((row, index) => (
@@ -70,8 +109,17 @@ function FieldMappingEditor({ rows, onChange }: { rows: UploadTemplateVersionFie
             onChange={(e) => updateRow(index, { fieldKey: e.target.value })}
             className="w-56 rounded border border-neutral-300 px-2 py-1 text-sm"
           />
-          <input placeholder="Libellé" value={row.label} onChange={(e) => updateRow(index, { label: e.target.value })} className="w-40 rounded border border-neutral-300 px-2 py-1 text-sm" />
-          <select value={row.fieldType} onChange={(e) => updateRow(index, { fieldType: e.target.value })} className="rounded border border-neutral-300 px-2 py-1 text-sm">
+          <input
+            placeholder="Libellé"
+            value={row.label}
+            onChange={(e) => updateRow(index, { label: e.target.value })}
+            className="w-40 rounded border border-neutral-300 px-2 py-1 text-sm"
+          />
+          <select
+            value={row.fieldType}
+            onChange={(e) => updateRow(index, { fieldType: e.target.value })}
+            className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          >
             {FIELD_TYPES.map((type) => (
               <option key={type} value={type}>
                 {FIELD_TYPE_LABELS[type]}
@@ -79,23 +127,43 @@ function FieldMappingEditor({ rows, onChange }: { rows: UploadTemplateVersionFie
             ))}
           </select>
           <label className="flex items-center gap-1 text-xs text-neutral-700">
-            <input type="checkbox" checked={row.required} onChange={(e) => updateRow(index, { required: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={row.required}
+              onChange={(e) => updateRow(index, { required: e.target.checked })}
+            />
             Requis
           </label>
-          <button type="button" onClick={() => removeRow(index)} className="text-xs text-red-700 hover:underline">
+          <button
+            type="button"
+            onClick={() => removeRow(index)}
+            className="text-xs text-red-700 hover:underline"
+          >
             Retirer
           </button>
         </div>
       ))}
-      <button type="button" onClick={addRow} className="self-start text-xs text-neutral-700 hover:underline">
+      <button
+        type="button"
+        onClick={addRow}
+        className="self-start text-xs text-neutral-700 hover:underline"
+      >
         + Ajouter un champ
       </button>
     </div>
   );
 }
 
-function UploadVersionForm({ templateId, onUploaded }: { templateId: string; onUploaded: () => void }) {
-  const [fieldMappings, setFieldMappings] = useState<UploadTemplateVersionFieldMapping[]>([{ fieldKey: "", label: "", fieldType: "STRING", required: false }]);
+function UploadVersionForm({
+  templateId,
+  onUploaded,
+}: {
+  templateId: string;
+  onUploaded: () => void;
+}) {
+  const [fieldMappings, setFieldMappings] = useState<UploadTemplateVersionFieldMapping[]>([
+    { fieldKey: "", label: "", fieldType: "STRING", required: false },
+  ]);
   const [allowPartialGeneration, setAllowPartialGeneration] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -104,7 +172,13 @@ function UploadVersionForm({ templateId, onUploaded }: { templateId: string; onU
     setIsPending(true);
     setError(undefined);
     const validRows = fieldMappings.filter((row) => row.fieldKey.trim() && row.label.trim());
-    const result = await uploadDocumentTemplateVersionAction(templateId, validRows, allowPartialGeneration, INITIAL_STATE, formData);
+    const result = await uploadDocumentTemplateVersionAction(
+      templateId,
+      validRows,
+      allowPartialGeneration,
+      INITIAL_STATE,
+      formData,
+    );
     setIsPending(false);
     if (result.error) {
       setError(result.error);
@@ -114,16 +188,27 @@ function UploadVersionForm({ templateId, onUploaded }: { templateId: string; onU
   }
 
   return (
-    <form action={handleSubmit} className="flex flex-col gap-3 rounded border border-dashed border-neutral-300 p-3">
+    <form
+      action={handleSubmit}
+      className="flex flex-col gap-3 rounded border border-dashed border-neutral-300 p-3"
+    >
       <div className="flex items-center gap-2">
-        <input name="file" type="file" accept=".docx" required className="text-xs" />
+        <FileInput name="file" accept=".docx" required aria-label="Modèle Word (.docx)" />
         <label className="flex items-center gap-1 text-xs text-neutral-700">
-          <input type="checkbox" checked={allowPartialGeneration} onChange={(e) => setAllowPartialGeneration(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={allowPartialGeneration}
+            onChange={(e) => setAllowPartialGeneration(e.target.checked)}
+          />
           Autoriser la génération partielle si un champ requis manque
         </label>
       </div>
       <FieldMappingEditor rows={fieldMappings} onChange={setFieldMappings} />
-      <button type="submit" disabled={isPending} className="self-start rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+      <button
+        type="submit"
+        disabled={isPending}
+        className="self-start rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+      >
         {isPending ? "Envoi..." : "Envoyer la nouvelle version"}
       </button>
       {error ? (
@@ -135,7 +220,13 @@ function UploadVersionForm({ templateId, onUploaded }: { templateId: string; onU
   );
 }
 
-function TemplateRow({ template, canManage }: { template: DocumentTemplateSummary; canManage: boolean }) {
+function TemplateRow({
+  template,
+  canManage,
+}: {
+  template: DocumentTemplateSummary;
+  canManage: boolean;
+}) {
   const [detail, setDetail] = useState<DocumentTemplateDetail | undefined>();
   const [expanded, setExpanded] = useState(false);
   const [activating, setActivating] = useState<string | undefined>();
@@ -166,12 +257,22 @@ function TemplateRow({ template, canManage }: { template: DocumentTemplateSummar
     <div className="rounded border border-neutral-200 p-3">
       <div className="flex items-center justify-between">
         <div>
-          <button type="button" onClick={toggle} className="text-sm font-medium text-neutral-900 hover:underline">
+          <button
+            type="button"
+            onClick={toggle}
+            className="text-sm font-medium text-neutral-900 hover:underline"
+          >
             {template.name}
           </button>
-          <span className="ml-2 text-xs text-neutral-500">{template.scope === "SYSTEM" ? "Système" : "Organisation"}</span>
+          <span className="ml-2 text-xs text-neutral-500">
+            {template.scope === "SYSTEM" ? "Système" : "Organisation"}
+          </span>
         </div>
-        <span className="text-xs text-neutral-600">{template.activeVersion ? `v${template.activeVersion.version} active` : "Aucune version active"}</span>
+        <span className="text-xs text-neutral-600">
+          {template.activeVersion
+            ? `v${template.activeVersion.version} active`
+            : "Aucune version active"}
+        </span>
       </div>
 
       {expanded ? (
@@ -185,7 +286,9 @@ function TemplateRow({ template, canManage }: { template: DocumentTemplateSummar
           {detail ? (
             <div className="flex flex-col gap-2">
               {detail.versions.length === 0 ? (
-                <p className="text-xs text-neutral-500">Aucune version envoyée pour l&apos;instant.</p>
+                <p className="text-xs text-neutral-500">
+                  Aucune version envoyée pour l&apos;instant.
+                </p>
               ) : (
                 <table className="w-full border-collapse text-xs">
                   <thead>
@@ -201,12 +304,19 @@ function TemplateRow({ template, canManage }: { template: DocumentTemplateSummar
                     {detail.versions.map((version) => (
                       <tr key={version.id} className="border-b border-neutral-100">
                         <td className="py-1 pr-4">v{version.version}</td>
-                        <td className="py-1 pr-4">{version.status}</td>
+                        <td className="py-1 pr-4">
+                          {VERSION_STATUS_LABELS[version.status] ?? version.status}
+                        </td>
                         <td className="py-1 pr-4">{version.discoveredPlaceholders.length}</td>
                         <td className="py-1 pr-4">{version.fieldMappings.length}</td>
                         <td className="py-1 pr-4">
                           {canManage && version.status === "DRAFT" ? (
-                            <button type="button" disabled={activating === version.id} onClick={() => handleActivate(version.id)} className="text-neutral-900 hover:underline disabled:opacity-50">
+                            <button
+                              type="button"
+                              disabled={activating === version.id}
+                              onClick={() => handleActivate(version.id)}
+                              className="text-neutral-900 hover:underline disabled:opacity-50"
+                            >
                               {activating === version.id ? "Activation..." : "Activer"}
                             </button>
                           ) : null}
@@ -219,14 +329,22 @@ function TemplateRow({ template, canManage }: { template: DocumentTemplateSummar
             </div>
           ) : null}
 
-          {canManage ? <UploadVersionForm templateId={template.id} onUploaded={loadDetail} /> : null}
+          {canManage ? (
+            <UploadVersionForm templateId={template.id} onUploaded={loadDetail} />
+          ) : null}
         </div>
       ) : null}
     </div>
   );
 }
 
-export function DocumentTemplatesSection({ initialTemplates, actorRole }: { initialTemplates: DocumentTemplateSummary[]; actorRole: string | undefined }) {
+export function DocumentTemplatesSection({
+  initialTemplates,
+  actorRole,
+}: {
+  initialTemplates: DocumentTemplateSummary[];
+  actorRole: string | undefined;
+}) {
   const canManage = canManageDocumentTemplates(actorRole);
 
   return (

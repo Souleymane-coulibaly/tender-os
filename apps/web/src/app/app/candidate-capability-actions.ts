@@ -13,6 +13,7 @@ import type {
   CandidateDocumentVersionsView,
   CandidateRepresentative,
 } from "../../lib/candidate-capability-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 /**
  * Checkpoint TENDEROS-2.1-CCV2-F — accès aux capacités, documents et coordonnées bancaires de
@@ -40,6 +41,8 @@ type CapabilityFamily = "representatives" | "insurances" | "certifications" | "r
 function describeCandidateApiError(error: unknown, context: string): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] ${context} (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";

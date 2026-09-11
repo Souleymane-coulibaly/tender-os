@@ -126,7 +126,8 @@ export type BenchmarkCaseSummary = {
   createdAt: string;
 };
 
-export type BenchmarkRunStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "PARTIALLY_SUCCEEDED" | "FAILED" | "CANCELLED";
+export type BenchmarkRunStatus =
+  "PENDING" | "RUNNING" | "SUCCEEDED" | "PARTIALLY_SUCCEEDED" | "FAILED" | "CANCELLED";
 
 export const BENCHMARK_RUN_STATUS_LABELS: Record<BenchmarkRunStatus, string> = {
   PENDING: "En attente",
@@ -285,4 +286,12 @@ export type RoutingPolicySummary = {
   archivedAt?: string;
   createdAt: string;
   updatedAt: string;
+};
+
+/** Fournisseur d'un modèle d'IA — `AnalysisProvider` côté API. */
+export const AI_PROVIDER_LABELS: Record<string, string> = {
+  OPENAI: "OpenAI",
+  ANTHROPIC: "Anthropic",
+  MISTRAL: "Mistral AI",
+  AZURE_OPENAI: "Azure OpenAI",
 };

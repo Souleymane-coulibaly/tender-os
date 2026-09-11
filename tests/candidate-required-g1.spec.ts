@@ -77,13 +77,13 @@ test.describe("CCV2-G.1 — entreprise candidate requise (preuves navigateur)", 
     await page.getByLabel("Titre *").fill(titre);
 
     // --- Tentative SANS candidat : la soumission n'aboutit pas.
-    await page.getByRole("button", { name: /Creer l'appel d'offres/i }).click();
+    await page.getByRole("button", { name: /Cr[ée]er l'appel d'offres/i }).click();
     await expect(page).toHaveURL(/\/app\/tenders\/new/);
     expect(await prisma.tender.count({ where: { organizationId: fixture.organizationId, title: titre } }), "aucun Tender écrit").toBe(0);
 
     // --- Avec candidat : la création aboutit et porte bien A.
     await selector.selectOption(fixture.candidateCompanyId);
-    await page.getByRole("button", { name: /Creer l'appel d'offres/i }).click();
+    await page.getByRole("button", { name: /Cr[ée]er l'appel d'offres/i }).click();
 
     await expect
       .poll(async () => await prisma.tender.count({ where: { organizationId: fixture.organizationId, title: titre } }), { timeout: 20000 })

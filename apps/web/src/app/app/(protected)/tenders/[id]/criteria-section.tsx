@@ -21,10 +21,10 @@ export function CriteriaSection({
   const totalWeight = criteria.reduce((sum, criterion) => sum + Number(criterion.weight), 0);
 
   return (
-    <Card title={`Criteres d'attribution${criteria.length > 0 ? ` (total ${totalWeight}%)` : ""}`}>
+    <Card title={`Critères d'attribution${criteria.length > 0 ? ` (total ${totalWeight}%)` : ""}`}>
       <div className="flex flex-col gap-2">
         {criteria.length === 0 ? (
-          <p className="text-sm text-tenderos-slate">Aucun critere renseigne.</p>
+          <p className="text-sm text-tenderos-slate">Aucun critère renseigné.</p>
         ) : (
           <ul>
             {criteria.map((criterion) => (
@@ -40,7 +40,7 @@ export function CriteriaSection({
             name="name"
             type="text"
             required
-            placeholder="Nom du critere..."
+            placeholder="Nom du critère..."
             className="min-w-[10rem] flex-1"
           />
           {/* `fieldControlClasses` impose `w-full` a tous les controles. Tailwind emet `.w-full`

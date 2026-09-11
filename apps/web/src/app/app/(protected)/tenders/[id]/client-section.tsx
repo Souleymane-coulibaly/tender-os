@@ -66,7 +66,7 @@ export function ClientSection({
                 className="truncate"
               >
                 <option value="" disabled>
-                  Selectionner...
+                  Sélectionner...
                 </option>
                 {otherClients.map((client) => (
                   <option key={client.id} value={client.id}>
@@ -102,7 +102,7 @@ export function ClientSection({
         ) : (
           <p className="text-xs text-tenderos-slate">
             {canChange
-              ? "Le changement de client n'est plus possible une fois la preparation de la reponse commencee."
+              ? "Le changement de client n'est plus possible une fois la préparation de la réponse commencée."
               : null}
           </p>
         )}

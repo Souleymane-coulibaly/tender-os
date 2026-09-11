@@ -2,7 +2,10 @@
 
 import { useActionState, useState } from "react";
 import { createAiModelAction, type FormActionState } from "../../../../ai-configuration-actions";
-import type { AllowedModelCatalog } from "../../../../../../lib/ai-configuration-types";
+import {
+  AI_PROVIDER_LABELS,
+  type AllowedModelCatalog,
+} from "../../../../../../lib/ai-configuration-types";
 
 const INITIAL_STATE: FormActionState = {};
 
@@ -31,7 +34,7 @@ export function CreateAiModelForm({ catalog }: { catalog: AllowedModelCatalog })
         >
           {providers.map((p) => (
             <option key={p} value={p}>
-              {p}
+              {AI_PROVIDER_LABELS[p] ?? p}
             </option>
           ))}
         </select>
@@ -41,7 +44,12 @@ export function CreateAiModelForm({ catalog }: { catalog: AllowedModelCatalog })
         <label htmlFor="modelKey" className="text-sm font-medium text-neutral-700">
           Modèle *
         </label>
-        <select id="modelKey" name="modelKey" required className="rounded border border-neutral-300 px-3 py-2 text-sm">
+        <select
+          id="modelKey"
+          name="modelKey"
+          required
+          className="rounded border border-neutral-300 px-3 py-2 text-sm"
+        >
           {(catalog[provider] ?? []).map((modelKey) => (
             <option key={modelKey} value={modelKey}>
               {modelKey}
@@ -65,14 +73,24 @@ export function CreateAiModelForm({ catalog }: { catalog: AllowedModelCatalog })
       </div>
 
       <div className="flex items-center gap-2">
-        <input id="enabledForBenchmark" name="enabledForBenchmark" type="checkbox" className="h-4 w-4" />
+        <input
+          id="enabledForBenchmark"
+          name="enabledForBenchmark"
+          type="checkbox"
+          className="h-4 w-4"
+        />
         <label htmlFor="enabledForBenchmark" className="text-sm text-neutral-700">
           Autoriser pour les benchmarks
         </label>
       </div>
 
       <div className="flex items-center gap-2">
-        <input id="enabledForProduction" name="enabledForProduction" type="checkbox" className="h-4 w-4" />
+        <input
+          id="enabledForProduction"
+          name="enabledForProduction"
+          type="checkbox"
+          className="h-4 w-4"
+        />
         <label htmlFor="enabledForProduction" className="text-sm text-neutral-700">
           Autoriser en production
         </label>

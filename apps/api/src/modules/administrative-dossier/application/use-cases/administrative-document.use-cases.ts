@@ -13,14 +13,32 @@ import {
   AdministrativeDocumentNotReadyForValidationError,
   AdministrativeDocumentRevisionNotFoundError,
 } from "../../domain/errors";
-import { AdministrativeDocumentSummary, toAdministrativeDocumentSummary } from "../dtos";
-import { ADMINISTRATIVE_DOCUMENT_REPOSITORY, type AdministrativeDocumentRepository } from "../ports/administrative-document.repository";
-import { ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY, type AdministrativeDocumentRevisionRepository } from "../ports/administrative-document-revision.repository";
-import { ADMINISTRATIVE_REQUIREMENT_REPOSITORY, type AdministrativeRequirementRepository } from "../ports/administrative-requirement.repository";
+import {
+  AdministrativeDocumentListItem,
+  AdministrativeDocumentSummary,
+  toAdministrativeDocumentListItem,
+  toAdministrativeDocumentSummary,
+} from "../dtos";
+import {
+  ADMINISTRATIVE_DOCUMENT_REPOSITORY,
+  type AdministrativeDocumentRepository,
+} from "../ports/administrative-document.repository";
+import {
+  ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY,
+  type AdministrativeDocumentRevisionRepository,
+} from "../ports/administrative-document-revision.repository";
+import {
+  ADMINISTRATIVE_REQUIREMENT_REPOSITORY,
+  type AdministrativeRequirementRepository,
+} from "../ports/administrative-requirement.repository";
 import { AUDIT_LOG_WRITER, type AuditLogWriter } from "../ports/audit-log-writer";
 import { AdministrativeDossierAccessService } from "../services/administrative-dossier-access.service";
 import { AdministrativeDossierRecalculationService } from "../services/administrative-dossier-recalculation.service";
 import { verifyAttachableDocument } from "../services/verify-attachable-document";
+import {
+  ADMINISTRATIVE_DOSSIER_REPOSITORY,
+  type AdministrativeDossierRepository,
+} from "../ports/administrative-dossier.repository";
 
 export type CreateAdministrativeDocumentCommand = Readonly<{
   organizationId: string;
@@ -41,16 +59,21 @@ export type CreateAdministrativeDocumentCommand = Readonly<{
 export class CreateAdministrativeDocumentUseCase {
   constructor(
     private readonly accessService: AdministrativeDossierAccessService,
-    @Inject(ADMINISTRATIVE_DOCUMENT_REPOSITORY) private readonly documentRepository: AdministrativeDocumentRepository,
-    @Inject(ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY) private readonly revisionRepository: AdministrativeDocumentRevisionRepository,
-    @Inject(ADMINISTRATIVE_REQUIREMENT_REPOSITORY) private readonly requirementRepository: AdministrativeRequirementRepository,
+    @Inject(ADMINISTRATIVE_DOCUMENT_REPOSITORY)
+    private readonly documentRepository: AdministrativeDocumentRepository,
+    @Inject(ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY)
+    private readonly revisionRepository: AdministrativeDocumentRevisionRepository,
+    @Inject(ADMINISTRATIVE_REQUIREMENT_REPOSITORY)
+    private readonly requirementRepository: AdministrativeRequirementRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     private readonly statusRecalculation: AdministrativeDossierRecalculationService,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
   ) {}
 
-  async execute(command: CreateAdministrativeDocumentCommand): Promise<AdministrativeDocumentSummary> {
+  async execute(
+    command: CreateAdministrativeDocumentCommand,
+  ): Promise<AdministrativeDocumentSummary> {
     const { dossier } = await this.accessService.loadDossierByTenderId({
       organizationId: command.organizationId,
       actorId: command.actorId,
@@ -84,14 +107,20 @@ export class CreateAdministrativeDocumentUseCase {
     await this.revisionRepository.create(revision);
 
     if (command.requirementId) {
-      const requirement = await this.requirementRepository.findById({ organizationId: command.organizationId, requirementId: command.requirementId });
+      const requirement = await this.requirementRepository.findById({
+        organizationId: command.organizationId,
+        requirementId: command.requirementId,
+      });
       if (requirement && requirement.tenderId === command.tenderId) {
         requirement.matchDocument({ documentId: document.id, occurredAt });
         await this.requirementRepository.save(requirement);
       }
     }
 
-    await this.statusRecalculation.recompute({ organizationId: command.organizationId, dossierId: dossier.id });
+    await this.statusRecalculation.recompute({
+      organizationId: command.organizationId,
+      dossierId: dossier.id,
+    });
     await this.auditLogWriter.record({
       organizationId: command.organizationId,
       actorType: "USER",
@@ -127,8 +156,10 @@ export type AttachAdministrativeDocumentRevisionCommand = Readonly<{
 export class AttachAdministrativeDocumentRevisionUseCase {
   constructor(
     private readonly accessService: AdministrativeDossierAccessService,
-    @Inject(ADMINISTRATIVE_DOCUMENT_REPOSITORY) private readonly documentRepository: AdministrativeDocumentRepository,
-    @Inject(ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY) private readonly revisionRepository: AdministrativeDocumentRevisionRepository,
+    @Inject(ADMINISTRATIVE_DOCUMENT_REPOSITORY)
+    private readonly documentRepository: AdministrativeDocumentRepository,
+    @Inject(ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY)
+    private readonly revisionRepository: AdministrativeDocumentRevisionRepository,
     private readonly getDocumentUseCase: GetDocumentUseCase,
     private readonly getTenderUseCase: GetTenderUseCase,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
@@ -137,8 +168,13 @@ export class AttachAdministrativeDocumentRevisionUseCase {
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
   ) {}
 
-  async execute(command: AttachAdministrativeDocumentRevisionCommand): Promise<AdministrativeDocumentSummary> {
-    const document = await this.documentRepository.findById({ organizationId: command.organizationId, documentId: command.administrativeDocumentId });
+  async execute(
+    command: AttachAdministrativeDocumentRevisionCommand,
+  ): Promise<AdministrativeDocumentSummary> {
+    const document = await this.documentRepository.findById({
+      organizationId: command.organizationId,
+      documentId: command.administrativeDocumentId,
+    });
     if (!document) {
       throw new AdministrativeDocumentNotFoundError();
     }
@@ -162,10 +198,18 @@ export class AttachAdministrativeDocumentRevisionUseCase {
       // (mission §18/§26), pour une révision manuelle comme pour une révision générée (même chemin
       // d'attachement, mission §18 "jamais un second mécanisme"). `undefined` si le Tender n'a pas
       // encore de candidat résolu — jamais deviné.
-      this.getTenderUseCase.execute({ organizationId: command.organizationId, tenderId: document.tenderId, actorId: command.actorId, actorRole: command.actorRole }),
+      this.getTenderUseCase.execute({
+        organizationId: command.organizationId,
+        tenderId: document.tenderId,
+        actorId: command.actorId,
+        actorRole: command.actorRole,
+      }),
     ]);
 
-    const revisions = await this.revisionRepository.listByDocument({ organizationId: command.organizationId, administrativeDocumentId: document.id });
+    const revisions = await this.revisionRepository.listByDocument({
+      organizationId: command.organizationId,
+      administrativeDocumentId: document.id,
+    });
     const latest = revisions[revisions.length - 1];
     const occurredAt = this.clock.now();
 
@@ -211,17 +255,25 @@ export class AttachAdministrativeDocumentRevisionUseCase {
     }
     await this.documentRepository.save(document);
 
-    await this.statusRecalculation.recompute({ organizationId: command.organizationId, dossierId: document.administrativeDossierId });
+    await this.statusRecalculation.recompute({
+      organizationId: command.organizationId,
+      dossierId: document.administrativeDossierId,
+    });
     await this.auditLogWriter.record({
       organizationId: command.organizationId,
       actorType: "USER",
       actorId: command.actorId,
-      action: supersededValidatedRevision ? "ADMINISTRATIVE_DOCUMENT_REPLACED" : "ADMINISTRATIVE_DOCUMENT_REVISION_CREATED",
+      action: supersededValidatedRevision
+        ? "ADMINISTRATIVE_DOCUMENT_REPLACED"
+        : "ADMINISTRATIVE_DOCUMENT_REVISION_CREATED",
       resourceType: "ADMINISTRATIVE_DOCUMENT_REVISION",
       resourceId: target.id,
     });
 
-    const allRevisions = await this.revisionRepository.listByDocument({ organizationId: command.organizationId, administrativeDocumentId: document.id });
+    const allRevisions = await this.revisionRepository.listByDocument({
+      organizationId: command.organizationId,
+      administrativeDocumentId: document.id,
+    });
     return toAdministrativeDocumentSummary(document, allRevisions);
   }
 }
@@ -239,15 +291,22 @@ export type ValidateAdministrativeDocumentCommand = Readonly<{
 export class ValidateAdministrativeDocumentUseCase {
   constructor(
     private readonly accessService: AdministrativeDossierAccessService,
-    @Inject(ADMINISTRATIVE_DOCUMENT_REPOSITORY) private readonly documentRepository: AdministrativeDocumentRepository,
-    @Inject(ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY) private readonly revisionRepository: AdministrativeDocumentRevisionRepository,
+    @Inject(ADMINISTRATIVE_DOCUMENT_REPOSITORY)
+    private readonly documentRepository: AdministrativeDocumentRepository,
+    @Inject(ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY)
+    private readonly revisionRepository: AdministrativeDocumentRevisionRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     private readonly statusRecalculation: AdministrativeDossierRecalculationService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  async execute(command: ValidateAdministrativeDocumentCommand): Promise<AdministrativeDocumentSummary> {
-    const document = await this.documentRepository.findById({ organizationId: command.organizationId, documentId: command.administrativeDocumentId });
+  async execute(
+    command: ValidateAdministrativeDocumentCommand,
+  ): Promise<AdministrativeDocumentSummary> {
+    const document = await this.documentRepository.findById({
+      organizationId: command.organizationId,
+      documentId: command.administrativeDocumentId,
+    });
     if (!document) {
       throw new AdministrativeDocumentNotFoundError();
     }
@@ -260,12 +319,17 @@ export class ValidateAdministrativeDocumentUseCase {
       permission: ClientPermission.ValidateAdministrativeDocuments,
     });
 
-    const revision = await this.revisionRepository.findById({ organizationId: command.organizationId, revisionId: command.revisionId });
+    const revision = await this.revisionRepository.findById({
+      organizationId: command.organizationId,
+      revisionId: command.revisionId,
+    });
     if (!revision || revision.administrativeDocumentId !== document.id) {
       throw new AdministrativeDocumentRevisionNotFoundError();
     }
     if (!revision.hasAttachedFile) {
-      throw new AdministrativeDocumentNotReadyForValidationError("no file has been attached to this revision yet");
+      throw new AdministrativeDocumentNotReadyForValidationError(
+        "no file has been attached to this revision yet",
+      );
     }
 
     const occurredAt = this.clock.now();
@@ -274,7 +338,10 @@ export class ValidateAdministrativeDocumentUseCase {
 
     await this.revisionRepository.save(revision);
     await this.documentRepository.save(document);
-    await this.statusRecalculation.recompute({ organizationId: command.organizationId, dossierId: document.administrativeDossierId });
+    await this.statusRecalculation.recompute({
+      organizationId: command.organizationId,
+      dossierId: document.administrativeDossierId,
+    });
     await this.auditLogWriter.record({
       organizationId: command.organizationId,
       actorType: "USER",
@@ -284,7 +351,10 @@ export class ValidateAdministrativeDocumentUseCase {
       resourceId: revision.id,
     });
 
-    const revisions = await this.revisionRepository.listByDocument({ organizationId: command.organizationId, administrativeDocumentId: document.id });
+    const revisions = await this.revisionRepository.listByDocument({
+      organizationId: command.organizationId,
+      administrativeDocumentId: document.id,
+    });
     return toAdministrativeDocumentSummary(document, revisions);
   }
 }
@@ -301,15 +371,22 @@ export type RejectAdministrativeDocumentCommand = Readonly<{
 export class RejectAdministrativeDocumentUseCase {
   constructor(
     private readonly accessService: AdministrativeDossierAccessService,
-    @Inject(ADMINISTRATIVE_DOCUMENT_REPOSITORY) private readonly documentRepository: AdministrativeDocumentRepository,
-    @Inject(ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY) private readonly revisionRepository: AdministrativeDocumentRevisionRepository,
+    @Inject(ADMINISTRATIVE_DOCUMENT_REPOSITORY)
+    private readonly documentRepository: AdministrativeDocumentRepository,
+    @Inject(ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY)
+    private readonly revisionRepository: AdministrativeDocumentRevisionRepository,
     @Inject(AUDIT_LOG_WRITER) private readonly auditLogWriter: AuditLogWriter,
     private readonly statusRecalculation: AdministrativeDossierRecalculationService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  async execute(command: RejectAdministrativeDocumentCommand): Promise<AdministrativeDocumentSummary> {
-    const document = await this.documentRepository.findById({ organizationId: command.organizationId, documentId: command.administrativeDocumentId });
+  async execute(
+    command: RejectAdministrativeDocumentCommand,
+  ): Promise<AdministrativeDocumentSummary> {
+    const document = await this.documentRepository.findById({
+      organizationId: command.organizationId,
+      documentId: command.administrativeDocumentId,
+    });
     if (!document) {
       throw new AdministrativeDocumentNotFoundError();
     }
@@ -322,7 +399,10 @@ export class RejectAdministrativeDocumentUseCase {
       permission: ClientPermission.ValidateAdministrativeDocuments,
     });
 
-    const revision = await this.revisionRepository.findById({ organizationId: command.organizationId, revisionId: command.revisionId });
+    const revision = await this.revisionRepository.findById({
+      organizationId: command.organizationId,
+      revisionId: command.revisionId,
+    });
     if (!revision || revision.administrativeDocumentId !== document.id) {
       throw new AdministrativeDocumentRevisionNotFoundError();
     }
@@ -330,7 +410,10 @@ export class RejectAdministrativeDocumentUseCase {
     const occurredAt = this.clock.now();
     revision.reject(occurredAt);
     await this.revisionRepository.save(revision);
-    await this.statusRecalculation.recompute({ organizationId: command.organizationId, dossierId: document.administrativeDossierId });
+    await this.statusRecalculation.recompute({
+      organizationId: command.organizationId,
+      dossierId: document.administrativeDossierId,
+    });
     await this.auditLogWriter.record({
       organizationId: command.organizationId,
       actorType: "USER",
@@ -340,23 +423,36 @@ export class RejectAdministrativeDocumentUseCase {
       resourceId: revision.id,
     });
 
-    const revisions = await this.revisionRepository.listByDocument({ organizationId: command.organizationId, administrativeDocumentId: document.id });
+    const revisions = await this.revisionRepository.listByDocument({
+      organizationId: command.organizationId,
+      administrativeDocumentId: document.id,
+    });
     return toAdministrativeDocumentSummary(document, revisions);
   }
 }
 
-export type GetAdministrativeDocumentQuery = Readonly<{ organizationId: string; actorId: string; actorRole: string; administrativeDocumentId: string }>;
+export type GetAdministrativeDocumentQuery = Readonly<{
+  organizationId: string;
+  actorId: string;
+  actorRole: string;
+  administrativeDocumentId: string;
+}>;
 
 @Injectable()
 export class GetAdministrativeDocumentUseCase {
   constructor(
     private readonly accessService: AdministrativeDossierAccessService,
-    @Inject(ADMINISTRATIVE_DOCUMENT_REPOSITORY) private readonly documentRepository: AdministrativeDocumentRepository,
-    @Inject(ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY) private readonly revisionRepository: AdministrativeDocumentRevisionRepository,
+    @Inject(ADMINISTRATIVE_DOCUMENT_REPOSITORY)
+    private readonly documentRepository: AdministrativeDocumentRepository,
+    @Inject(ADMINISTRATIVE_DOCUMENT_REVISION_REPOSITORY)
+    private readonly revisionRepository: AdministrativeDocumentRevisionRepository,
   ) {}
 
   async execute(query: GetAdministrativeDocumentQuery): Promise<AdministrativeDocumentSummary> {
-    const document = await this.documentRepository.findById({ organizationId: query.organizationId, documentId: query.administrativeDocumentId });
+    const document = await this.documentRepository.findById({
+      organizationId: query.organizationId,
+      documentId: query.administrativeDocumentId,
+    });
     if (!document) {
       throw new AdministrativeDocumentNotFoundError();
     }
@@ -369,7 +465,62 @@ export class GetAdministrativeDocumentUseCase {
       permission: ClientPermission.ReadAdministrativeDossier,
     });
 
-    const revisions = await this.revisionRepository.listByDocument({ organizationId: query.organizationId, administrativeDocumentId: document.id });
+    const revisions = await this.revisionRepository.listByDocument({
+      organizationId: query.organizationId,
+      administrativeDocumentId: document.id,
+    });
     return toAdministrativeDocumentSummary(document, revisions);
+  }
+}
+
+export type ListTenderAdministrativeDocumentsQuery = Readonly<{
+  organizationId: string;
+  actorId: string;
+  actorRole: string;
+  tenderId: string;
+}>;
+
+/**
+ * Liste les documents administratifs du dossier d'un appel d'offres — source du sélecteur
+ * « document preuve » des pouvoirs de signature, qui demandait jusqu'ici un identifiant tapé à la
+ * main. Même permission que la lecture d'un document administratif : aucune règle d'accès nouvelle.
+ *
+ * Autorisation AVANT toute lecture (leçon H.1) : un acteur sans accès apprend seulement qu'il n'a
+ * pas accès, jamais si un dossier existe. Un appel d'offres sans dossier renvoie une liste vide,
+ * état normal tant que le dossier n'a pas été initialisé.
+ */
+@Injectable()
+export class ListTenderAdministrativeDocumentsUseCase {
+  constructor(
+    private readonly accessService: AdministrativeDossierAccessService,
+    @Inject(ADMINISTRATIVE_DOSSIER_REPOSITORY)
+    private readonly dossierRepository: AdministrativeDossierRepository,
+    @Inject(ADMINISTRATIVE_DOCUMENT_REPOSITORY)
+    private readonly documentRepository: AdministrativeDocumentRepository,
+  ) {}
+
+  async execute(
+    query: ListTenderAdministrativeDocumentsQuery,
+  ): Promise<AdministrativeDocumentListItem[]> {
+    await this.accessService.assertTenderAccess({
+      organizationId: query.organizationId,
+      actorId: query.actorId,
+      actorRole: query.actorRole,
+      tenderId: query.tenderId,
+      permission: ClientPermission.ReadAdministrativeDossier,
+    });
+
+    const dossier = await this.dossierRepository.findByTenderId({
+      organizationId: query.organizationId,
+      tenderId: query.tenderId,
+    });
+    if (!dossier) {
+      return [];
+    }
+    const documents = await this.documentRepository.listByDossier({
+      organizationId: query.organizationId,
+      administrativeDossierId: dossier.id,
+    });
+    return documents.map(toAdministrativeDocumentListItem);
   }
 }

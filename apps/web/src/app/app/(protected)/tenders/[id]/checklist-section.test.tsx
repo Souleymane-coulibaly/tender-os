@@ -80,7 +80,7 @@ describe("ChecklistSection", () => {
   it("has an inline form to add a new checklist item", () => {
     render(<ChecklistSection tenderId="tender-1" items={[]} lots={LOTS} progress={null} />);
 
-    expect(screen.getByPlaceholderText("Nouvel element...")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Nouvel élément...")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ajouter" })).toBeInTheDocument();
   });
 

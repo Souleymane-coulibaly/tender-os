@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
-import { AI_MODEL_STATUS_LABELS, aiModelStatusBadgeClass, type AiModelSummary } from "../../../../../lib/ai-configuration-types";
+import {
+  AI_MODEL_STATUS_LABELS,
+  AI_PROVIDER_LABELS,
+  aiModelStatusBadgeClass,
+  type AiModelSummary,
+} from "../../../../../lib/ai-configuration-types";
 import { isOrganizationAdmin } from "../../../../../lib/authorization";
 import { ApiErrorState } from "../../api-error-state";
 
@@ -30,12 +35,15 @@ export default async function AiModelsListPage() {
         <div>
           <h1 className="text-xl font-semibold">Modèles IA</h1>
           <p className="text-sm text-neutral-600">
-            Registre des modèles autorisés à être benchmarkés ou utilisés en production. Aucun modèle en dehors de cette
-            liste ne peut être appelé par TenderOS.
+            Registre des modèles autorisés à être benchmarkés ou utilisés en production. Aucun
+            modèle en dehors de cette liste ne peut être appelé par TenderOS.
           </p>
         </div>
         {canManage ? (
-          <Link href="/app/ai-configuration/models/new" className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
+          <Link
+            href="/app/ai-configuration/models/new"
+            className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
+          >
             Enregistrer un modèle
           </Link>
         ) : null}
@@ -61,21 +69,35 @@ export default async function AiModelsListPage() {
               {models.map((model) => (
                 <tr key={model.id} className="border-b border-neutral-100">
                   <td className="py-2 pr-4">
-                    <Link href={`/app/ai-configuration/models/${model.id}`} className="font-medium text-neutral-900 hover:underline">
+                    <Link
+                      href={`/app/ai-configuration/models/${model.id}`}
+                      className="font-medium text-neutral-900 hover:underline"
+                    >
                       {model.displayName}
                     </Link>
                   </td>
-                  <td className="py-2 pr-4 text-neutral-600">{model.provider}</td>
+                  <td className="py-2 pr-4 text-neutral-600">
+                    {AI_PROVIDER_LABELS[model.provider] ?? model.provider}
+                  </td>
                   <td className="py-2 pr-4 text-neutral-600">{model.modelKey}</td>
                   <td className="py-2 pr-4">
-                    <span className={`rounded px-2 py-0.5 text-xs font-medium ${aiModelStatusBadgeClass(model.status)}`}>
+                    <span
+                      className={`rounded px-2 py-0.5 text-xs font-medium ${aiModelStatusBadgeClass(model.status)}`}
+                    >
                       {AI_MODEL_STATUS_LABELS[model.status]}
                     </span>
                   </td>
-                  <td className="py-2 pr-4 text-neutral-600">{model.enabledForBenchmark ? "Oui" : "Non"}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{model.enabledForProduction ? "Oui" : "Non"}</td>
+                  <td className="py-2 pr-4 text-neutral-600">
+                    {model.enabledForBenchmark ? "Oui" : "Non"}
+                  </td>
+                  <td className="py-2 pr-4 text-neutral-600">
+                    {model.enabledForProduction ? "Oui" : "Non"}
+                  </td>
                   <td className="py-2 pr-4">
-                    <Link href={`/app/ai-configuration/models/${model.id}`} className="text-neutral-700 hover:underline">
+                    <Link
+                      href={`/app/ai-configuration/models/${model.id}`}
+                      className="text-neutral-700 hover:underline"
+                    >
                       Ouvrir
                     </Link>
                   </td>

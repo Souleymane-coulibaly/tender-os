@@ -45,7 +45,7 @@ describe("documents-actions — French error mapping (bug #10)", () => {
 
     const result = await attachExistingDocumentToTenderAction("tender-1", {}, formData);
 
-    expect(result.error).toBe("Ce document est déjà associé à cet appel d'offres.");
+    expect(result.error).toBe("Ce document est déjà rattaché à cet appel d'offres.");
     expect(result.error).not.toContain("already exists");
   });
 
@@ -54,7 +54,7 @@ describe("documents-actions — French error mapping (bug #10)", () => {
 
     const result = await detachDocumentFromTenderAction("tender-1", "doc-1");
 
-    expect(result.error).toBe("Ce document est archivé.");
+    expect(result.error).toBe("Ce document est archivé : il ne peut plus être modifié ni recevoir de nouvelle version.");
   });
 
   it("maps a 404 to a generic French message", async () => {
@@ -62,7 +62,7 @@ describe("documents-actions — French error mapping (bug #10)", () => {
 
     const result = await detachDocumentFromTenderAction("tender-1", "doc-1");
 
-    expect(result.error).toBe("Ressource introuvable.");
+    expect(result.error).toBe("Ce document est introuvable.");
   });
 
   it("maps an unexpected non-AppApiError to a network error message, never exposing the raw error", async () => {

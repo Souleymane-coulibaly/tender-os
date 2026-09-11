@@ -5,7 +5,14 @@
 
 export type AnalysisScope = "DOCUMENT" | "TENDER";
 
-export type AnalysisStatus = "PENDING" | "QUEUED" | "PROCESSING" | "SUCCEEDED" | "PARTIALLY_SUCCEEDED" | "FAILED" | "CANCELLED";
+export type AnalysisStatus =
+  | "PENDING"
+  | "QUEUED"
+  | "PROCESSING"
+  | "SUCCEEDED"
+  | "PARTIALLY_SUCCEEDED"
+  | "FAILED"
+  | "CANCELLED";
 
 export type AnalysisJobSummary = {
   id: string;
@@ -34,12 +41,21 @@ export type AnalysisJobSummary = {
   updatedAt: string;
 };
 
-export type ListTenderAnalysesResult = { items: AnalysisJobSummary[]; total: number; limit: number; offset: number };
+export type ListTenderAnalysesResult = {
+  items: AnalysisJobSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+};
 
 export type GoNoGoRecommendation = "GO" | "GO_WITH_RESERVATIONS" | "NO_GO" | "INSUFFICIENT_DATA";
 export type ComplexityLevel = "LOW" | "MEDIUM" | "HIGH";
 
-export type TenderAnalysisConflict = { category: string; description: string; documentIds: string[] };
+export type TenderAnalysisConflict = {
+  category: string;
+  description: string;
+  documentIds: string[];
+};
 
 /** Checkpoint 2.1-P2.1-FIX-A — jamais persistée côté backend, recalculée à chaque lecture en
  *  comparant la révision DCE figée à la persistance à la révision DCE courante. `UNKNOWN` pour une
@@ -135,7 +151,13 @@ export type QuestionFinding = FindingProvenance & {
   createdAt: string;
 };
 
-export type FindingsPage<T> = { items: T[]; total: number; limit: number; offset: number; analysisVersion?: number };
+export type FindingsPage<T> = {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+  analysisVersion?: number;
+};
 
 export type AnalysisSectionData = {
   latestJob: AnalysisJobSummary | null;
@@ -153,20 +175,24 @@ export const ANALYSIS_STATUS_LABELS: Record<AnalysisStatus, string> = {
   PENDING: "En attente",
   QUEUED: "En file d'attente",
   PROCESSING: "En cours",
-  SUCCEEDED: "Terminee",
-  PARTIALLY_SUCCEEDED: "Terminee (partielle)",
-  FAILED: "Echouee",
-  CANCELLED: "Annulee",
+  SUCCEEDED: "Terminée",
+  PARTIALLY_SUCCEEDED: "Terminée (partielle)",
+  FAILED: "Échouée",
+  CANCELLED: "Annulée",
 };
 
 export const GO_NO_GO_LABELS: Record<GoNoGoRecommendation, string> = {
   GO: "Favorable",
-  GO_WITH_RESERVATIONS: "Favorable avec reserves",
+  GO_WITH_RESERVATIONS: "Favorable avec réserves",
   NO_GO: "Defavorable",
-  INSUFFICIENT_DATA: "Donnees insuffisantes",
+  INSUFFICIENT_DATA: "Données insuffisantes",
 };
 
-export const COMPLEXITY_LABELS: Record<ComplexityLevel, string> = { LOW: "Faible", MEDIUM: "Moyenne", HIGH: "Elevee" };
+export const COMPLEXITY_LABELS: Record<ComplexityLevel, string> = {
+  LOW: "Faible",
+  MEDIUM: "Moyenne",
+  HIGH: "Élevée",
+};
 
 export const ANALYSIS_FRESHNESS_LABELS: Record<AnalysisFreshness, string> = {
   CURRENT: "Actualisé",
@@ -174,19 +200,73 @@ export const ANALYSIS_FRESHNESS_LABELS: Record<AnalysisFreshness, string> = {
   UNKNOWN: "Fraîcheur inconnue",
 };
 
-export type AnalysisCapability = { taskType: "ANALYZE_DOCUMENT" | "CONSOLIDATE_TENDER_ANALYSIS"; ready: boolean; reasonCode?: string };
+export type AnalysisCapability = {
+  taskType: "ANALYZE_DOCUMENT" | "CONSOLIDATE_TENDER_ANALYSIS";
+  ready: boolean;
+  reasonCode?: string;
+};
 
 /** Mission — "le frontend doit savoir avant le clic si l'analyse est possible". Codes alignés sur
  *  `GetAnalysisCapabilitiesUseCase` (backend), jamais un second vocabulaire divergent. */
 export const ANALYSIS_CAPABILITY_REASON_LABELS: Record<string, string> = {
-  AI_PROVIDER_NOT_CONFIGURED: "La génération IA n'est pas configurée pour ce type de contenu. Un administrateur doit activer une politique de routage dans Configuration IA.",
+  AI_PROVIDER_NOT_CONFIGURED:
+    "La génération IA n'est pas configurée pour ce type de contenu. Un administrateur doit activer une politique de routage dans Configuration IA.",
 };
 
 /** Meme permission backend que analysis:trigger (ROLE_ANALYSIS_PERMISSIONS — OWNER,
  *  ORGANIZATION_ADMIN, BID_MANAGER, CONTRIBUTOR) — gate d'affichage uniquement, jamais l'autorite
  *  reelle (revalidee par l'API a chaque requete quoi que montre l'UI). */
-const ROLES_ALLOWED_TO_TRIGGER_ANALYSIS = ["OWNER", "ORGANIZATION_ADMIN", "BID_MANAGER", "CONTRIBUTOR"];
+const ROLES_ALLOWED_TO_TRIGGER_ANALYSIS = [
+  "OWNER",
+  "ORGANIZATION_ADMIN",
+  "BID_MANAGER",
+  "CONTRIBUTOR",
+];
 
 export function canTriggerAnalysis(role: string | undefined): boolean {
   return role !== undefined && ROLES_ALLOWED_TO_TRIGGER_ANALYSIS.includes(role);
 }
+
+/** Catégorie d'une exigence extraite du DCE — `RequirementCategory` côté API. */
+export const REQUIREMENT_CATEGORY_LABELS: Record<string, string> = {
+  ADMINISTRATIVE: "Administratif",
+  TECHNICAL_MEMO: "Mémoire technique",
+  REFERENCES: "Références",
+  CV: "CV",
+  CERTIFICATION: "Certification",
+  INSURANCE: "Assurance",
+  FINANCIAL_CAPACITY: "Capacité financière",
+  TECHNICAL_CAPACITY: "Capacité technique",
+  HUMAN_RESOURCES: "Moyens humains",
+  MATERIAL_RESOURCES: "Moyens matériels",
+  METHODOLOGY: "Méthodologie",
+  PLANNING: "Planning",
+  SIGNATURE: "Signature",
+  OTHER: "Autre",
+};
+
+/** Catégorie d'une clause extraite du DCE — `ClauseCategory` côté API. */
+export const CLAUSE_CATEGORY_LABELS: Record<string, string> = {
+  PENALTY: "Pénalités",
+  WARRANTY: "Garantie",
+  INSURANCE: "Assurance",
+  DEADLINE: "Délais",
+  CONFIDENTIALITY: "Confidentialité",
+  IP: "Propriété intellectuelle",
+  SECURITY: "Sécurité",
+  CYBERSECURITY: "Cybersécurité",
+  REVERSIBILITY: "Réversibilité",
+  SUBCONTRACTING: "Sous-traitance",
+  CONSORTIUM: "Groupement",
+  ADVANCE_PAYMENT: "Avance",
+  RETENTION_GUARANTEE: "Retenue de garantie",
+  PAYMENT: "Paiement",
+  INVOICING: "Facturation",
+  TERMINATION: "Résiliation",
+  RENEWAL: "Reconduction",
+  LIABILITY: "Responsabilité",
+  GDPR: "RGPD",
+  HOSTING: "Hébergement",
+  ENVIRONMENTAL_SOCIAL: "Environnemental et social",
+  OTHER: "Autre",
+};

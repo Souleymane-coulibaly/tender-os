@@ -2,18 +2,26 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { appApiFetch } from "../../lib/app-api-client";
+import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type {
   KnowledgeDocumentDetail,
   KnowledgeDocumentSummary,
   KnowledgeEntrySummary,
   KnowledgeEntryVersionSummary,
 } from "../../lib/knowledge-types";
+import { describeApiError } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
+/** Toujours un message français, jamais le texte brut d'une erreur de l'API ou du réseau
+ *  (voir lib/api-error-messages.ts). Le détail reste journalisé pour l'analyse. */
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Une erreur est survenue.";
+  if (error instanceof AppApiError) {
+    console.error(`[TenderOS] Action failed (${error.status} ${error.code}): ${error.message}`);
+  } else {
+    console.error("[TenderOS] Unexpected action error:", error);
+  }
+  return describeApiError(error);
 }
 
 function optional(value: FormDataEntryValue | null): string | undefined {

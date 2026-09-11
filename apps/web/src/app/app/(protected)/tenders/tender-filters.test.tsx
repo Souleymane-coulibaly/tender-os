@@ -9,8 +9,8 @@ describe("TenderFilters", () => {
     expect(screen.getByLabelText("Recherche")).toBeInTheDocument();
     expect(screen.getByLabelText("Statut")).toBeInTheDocument();
     expect(screen.getByLabelText("Responsable (ID)")).toBeInTheDocument();
-    expect(screen.getByLabelText("Echeance apres le")).toBeInTheDocument();
-    expect(screen.getByLabelText("Echeance avant le")).toBeInTheDocument();
+    expect(screen.getByLabelText("Échéance après le")).toBeInTheDocument();
+    expect(screen.getByLabelText("Échéance avant le")).toBeInTheDocument();
     expect(screen.getByLabelText(/Echeance depassee uniquement/)).toBeInTheDocument();
   });
 

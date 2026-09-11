@@ -28,7 +28,7 @@ test.describe("Isolation multi-tenant (anti-IDOR)", () => {
     // (`#__next-route-announcer__`, présent sur toute page une fois l'hydratation terminée,
     // vide mais avec le même rôle ARIA) — jamais fiable en violation de mode strict. `ApiErrorState`
     // rend son alerte dans un `<div>`, jamais un élément `#__next-route-announcer__`.
-    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText("Introuvable ou accès refusé");
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toContainText(/introuvable/i);
     await expect(page.getByRole("heading", { name: "Cockpit" })).not.toBeVisible();
   });
 

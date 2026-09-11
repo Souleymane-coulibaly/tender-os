@@ -17,7 +17,9 @@ export type AdministrativeDossierSummary = {
   updatedAt: string;
 };
 
-export function toAdministrativeDossierSummary(dossier: AdministrativeDossier): AdministrativeDossierSummary {
+export function toAdministrativeDossierSummary(
+  dossier: AdministrativeDossier,
+): AdministrativeDossierSummary {
   return {
     id: dossier.id,
     tenderId: dossier.tenderId,
@@ -58,7 +60,9 @@ export type AdministrativeRequirementSummary = {
   updatedAt: string;
 };
 
-export function toAdministrativeRequirementSummary(requirement: AdministrativeRequirement): AdministrativeRequirementSummary {
+export function toAdministrativeRequirementSummary(
+  requirement: AdministrativeRequirement,
+): AdministrativeRequirementSummary {
   return {
     id: requirement.id,
     tenderId: requirement.tenderId,
@@ -105,7 +109,9 @@ export type AdministrativeDocumentRevisionSummary = {
   updatedAt: string;
 };
 
-export function toAdministrativeDocumentRevisionSummary(revision: AdministrativeDocumentRevision): AdministrativeDocumentRevisionSummary {
+export function toAdministrativeDocumentRevisionSummary(
+  revision: AdministrativeDocumentRevision,
+): AdministrativeDocumentRevisionSummary {
   return {
     id: revision.id,
     administrativeDocumentId: revision.administrativeDocumentId,
@@ -142,7 +148,10 @@ export type AdministrativeDocumentSummary = {
   revisions: readonly AdministrativeDocumentRevisionSummary[];
 };
 
-export function toAdministrativeDocumentSummary(document: AdministrativeDocument, revisions: readonly AdministrativeDocumentRevision[]): AdministrativeDocumentSummary {
+export function toAdministrativeDocumentSummary(
+  document: AdministrativeDocument,
+  revisions: readonly AdministrativeDocumentRevision[],
+): AdministrativeDocumentSummary {
   return {
     id: document.id,
     administrativeDossierId: document.administrativeDossierId,
@@ -182,3 +191,28 @@ export type AdministrativeDossierCapabilities = {
   blockers: readonly string[];
   warnings: readonly string[];
 };
+
+/**
+ * Élément léger d'une liste de documents administratifs — source d'un sélecteur. Sans les
+ * révisions : les charger coûterait une requête par document, et renvoyer une liste vide à la place
+ * serait faux.
+ */
+export type AdministrativeDocumentListItem = Readonly<{
+  id: string;
+  label: string;
+  documentType: string;
+  validatedRevisionId?: string;
+  signatureStatus: string;
+}>;
+
+export function toAdministrativeDocumentListItem(
+  document: AdministrativeDocument,
+): AdministrativeDocumentListItem {
+  return {
+    id: document.id,
+    label: document.label,
+    documentType: document.documentType,
+    ...(document.validatedRevisionId ? { validatedRevisionId: document.validatedRevisionId } : {}),
+    signatureStatus: document.signatureStatus,
+  };
+}

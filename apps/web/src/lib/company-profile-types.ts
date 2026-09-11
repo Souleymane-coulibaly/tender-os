@@ -34,7 +34,13 @@ export type CompanyLegalIdentity = {
   status: string;
 };
 
-export const REPRESENTATIVE_TYPES = ["LEGAL_REPRESENTATIVE", "SIGNATORY", "ADMINISTRATIVE_CONTACT", "COMMERCIAL_CONTACT", "TECHNICAL_CONTACT"] as const;
+export const REPRESENTATIVE_TYPES = [
+  "LEGAL_REPRESENTATIVE",
+  "SIGNATORY",
+  "ADMINISTRATIVE_CONTACT",
+  "COMMERCIAL_CONTACT",
+  "TECHNICAL_CONTACT",
+] as const;
 export type RepresentativeType = (typeof REPRESENTATIVE_TYPES)[number];
 export const REPRESENTATIVE_TYPE_LABELS: Record<RepresentativeType, string> = {
   LEGAL_REPRESENTATIVE: "Représentant légal",
@@ -66,7 +72,13 @@ export type CompanyBankAccount = {
   status: string;
 };
 
-export const INSURANCE_TYPES = ["PROFESSIONAL_LIABILITY", "DECENNIAL", "OPERATING_LIABILITY", "SECTOR_SPECIFIC", "OTHER"] as const;
+export const INSURANCE_TYPES = [
+  "PROFESSIONAL_LIABILITY",
+  "DECENNIAL",
+  "OPERATING_LIABILITY",
+  "SECTOR_SPECIFIC",
+  "OTHER",
+] as const;
 export type InsuranceType = (typeof INSURANCE_TYPES)[number];
 export const INSURANCE_TYPE_LABELS: Record<InsuranceType, string> = {
   PROFESSIONAL_LIABILITY: "Responsabilité civile professionnelle",
@@ -136,7 +148,8 @@ export type DocumentClientAccountAssociation = {
 };
 
 export type TemporalValidityStatus = "VALID" | "EXPIRING_SOON" | "EXPIRED" | "NO_EXPIRY";
-export type CompanyProfileCategoryStatus = "COMPLETE" | "PARTIAL" | "MISSING" | "EXPIRED" | "TO_VERIFY";
+export type CompanyProfileCategoryStatus =
+  "COMPLETE" | "PARTIAL" | "MISSING" | "EXPIRED" | "TO_VERIFY";
 
 /** Checkpoint TENDEROS-2.1-P2.3-E5.1 (Design System V2, audit hardcode) — `TEMPORAL_LABELS`/
  *  `TEMPORAL_BADGE` étaient dupliqués à l'identique (octet pour octet) dans
@@ -197,5 +210,27 @@ export type CompanyProfileSummary = {
   humanResources: CompanyHumanResource[];
   materialResources: CompanyMaterialResource[];
   documents: DocumentClientAccountAssociation[];
-  completeness: Record<"identity" | "banking" | "insurances" | "certifications" | "references" | "resources" | "documents", CompanyProfileCategoryStatus>;
+  completeness: Record<
+    | "identity"
+    | "banking"
+    | "insurances"
+    | "certifications"
+    | "references"
+    | "resources"
+    | "documents",
+    CompanyProfileCategoryStatus
+  >;
+};
+
+/** Statut d'un élément du profil entreprise (compte bancaire, représentant…) — `SatelliteStatus` côté API. */
+export const SATELLITE_STATUS_LABELS: Record<string, string> = {
+  ACTIVE: "Actif",
+  ARCHIVED: "Archivé",
+};
+
+/** Statut d'une référence — `CompanyReferenceStatus` côté API. */
+export const COMPANY_REFERENCE_STATUS_LABELS: Record<string, string> = {
+  DRAFT: "Brouillon",
+  VALIDATED: "Validée",
+  ARCHIVED: "Archivée",
 };

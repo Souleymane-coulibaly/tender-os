@@ -3,10 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { ExternalTenderSummary, SavedSearchCriteria, SavedSearchMatchSummary, SavedSearchSummary } from "../../lib/market-watch-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 function describeMarketWatchActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Market watch action failed (${error.status} ${error.code}): ${error.message}`);
+    // Sentinelle lue par l'écran (proposition de doublon), jamais affichée telle quelle.
+    if (error.code === "EXTERNAL_TENDER_ALREADY_PROMOTED") return "ALREADY_PROMOTED";
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
@@ -15,7 +20,6 @@ function describeMarketWatchActionError(error: unknown): string {
       case 404:
         return "Introuvable ou accès refusé.";
       case 409:
-        if (error.code === "EXTERNAL_TENDER_ALREADY_PROMOTED") return "ALREADY_PROMOTED";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
         return "Certains champs sont invalides.";

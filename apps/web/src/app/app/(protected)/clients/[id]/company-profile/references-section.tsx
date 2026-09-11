@@ -8,14 +8,23 @@
  * Legacy subsistent chez les clients sans entreprise candidate (registre CCV2-I.2) et rien d'autre
  * ne les montre : les masquer reviendrait a les faire disparaitre du produit.
  */
-import type { CompanyReference } from "../../../../../../lib/company-profile-types";
+import {
+  COMPANY_REFERENCE_STATUS_LABELS,
+  type CompanyReference,
+} from "../../../../../../lib/company-profile-types";
 
-
-export function ReferencesSection({ references }: { clientId: string; references: CompanyReference[] }) {
-
+export function ReferencesSection({
+  references,
+}: {
+  clientId: string;
+  references: CompanyReference[];
+}) {
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-neutral-600">Références commerciales — préparées pour un usage futur (mémoire technique, GO/NO-GO), jamais réutilisées automatiquement ce sprint.</p>
+      <p className="text-sm text-neutral-600">
+        Références commerciales — préparées pour un usage futur (mémoire technique, GO/NO-GO),
+        jamais réutilisées automatiquement ce sprint.
+      </p>
 
       {references.length === 0 ? (
         <p className="text-sm text-neutral-600">Aucune référence enregistrée.</p>
@@ -34,11 +43,19 @@ export function ReferencesSection({ references }: { clientId: string; references
             <tbody>
               {references.map((reference) => (
                 <tr key={reference.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4 font-medium text-neutral-900">{reference.projectName}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{reference.referenceClientName ?? "—"}</td>
+                  <td className="py-2 pr-4 font-medium text-neutral-900">
+                    {reference.projectName}
+                  </td>
+                  <td className="py-2 pr-4 text-neutral-600">
+                    {reference.referenceClientName ?? "—"}
+                  </td>
                   <td className="py-2 pr-4 text-neutral-600">{reference.sector ?? "—"}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{reference.confidentiality === "CONFIDENTIAL" ? "Confidentielle" : "Standard"}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{reference.status}</td>
+                  <td className="py-2 pr-4 text-neutral-600">
+                    {reference.confidentiality === "CONFIDENTIAL" ? "Confidentielle" : "Standard"}
+                  </td>
+                  <td className="py-2 pr-4 text-neutral-600">
+                    {COMPANY_REFERENCE_STATUS_LABELS[reference.status] ?? reference.status}
+                  </td>
                 </tr>
               ))}
             </tbody>

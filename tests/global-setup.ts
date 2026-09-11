@@ -28,6 +28,9 @@ export default function globalSetup(): void {
     candidateCompanyId: string;
     secondCandidateCompanyId: string;
     legacyTenderId: string;
+    other: { organizationId: string; userId: string };
+    /** Organisation abonnée dédiée au parcours DCE du Cockpit (voir e2e-seed.ts). */
+    cockpit: { organizationId: string; userId: string };
   };
   writeFileSync(path.resolve(__dirname, ".e2e-fixture.json"), JSON.stringify(fixture, null, 2));
 }

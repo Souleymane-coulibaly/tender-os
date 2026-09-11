@@ -19,6 +19,7 @@ import {
   type CapabilityActionState,
 } from "../../../candidate-capability-actions";
 import type { DocumentPickerOption } from "../../../connectors-actions";
+import { FileInput } from "../../../../../components/ui/file-input";
 
 const INITIAL_STATE: CapabilityActionState = {};
 
@@ -63,32 +64,62 @@ export function CandidateDocumentsSection({
       {documents.length === 0 ? (
         <EmptyState
           title="Aucun document d'entreprise"
-          description={canUpload ? "Rattachez une pièce déjà téléversée pour la rendre disponible aux dossiers." : "Vous n'avez pas les droits nécessaires pour en rattacher."}
+          description={
+            canUpload
+              ? "Rattachez une pièce déjà téléversée pour la rendre disponible aux dossiers."
+              : "Vous n'avez pas les droits nécessaires pour en rattacher."
+          }
         />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-tenderos-mist text-left text-tenderos-slate">
-                <th scope="col" className="py-2 pr-4 text-xs font-semibold uppercase">Libellé</th>
-                <th scope="col" className="py-2 pr-4 text-xs font-semibold uppercase">Type</th>
-                <th scope="col" className="py-2 pr-4 text-xs font-semibold uppercase">Émis le</th>
-                <th scope="col" className="py-2 pr-4 text-xs font-semibold uppercase">Valide à partir du</th>
-                <th scope="col" className="py-2 pr-4 text-xs font-semibold uppercase">Échéance</th>
-                <th scope="col" className="py-2 pr-4 text-xs font-semibold uppercase">Validité</th>
-                <th scope="col" className="py-2 text-right text-xs font-semibold uppercase">Actions</th>
+                <th scope="col" className="py-2 pr-4 text-xs font-semibold uppercase">
+                  Libellé
+                </th>
+                <th scope="col" className="py-2 pr-4 text-xs font-semibold uppercase">
+                  Type
+                </th>
+                <th scope="col" className="py-2 pr-4 text-xs font-semibold uppercase">
+                  Émis le
+                </th>
+                <th scope="col" className="py-2 pr-4 text-xs font-semibold uppercase">
+                  Valide à partir du
+                </th>
+                <th scope="col" className="py-2 pr-4 text-xs font-semibold uppercase">
+                  Échéance
+                </th>
+                <th scope="col" className="py-2 pr-4 text-xs font-semibold uppercase">
+                  Validité
+                </th>
+                <th scope="col" className="py-2 text-right text-xs font-semibold uppercase">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {documents.map((document) => (
                 <tr key={document.documentId} className="border-b border-tenderos-mist/60">
-                  <td className="py-2 pr-4 font-medium text-tenderos-navy">{candidateDocumentDisplayLabel(document)}</td>
-                  <td className="py-2 pr-4 text-tenderos-slate">{CANDIDATE_DOCUMENT_CATEGORY_LABELS[document.category] ?? document.category}</td>
-                  <td className="py-2 pr-4 text-tenderos-slate">{formatOptionalDate(document.issuedAt)}</td>
-                  <td className="py-2 pr-4 text-tenderos-slate">{formatOptionalDate(document.validFrom)}</td>
-                  <td className="py-2 pr-4 text-tenderos-slate">{formatOptionalDate(document.validUntil)}</td>
+                  <td className="py-2 pr-4 font-medium text-tenderos-navy">
+                    {candidateDocumentDisplayLabel(document)}
+                  </td>
+                  <td className="py-2 pr-4 text-tenderos-slate">
+                    {CANDIDATE_DOCUMENT_CATEGORY_LABELS[document.category] ?? document.category}
+                  </td>
+                  <td className="py-2 pr-4 text-tenderos-slate">
+                    {formatOptionalDate(document.issuedAt)}
+                  </td>
+                  <td className="py-2 pr-4 text-tenderos-slate">
+                    {formatOptionalDate(document.validFrom)}
+                  </td>
+                  <td className="py-2 pr-4 text-tenderos-slate">
+                    {formatOptionalDate(document.validUntil)}
+                  </td>
                   <td className="py-2 pr-4">
-                    <Badge tone={TEMPORAL_STATUS_TONE[document.temporalStatus]}>{TEMPORAL_STATUS_LABELS[document.temporalStatus]}</Badge>
+                    <Badge tone={TEMPORAL_STATUS_TONE[document.temporalStatus]}>
+                      {TEMPORAL_STATUS_LABELS[document.temporalStatus]}
+                    </Badge>
                   </td>
                   <td className="py-2 text-right">
                     <div className="relative flex items-center justify-end gap-2">
@@ -98,11 +129,17 @@ export function CandidateDocumentsSection({
                       >
                         Télécharger
                       </a>
-                      <DocumentVersionsDisclosure candidateCompanyId={candidateCompanyId} documentId={document.documentId} />
+                      <DocumentVersionsDisclosure
+                        candidateCompanyId={candidateCompanyId}
+                        documentId={document.documentId}
+                      />
                       {canDelete ? (
                         <form
                           action={async () => {
-                            await detachCandidateDocumentAction(candidateCompanyId, document.documentId);
+                            await detachCandidateDocumentAction(
+                              candidateCompanyId,
+                              document.documentId,
+                            );
                           }}
                         >
                           <Button type="submit" variant="ghost" size="sm">
@@ -120,7 +157,10 @@ export function CandidateDocumentsSection({
       )}
 
       {canUpload ? (
-        <form action={formAction} className="flex flex-col gap-3 rounded-lg border border-tenderos-mist p-4">
+        <form
+          action={formAction}
+          className="flex flex-col gap-3 rounded-lg border border-tenderos-mist p-4"
+        >
           <h3 className="text-sm font-semibold text-tenderos-navy">Ajouter un document</h3>
 
           <fieldset className="flex flex-col gap-2">
@@ -132,7 +172,10 @@ export function CandidateDocumentsSection({
                   { value: "library", label: "Choisir une pièce déjà téléversée" },
                 ] as const
               ).map((choice) => (
-                <label key={choice.value} className="flex items-center gap-2 text-sm text-tenderos-navy">
+                <label
+                  key={choice.value}
+                  className="flex items-center gap-2 text-sm text-tenderos-navy"
+                >
                   <input
                     type="radio"
                     name="source"
@@ -155,17 +198,14 @@ export function CandidateDocumentsSection({
                 </label>
                 {/* Le fichier part au moteur documentaire (`POST /documents`) qui valide le type MIME,
                     calcule le checksum et crée la version 1 — l'interface n'en refait aucune partie. */}
-                <input
-                  id="doc-file"
-                  name="file"
-                  type="file"
-                  required
-                  className="rounded-md border border-tenderos-mist px-2 py-1.5 text-sm text-tenderos-navy file:mr-3 file:rounded file:border-0 file:bg-tenderos-mist file:px-2 file:py-1 file:text-xs file:text-tenderos-navy"
-                />
+                <FileInput id="doc-file" name="file" required />
               </div>
             ) : (
               <div className="flex flex-col gap-1">
-                <label htmlFor="doc-existingDocumentId" className="text-xs font-medium text-tenderos-slate">
+                <label
+                  htmlFor="doc-existingDocumentId"
+                  className="text-xs font-medium text-tenderos-slate"
+                >
                   Pièce de la bibliothèque *
                 </label>
                 {/* Un titre, jamais un identifiant à recopier : c'est tout l'objet du gap F2. */}
@@ -183,7 +223,9 @@ export function CandidateDocumentsSection({
                   ))}
                 </select>
                 {libraryDocuments.length === 0 ? (
-                  <p className="text-xs text-tenderos-slate">Aucune pièce dans la bibliothèque documentaire pour le moment.</p>
+                  <p className="text-xs text-tenderos-slate">
+                    Aucune pièce dans la bibliothèque documentaire pour le moment.
+                  </p>
                 ) : null}
               </div>
             )}
@@ -191,7 +233,12 @@ export function CandidateDocumentsSection({
               <label htmlFor="doc-category" className="text-xs font-medium text-tenderos-slate">
                 Type *
               </label>
-              <select id="doc-category" name="category" required className="rounded-md border border-tenderos-mist px-2 py-1.5 text-sm text-tenderos-navy">
+              <select
+                id="doc-category"
+                name="category"
+                required
+                className="rounded-md border border-tenderos-mist px-2 py-1.5 text-sm text-tenderos-navy"
+              >
                 {Object.entries(CANDIDATE_DOCUMENT_CATEGORY_LABELS)
                   // Les pièces bancaires exigent `candidate:manage_banking` : elles ne se
                   // rattachent pas depuis la bibliothèque générale.
@@ -207,25 +254,44 @@ export function CandidateDocumentsSection({
               <label htmlFor="doc-label" className="text-xs font-medium text-tenderos-slate">
                 Libellé
               </label>
-              <input id="doc-label" name="label" className="rounded-md border border-tenderos-mist px-2 py-1.5 text-sm text-tenderos-navy" />
+              <input
+                id="doc-label"
+                name="label"
+                className="rounded-md border border-tenderos-mist px-2 py-1.5 text-sm text-tenderos-navy"
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label htmlFor="doc-issuedAt" className="text-xs font-medium text-tenderos-slate">
                 Émis le
               </label>
-              <input id="doc-issuedAt" name="issuedAt" type="date" className="rounded-md border border-tenderos-mist px-2 py-1.5 text-sm text-tenderos-navy" />
+              <input
+                id="doc-issuedAt"
+                name="issuedAt"
+                type="date"
+                className="rounded-md border border-tenderos-mist px-2 py-1.5 text-sm text-tenderos-navy"
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label htmlFor="doc-validFrom" className="text-xs font-medium text-tenderos-slate">
                 Valide à partir du
               </label>
-              <input id="doc-validFrom" name="validFrom" type="date" className="rounded-md border border-tenderos-mist px-2 py-1.5 text-sm text-tenderos-navy" />
+              <input
+                id="doc-validFrom"
+                name="validFrom"
+                type="date"
+                className="rounded-md border border-tenderos-mist px-2 py-1.5 text-sm text-tenderos-navy"
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label htmlFor="doc-validUntil" className="text-xs font-medium text-tenderos-slate">
                 Échéance
               </label>
-              <input id="doc-validUntil" name="validUntil" type="date" className="rounded-md border border-tenderos-mist px-2 py-1.5 text-sm text-tenderos-navy" />
+              <input
+                id="doc-validUntil"
+                name="validUntil"
+                type="date"
+                className="rounded-md border border-tenderos-mist px-2 py-1.5 text-sm text-tenderos-navy"
+              />
             </div>
           </div>
           {state.error ? (
@@ -253,9 +319,18 @@ export function CandidateDocumentsSection({
  * La version courante est signalée d'après `currentVersionId` renvoyé par l'API — le pointeur réel
  * porté par le Document — et non d'après le numéro le plus élevé de la liste.
  */
-function DocumentVersionsDisclosure({ candidateCompanyId, documentId }: { candidateCompanyId: string; documentId: string }) {
+function DocumentVersionsDisclosure({
+  candidateCompanyId,
+  documentId,
+}: {
+  candidateCompanyId: string;
+  documentId: string;
+}) {
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<{ versions: CandidateDocumentVersion[]; currentVersionId?: string } | null>(null);
+  const [view, setView] = useState<{
+    versions: CandidateDocumentVersion[];
+    currentVersionId?: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, startLoading] = useTransition();
 
@@ -280,12 +355,24 @@ function DocumentVersionsDisclosure({ candidateCompanyId, documentId }: { candid
 
   return (
     <>
-      <Button type="button" variant="ghost" size="sm" onClick={toggle} aria-expanded={open} aria-controls={`versions-${documentId}`}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={toggle}
+        aria-expanded={open}
+        aria-controls={`versions-${documentId}`}
+      >
         Versions
       </Button>
       {open ? (
-        <div id={`versions-${documentId}`} className="absolute right-0 top-full z-10 mt-1 w-80 rounded-lg border border-tenderos-mist bg-white p-3 text-left shadow-lg">
-          <p className="mb-2 text-xs font-semibold uppercase text-tenderos-slate">Historique des versions</p>
+        <div
+          id={`versions-${documentId}`}
+          className="absolute right-0 top-full z-10 mt-1 w-80 rounded-lg border border-tenderos-mist bg-white p-3 text-left shadow-lg"
+        >
+          <p className="mb-2 text-xs font-semibold uppercase text-tenderos-slate">
+            Historique des versions
+          </p>
           {isLoading ? <p className="text-sm text-tenderos-slate">Chargement…</p> : null}
           {error ? (
             <p role="alert" className="text-sm text-tenderos-danger">
@@ -303,10 +390,13 @@ function DocumentVersionsDisclosure({ candidateCompanyId, documentId }: { candid
                         v{version.versionNumber} — {version.originalFilename}
                       </span>
                       <span className="text-xs text-tenderos-slate">
-                        {formatOptionalDate(version.createdAt)} · {formatFileSize(version.sizeBytes)}
+                        {formatOptionalDate(version.createdAt)} ·{" "}
+                        {formatFileSize(version.sizeBytes)}
                       </span>
                     </div>
-                    {version.id === view.currentVersionId ? <Badge tone="success">Courante</Badge> : null}
+                    {version.id === view.currentVersionId ? (
+                      <Badge tone="success">Courante</Badge>
+                    ) : null}
                   </li>
                 ))}
             </ul>

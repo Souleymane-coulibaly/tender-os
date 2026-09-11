@@ -42,9 +42,11 @@ import {
   type OfficialFormPreparationResult,
   type SigningPowerSummary,
   type SubcontractorDeclarationSummary,
+  type AdministrativeDocumentListItem,
 } from "../../../../../../../lib/administrative-dossier-types";
 import { Button } from "../../../../../../../components/ui/button";
 import { Input } from "../../../../../../../components/ui/input";
+import { Select } from "../../../../../../../components/ui/select";
 
 /** Sprint 8C Phase 3 — lien de téléchargement du PDF généré, réutilise le proxy authentifié déjà
  *  existant pour tout Document (le PDF généré EST un Document réel du module Documents). */
@@ -988,12 +990,14 @@ function EngagementActSection({
 function SigningPowersSection({
   tenderId,
   signingPowers,
+  administrativeDocuments,
   canEdit,
   canValidate,
   onChanged,
 }: {
   tenderId: string;
   signingPowers: SigningPowerSummary[];
+  administrativeDocuments: AdministrativeDocumentListItem[];
   canEdit: boolean;
   canValidate: boolean;
   onChanged: () => void;
@@ -1062,13 +1066,25 @@ function SigningPowersSection({
               <div className="flex items-center gap-2">
                 {!p.administrativeDocumentId ? (
                   <>
-                    <Input
-                      placeholder="Id du document preuve"
+                    <Select
+                      aria-label="Document preuve du pouvoir"
                       value={proofByPowerId[p.id] ?? ""}
                       onChange={(e) =>
                         setProofByPowerId((prev) => ({ ...prev, [p.id]: e.target.value }))
                       }
-                    />
+                    >
+                      <option value="">
+                        {administrativeDocuments.length === 0
+                          ? "Aucun document administratif sur ce dossier"
+                          : "Choisir le document preuve…"}
+                      </option>
+                      {administrativeDocuments.map((doc) => (
+                        <option key={doc.id} value={doc.id}>
+                          {doc.label}
+                          {doc.validatedRevisionId ? " (validé)" : ""}
+                        </option>
+                      ))}
+                    </Select>
                     <Button
                       type="button"
                       disabled={isPending}
@@ -1134,6 +1150,7 @@ export function AdministrativeStructuredSection({
   subcontractors,
   engagementAct,
   signingPowers,
+  administrativeDocuments,
 }: {
   tenderId: string;
   capabilities: AdministrativeDossierCapabilities;
@@ -1144,6 +1161,7 @@ export function AdministrativeStructuredSection({
   subcontractors: SubcontractorDeclarationSummary[];
   engagementAct: EngagementActSummary | null;
   signingPowers: SigningPowerSummary[];
+  administrativeDocuments: AdministrativeDocumentListItem[];
 }) {
   const router = useRouter();
   function onChanged() {
@@ -1211,6 +1229,7 @@ export function AdministrativeStructuredSection({
       <SigningPowersSection
         tenderId={tenderId}
         signingPowers={signingPowers}
+        administrativeDocuments={administrativeDocuments}
         canEdit={capabilities.canEdit}
         canValidate={capabilities.canValidate}
         onChanged={onChanged}

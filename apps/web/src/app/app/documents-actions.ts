@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { DocumentSummary } from "../../lib/documents-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
@@ -12,7 +13,11 @@ export type FormActionState = { error?: string };
  *  backend brut, souvent en anglais) atteindre un composant. */
 function describeDocumentActionError(error: unknown): string {
   if (error instanceof AppApiError) {
-    console.error(`[TenderOS] Document action failed (${error.status} ${error.code}): ${error.message}`);
+    console.error(
+      `[TenderOS] Document action failed (${error.status} ${error.code}): ${error.message}`,
+    );
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -23,10 +28,6 @@ function describeDocumentActionError(error: unknown): string {
       case 404:
         return "Ressource introuvable.";
       case 409:
-        if (error.code === "DOCUMENT_ARCHIVED") return "Ce document est archivé.";
-        if (error.code === "DOCUMENT_DELETED") return "Ce document a été supprimé.";
-        if (error.code === "DUPLICATE_DOCUMENT_TENDER_ASSOCIATION") return "Ce document est déjà associé à cet appel d'offres.";
-        if (error.code === "CONCURRENT_VERSION_CREATION") return "Une autre version vient d'être créée simultanément ; rechargez et réessayez.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 413:
         return "Le fichier dépasse la taille maximale autorisée.";
@@ -35,7 +36,9 @@ function describeDocumentActionError(error: unknown): string {
       case 422:
         return "Certains champs sont invalides.";
       default:
-        return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";
+        return error.status >= 500
+          ? "Une erreur serveur est survenue. Veuillez réessayer."
+          : "Une erreur est survenue.";
     }
   }
   console.error("[TenderOS] Unexpected error during a document action:", error);
@@ -51,7 +54,10 @@ function requiredFile(formData: FormData): File | undefined {
   return file instanceof File && file.size > 0 ? file : undefined;
 }
 
-export async function createDocumentAction(_prevState: FormActionState, formData: FormData): Promise<FormActionState> {
+export async function createDocumentAction(
+  _prevState: FormActionState,
+  formData: FormData,
+): Promise<FormActionState> {
   const title = formData.get("title");
   const origin = formData.get("origin");
   const domain = formData.get("domain");
@@ -180,7 +186,9 @@ export async function attachExistingDocumentToTenderAction(
   }
 
   try {
-    await appApiFetch(`/api/v1/documents/${documentId.trim()}/tenders/${tenderId}`, { method: "POST" });
+    await appApiFetch(`/api/v1/documents/${documentId.trim()}/tenders/${tenderId}`, {
+      method: "POST",
+    });
   } catch (error) {
     return { error: describeDocumentActionError(error) };
   }
@@ -227,7 +235,10 @@ export async function uploadAndAttachDocumentToTenderAction(
   return {};
 }
 
-export async function detachDocumentFromTenderAction(tenderId: string, documentId: string): Promise<{ error?: string }> {
+export async function detachDocumentFromTenderAction(
+  tenderId: string,
+  documentId: string,
+): Promise<{ error?: string }> {
   try {
     await appApiFetch(`/api/v1/documents/${documentId}/tenders/${tenderId}`, { method: "DELETE" });
   } catch (error) {
@@ -236,4 +247,29 @@ export async function detachDocumentFromTenderAction(tenderId: string, documentI
 
   revalidatePath(`/app/tenders/${tenderId}`);
   return {};
+}
+
+/**
+ * Recherche dans la bibliothèque pour le sélecteur « Rattacher un document existant » — remplace la
+ * saisie d'un identifiant technique. Seuls les documents ACTIFS sont proposés : rattacher un
+ * document archivé à un appel d'offres n'a pas de sens. 10 résultats au plus, triés par titre.
+ */
+export async function searchLibraryDocumentsAction(
+  query: string,
+): Promise<{ value: string; label: string; description?: string }[]> {
+  const params = new URLSearchParams({
+    search: query,
+    status: "ACTIVE",
+    limit: "10",
+    sort: "title",
+    sortDirection: "asc",
+  });
+  const page = await appApiFetch<{ items: readonly DocumentSummary[] }>(
+    "/api/v1/documents?" + params.toString(),
+  );
+  return page.items.map((document) => ({
+    value: document.id,
+    label: document.title,
+    ...(document.category ? { description: document.category } : {}),
+  }));
 }

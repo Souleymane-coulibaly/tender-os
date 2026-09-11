@@ -319,6 +319,7 @@ describe("ImportDceFilesUseCase", () => {
     expect(result.accepted).toHaveLength(1);
     expect(result.rejected).toHaveLength(1);
     expect(result.rejected[0]?.originalFilename).toBe("virus.exe");
+    expect(result.rejected[0]?.code).toBe("DCE_UNSUPPORTED_FILE_TYPE");
   });
 
   it("rejects a .zip file, redirecting to the archive import", async () => {
@@ -330,6 +331,7 @@ describe("ImportDceFilesUseCase", () => {
 
     expect(result.accepted).toHaveLength(0);
     expect(result.rejected[0]?.reason).toMatch(/archive import/);
+    expect(result.rejected[0]?.code).toBe("DCE_ARCHIVE_REQUIRES_ZIP_IMPORT");
   });
 
   it("rejects a duplicate file by content hash", async () => {
@@ -342,6 +344,7 @@ describe("ImportDceFilesUseCase", () => {
 
     expect(result.accepted).toHaveLength(0);
     expect(result.rejected[0]?.reason).toMatch(/duplicate/);
+    expect(result.rejected[0]?.code).toBe("DCE_DUPLICATE_FILE");
   });
 
   it("rejects a file whose content does not match its declared extension (disguised file)", async () => {
@@ -365,6 +368,7 @@ describe("ImportDceFilesUseCase", () => {
 
     expect(result.accepted).toHaveLength(0);
     expect(result.rejected[0]?.reason).toMatch(/does not match/);
+    expect(result.rejected[0]?.code).toBe("DCE_FILE_CONTENT_MISMATCH");
   });
 
   it("throws TooManyFilesError when the batch exceeds maxFilesPerImport", async () => {

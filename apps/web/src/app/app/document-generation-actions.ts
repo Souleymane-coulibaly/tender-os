@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { DocumentTemplateDetail, DocumentTemplateSummary, DocumentTemplateVersionSummary, GeneratedDocumentSummary } from "../../lib/document-generation-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
@@ -11,6 +12,8 @@ export type FormActionState = { error?: string };
 function describeDocumentGenerationActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Document generation action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
@@ -21,8 +24,6 @@ function describeDocumentGenerationActionError(error: unknown): string {
       case 409:
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
-        if (error.code === "REQUIRED_FIELDS_MISSING") return "Des champs obligatoires sont manquants et ce template n'autorise pas la génération partielle.";
-        if (error.code === "INVALID_TEMPLATE_FILE") return "Le fichier n'est pas un template DOCX valide ou sûr.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

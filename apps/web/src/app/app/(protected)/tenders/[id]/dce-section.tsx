@@ -21,6 +21,7 @@ import {
   type AnalysisCapability,
   type AnalysisJobSummary,
 } from "../../../../../lib/analysis-types";
+import { API_ERROR_MESSAGES } from "../../../../../lib/api-error-messages";
 import {
   DCE_DOCUMENT_PROCESSING_STATUS_LABELS,
   DCE_IMPORT_JOB_STATUS_LABELS,
@@ -28,6 +29,7 @@ import {
   isReadyForAnalysis,
   isTerminalDceImportJobStatus,
   type DceDocumentSummary,
+  type DceImportRejection,
   type DceImportJobSummary,
   type DceSummary,
 } from "../../../../../lib/dce-types";
@@ -35,6 +37,7 @@ import { Badge, type BadgeTone } from "../../../../../components/ui/badge";
 import { Button } from "../../../../../components/ui/button";
 import { Card } from "../../../../../components/ui/card";
 import { EmptyState } from "../../../../../components/ui/empty-state";
+import { FileInput } from "../../../../../components/ui/file-input";
 
 const NON_TERMINAL_ANALYSIS_STATUSES = ["PENDING", "QUEUED", "PROCESSING"];
 
@@ -181,6 +184,11 @@ function DocumentAnalysisControl({
 
 const INITIAL_IMPORT_STATE: ImportActionState = {};
 
+/** Motif de refus en français, d'après le code — jamais `reason`, texte technique de l'API. */
+function rejectionMessage(entry: DceImportRejection): string {
+  return (entry.code ? API_ERROR_MESSAGES[entry.code] : undefined) ?? "Ce fichier n'a pas pu être importé.";
+}
+
 function ImportResultSummary({ result }: { result: ImportActionState["result"] }) {
   if (!result) return null;
   if (result.accepted.length === 0 && result.rejected.length === 0) return null;
@@ -189,12 +197,12 @@ function ImportResultSummary({ result }: { result: ImportActionState["result"] }
     <ul className="w-full text-xs">
       {result.accepted.map((doc) => (
         <li key={doc.documentId} className="text-success-fg">
-          {doc.originalFilename} — importe
+          {doc.originalFilename} — importé
         </li>
       ))}
       {result.rejected.map((entry) => (
         <li key={entry.originalFilename} className="text-danger-fg">
-          {entry.originalFilename} — refuse ({entry.reason})
+          {entry.originalFilename} — refusé : {rejectionMessage(entry)}
         </li>
       ))}
     </ul>
@@ -316,7 +324,7 @@ function ZipImportControl({ tenderId, onSettled }: { tenderId: string; onSettled
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col items-start gap-2">
       <div className="flex flex-wrap items-end gap-2">
-        <input name="archive" type="file" accept=".zip" className="min-w-0 max-w-full text-xs" />
+        <FileInput name="archive" accept=".zip" aria-label="Archive ZIP du DCE" />
         <Button type="submit" disabled={isSubmitting || isRunning}>
           Importer une archive ZIP
         </Button>
@@ -329,7 +337,9 @@ function ZipImportControl({ tenderId, onSettled }: { tenderId: string; onSettled
       ) : null}
       {job?.status === "FAILED" && job.errorMessage ? (
         <p role="alert" className="text-xs text-danger-fg">
-          {job.errorMessage}
+          {/* `errorMessage` est le détail technique (anglais) de l'échec, sans code : jamais affiché. */}
+          L&apos;import de l&apos;archive a échoué. Vérifiez qu&apos;il s&apos;agit d&apos;une archive ZIP valide et sans
+          contenu suspect, puis réessayez.
         </p>
       ) : null}
       {job?.result ? <ImportResultSummary result={job.result} /> : null}
@@ -453,7 +463,7 @@ export function DceSection({
             <div className="flex flex-col gap-3 border-t border-tenderos-navy/10 pt-3">
               <form action={importFilesFormAction} className="flex flex-col items-start gap-2">
                 <div className="flex flex-wrap items-end gap-2">
-                  <input name="files" type="file" multiple className="min-w-0 max-w-full text-xs" />
+                  <FileInput name="files" multiple aria-label="Fichiers du DCE" />
                   <Button type="submit" disabled={isImportingFiles}>
                     Importer
                   </Button>

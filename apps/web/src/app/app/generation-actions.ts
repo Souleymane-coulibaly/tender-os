@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { GenerationCapability, GenerationSummary, PromptTemplateSummary, PromptVersionSummary } from "../../lib/generation-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
@@ -12,6 +13,8 @@ export type FormActionState = { error?: string };
 function describeGenerationActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Generation action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 400:
         return "Certains champs sont invalides.";
@@ -22,13 +25,6 @@ function describeGenerationActionError(error: unknown): string {
       case 404:
         return "Ressource introuvable.";
       case 409:
-        if (error.code === "GENERATION_ALREADY_RUNNING") return "Une génération est déjà en cours pour cette tâche.";
-        if (error.code === "PROMPT_VERSION_ACTIVATION_CONFLICT") return "Une autre activation est déjà en cours ; réessayez.";
-        if (error.code === "DUPLICATE_PROMPT_TEMPLATE") return "Un template existe déjà pour ce type de tâche.";
-        if (error.code === "NO_ACTIVE_PROMPT_VERSION") return "Aucune version de prompt active pour ce type de tâche.";
-        if (error.code === "GENERATION_NOT_REJECTABLE") return "Seule une génération produite peut être rejetée.";
-        if (error.code === "GENERATION_ALREADY_VALIDATED") return "Cette génération a déjà été validée et ne peut plus être rejetée.";
-        if (error.code === "GENERATION_ALREADY_REJECTED") return "Cette génération a déjà été rejetée et ne peut plus être validée.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
         return "Certains champs sont invalides.";

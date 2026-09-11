@@ -7,10 +7,13 @@ import {
   startTenderAnalysisAction,
 } from "../../../analysis-actions";
 import {
+  ANALYSIS_CAPABILITY_REASON_LABELS,
   ANALYSIS_FRESHNESS_LABELS,
   ANALYSIS_STATUS_LABELS,
+  CLAUSE_CATEGORY_LABELS,
   COMPLEXITY_LABELS,
   GO_NO_GO_LABELS,
+  REQUIREMENT_CATEGORY_LABELS,
   type AnalysisFreshness,
   type AnalysisSectionData,
   type AnalysisStatus,
@@ -23,8 +26,18 @@ import {
   type RiskFinding,
 } from "../../../../../lib/analysis-types";
 import { Button } from "../../../../../components/ui/button";
+import { API_ERROR_MESSAGES } from "../../../../../lib/api-error-messages";
 
 const NON_TERMINAL_STATUSES: AnalysisStatus[] = ["PENDING", "QUEUED", "PROCESSING"];
+
+/** Cause d'un échec d'analyse en français — jamais le code technique (`errorCode`) à l'écran. */
+function analysisFailureReason(errorCode: string): string {
+  return (
+    ANALYSIS_CAPABILITY_REASON_LABELS[errorCode] ??
+    API_ERROR_MESSAGES[errorCode] ??
+    "L'analyse a échoué pour une raison technique. Relancez-la ; si l'échec persiste, contactez le support."
+  );
+}
 
 function statusBadgeClass(status: AnalysisStatus): string {
   switch (status) {
@@ -102,7 +115,7 @@ function ProvenanceLine({ provenance }: { provenance: FindingProvenance }) {
 
 function DeadlinesList({ items }: { items: DeadlineFinding[] }) {
   if (items.length === 0)
-    return <p className="text-sm text-tenderos-slate">Aucune echeance detectee.</p>;
+    return <p className="text-sm text-tenderos-slate">Aucune échéance détectée.</p>;
   return (
     <ul>
       {items.map((item) => (
@@ -120,7 +133,7 @@ function DeadlinesList({ items }: { items: DeadlineFinding[] }) {
 
 function CriteriaList({ items }: { items: CriterionFinding[] }) {
   if (items.length === 0)
-    return <p className="text-sm text-tenderos-slate">Aucun critere detecte.</p>;
+    return <p className="text-sm text-tenderos-slate">Aucun critère détecté.</p>;
   return (
     <ul>
       {items.map((item) => (
@@ -131,7 +144,7 @@ function CriteriaList({ items }: { items: CriterionFinding[] }) {
           ) : null}
           {item.isEliminatory ? (
             <span className="ml-2 rounded bg-danger-bg px-1.5 py-0.5 text-xs text-danger-fg">
-              Eliminatoire
+              Éliminatoire
             </span>
           ) : null}
           <ProvenanceLine provenance={item} />
@@ -143,13 +156,15 @@ function CriteriaList({ items }: { items: CriterionFinding[] }) {
 
 function RequirementsList({ items }: { items: RequirementFinding[] }) {
   if (items.length === 0)
-    return <p className="text-sm text-tenderos-slate">Aucune exigence detectee.</p>;
+    return <p className="text-sm text-tenderos-slate">Aucune exigence détectée.</p>;
   return (
     <ul>
       {items.map((item) => (
         <li key={item.id} className="border-b border-tenderos-navy/10 py-2 text-sm">
           <span className="font-medium text-tenderos-navy">{item.label}</span>
-          <span className="ml-2 text-xs text-tenderos-slate">{item.category}</span>
+          <span className="ml-2 text-xs text-tenderos-slate">
+            {REQUIREMENT_CATEGORY_LABELS[item.category] ?? item.category}
+          </span>
           {item.isMandatory ? (
             <span className="ml-2 rounded bg-tenderos-light px-1.5 py-0.5 text-xs text-tenderos-navy">
               Obligatoire
@@ -164,13 +179,13 @@ function RequirementsList({ items }: { items: RequirementFinding[] }) {
 
 function ClausesList({ items }: { items: ClauseFinding[] }) {
   if (items.length === 0)
-    return <p className="text-sm text-tenderos-slate">Aucune clause detectee.</p>;
+    return <p className="text-sm text-tenderos-slate">Aucune clause détectée.</p>;
   return (
     <ul>
       {items.map((item) => (
         <li key={item.id} className="border-b border-tenderos-navy/10 py-2 text-sm">
           <span className="rounded bg-tenderos-light px-1.5 py-0.5 text-xs text-tenderos-navy">
-            {item.category}
+            {CLAUSE_CATEGORY_LABELS[item.category] ?? item.category}
           </span>
           <p className="mt-1 text-sm text-tenderos-navy">{item.summary}</p>
           <ProvenanceLine provenance={item} />
@@ -182,7 +197,7 @@ function ClausesList({ items }: { items: ClauseFinding[] }) {
 
 function RisksList({ items }: { items: RiskFinding[] }) {
   if (items.length === 0)
-    return <p className="text-sm text-tenderos-slate">Aucun risque detecte.</p>;
+    return <p className="text-sm text-tenderos-slate">Aucun risque détecté.</p>;
   return (
     <ul>
       {items.map((item) => (
@@ -206,7 +221,7 @@ function RisksList({ items }: { items: RiskFinding[] }) {
 
 function QuestionsList({ items }: { items: QuestionFinding[] }) {
   if (items.length === 0)
-    return <p className="text-sm text-tenderos-slate">Aucune question generee.</p>;
+    return <p className="text-sm text-tenderos-slate">Aucune question générée.</p>;
   return (
     <ul>
       {items.map((item) => (
@@ -287,12 +302,9 @@ export function AnalysisSection({
               className={`rounded px-2 py-1 text-xs font-medium ${statusBadgeClass(latestJob.status)}`}
             >
               {ANALYSIS_STATUS_LABELS[latestJob.status]}
-              {latestJob.status === "FAILED" && latestJob.errorCode
-                ? ` — ${latestJob.errorCode}`
-                : null}
             </span>
           ) : (
-            <span className="text-xs text-tenderos-slate">Aucune analyse lancee</span>
+            <span className="text-xs text-tenderos-slate">Aucune analyse lancée</span>
           )}
           <Button
             type="button"
@@ -327,6 +339,11 @@ export function AnalysisSection({
           ) : null}
         </div>
       </div>
+      {latestJob?.status === "FAILED" && latestJob.errorCode ? (
+        <p role="alert" className="text-xs text-danger-fg">
+          {analysisFailureReason(latestJob.errorCode)}
+        </p>
+      ) : null}
 
       {error ? (
         <p role="alert" className="text-xs text-danger-fg">
@@ -344,7 +361,7 @@ export function AnalysisSection({
         <div className="flex flex-col gap-3 rounded border border-tenderos-navy/10 bg-tenderos-light p-3">
           <div className="flex items-center gap-2">
             <span className="rounded bg-tenderos-light px-2 py-1 text-xs font-medium text-tenderos-navy">
-              Complexite : {COMPLEXITY_LABELS[summary.complexityLevel]}
+              Complexité : {COMPLEXITY_LABELS[summary.complexityLevel]}
             </span>
             <span className="rounded bg-info-bg px-2 py-1 text-xs font-medium text-tenderos-blue">
               {GO_NO_GO_LABELS[summary.goNoGoRecommendation]}
@@ -364,7 +381,7 @@ export function AnalysisSection({
 
           {summary.missingElements.length > 0 ? (
             <div>
-              <h3 className="text-xs font-semibold text-tenderos-navy">Elements manquants</h3>
+              <h3 className="text-xs font-semibold text-tenderos-navy">Éléments manquants</h3>
               <ul className="list-disc pl-4 text-xs text-tenderos-slate">
                 {summary.missingElements.map((item) => (
                   <li key={item}>{item}</li>
@@ -384,7 +401,7 @@ export function AnalysisSection({
           ) : null}
         </div>
       ) : (
-        <p className="text-sm text-tenderos-slate">Aucune synthese disponible pour le moment.</p>
+        <p className="text-sm text-tenderos-slate">Aucune synthèse disponible pour le moment.</p>
       )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

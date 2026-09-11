@@ -12,12 +12,15 @@ import type {
   ResponsePackageFreshnessResult,
   ResponsePackageVersion,
 } from "../../lib/response-package-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type ResponsePackageActionState = { error?: string };
 
 function describeResponsePackageActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Response package action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
@@ -26,10 +29,6 @@ function describeResponsePackageActionError(error: unknown): string {
       case 404:
         return "Introuvable ou accès refusé.";
       case 409:
-        if (error.code === "DUPLICATE_RESPONSE_PACKAGE") return "Un dossier de réponse existe déjà pour ce lot.";
-        if (error.code === "RESPONSE_PACKAGE_VERSION_VALIDATED") return "Cette version est déjà validée et immuable — reconstruisez une nouvelle version pour tout changement.";
-        if (error.code === "RESPONSE_PACKAGE_VALIDATION_BLOCKED") return "Des pièces obligatoires manquent encore — corrigez-les avant de valider.";
-        if (error.code === "PACKAGE_ARTIFACT_NOT_READY") return "Le dossier doit être validé avant de générer le ZIP final.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

@@ -7,7 +7,13 @@ import { Card } from "../../../../../components/ui/card";
 import { Input } from "../../../../../components/ui/input";
 import { Select } from "../../../../../components/ui/select";
 import { changeRiskStatusAction, createRiskAction, type FormActionState } from "../../../actions";
-import type { Risk, RiskSeverity, RiskStatus } from "../../../../../lib/tenders-types";
+import {
+  RISK_SEVERITY_LABELS,
+  RISK_STATUS_LABELS,
+  type Risk,
+  type RiskSeverity,
+  type RiskStatus,
+} from "../../../../../lib/tenders-types";
 
 const INITIAL_STATE: FormActionState = {};
 const SEVERITIES: RiskSeverity[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
@@ -34,7 +40,7 @@ function RiskRow({ tenderId, risk }: { tenderId: string; risk: Risk }) {
   return (
     <li className="flex items-center justify-between gap-3 border-b border-tenderos-navy/10 py-2 text-sm">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Badge tone={SEVERITY_TONE[risk.severity]}>{risk.severity}</Badge>
+        <Badge tone={SEVERITY_TONE[risk.severity]}>{RISK_SEVERITY_LABELS[risk.severity]}</Badge>
         <span className="font-medium text-tenderos-navy">{risk.title}</span>
         {error ? (
           <p role="alert" className="text-xs text-danger-fg">
@@ -58,7 +64,7 @@ function RiskRow({ tenderId, risk }: { tenderId: string; risk: Risk }) {
         >
           {STATUSES.map((value) => (
             <option key={value} value={value}>
-              {value}
+              {RISK_STATUS_LABELS[value]}
             </option>
           ))}
         </Select>
@@ -93,10 +99,10 @@ export function RisksSection({ tenderId, risks }: { tenderId: string; risks: Ris
           />
           {/* Largeur portee par un conteneur : `Select` sans `label` ignore `wrapperClassName`. */}
           <div className="shrink-0 grow-0 basis-36">
-            <Select name="severity" defaultValue="MEDIUM" aria-label="Gravite du risque">
+            <Select name="severity" defaultValue="MEDIUM" aria-label="Gravité du risque">
               {SEVERITIES.map((value) => (
                 <option key={value} value={value}>
-                  {value}
+                  {RISK_SEVERITY_LABELS[value]}
                 </option>
               ))}
             </Select>

@@ -57,7 +57,7 @@ export function OpportunityCandidateCompanySection({
         <form action={handleSelect} className="mt-2 flex flex-col gap-2 rounded border border-amber-200 bg-amber-50 p-3">
           <select name="candidateCompanyId" required defaultValue="" className="rounded border border-neutral-300 px-2 py-1 text-sm">
             <option value="" disabled>
-              Selectionner...
+              Sélectionner...
             </option>
             {otherCandidates.map((company) => (
               <option key={company.id} value={company.id}>

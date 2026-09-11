@@ -18,6 +18,15 @@ import { Button } from "../../../../../../components/ui/button";
 import { Input } from "../../../../../../components/ui/input";
 import { Select } from "../../../../../../components/ui/select";
 import { Textarea } from "../../../../../../components/ui/textarea";
+import {
+  GENERATION_STATUS_LABELS,
+  GENERATION_TASK_TYPE_LABELS,
+  type GenerationSummary,
+} from "../../../../../../lib/generation-types";
+import {
+  PRICING_STATUS_LABELS,
+  type PricingEstimateSummary,
+} from "../../../../../../lib/pricing-types";
 
 type TemplateSectionConfig = { id: string; label: string; mandatory: boolean; order: number };
 
@@ -40,18 +49,50 @@ function readTemplateSections(
   return [...(config?.sections ?? [])].sort((a, b) => a.order - b.order);
 }
 
+/** Libellé d'une génération proposée comme source : ce que l'utilisateur reconnaît (type de
+ *  contenu, version, statut, date), jamais son identifiant technique. */
+function generationOptionLabel(generation: GenerationSummary): string {
+  const type = GENERATION_TASK_TYPE_LABELS[generation.taskType] ?? generation.taskType;
+  const status = GENERATION_STATUS_LABELS[generation.status] ?? generation.status;
+  return (
+    type +
+    " — v" +
+    generation.version +
+    " · " +
+    status +
+    " · " +
+    new Date(generation.createdAt).toLocaleDateString("fr-FR")
+  );
+}
+
+function estimateOptionLabel(estimate: PricingEstimateSummary): string {
+  const status = PRICING_STATUS_LABELS[estimate.status] ?? estimate.status;
+  return (
+    "Estimation v" +
+    estimate.currentVersionNumber +
+    " · " +
+    status +
+    " · " +
+    new Date(estimate.createdAt).toLocaleDateString("fr-FR")
+  );
+}
+
 export function ExportSection({
   tenderId,
   templates,
   history,
   actorRole,
   capabilities,
+  generations,
+  estimates,
 }: {
   tenderId: string;
   templates: ExportTemplateSummary[];
   history: ExportJobSummary[];
   actorRole: string | undefined;
   capabilities: ExportCapabilities;
+  generations: GenerationSummary[];
+  estimates: PricingEstimateSummary[];
 }) {
   const activatableTemplates = templates.filter((t) => t.activeVersion);
   const canManage = canManageExport(actorRole);
@@ -182,24 +223,47 @@ export function ExportSection({
                         ))}
                       </Select>
                       {row.sourceType === "GENERATION" ? (
-                        <Input
-                          placeholder="ID de la génération"
+                        <Select
+                          aria-label="Génération à reprendre"
                           value={row.generationId}
                           onChange={(e) =>
                             updateRow(row.sectionId, { generationId: e.target.value })
                           }
-                        />
+                        >
+                          <option value="">
+                            {generations.length === 0
+                              ? "Aucune génération pour cet appel d'offres"
+                              : "Choisir une génération…"}
+                          </option>
+                          {generations.map((generation) => (
+                            <option key={generation.id} value={generation.id}>
+                              {generationOptionLabel(generation)}
+                            </option>
+                          ))}
+                        </Select>
                       ) : null}
                       {row.sourceType === "PRICING" ? (
                         <div className="flex gap-2">
-                          <Input
-                            placeholder="ID de l'estimation"
-                            value={row.pricingEstimateId}
-                            onChange={(e) =>
-                              updateRow(row.sectionId, { pricingEstimateId: e.target.value })
-                            }
-                            className="flex-1"
-                          />
+                          <div className="min-w-0 flex-1">
+                            <Select
+                              aria-label="Estimation à reprendre"
+                              value={row.pricingEstimateId}
+                              onChange={(e) =>
+                                updateRow(row.sectionId, { pricingEstimateId: e.target.value })
+                              }
+                            >
+                              <option value="">
+                                {estimates.length === 0
+                                  ? "Aucune estimation pour cet appel d'offres"
+                                  : "Choisir une estimation…"}
+                              </option>
+                              {estimates.map((estimate) => (
+                                <option key={estimate.id} value={estimate.id}>
+                                  {estimateOptionLabel(estimate)}
+                                </option>
+                              ))}
+                            </Select>
+                          </div>
                           <Input
                             type="number"
                             min="1"

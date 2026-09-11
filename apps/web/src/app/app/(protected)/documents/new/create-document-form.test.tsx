@@ -14,13 +14,13 @@ describe("CreateDocumentForm", () => {
     expect(screen.getByLabelText("Origine *")).toBeRequired();
     expect(screen.getByLabelText("Domaine *")).toBeRequired();
     expect(screen.getByLabelText("Fichier *")).toBeRequired();
-    expect(screen.getByRole("button", { name: "Deposer le document" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Déposer le document" })).toBeInTheDocument();
   });
 
   it("renders a free-text category field with suggestions, never a constrained select", () => {
     render(<CreateDocumentForm />);
 
-    const category = screen.getByLabelText("Categorie");
+    const category = screen.getByLabelText("Catégorie");
     expect(category.tagName).toBe("INPUT");
     expect(category).toHaveAttribute("list", "category-suggestions");
   });

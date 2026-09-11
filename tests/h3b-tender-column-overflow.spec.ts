@@ -86,6 +86,11 @@ async function findUnreachableControls(page: Page): Promise<string[]> {
 
       const hit = document.elementFromPoint(cx, cy);
       if (hit === null || hit === el || el.contains(hit) || hit.contains(el)) continue;
+      // Champ fichier du design system (`FileInput`) : l'input natif est volontairement masqué
+      // (`sr-only`) DANS son `<label>`, et c'est le label visible qui reçoit le clic — cliquer un
+      // label active son champ. Recouvert par son propre label n'est donc pas inatteignable.
+      const ownLabel = el.closest("label");
+      if (ownLabel !== null && ownLabel.contains(hit)) continue;
       const label = el.getAttribute("name") ?? (el.textContent ?? "").trim().slice(0, 24);
       unreachable.push(`${el.tagName.toLowerCase()}[${label}] recouvert par <${hit.tagName.toLowerCase()}>`);
     }
@@ -93,8 +98,54 @@ async function findUnreachableControls(page: Page): Promise<string[]> {
   });
 }
 
-/** 1024 = point certifié en H.3 ; 1512 = la largeur de la capture utilisateur ; 1280 = usage courant. */
-const WIDTHS = [1024, 1280, 1512];
+/**
+ * Bouton ISOLÉ : dans un formulaire EN LIGNE (flex horizontal qui passe à la ligne), un bouton qui a
+ * glissé seul sur une ligne à lui, sous des champs qui partagent une même ligne. C'est le symptôme
+ * d'une rangée trop large pour sa colonne : le bouton « Ajouter » se retrouve orphelin, loin des
+ * champs qu'il valide.
+ *
+ * Un formulaire EMPILÉ (`flex-col`, ou flex qui ne passe pas à la ligne) n'est pas concerné : un
+ * bouton seul sous des champs empilés y est la mise en page voulue, pas un accident de largeur.
+ */
+async function findLonelyButtons(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const lonely: string[] = [];
+    for (const form of Array.from(document.querySelectorAll<HTMLFormElement>("form"))) {
+      const style = getComputedStyle(form);
+      const inline = style.display === "flex" && style.flexDirection === "row" && style.flexWrap === "wrap";
+      if (!inline) continue;
+      const details = form.closest("details");
+      if (details !== null && !details.open) continue;
+
+      // Les messages d'erreur (role=alert) occupent une ligne à part par conception : ils ne comptent pas.
+      const items = (Array.from(form.children) as HTMLElement[]).filter((child) => {
+        const rect = child.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && child.getAttribute("role") !== "alert" && child.tagName !== "INPUT";
+      });
+      if (items.length < 2) continue;
+
+      // Même ligne = bandes verticales qui se CHEVAUCHENT, jamais un `top` identique : `items-end`
+      // aligne le bas des éléments, un bouton plus bas qu'un champ a donc un `top` différent tout en
+      // partageant sa ligne. (Une première version groupait par `top` et signalait à tort 6 boutons.)
+      const overlaps = (a: DOMRect, b: DOMRect) => a.top < b.bottom - 1 && b.top < a.bottom - 1;
+      const fields = items.filter((el) => el.tagName !== "BUTTON");
+      for (const button of items.filter((el) => el.tagName === "BUTTON")) {
+        const rect = button.getBoundingClientRect();
+        if (fields.some((field) => overlaps(field.getBoundingClientRect(), rect))) continue;
+        if (fields.length === 0) continue;
+        lonely.push(
+          `« ${(button.textContent ?? "").trim().slice(0, 30)} » seul sur sa ligne (${Math.round(form.getBoundingClientRect().width)}px de large)`,
+        );
+      }
+    }
+    return lonely;
+  });
+}
+
+/** 1024 = point certifié en H.3 ; 1512 = la largeur de la capture utilisateur ; 1280, 1366, 1440 =
+ *  usages courants. Les passages à la ligne dépendent de la largeur exacte (W4 : « Ajouter » ne
+ *  tombait seul qu'à 1512 px) : quelques largeurs intermédiaires valent mieux qu'un seul point. */
+const WIDTHS = [1024, 1280, 1366, 1440, 1512];
 
 test.describe("H.3-b — la fiche d'appel d'offres ne déborde pas colonne sur colonne", () => {
   test.describe.configure({ timeout: 300000 });
@@ -110,8 +161,10 @@ test.describe("H.3-b — la fiche d'appel d'offres ne déborde pas colonne sur c
 
       const overflows = await measureColumnOverflow(page);
       const unreachable = await findUnreachableControls(page);
+      const lonely = await findLonelyButtons(page);
       console.log(`H3B_${width}_OVERFLOW`, JSON.stringify(overflows, null, 1));
       console.log(`H3B_${width}_UNREACHABLE`, JSON.stringify(unreachable, null, 1));
+      console.log(`H3B_${width}_LONELY`, JSON.stringify(lonely, null, 1));
 
       expect(
         overflows,
@@ -121,6 +174,7 @@ test.describe("H.3-b — la fiche d'appel d'offres ne déborde pas colonne sur c
       ).toEqual([]);
 
       expect(unreachable, `${width}px — contrôles recouverts : ${unreachable.join(" | ")}`).toEqual([]);
+      expect(lonely, `${width}px — boutons isolés : ${lonely.join(" | ")}`).toEqual([]);
     });
   }
 });

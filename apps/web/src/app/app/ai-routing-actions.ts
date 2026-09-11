@@ -3,10 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { AiModelPreferenceSummary, AiRoutingModelId } from "../../lib/ai-routing-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 function describeAiRoutingActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] AI routing action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 403:
         return "Vous n'avez pas les droits nécessaires pour modifier ce réglage.";

@@ -36,11 +36,11 @@ describe("EditTenderForm", () => {
     render(<EditTenderForm tender={BASE_TENDER} buyers={[]} />);
 
     expect(screen.getByLabelText("Titre *")).toHaveValue(BASE_TENDER.title);
-    expect(screen.getByLabelText("Reference")).toHaveValue("AO-2026-001");
+    expect(screen.getByLabelText("Référence")).toHaveValue("AO-2026-001");
     expect(screen.getByLabelText("Acheteur (texte libre — compatibilite V1)")).toHaveValue("Mairie de Lyon");
-    expect(screen.getByLabelText("Type de procedure")).toHaveValue("OPEN");
-    expect(screen.getByLabelText("Type de marche *")).toHaveValue("PUBLIC");
-    expect(screen.getByLabelText("Montant estime")).toHaveValue("50000");
+    expect(screen.getByLabelText("Type de procédure")).toHaveValue("OPEN");
+    expect(screen.getByLabelText("Type de marché *")).toHaveValue("PUBLIC");
+    expect(screen.getByLabelText("Montant estimé")).toHaveValue("50000");
     expect(screen.getByLabelText("Date limite de remise")).toHaveValue("2026-09-30");
     expect(screen.getByLabelText("Pays *")).toHaveValue("FR");
     expect(screen.getByLabelText("Langue *")).toHaveValue("fr");
@@ -69,7 +69,7 @@ describe("EditTenderForm", () => {
     expect(screen.getByLabelText("Pays *")).toHaveValue("FR");
     expect(screen.getByLabelText("Langue *")).toHaveValue("fr");
     expect(screen.getByLabelText("Devise *")).toHaveValue("EUR");
-    expect(screen.getByLabelText("Type de marche *")).toHaveValue("PUBLIC");
+    expect(screen.getByLabelText("Type de marché *")).toHaveValue("PUBLIC");
     expect(screen.getByLabelText("Source")).toHaveValue("MANUAL");
     expect(screen.getByLabelText("Date limite de remise")).toHaveValue("");
   });

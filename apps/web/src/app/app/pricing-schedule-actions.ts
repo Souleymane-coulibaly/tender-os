@@ -10,6 +10,7 @@ import type {
   PricingScheduleLine,
   PricingScheduleVersion,
 } from "../../lib/pricing-schedule-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type PricingScheduleActionState = { error?: string };
 
@@ -18,6 +19,8 @@ export type PricingScheduleActionState = { error?: string };
 function describePricingScheduleActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Pricing schedule action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
@@ -26,14 +29,8 @@ function describePricingScheduleActionError(error: unknown): string {
       case 404:
         return "Introuvable ou accès refusé.";
       case 409:
-        if (error.code === "DUPLICATE_PRICING_SCHEDULE") return "Un chiffrage existe déjà pour ce fichier sur ce lot.";
-        if (error.code === "PRICING_SCHEDULE_VERSION_VALIDATED") return "Cette version est déjà validée et immuable — une nouvelle extraction créera une nouvelle version.";
-        if (error.code === "PRICING_SCHEDULE_VALIDATION_BLOCKED") return "Des anomalies bloquantes doivent être corrigées (ou justifiées explicitement) avant de valider.";
-        if (error.code === "FINANCIAL_FILE_NOT_READY") return "La version doit être validée avant de générer le fichier financier final.";
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
-        if (error.code === "UNSUPPORTED_XLSX_STRUCTURE") return "Ce classeur n'a pas pu être analysé de façon fiable (structure non reconnue).";
-        if (error.code === "CORRUPTED_XLSX_FILE") return "Ce fichier n'est pas un classeur Excel valide.";
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";

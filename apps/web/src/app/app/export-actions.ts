@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { ExportCapabilities, ExportJobSummary, ExportTemplateSummary, ExportTemplateVersionSummary } from "../../lib/export-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type FormActionState = { error?: string };
 
@@ -13,6 +14,8 @@ export type FormActionState = { error?: string };
 function describeExportActionError(error: unknown): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Export action failed (${error.status} ${error.code}): ${error.message}`);
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.code) {
       case "EXPORT_TEMPLATE_NOT_FOUND":
         return "Aucun modèle d'export valide n'est sélectionné.";

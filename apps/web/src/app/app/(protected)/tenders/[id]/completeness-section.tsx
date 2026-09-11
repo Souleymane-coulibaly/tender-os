@@ -39,7 +39,7 @@ const STATUS_TONE: Record<TenderCompletenessStatus, BadgeTone> = {
  */
 export function CompletenessSection({ completeness }: { completeness: TenderCompleteness }) {
   return (
-    <Card title="Vue d'ensemble — completude">
+    <Card title="Vue d'ensemble — complétude">
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {COMPLETENESS_CATEGORIES.map((category) => {
           const status: TenderCompletenessStatus = completeness[category];

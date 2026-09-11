@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { platformApiFetch } from "../../../../../lib/platform-api-client";
-import type { PlatformOrganization } from "../../../../../lib/platform-admin-types";
+import {
+  ORGANIZATION_STATUS_LABELS,
+  type PlatformOrganization,
+} from "../../../../../lib/platform-admin-types";
 import { ApiErrorState } from "../../api-error-state";
 import { SuspendReactivateButton } from "./suspend-reactivate-button";
 import { OrganizationBillingSection } from "./organization-billing-section";
@@ -16,7 +19,9 @@ export default async function PlatformAdminOrganizationDetailPage({
   let organization: PlatformOrganization;
 
   try {
-    organization = await platformApiFetch<PlatformOrganization>(`/api/v1/admin/organizations/${id}`);
+    organization = await platformApiFetch<PlatformOrganization>(
+      `/api/v1/admin/organizations/${id}`,
+    );
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
@@ -38,7 +43,9 @@ export default async function PlatformAdminOrganizationDetailPage({
         </div>
         <div>
           <dt className="text-xs uppercase tracking-wide text-neutral-500">Statut</dt>
-          <dd className="text-sm">{organization.status}</dd>
+          <dd className="text-sm">
+            {ORGANIZATION_STATUS_LABELS[organization.status] ?? organization.status}
+          </dd>
         </div>
         <div>
           <dt className="text-xs uppercase tracking-wide text-neutral-500">Membres actifs</dt>

@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { platformApiFetch } from "../../../../lib/platform-api-client";
-import type { PageResponse, PlatformAuditLogEntry } from "../../../../lib/platform-admin-types";
+import {
+  PLATFORM_AUDIT_RESULT_LABELS,
+  type PageResponse,
+  type PlatformAuditLogEntry,
+} from "../../../../lib/platform-admin-types";
 import { ApiErrorState } from "../api-error-state";
 
 export const metadata: Metadata = { title: "Audit — Platform Admin — TenderOS" };
@@ -17,7 +21,9 @@ export default async function PlatformAdminAuditLogsPage({
   let page: PageResponse<PlatformAuditLogEntry>;
 
   try {
-    page = await platformApiFetch<PageResponse<PlatformAuditLogEntry>>(`/api/v1/admin/audit-logs${query}`);
+    page = await platformApiFetch<PageResponse<PlatformAuditLogEntry>>(
+      `/api/v1/admin/audit-logs${query}`,
+    );
   } catch (error) {
     return <ApiErrorState error={error} />;
   }
@@ -49,13 +55,20 @@ export default async function PlatformAdminAuditLogsPage({
             <tr key={entry.id} className="border-b border-neutral-100">
               <td className="py-2 pr-4 font-mono text-xs">{entry.action}</td>
               <td className="py-2 pr-4 text-neutral-600">
-                <Link href={`/platform-admin/organizations/${entry.organizationId}`} className="hover:underline">
+                <Link
+                  href={`/platform-admin/organizations/${entry.organizationId}`}
+                  className="hover:underline"
+                >
                   {entry.organizationId}
                 </Link>
               </td>
               <td className="py-2 pr-4 text-neutral-600">{entry.actorId ?? "—"}</td>
-              <td className="py-2 pr-4">{entry.result}</td>
-              <td className="py-2 pr-4 text-neutral-600">{new Date(entry.createdAt).toLocaleString("fr-FR")}</td>
+              <td className="py-2 pr-4">
+                {PLATFORM_AUDIT_RESULT_LABELS[entry.result] ?? entry.result}
+              </td>
+              <td className="py-2 pr-4 text-neutral-600">
+                {new Date(entry.createdAt).toLocaleString("fr-FR")}
+              </td>
             </tr>
           ))}
         </tbody>

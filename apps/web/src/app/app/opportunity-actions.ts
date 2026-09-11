@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { AppApiError, appApiFetch } from "../../lib/app-api-client";
 import type { GoNoGoDecision, GoNoGoReport, Opportunity, OpportunityQuickScore, PromoteOpportunityResult } from "../../lib/opportunity-types";
 import type { PageResponse } from "../../lib/tenders-types";
+import { apiErrorMessage } from "../../lib/api-error-messages";
 
 export type OpportunityActionState = { error?: string };
 export type OpportunityFormActionState = { error?: string };
@@ -20,6 +21,15 @@ type OpportunityActionContext = "decision" | "status";
 function describeOpportunityActionError(error: unknown, context?: OpportunityActionContext): string {
   if (error instanceof AppApiError) {
     console.error(`[TenderOS] Opportunity action failed (${error.status} ${error.code}): ${error.message}`);
+    // Dépend du geste de l'utilisateur (`context`) : la table, sans contexte, ne peut pas dire quoi faire.
+    if (error.code === "INVALID_OPPORTUNITY_STATUS_TRANSITION") {
+      if (context === "decision") {
+        return "Cette opportunité doit d'abord être qualifiée pour recevoir une décision GO/NO-GO. Passez son statut à « À qualifier », puis « Qualifiée », avant de réessayer.";
+      }
+      return "Ce changement de statut n'est pas autorisé depuis l'état actuel de l'opportunité (l'ordre attendu est Brouillon → À qualifier → Qualifiée → décision GO/NO-GO).";
+    }
+    const known = apiErrorMessage(error);
+    if (known) return known;
     switch (error.status) {
       case 401:
         return "Votre session a expiré. Veuillez vous reconnecter.";
@@ -28,26 +38,8 @@ function describeOpportunityActionError(error: unknown, context?: OpportunityAct
       case 404:
         return "Cette opportunité n'existe plus ou n'est plus accessible.";
       case 409:
-        if (error.code === "OPPORTUNITY_PROMOTION_REQUIRES_GO_DECISION") return "Une décision GO ou GO conditionnel est requise avant de promouvoir cette opportunité.";
-        if (error.code === "OPPORTUNITY_PROMOTION_CONFLICT") return "Cette opportunité n'est plus dans un état permettant la promotion.";
-        if (error.code === "TENDER_BUSINESS_ANALYSIS_NOT_FOUND") return "L'analyse IA du DCE doit d'abord réussir avant de générer un rapport GO/NO-GO.";
-        if (error.code === "GO_NO_GO_ANALYSIS_NOT_CURRENT") return "Le DCE a changé depuis la dernière analyse : actualisez l'analyse avant de recalculer le GO/NO-GO.";
-        if (error.code === "OPPORTUNITY_ARCHIVED") return "Cette opportunité est archivée : restaurez-la avant de la modifier.";
-        if (error.code === "OPPORTUNITY_CONCURRENT_MODIFICATION") return "Cette opportunité a été modifiée entre-temps. Rechargez la page puis réessayez.";
-        if (error.code === "INVALID_OPPORTUNITY_STATUS_TRANSITION") {
-          if (context === "decision") {
-            return "Cette opportunité doit d'abord être qualifiée pour recevoir une décision GO/NO-GO. Passez son statut à « À qualifier », puis « Qualifiée », avant de réessayer.";
-          }
-          return "Ce changement de statut n'est pas autorisé depuis l'état actuel de l'opportunité (l'ordre attendu est Brouillon → À qualifier → Qualifiée → décision GO/NO-GO).";
-        }
         return "Cette action entre en conflit avec l'état actuel de la ressource.";
       case 422:
-        if (error.code === "GO_NO_GO_DECISION_JUSTIFICATION_REQUIRED") return "Une justification est obligatoire pour une décision NO GO.";
-        if (error.code === "GO_NO_GO_DECISION_CONDITIONS_REQUIRED") return "Des conditions sont obligatoires pour une décision GO conditionnel.";
-        if (error.code === "OPPORTUNITY_MISSING_CLIENT_ACCOUNT") return "Un client doit être rattaché avant de promouvoir cette opportunité.";
-        if (error.code === "GO_NO_GO_ADMIN_BYPASS_JUSTIFICATION_REQUIRED") {
-          return "Vous n'êtes pas affecté comme gestionnaire sur ce client : une justification est obligatoire pour agir via votre privilège d'administration.";
-        }
         return "Certains champs sont invalides.";
       default:
         return error.status >= 500 ? "Une erreur serveur est survenue. Veuillez réessayer." : "Une erreur est survenue.";
