@@ -135,6 +135,30 @@ que le DCE a son onglet) ; la carte « Signature » du dossier administratif, qu
 à ce stade (phase ultérieure) », renvoie vers l'onglet Signature. Le message d'offre non incluse
 s'accorde désormais quel que soit le libellé (« … : fonctionnalité non incluse dans votre offre »).
 
+**Checklist — « Comparer avec la dernière analyse » ne semblait rien faire** (signalé par
+l'utilisateur). Le bouton fonctionnait côté API, mais son effet était invisible et parfois trompeur :
+il crée des SUGGESTIONS à valider (jamais d'éléments écrits directement — V2 Sprint 6 §22), qui
+n'étaient affichées que sur la Vue d'ensemble ; sans analyse terminée ou sur une analyse déjà
+comparée, il affichait « 0 nouvelle(s) suggestion(s) », indiscernable d'un succès ; l'écran n'était
+pas rafraîchi. Corrigé : le panneau « Suggestions IA à valider » (restreint aux éléments de checklist,
+sans « Générer les suggestions ») s'affiche sur l'écran Checklist ; un message exact pour chaque cas ;
+rafraîchissement après succès. Au passage, une checklist vide n'affiche plus « 0 / 0 validés
+(100%) ». Tests : +5 (web 565/565) ; e2e `checklist-intelligence` **2/2** dans le navigateur
+(suggestion appliquée, écran Checklist, comparaison avec la dernière analyse, message affiché).
+
+**Onboarding — « Impossible de créer l'organisation. Réessayez. »** (signalé par l'utilisateur). Le
+message était le même pour TOUTE erreur — refus de l'API comme API injoignable — et masquait la
+cause (journalisée seulement côté serveur web). Reproduction locale : la création via l'API réussit
+(201), y compris avec un nom accentué, une raison sociale et un SIRET ; la tentative de l'utilisateur
+n'apparaît pas dans les journaux locaux (environnement distant). Corrigé : un refus de l'API est dit
+par son code (table W6), une API injoignable l'est comme telle, et l'étape « Compte » passe aussi par
+la table pour les codes non traités. Ce correctif rend la cause visible ; il ne corrige pas une
+éventuelle panne de l'environnement distant, à diagnostiquer avec le nouveau message.
+Tests : `onboarding-actions.test.ts` (nouveau, 5 cas — refus par code, panne serveur, API
+injoignable, session expirée, nom vide) ; web 570/570. E2E `onboarding.spec` : 5 réussis au premier
+passage ; l'échec restant était un faux positif du test (il comptait l'annonceur de route de Next.js,
+qui porte aussi role="alert"), corrigé comme dans les autres specs — relance : **9/9 verts**.
+
 E2E collaboration (après le renommage) : 2 réussis, 4 échecs **sans lien avec le renommage** (le
 titre « Espace collaboratif » est bien trouvé). Causes préexistantes, prouvées par l'instantané :
 (1) couplage d'ordre — `collaboration-validations.spec` ajoute déjà les participants sur le même

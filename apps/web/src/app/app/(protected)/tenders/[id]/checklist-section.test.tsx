@@ -32,6 +32,9 @@ vi.mock("../../../actions", () => ({
   promoteChecklistItemToKnowledgeAction: (tenderId: string, itemId: string, input: unknown) => promoteChecklistItemToKnowledgeAction(tenderId, itemId, input),
 }));
 
+const routerRefresh = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: routerRefresh }) }));
+
 function baseItem(overrides: Partial<ChecklistItem> = {}): ChecklistItem {
   return {
     id: "item-1",
@@ -90,6 +93,60 @@ describe("ChecklistSection", () => {
     // 0 validé sur 1 applicable dans la fixture PROGRESS ci-dessus — l'UI actuelle (plus
     // informative que l'ancien "0% prête") affiche le ratio explicite en plus du pourcentage.
     expect(screen.getByText("0 / 1 validés (0%)")).toBeInTheDocument();
+  });
+
+  it("never shows an empty checklist as 100% ready", () => {
+    const empty: ChecklistProgress = {
+      global: { totalApplicable: 0, ready: 0, validated: 0, missing: 0, blockingMissing: 0, expired: 0, toReview: 0 },
+      byLot: {},
+    };
+    render(<ChecklistSection tenderId="tender-1" items={[]} lots={LOTS} progress={empty} />);
+
+    expect(screen.getByText(/Aucun élément applicable pour l'instant/)).toBeInTheDocument();
+    expect(screen.queryByText(/100%/)).not.toBeInTheDocument();
+  });
+
+  describe("« Comparer avec la dernière analyse »", () => {
+    const compare = async () => {
+      const user = userEvent.setup();
+      render(<ChecklistSection tenderId="tender-1" items={ITEMS} lots={LOTS} progress={PROGRESS} />);
+      await user.click(screen.getByRole("button", { name: "Comparer avec la dernière analyse" }));
+    };
+
+    it("says there is no finished analysis instead of a misleading « 0 suggestion »", async () => {
+      reconcileChecklistWithNewAnalysisAction.mockResolvedValueOnce({ result: { newRequirementSuggestionsCreated: 0, possibleChangeSuggestionsCreated: 0, possibleRemovals: [] } });
+      await compare();
+
+      expect(await screen.findByText("Aucune analyse terminée pour cet appel d'offres : lancez d'abord l'analyse du DCE.")).toBeInTheDocument();
+    });
+
+    it("says the checklist was already compared to this analysis version", async () => {
+      reconcileChecklistWithNewAnalysisAction.mockResolvedValueOnce({
+        result: { analysisVersion: 3, alreadyReconciled: true, newRequirementSuggestionsCreated: 0, possibleChangeSuggestionsCreated: 0, possibleRemovals: [] },
+      } as never);
+      await compare();
+
+      expect(await screen.findByText(/déjà été comparée à la dernière analyse \(version 3\)/)).toBeInTheDocument();
+    });
+
+    it("points to the suggestions to validate and refreshes the screen", async () => {
+      routerRefresh.mockClear();
+      reconcileChecklistWithNewAnalysisAction.mockResolvedValueOnce({
+        result: {
+          analysisVersion: 4,
+          alreadyReconciled: false,
+          newRequirementSuggestionsCreated: 2,
+          possibleChangeSuggestionsCreated: 1,
+          possibleRemovals: [{ itemId: "item-9", title: "Ancienne pièce", reason: "absente" }],
+        },
+      } as never);
+      await compare();
+
+      expect(
+        await screen.findByText("3 suggestion(s) à valider dans « Suggestions IA à valider » ; 1 élément(s) absent(s) de la dernière analyse, à vérifier."),
+      ).toBeInTheDocument();
+      expect(routerRefresh).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("lets the user validate an item, calling the dedicated action (never the generic status action)", async () => {

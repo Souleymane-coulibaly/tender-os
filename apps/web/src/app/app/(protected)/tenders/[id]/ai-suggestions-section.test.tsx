@@ -45,6 +45,25 @@ describe("AiSuggestionsSection", () => {
     expect(screen.queryByRole("button", { name: "Générer les suggestions" })).not.toBeInTheDocument();
   });
 
+  it("shows only the requested entity types, also after a refresh, and can hide « Générer les suggestions »", async () => {
+    const user = userEvent.setup();
+    const checklist = baseSuggestion({ id: "s-checklist", entityType: "CHECKLIST_ITEM", fieldName: "__create__", proposedValue: { title: "Attestation URSSAF" } });
+    const tenderField = baseSuggestion({ id: "s-field", entityType: "TENDER_FIELD", proposedValue: "Description hors checklist" });
+    fetchTenderSuggestions.mockResolvedValueOnce([checklist, tenderField]);
+
+    render(
+      <AiSuggestionsSection tenderId="tender-1" initialSuggestions={[checklist, tenderField]} canManage={true} entityTypes={["CHECKLIST_ITEM"]} canGenerate={false} />,
+    );
+
+    expect(screen.getByText("Suggestions IA à valider (1)")).toBeInTheDocument();
+    expect(screen.queryByText("Description hors checklist")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Générer les suggestions" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Actualiser" }));
+    expect(await screen.findByText("Suggestions IA à valider (1)")).toBeInTheDocument();
+    expect(screen.queryByText("Description hors checklist")).not.toBeInTheDocument();
+  });
+
   it("renders a pending suggestion with its field, value and confidence", () => {
     render(<AiSuggestionsSection tenderId="tender-1" initialSuggestions={[baseSuggestion()]} canManage={true} />);
 

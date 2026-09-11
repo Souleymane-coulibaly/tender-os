@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { APP_ORGANIZATION_COOKIE, APP_SESSION_COOKIE, AppApiError, appApiFetch, appApiFetchWithToken } from "../../lib/app-api-client";
 import { createCheckoutSessionAction, type CheckoutTarget } from "../app/billing-actions";
 import { onboardingQueryString, parseOnboardingQuery, type OnboardingQuery } from "./onboarding-query";
+import { API_ERROR_MESSAGES, describeApiError } from "../../lib/api-error-messages";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
@@ -69,7 +70,8 @@ export async function registerAccountAction(_prevState: AccountStepState, formDa
     if (body?.error?.code === "TERMS_NOT_ACCEPTED") {
       return { error: "Vous devez accepter les Conditions Générales d'Utilisation pour continuer." };
     }
-    return { error: "Impossible de créer le compte. Vérifiez les champs saisis." };
+    const code = typeof body?.error?.code === "string" ? body.error.code : undefined;
+    return { error: (code && API_ERROR_MESSAGES[code]) || "Impossible de créer le compte. Vérifiez les champs saisis." };
   }
 
   const loginRes = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
@@ -150,7 +152,13 @@ export async function createOrganizationAction(_prevState: OrganizationStepState
       redirect(`/onboarding/compte${onboardingQueryString(query)}`);
     }
     console.error("[TenderOS] createOrganizationAction failed:", error);
-    return { error: "Impossible de créer l'organisation. Réessayez." };
+    // Jamais un message unique pour toutes les causes : un refus de l'API est dit par son code
+    // (lib/api-error-messages.ts), et une API injoignable (réseau, service arrêté) n'est pas
+    // présentée comme une donnée saisie refusée.
+    if (error instanceof AppApiError) {
+      return { error: describeApiError(error, "Impossible de créer l'organisation. Réessayez.") };
+    }
+    return { error: "Le service TenderOS est momentanément injoignable. Réessayez dans un instant." };
   }
 
   const cookieStore = await cookies();

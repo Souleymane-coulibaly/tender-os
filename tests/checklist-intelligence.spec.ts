@@ -92,7 +92,11 @@ test.describe.serial("Checklist intelligente DCE — flux principal", () => {
     // Réconciliation avec la dernière analyse — ne doit jamais écraser un élément déjà validé
     // (mission §22) : l'élément validé ci-dessus reste "Validé" après l'opération.
     await checklistSection.getByRole("button", { name: "Comparer avec la dernière analyse" }).click();
-    await expect(checklistSection.getByText(/\d+ nouvelle\(s\) suggestion\(s\), \d+ élément\(s\) à vérifier\./)).toBeVisible({ timeout: 15000 });
+    // Le message dit désormais le cas réel (suggestions à valider, aucun écart, analyse déjà
+    // comparée) ; l'ancienne formulation reste acceptée pour le staging.
+    await expect(
+      checklistSection.getByText(/suggestion\(s\) à valider|Aucun écart avec la dernière analyse|déjà été comparée à la dernière analyse|\d+ nouvelle\(s\) suggestion\(s\), \d+ élément\(s\) à vérifier\./),
+    ).toBeVisible({ timeout: 15000 });
     await expect(checklistSection.locator("li", { hasText: "Attestation d'assurance responsabilité civile professionnelle" }).getByText("Validé")).toBeVisible();
   });
 });

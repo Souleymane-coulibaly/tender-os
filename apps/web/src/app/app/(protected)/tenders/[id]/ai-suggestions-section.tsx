@@ -35,19 +35,27 @@ export function AiSuggestionsSection({
   tenderId,
   initialSuggestions,
   canManage,
+  entityTypes,
+  canGenerate = true,
 }: {
   tenderId: string;
   initialSuggestions: AiSuggestion[];
   canManage: boolean;
+  /** Restreint le panneau à certains types (ex. l'écran Checklist n'affiche que CHECKLIST_ITEM). */
+  entityTypes?: readonly string[];
+  /** « Générer les suggestions » transforme TOUS les constats : masqué là où seul un type est affiché. */
+  canGenerate?: boolean;
 }) {
-  const [suggestions, setSuggestions] = useState(initialSuggestions);
+  const visible = (list: AiSuggestion[]) =>
+    entityTypes ? list.filter((suggestion) => entityTypes.includes(suggestion.entityType)) : list;
+  const [suggestions, setSuggestions] = useState(() => visible(initialSuggestions));
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [mapResult, setMapResult] = useState<MapSuggestionsResult | undefined>();
   const [conflictIds, setConflictIds] = useState<Set<string>>(new Set());
 
   async function refresh(): Promise<void> {
-    setSuggestions(await fetchTenderSuggestions(tenderId));
+    setSuggestions(visible(await fetchTenderSuggestions(tenderId)));
   }
 
   async function handleGenerate(): Promise<void> {
@@ -119,7 +127,7 @@ export function AiSuggestionsSection({
           >
             Actualiser
           </Button>
-          {canManage ? (
+          {canManage && canGenerate ? (
             <Button
               type="button"
               disabled={isPending}

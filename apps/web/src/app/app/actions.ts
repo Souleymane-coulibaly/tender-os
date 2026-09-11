@@ -893,13 +893,15 @@ export async function fetchChecklistProgress(tenderId: string): Promise<Checklis
 
 export async function reconcileChecklistWithNewAnalysisAction(
   tenderId: string,
-): Promise<{ result?: { analysisVersion?: number; newRequirementSuggestionsCreated: number; possibleChangeSuggestionsCreated: number; possibleRemovals: { itemId: string; title: string; reason: string }[] }; error?: string }> {
+): Promise<{ result?: { analysisVersion?: number; newRequirementSuggestionsCreated: number; possibleChangeSuggestionsCreated: number; possibleRemovals: { itemId: string; title: string; reason: string }[]; alreadyReconciled?: boolean }; error?: string }> {
   try {
     const result = await appApiFetch<{
       analysisVersion?: number;
       newRequirementSuggestionsCreated: number;
       possibleChangeSuggestionsCreated: number;
       possibleRemovals: { itemId: string; title: string; reason: string }[];
+      /** Cette version d'analyse avait déjà été comparée : aucune écriture (idempotence API). */
+      alreadyReconciled?: boolean;
     }>(`/api/v1/tenders/${tenderId}/checklist/reconcile`, { method: "POST" });
     return { result };
   } catch (error) {

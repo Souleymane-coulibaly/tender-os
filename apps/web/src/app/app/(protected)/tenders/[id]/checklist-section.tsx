@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   attachChecklistItemDocumentAction,
   changeChecklistItemStatusAction,
@@ -35,6 +36,33 @@ import { Card } from "../../../../../components/ui/card";
 import { EmptyState } from "../../../../../components/ui/empty-state";
 
 const INITIAL_STATE: FormActionState = {};
+
+type ReconcileResult = NonNullable<Awaited<ReturnType<typeof reconcileChecklistWithNewAnalysisAction>>["result"]>;
+
+/**
+ * Résultat de « Comparer avec la dernière analyse », dit tel qu'il est : aucune analyse terminée,
+ * analyse déjà comparée, aucun écart, ou ce qu'il reste à valider — jamais un « 0 suggestion »
+ * ambigu. Les éléments proposés arrivent comme SUGGESTIONS dans « Suggestions IA à valider » :
+ * l'IA ne modifie jamais la checklist sans validation humaine (V2 Sprint 6 §22).
+ */
+function describeReconcileResult(result: ReconcileResult): string {
+  if (result.analysisVersion === undefined) {
+    return "Aucune analyse terminée pour cet appel d'offres : lancez d'abord l'analyse du DCE.";
+  }
+  if (result.alreadyReconciled) {
+    return `La checklist a déjà été comparée à la dernière analyse (version ${result.analysisVersion}) : rien de nouveau.`;
+  }
+  const toValidate = result.newRequirementSuggestionsCreated + result.possibleChangeSuggestionsCreated;
+  const toCheck = result.possibleRemovals.length;
+  if (toValidate === 0 && toCheck === 0) {
+    return `Aucun écart avec la dernière analyse (version ${result.analysisVersion}) : la checklist est à jour.`;
+  }
+  const parts: string[] = [];
+  if (toValidate > 0) parts.push(`${toValidate} suggestion(s) à valider dans « Suggestions IA à valider »`);
+  if (toCheck > 0) parts.push(`${toCheck} élément(s) absent(s) de la dernière analyse, à vérifier`);
+  return `${parts.join(" ; ")}.`;
+}
+
 const STATUSES: ChecklistItemStatus[] = ["TODO", "IN_PROGRESS", "COMPLETED", "NOT_APPLICABLE"];
 const TYPES: ChecklistItemType[] = [
   "ADMINISTRATIVE_DOCUMENT",
@@ -482,10 +510,15 @@ function ChecklistItemRow({
 function ProgressSummary({ progress }: { progress: ChecklistProgress | null }) {
   if (!progress) return null;
   const { global } = progress;
-  const percent =
-    global.totalApplicable === 0
-      ? 100
-      : Math.round((global.validated / global.totalApplicable) * 100);
+  // Une checklist vide n'est pas « prête à 100 % » : elle n'a encore rien à vérifier.
+  if (global.totalApplicable === 0) {
+    return (
+      <div className="rounded-xl bg-tenderos-light p-3 text-sm text-tenderos-slate">
+        Aucun élément applicable pour l&apos;instant : ajoutez-en un ou comparez avec la dernière analyse.
+      </div>
+    );
+  }
+  const percent = Math.round((global.validated / global.totalApplicable) * 100);
 
   return (
     <div className="flex flex-col gap-2 rounded-xl bg-tenderos-light p-3">
@@ -537,6 +570,7 @@ export function ChecklistSection({
   const [state, formAction, isPending] = useActionState(boundAction, INITIAL_STATE);
   const [lotFilter, setLotFilter] = useState<string>("ALL");
   const [reconcileMessage, setReconcileMessage] = useState<string | undefined>();
+  const router = useRouter();
 
   const filteredItems = useMemo(() => {
     if (lotFilter === "ALL") return items;
@@ -562,9 +596,10 @@ export function ChecklistSection({
               if (result.error) {
                 setReconcileMessage(result.error);
               } else if (result.result) {
-                setReconcileMessage(
-                  `${result.result.newRequirementSuggestionsCreated} nouvelle(s) suggestion(s), ${result.result.possibleRemovals.length} élément(s) à vérifier.`,
-                );
+                setReconcileMessage(describeReconcileResult(result.result));
+                // Relit la page : fraîcheur des éléments (« Absente de la dernière analyse ») et
+                // suggestions à valider, jamais un écran qui semble ne pas avoir bougé.
+                router.refresh();
               }
             }}
           >

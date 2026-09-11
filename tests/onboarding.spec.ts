@@ -140,7 +140,9 @@ test.describe.serial("Onboarding — wizard complet (V2 Sprint 24)", () => {
     await page.getByRole("button", { name: "Se connecter" }).click();
 
     await expect(page).toHaveURL(/\/onboarding/);
-    await expect(page.getByRole("alert")).toHaveCount(0);
+    // L'annonceur de route de Next.js porte aussi role="alert" (il lit le titre de la page après
+    // chaque navigation) : seul un VRAI message d'échec doit être compté, comme dans les autres specs.
+    await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)')).toHaveCount(0);
   });
 
   test("mission — /app/login expose un vrai lien 'Mot de passe oublié' et 'Créer un compte' vers /onboarding", async ({ page }) => {
