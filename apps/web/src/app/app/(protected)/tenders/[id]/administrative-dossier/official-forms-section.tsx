@@ -29,8 +29,13 @@ export type FormCardSpec = {
   tenderId: string;
   memberId?: string | undefined;
   subcontractorDeclarationId?: string | undefined;
-  downloadHref: (revisionId: string) => string;
 };
+
+/** Construit ici, jamais reçu en prop : une fonction ne franchit pas la frontière serveur → client
+ *  (la page entière échouait dès qu'un formulaire officiel était disponible). */
+export function revisionDownloadHref(tenderId: string, revisionId: string): string {
+  return `/app/tenders/${tenderId}/documents-generated/document-revisions/${revisionId}/download`;
+}
 
 function FieldRow({ field }: { field: OfficialFormReadiness["fields"][number] }) {
   return (
@@ -225,7 +230,7 @@ export function OfficialFormCard({ spec }: { spec: FormCardSpec }) {
       {justGeneratedRevisionId ? (
         <p className="mt-2 text-xs text-success-fg">
           Révision générée —{" "}
-          <a href={spec.downloadHref(justGeneratedRevisionId)} className="font-medium underline">
+          <a href={revisionDownloadHref(spec.tenderId, justGeneratedRevisionId)} className="font-medium underline">
             Télécharger le DOCX
           </a>
           . Ce document reste à l&apos;état « généré », une validation humaine explicite reste
@@ -283,7 +288,7 @@ export function OfficialFormCard({ spec }: { spec: FormCardSpec }) {
                   <td className="py-1 pr-4">
                     {revision.status === "COMPLETED" ? (
                       <a
-                        href={spec.downloadHref(revision.id)}
+                        href={revisionDownloadHref(spec.tenderId, revision.id)}
                         className="text-tenderos-navy hover:underline"
                       >
                         Télécharger

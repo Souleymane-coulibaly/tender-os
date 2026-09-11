@@ -205,6 +205,31 @@ Vérification navigateur après correction : l'Export se charge (« Export docum
 aperçu », « Historique ») ; le Dossier administratif affiche la cause réelle. API : typecheck 0,
 lint 0 ; web : 581/581.
 
+**Dossier administratif — page entière en échec sur staging** (« Application error », digest
+`…@E7`, signalé après le déploiement de `7afe0f3`). Le diagnostic local précédent tournait avec une
+organisation **sans** droit actif : la création du dossier y était refusée, et les deux chemins
+fautifs, qui ne s'exécutent qu'avec un droit actif, n'étaient jamais atteints. Deux défauts réels, en
+cascade :
+
+1. **`revalidatePath` pendant le rendu (code Next `E7`)** : la page appelait la server action
+   `ensureAdministrativeDossierAction`, qui revalide trois chemins après une création réussie — ce
+   que Next interdit pendant un rendu. Avant `7afe0f3`, l'appel était dans le `try` et l'exception
+   finissait en « Une erreur inattendue est survenue. » (le signalement initial) ; `7afe0f3` l'avait
+   sorti du `try`, d'où la page blanche. Corrigé : la page crée le dossier par un appel direct à
+   l'API, sans revalidation (le rendu qui suit lit l'état frais) ; l'action, sans autre appelant, est
+   supprimée. Balayage de tout le front : plus aucune page ni aucun layout n'appelle une action qui
+   revalide.
+2. **Fonction passée à un composant client** : chaque carte de formulaire officiel (DC1, DC2, DC4)
+   transportait `downloadHref`, une fonction, vers `OfficialFormsSection` (composant client) — refusé
+   par React dès qu'un formulaire est disponible, donc dès qu'un droit actif existe. Corrigé :
+   `FormCardSpec` ne porte plus que des données ; le composant construit le lien de téléchargement à
+   partir de `tenderId` (`revisionDownloadHref`).
+
+Vérification navigateur avec l'organisation abonnée du seed e2e (`fixture.cockpit`) : les 21 pages de
+la fiche AO (19 onglets + checklist et vue structurée du dossier administratif) s'affichent sans
+exception serveur ; le dossier administratif s'affiche aussi au second chargement (dossier déjà
+créé). Web : typecheck 0, lint 0 erreur, 581/581.
+
 E2E collaboration (après le renommage) : 2 réussis, 4 échecs **sans lien avec le renommage** (le
 titre « Espace collaboratif » est bien trouvé). Causes préexistantes, prouvées par l'instantané :
 (1) couplage d'ordre — `collaboration-validations.spec` ajoute déjà les participants sur le même

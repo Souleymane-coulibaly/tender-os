@@ -33,8 +33,6 @@ function readiness(overrides: Partial<OfficialFormReadiness> = {}): OfficialForm
   };
 }
 
-const download = (revisionId: string) => `/download/${revisionId}`;
-
 describe("OfficialFormsSection", () => {
   it("shows an empty state when there is nothing to prepare yet", () => {
     render(<OfficialFormsSection cards={[]} />);
@@ -43,8 +41,8 @@ describe("OfficialFormsSection", () => {
 
   it("renders multiple operator cards independently — DC1, DC2 candidate, DC2 member, DC4 — each with its own readiness %, never a single aggregated score", () => {
     const cards: FormCardSpec[] = [
-      { key: "dc1", title: "DC1", operatorLabel: "Candidat", initialReadiness: readiness({ readinessPercentage: 90 }), canGenerate: true, action: "dc1", tenderId: "tender-1", downloadHref: download },
-      { key: "dc2-candidate", title: "DC2", operatorLabel: "Candidat", initialReadiness: readiness({ readinessPercentage: 87, documentType: "DC2" }), canGenerate: true, action: "dc2-candidate", tenderId: "tender-1", downloadHref: download },
+      { key: "dc1", title: "DC1", operatorLabel: "Candidat", initialReadiness: readiness({ readinessPercentage: 90 }), canGenerate: true, action: "dc1", tenderId: "tender-1" },
+      { key: "dc2-candidate", title: "DC2", operatorLabel: "Candidat", initialReadiness: readiness({ readinessPercentage: 87, documentType: "DC2" }), canGenerate: true, action: "dc2-candidate", tenderId: "tender-1" },
       {
         key: "dc2-member-a",
         title: "DC2",
@@ -54,7 +52,6 @@ describe("OfficialFormsSection", () => {
         action: "dc2-member",
         tenderId: "tender-1",
         memberId: "member-A",
-        downloadHref: download,
       },
       {
         key: "dc4-sub",
@@ -65,7 +62,6 @@ describe("OfficialFormsSection", () => {
         action: "dc4",
         tenderId: "tender-1",
         subcontractorDeclarationId: "decl-1",
-        downloadHref: download,
       },
     ];
     render(<OfficialFormsSection cards={cards} />);
@@ -80,7 +76,7 @@ describe("OfficialFormsSection", () => {
 
   it("preview toggle shows the field table with per-field status, without ever generating a document", async () => {
     const user = userEvent.setup();
-    const cards: FormCardSpec[] = [{ key: "dc1", title: "DC1", operatorLabel: "Candidat", initialReadiness: readiness(), canGenerate: true, action: "dc1", tenderId: "tender-1", downloadHref: download }];
+    const cards: FormCardSpec[] = [{ key: "dc1", title: "DC1", operatorLabel: "Candidat", initialReadiness: readiness(), canGenerate: true, action: "dc1", tenderId: "tender-1" }];
     render(<OfficialFormsSection cards={cards} />);
 
     expect(screen.queryByText("Nom commercial")).not.toBeInTheDocument();
@@ -93,7 +89,7 @@ describe("OfficialFormsSection", () => {
 
   it("generating with missing required fields asks for confirmation ('Générer quand même ?') before calling the action — never auto-generates", async () => {
     const user = userEvent.setup();
-    const cards: FormCardSpec[] = [{ key: "dc1", title: "DC1", operatorLabel: "Candidat", initialReadiness: readiness(), canGenerate: true, action: "dc1", tenderId: "tender-1", downloadHref: download }];
+    const cards: FormCardSpec[] = [{ key: "dc1", title: "DC1", operatorLabel: "Candidat", initialReadiness: readiness(), canGenerate: true, action: "dc1", tenderId: "tender-1" }];
     render(<OfficialFormsSection cards={cards} />);
 
     await user.click(screen.getByRole("button", { name: "Générer le DOCX" }));
@@ -117,7 +113,6 @@ describe("OfficialFormsSection", () => {
         action: "dc2-member",
         tenderId: "tender-1",
         memberId: "member-A",
-        downloadHref: download,
       },
     ];
     render(<OfficialFormsSection cards={cards} />);
@@ -149,7 +144,6 @@ describe("OfficialFormsSection", () => {
         action: "dc4",
         tenderId: "tender-1",
         subcontractorDeclarationId: "decl-1",
-        downloadHref: download,
       },
     ];
     render(<OfficialFormsSection cards={cards} />);
@@ -158,7 +152,10 @@ describe("OfficialFormsSection", () => {
     expect(generateDc4Action).toHaveBeenCalledWith("tender-1", "decl-1");
 
     await screen.findByRole("link", { name: "Télécharger le DOCX" });
-    expect(screen.getByRole("link", { name: "Télécharger le DOCX" })).toHaveAttribute("href", "/download/rev-1");
+    expect(screen.getByRole("link", { name: "Télécharger le DOCX" })).toHaveAttribute(
+      "href",
+      "/app/tenders/tender-1/documents-generated/document-revisions/rev-1/download",
+    );
     expect(screen.getByText(/validation humaine explicite reste nécessaire/)).toBeInTheDocument();
     expect(screen.queryByText(/juridiquement validé/i)).not.toBeInTheDocument();
   });
@@ -175,7 +172,6 @@ describe("OfficialFormsSection", () => {
         canGenerate: true,
         action: "dc1",
         tenderId: "tender-1",
-        downloadHref: download,
       },
     ];
     render(<OfficialFormsSection cards={cards} />);

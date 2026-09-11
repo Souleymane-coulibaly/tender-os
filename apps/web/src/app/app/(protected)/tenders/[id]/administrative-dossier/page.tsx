@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
-import { ensureAdministrativeDossierAction } from "../../../../administrative-dossier-actions";
+import { describeApiError } from "../../../../../../lib/api-error-messages";
 import type {
   AdministrativeDossierCapabilities,
   AdministrativeDossierSummary,
@@ -52,11 +52,6 @@ function dossierStatusTone(status: AdministrativeDossierSummary["status"]): Badg
 
 export const metadata: Metadata = { title: "Dossier administratif — TenderOS" };
 
-function downloadHrefFor(tenderId: string) {
-  return (revisionId: string) =>
-    `/app/tenders/${tenderId}/documents-generated/document-revisions/${revisionId}/download`;
-}
-
 function findGeneratedDocument(
   generatedDocuments: GeneratedDocumentSummary[],
   templates: DocumentTemplateSummary[],
@@ -80,11 +75,18 @@ export default async function AdministrativeDossierPage({
 }) {
   const { id: tenderId } = await params;
 
-  // Crée le dossier s'il manque. Son résultat est gardé : la création peut être refusée (droit actif
-  // manquant — abonnement, essai ou Pass —, permission), et sans lui la lecture ci-dessous ne dirait
-  // que « introuvable ». Jamais bloquant en soi : un rôle en lecture seule, qui ne peut pas créer,
-  // doit toujours pouvoir consulter un dossier qui existe déjà.
-  const ensured = await ensureAdministrativeDossierAction(tenderId);
+  // Crée le dossier s'il manque — appel direct, jamais une server action : celles-ci revalident des
+  // chemins, ce que Next interdit pendant un rendu (erreur E7, page entière en échec). Le rendu qui
+  // suit lit de toute façon l'état frais. Un refus (droit actif manquant — abonnement, essai ou
+  // Pass —, permission) est gardé : sans lui la lecture ci-dessous ne dirait que « introuvable ».
+  // Jamais bloquant en soi : un rôle en lecture seule, qui ne peut pas créer, doit toujours pouvoir
+  // consulter un dossier qui existe déjà.
+  let ensureError: string | undefined;
+  try {
+    await appApiFetch(`/api/v1/tenders/${tenderId}/administrative-dossier`, { method: "POST" });
+  } catch (error) {
+    ensureError = describeApiError(error, "Le dossier administratif n'a pas pu être créé.");
+  }
 
   try {
     const [
@@ -132,7 +134,6 @@ export default async function AdministrativeDossierPage({
     );
 
     const canGenerate = canUseDocumentGeneration(actorRole);
-    const download = downloadHrefFor(tenderId);
     const cards: FormCardSpec[] = [];
 
     if (dc1Readiness) {
@@ -145,7 +146,6 @@ export default async function AdministrativeDossierPage({
         canGenerate,
         action: "dc1",
         tenderId,
-        downloadHref: download,
       });
     }
     if (dc2CandidateReadiness) {
@@ -163,7 +163,6 @@ export default async function AdministrativeDossierPage({
         canGenerate,
         action: "dc2-candidate",
         tenderId,
-        downloadHref: download,
       });
     }
     for (const { member, readiness } of memberReadinessEntries) {
@@ -183,7 +182,6 @@ export default async function AdministrativeDossierPage({
         action: "dc2-member",
         tenderId,
         memberId: member.memberId,
-        downloadHref: download,
       });
     }
     for (const { declaration, readiness } of dc4ReadinessEntries) {
@@ -203,7 +201,6 @@ export default async function AdministrativeDossierPage({
         action: "dc4",
         tenderId,
         subcontractorDeclarationId: declaration.id,
-        downloadHref: download,
       });
     }
 
@@ -298,10 +295,10 @@ export default async function AdministrativeDossierPage({
     );
   } catch (error) {
     // Dossier absent PARCE QUE sa création a été refusée : on dit la vraie cause, pas « introuvable ».
-    if (ensured.error && asApiError(error)?.status === 404) {
+    if (ensureError && asApiError(error)?.status === 404) {
       return (
         <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm">
-          {ensured.error}
+          {ensureError}
         </div>
       );
     }

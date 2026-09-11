@@ -58,16 +58,6 @@ function revalidateAdministrativeDossier(tenderId: string): void {
   revalidatePath(`/app/tenders/${tenderId}/administrative-dossier/structured`);
 }
 
-export async function ensureAdministrativeDossierAction(tenderId: string): Promise<FormActionState> {
-  try {
-    await appApiFetch(`/api/v1/tenders/${tenderId}/administrative-dossier`, { method: "POST" });
-  } catch (error) {
-    return { error: describeAdministrativeDossierActionError(error) };
-  }
-  revalidateAdministrativeDossier(tenderId);
-  return {};
-}
-
 export async function createAdministrativeRequirementAction(
   tenderId: string,
   input: { title: string; requirementType: string; expectedDocumentType: string; required: boolean; description?: string },
