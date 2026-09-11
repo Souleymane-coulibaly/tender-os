@@ -41,8 +41,11 @@ export default async function AppLoginPage({ searchParams }: { searchParams: Pro
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="relative hidden flex-col justify-between overflow-hidden bg-tenderos-navy p-10 text-white lg:flex">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.08),transparent_60%)]" aria-hidden="true" />
-        <Link href="/" className="relative font-tenderos-display text-xl font-extrabold">
-          TenderOS
+        {/* Logo officiel, variante `-dark` (texte blanc + « OS » or) conçue pour le fond navy — même
+            asset que le menu latéral et le pied de page du site. */}
+        <Link href="/" aria-label="TenderOS" className="relative w-fit">
+          {/* eslint-disable-next-line @next/next/no-img-element -- SVG vectoriel */}
+          <img src="/brand/tenderos-logo-horizontal-dark.svg" alt="TenderOS" className="h-8 w-auto" width={220} height={48} />
         </Link>
         <div className="relative flex flex-col gap-6">
           <p className="font-tenderos-display text-3xl font-bold leading-tight">Le système d&apos;exploitation des appels d&apos;offres.</p>
@@ -62,8 +65,9 @@ export default async function AppLoginPage({ searchParams }: { searchParams: Pro
       </div>
 
       <div className="flex flex-col items-center justify-center gap-6 bg-tenderos-light px-4 py-12 sm:px-6">
-        <Link href="/" className="font-tenderos-display text-xl font-extrabold text-tenderos-navy lg:hidden">
-          TenderOS
+        <Link href="/" aria-label="TenderOS" className="lg:hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element -- SVG vectoriel */}
+          <img src="/brand/tenderos-logo-horizontal.svg" alt="TenderOS" className="h-8 w-auto" width={220} height={48} />
         </Link>
         <div className="flex w-full max-w-sm flex-col gap-1 text-center">
           <h1 className="font-tenderos-display text-2xl font-bold text-tenderos-navy">Connexion</h1>

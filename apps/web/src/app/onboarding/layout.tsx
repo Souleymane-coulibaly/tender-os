@@ -17,8 +17,10 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
     <ConsentProvider>
       <div className="font-tenderos-body flex min-h-screen flex-col bg-tenderos-light text-tenderos-navy">
         <header className="border-b border-tenderos-navy/10 bg-white px-4 py-4 sm:px-6">
-          <Link href="/" className="font-tenderos-display text-lg font-extrabold text-tenderos-navy">
-            TenderOS
+          {/* Logo officiel (même asset que l'en-tête du site), jamais le mot en texte brut. */}
+          <Link href="/" aria-label="TenderOS" className="inline-block">
+            {/* eslint-disable-next-line @next/next/no-img-element -- SVG vectoriel */}
+            <img src="/brand/tenderos-logo-horizontal.svg" alt="TenderOS" className="h-8 w-auto" width={220} height={48} />
           </Link>
         </header>
         <main className="flex-1">{children}</main>
