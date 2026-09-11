@@ -67,9 +67,12 @@ export const NAV_SECTIONS: readonly NavSection[] = [
       // sensible" (commentaire backend). 200 OK backend confirmé pour AI models même en READ_ONLY,
       // donc Configuration IA reste volontairement PAS filtrée ci-dessous.
       { href: "/app/integrations/api-keys", label: "Intégrations", tourTarget: "integrations", isVisible: isOrganizationAdmin },
+      // Une seule entrée IA : le choix du modèle par fonctionnalité (ex-« IA / Modèles ») est un
+      // onglet de Configuration IA, « Choix des modèles » — deux entrées « IA » se confondaient.
       { href: "/app/ai-configuration/models", label: "Configuration IA" },
-      { href: "/app/ai-preferences", label: "IA / Modèles" },
-      { href: "/app/pricing", label: "Pricing organisation" },
+      // Coût technique IA réel de l'organisation — jamais l'abonnement (« Abonnement & utilisation »),
+      // avec lequel l'ancien libellé « Pricing organisation » se confondait.
+      { href: "/app/pricing", label: "Coûts IA" },
     ],
   },
 ];

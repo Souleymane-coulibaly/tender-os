@@ -34,7 +34,7 @@ export async function setAiModelPreferenceAction(taskType: string, modelOverride
   } catch (error) {
     return { error: describeAiRoutingActionError(error) };
   }
-  revalidatePath("/app/ai-preferences");
+  revalidatePath("/app/ai-configuration/model-preferences");
   return {};
 }
 
@@ -44,6 +44,6 @@ export async function resetAiModelPreferenceAction(taskType: string): Promise<{ 
   } catch (error) {
     return { error: describeAiRoutingActionError(error) };
   }
-  revalidatePath("/app/ai-preferences");
+  revalidatePath("/app/ai-configuration/model-preferences");
   return {};
 }

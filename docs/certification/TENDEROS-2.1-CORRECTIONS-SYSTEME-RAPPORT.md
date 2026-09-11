@@ -294,6 +294,25 @@ type d'erreur Stripe + message, Stripe ne lui donnant pas de `code`) et lève
 activé. Contactez le support. »), journalisé en erreur avec la marche à suivre. Tests :
 `stripe-sdk.client.spec.ts` (3 tests) ; billing 31/31 fichiers ; contrat des messages web vert.
 
+**Menu Paramètres — doublons** (signalé : « Configuration IA », « IA / Modèles », « Pricing
+organisation », « Abonnement & utilisation »). Aucune page n'était strictement dupliquée, mais deux
+entrées se confondaient :
+
+- « IA / Modèles » (`/app/ai-preferences`, choix du modèle par fonctionnalité) portait le même nom
+  que l'onglet « Modèles » de Configuration IA (registre des modèles autorisés). Décision
+  utilisateur : fusion. La page devient l'onglet **« Choix des modèles »** de Configuration IA
+  (`/app/ai-configuration/model-preferences`, fichiers déplacés avec `git mv`) ; l'entrée disparaît
+  du menu ; l'ancienne adresse redirige définitivement (`permanentRedirect`) ; les revalidations des
+  actions de préférence visent la nouvelle adresse.
+- « Pricing organisation » (`/app/pricing`) affiche le coût technique IA réel par client et par type
+  de tâche — rien à voir avec l'abonnement. Décision utilisateur : renommée **« Coûts IA »** (entrée,
+  titre de page et onglet du navigateur), contenu inchangé.
+
+Garde-fous : `nav-sections.test.ts` (aucun libellé ni aucune adresse en double dans tout le menu,
+une seule entrée IA dans Paramètres, aucune entrée « Pricing ») ; `ai-preferences/page.test.tsx`
+(redirection). Web : typecheck 0, lint 0 erreur, tests ciblés 6/6 fichiers. Hors périmètre, non
+modifié : l'intitulé « Pricing & prévisions » de la fiche client.
+
 **Abonnement staging désynchronisé de Stripe** (constaté en même temps : « Essai Starter — 0 jours
 restants », échéance au 05/09/2026 déjà passée). Établi : les variables Stripe du service API
 staging sont toutes définies (clé, secret de webhook, 7 prix, `APP_BASE_URL`) et les webhooks

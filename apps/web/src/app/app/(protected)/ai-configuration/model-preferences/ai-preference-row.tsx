@@ -2,8 +2,8 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { resetAiModelPreferenceAction, setAiModelPreferenceAction } from "../../ai-routing-actions";
-import { AI_ROUTING_MODEL_LABELS, type AiModelPreferenceSummary, type AiRoutingModelId } from "../../../../lib/ai-routing-types";
+import { resetAiModelPreferenceAction, setAiModelPreferenceAction } from "../../../ai-routing-actions";
+import { AI_ROUTING_MODEL_LABELS, type AiModelPreferenceSummary, type AiRoutingModelId } from "../../../../../lib/ai-routing-types";
 
 const AUTOMATIC_VALUE = "AUTOMATIC";
 
