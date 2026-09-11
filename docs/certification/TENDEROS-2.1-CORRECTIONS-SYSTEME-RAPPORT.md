@@ -313,6 +313,25 @@ une seule entrée IA dans Paramètres, aucune entrée « Pricing ») ; `ai-prefe
 (redirection). Web : typecheck 0, lint 0 erreur, tests ciblés 6/6 fichiers. Hors périmètre, non
 modifié : l'intitulé « Pricing & prévisions » de la fiche client.
 
+**Menu latéral — pictogrammes** (demande utilisateur). Décisions : icônes dessinées maison (aucune
+nouvelle dépendance ; règle du design system « une seule bibliothèque, un seul style ») et menu
+latéral seulement (15 entrées ; les barres d'onglets restent textuelles).
+
+- `components/ui/icons.tsx` : 15 pictogrammes dans la grammaire existante (grille 16px, trait
+  `currentColor` 1,4, extrémités arrondies), le trait porté une seule fois par `LineGlyph`.
+  `IconProps` exporté et élargi à `| undefined` (exactOptionalPropertyTypes).
+- `nav-sections.ts` : chaque entrée porte une **clé** d'icône (`NavIconName`), jamais un composant —
+  la liste reste de la donnée pure, transmissible du serveur au navigateur (même classe de défaut
+  que la fonction passée aux formulaires officiels du dossier administratif). `nav-icons.tsx` fait
+  la correspondance clé → dessin ; `app-shell.tsx` affiche l'icône devant le libellé (décorative,
+  `aria-hidden`, couleur du texte, donc éclairée avec l'entrée active).
+- Contrôle visuel (captures navigateur) : 15 icônes en 16×16, alignées, hauteur de ligne inchangée
+  (36px). Ajustement après capture : « Veille » (radar) se confondait avec « Opportunités » (cible)
+  à 16px — remplacée par un signal de diffusion, sans cercle fermé.
+- Tests : `nav-sections.test.ts` (chaque entrée a son pictogramme, jamais deux identiques) ;
+  `app-shell.test.tsx` (chaque lien du menu affiche une icône décorative, nom accessible inchangé).
+  Web : typecheck 0, lint 0 erreur.
+
 **Abonnement staging désynchronisé de Stripe** (constaté en même temps : « Essai Starter — 0 jours
 restants », échéance au 05/09/2026 déjà passée). Établi : les variables Stripe du service API
 staging sont toutes définies (clé, secret de webhook, 7 prix, `APP_BASE_URL`) et les webhooks

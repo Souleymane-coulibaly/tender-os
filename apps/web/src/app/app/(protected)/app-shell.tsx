@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
+import { NavIcon } from "./nav-icons";
 import { getVisibleNavSections } from "./nav-sections";
 
 function isActiveHref(pathname: string, href: string): boolean {
@@ -82,10 +83,11 @@ export function AppShell({ headerActions, actorRole, children }: { headerActions
                         data-tour={item.tourTarget}
                         onClick={() => setOpen(false)}
                         aria-current={active ? "page" : undefined}
-                        className={`block rounded-lg px-3 py-2 text-sm font-medium transition ${
+                        className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
                           active ? "bg-white/10 text-white" : "text-white/70 hover:bg-white/5 hover:text-white"
                         }`}
                       >
+                        <NavIcon name={item.icon} className="shrink-0" />
                         {item.label}
                       </Link>
                     </li>

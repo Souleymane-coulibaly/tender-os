@@ -76,6 +76,22 @@ describe("AppShell", () => {
     expect(screen.getByRole("link", { name: "Membres" })).toBeInTheDocument();
   });
 
+  it("shows a decorative pictogram in front of every sidebar entry, without changing the link's accessible name", () => {
+    render(
+      <AppShell headerActions={null} actorRole="OWNER">
+        Contenu
+      </AppShell>,
+    );
+    const sidebarLinks = screen.getAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/app") && link.getAttribute("aria-label") !== "TenderOS");
+    expect(sidebarLinks.length).toBeGreaterThanOrEqual(15);
+    for (const link of sidebarLinks) {
+      const icon = link.querySelector("svg");
+      expect(icon, `pictogramme manquant : ${link.textContent}`).not.toBeNull();
+      expect(icon?.getAttribute("aria-hidden")).toBe("true");
+    }
+    expect(screen.getByRole("link", { name: "Coûts IA" })).toBeInTheDocument();
+  });
+
   it("hides Veille for READ_ONLY/EXTERNAL_CONSULTANT (mirrors canUseMarketWatch, already used at page level)", () => {
     render(
       <AppShell headerActions={null} actorRole="READ_ONLY">

@@ -17,6 +17,12 @@ describe("NAV_SECTIONS", () => {
     expect(allItems.some((item) => item.label === "IA / Modèles")).toBe(false);
   });
 
+  it("gives every entry its own pictogram (never two entries with the same one)", () => {
+    const icons = allItems.map((item) => item.icon);
+    expect(icons.every(Boolean)).toBe(true);
+    expect(icons.filter((icon, index) => icons.indexOf(icon) !== index)).toEqual([]);
+  });
+
   it("names the AI technical cost page « Coûts IA », never a « Pricing » entry that reads like the subscription", () => {
     expect(settings.find((item) => item.href === "/app/pricing")?.label).toBe("Coûts IA");
     expect(allItems.some((item) => /pricing/i.test(item.label))).toBe(false);
