@@ -1,23 +1,33 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  PageHeader,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  type BadgeTone,
+} from "../../../../components/ui";
 import { platformApiFetch } from "../../../../lib/platform-api-client";
 import type { PageResponse, PlatformOrganization } from "../../../../lib/platform-admin-types";
 import { ApiErrorState } from "../api-error-state";
 
 export const metadata: Metadata = { title: "Organisations — Platform Admin — TenderOS" };
 
-function statusBadgeClass(status: PlatformOrganization["status"]): string {
-  switch (status) {
-    case "SUSPENDED":
-      return "bg-red-100 text-red-800";
-    case "CLOSED":
-      return "bg-neutral-200 text-neutral-700";
-    case "TRIAL":
-      return "bg-amber-100 text-amber-800";
-    default:
-      return "bg-green-100 text-green-800";
-  }
-}
+/** Ton `Badge` d'un statut d'organisation (remplace l'ancien `statusBadgeClass()` local). */
+const ORGANIZATION_STATUS_TONE: Record<PlatformOrganization["status"], BadgeTone> = {
+  TRIAL: "warning",
+  ACTIVE: "success",
+  SUSPENDED: "danger",
+  CLOSED: "neutral",
+};
+
+const BREADCRUMB = [{ label: "Back-office", href: "/platform-admin" }, { label: "Organisations" }];
 
 export default async function PlatformAdminOrganizationsPage({
   searchParams,
@@ -38,57 +48,56 @@ export default async function PlatformAdminOrganizationsPage({
   if (page.items.length === 0) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-xl font-semibold">Organisations</h1>
-        <p className="text-sm text-neutral-600">Aucune organisation à afficher.</p>
+        <PageHeader breadcrumb={BREADCRUMB} title="Organisations" />
+        <EmptyState title="Aucune organisation à afficher." />
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Organisations</h1>
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-neutral-200 text-left text-neutral-500">
-            <th className="py-2 pr-4">Nom</th>
-            <th className="py-2 pr-4">Slug</th>
-            <th className="py-2 pr-4">Statut</th>
-            <th className="py-2 pr-4">Membres actifs</th>
-            <th className="py-2 pr-4">Créée le</th>
-          </tr>
-        </thead>
-        <tbody>
+      <PageHeader breadcrumb={BREADCRUMB} title="Organisations" />
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableHeaderCell>Nom</TableHeaderCell>
+            <TableHeaderCell>Slug</TableHeaderCell>
+            <TableHeaderCell>Statut</TableHeaderCell>
+            <TableHeaderCell>Membres actifs</TableHeaderCell>
+            <TableHeaderCell>Créée le</TableHeaderCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
           {page.items.map((organization) => (
-            <tr key={organization.id} className="border-b border-neutral-100">
-              <td className="py-2 pr-4">
+            <TableRow key={organization.id}>
+              <TableCell>
                 <Link
                   href={`/platform-admin/organizations/${organization.id}`}
-                  className="font-medium text-neutral-900 hover:underline"
+                  className="font-medium text-tenderos-navy hover:underline"
                 >
                   {organization.name}
                 </Link>
-              </td>
-              <td className="py-2 pr-4 text-neutral-600">{organization.slug}</td>
-              <td className="py-2 pr-4">
-                <span className={`rounded px-2 py-0.5 text-xs font-medium ${statusBadgeClass(organization.status)}`}>
-                  {organization.status}
-                </span>
-              </td>
-              <td className="py-2 pr-4">{organization.activeMemberCount}</td>
-              <td className="py-2 pr-4 text-neutral-600">
+              </TableCell>
+              <TableCell className="text-tenderos-slate">{organization.slug}</TableCell>
+              <TableCell>
+                <Badge tone={ORGANIZATION_STATUS_TONE[organization.status] ?? "success"}>{organization.status}</Badge>
+              </TableCell>
+              <TableCell>{organization.activeMemberCount}</TableCell>
+              <TableCell className="text-tenderos-slate">
                 {new Date(organization.createdAt).toLocaleDateString("fr-FR")}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       {page.pageInfo.hasNextPage && page.pageInfo.nextCursor ? (
-        <Link
+        <Button
+          variant="link"
           href={`/platform-admin/organizations?cursor=${encodeURIComponent(page.pageInfo.nextCursor)}`}
-          className="self-start text-sm text-neutral-700 hover:underline"
+          className="self-start"
         >
           Page suivante →
-        </Link>
+        </Button>
       ) : null}
     </div>
   );

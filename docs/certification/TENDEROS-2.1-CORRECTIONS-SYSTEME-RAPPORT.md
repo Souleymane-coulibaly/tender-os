@@ -487,6 +487,42 @@ d'offres (liste, création, Kanban), Validations, Mes tâches, en-tête, fiche A
   laissés natifs pour les tests) ; l'onglet Dépôt affiche encore le code « BLOCKED » non traduit
   (existant).
 
+**Homogénéisation visuelle — lot 4 : back-office plateforme, onboarding, connexion et mot de passe
+oublié** (même méthode).
+
+- Back-office (`platform-admin`) : coquille aux jetons de l'App Shell (en-tête blanc, navigation
+  navy, contenu sur `tenderos-light`, navigation en ligne au-dessus du contenu avant `md:`) ; la
+  navigation surligne désormais la rubrique courante (`aria-current`, même règle que l'espace
+  organisation — la fiche organisation active « Organisations »). Pages : `PageHeader`, tableaux en
+  `Table`, statuts en `Badge`, listes vides en `EmptyState`, sections et formulaires en `Card`,
+  suspension en `danger` avec encadré de confirmation, écran de chargement en squelettes, écran
+  d'erreur aux fonds d'état (`role="alert"` conservé, attendu par les tests).
+- Tables de tons : statut d'organisation, statut d'utilisateur, résultat d'audit (nouveau badge),
+  statut d'achat de Pass AO (`PASS_PURCHASE_STATUS_TONE`, aussi utilisé par la page Abonnement) ;
+  statut d'abonnement : `subscriptionStatusTone` existant réutilisé. Les deux anciens helpers
+  `*StatusBadgeClass` de `billing-types.ts` supprimés. Les deux copies locales de
+  `statusBadgeClass` du back-office remplacées ; celle de la fiche AO (partagée) n'est pas touchée.
+- Connexion back-office : champs `Input` avec libellés, bouton principal. Onboarding (compte,
+  entreprise, configuration, paiement) et connexion / mot de passe oublié / réinitialisation de
+  l'espace organisation : déjà aux jetons, seuls les 8 messages d'erreur ou d'avertissement en
+  couleur brute convertis (`text-danger-fg`, `text-warning-fg`).
+- Changements visibles assumés : « Assigner » et « Appliquer » en `secondary` (un seul bouton
+  principal par écran) ; « Réactiver » en `secondary` ; astérisque rouge sur les champs obligatoires.
+- Garde-fou étendu hors de `app/(protected)` : `platform-admin`, `onboarding`, `app/login`,
+  `app/forgot-password`, `app/reset-password`. `DESIGN_SYSTEM.md` mis à jour.
+- Signalé, non modifié : les trois listes de forfaits et les champs montant / motif du back-office
+  n'ont pas de libellé visible (existant) ; le fil d'Ariane du tableau de bord du back-office pointe
+  sur la page elle-même ; les compteurs du tableau de bord affichent les codes (TRIAL, ACTIVE,
+  PLATFORM_OWNER…) au lieu de libellés français (existant).
+- Web : typecheck 0, lint 0 erreur (1 avertissement préexistant, `<img>` du logo de l'App Shell),
+  101/101 fichiers de tests, 601/601 tests (contrat compris, 4 nouveaux tests de la navigation du
+  back-office).
+- Navigateur (serveur local, compte administrateur plateforme local jetable) : connexion, tableau de
+  bord, organisations, fiche organisation, utilisateurs, journal d'audit à 1280 px, organisations et
+  fiche organisation à 400 px — aucun écran d'erreur, un seul titre chacun, aucun défilement
+  horizontal ; parcours E2E onboarding et connexion existant (9 tests) vert. Captures relues : même
+  anatomie que l'espace organisation.
+
 **Abonnement staging désynchronisé de Stripe** (constaté en même temps : « Essai Starter — 0 jours
 restants », échéance au 05/09/2026 déjà passée). Établi : les variables Stripe du service API
 staging sont toutes définies (clé, secret de webhook, 7 prix, `APP_BASE_URL`) et les webhooks

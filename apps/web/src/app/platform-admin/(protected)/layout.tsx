@@ -1,16 +1,15 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Button } from "../../../components/ui";
 import { getPlatformSessionToken } from "../../../lib/platform-api-client";
 import { logoutAction } from "../actions";
+import { PlatformAdminNav } from "./platform-admin-nav";
 
-const NAV_ITEMS = [
-  { href: "/platform-admin", label: "Tableau de bord" },
-  { href: "/platform-admin/organizations", label: "Organisations" },
-  { href: "/platform-admin/users", label: "Utilisateurs" },
-  { href: "/platform-admin/audit-logs", label: "Audit" },
-];
-
+/**
+ * Coquille du back-office plateforme — mêmes jetons que l'App Shell de l'espace organisation
+ * (`app/(protected)/app-shell.tsx`) : navigation sur fond navy, en-tête blanc bordé, contenu sur
+ * fond `tenderos-light`. La navigation passe en ligne au-dessus du contenu avant `md:`.
+ */
 export default async function PlatformAdminLayout({ children }: { children: ReactNode }) {
   const token = await getPlatformSessionToken();
 
@@ -22,30 +21,20 @@ export default async function PlatformAdminLayout({ children }: { children: Reac
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-neutral-200 px-6 py-4">
-        <span className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+    <div className="flex min-h-screen flex-col bg-tenderos-light">
+      <header className="flex items-center justify-between gap-3 border-b border-tenderos-navy/10 bg-white px-4 py-3 md:px-6 md:py-4">
+        <span className="text-sm font-semibold uppercase tracking-wide text-tenderos-slate">
           TenderOS Platform Admin
         </span>
         <form action={logoutAction}>
-          <button type="submit" className="text-sm text-neutral-600 hover:underline">
+          <Button type="submit" variant="ghost" size="sm">
             Se déconnecter
-          </button>
+          </Button>
         </form>
       </header>
-      <div className="flex flex-1">
-        <nav className="w-56 shrink-0 border-r border-neutral-200 p-4">
-          <ul className="flex flex-col gap-1">
-            {NAV_ITEMS.map((item) => (
-              <li key={item.href}>
-                <Link href={item.href} className="block rounded px-3 py-2 text-sm hover:bg-neutral-100">
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <main className="flex-1 p-6">{children}</main>
+      <div className="flex flex-1 flex-col md:flex-row">
+        <PlatformAdminNav />
+        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

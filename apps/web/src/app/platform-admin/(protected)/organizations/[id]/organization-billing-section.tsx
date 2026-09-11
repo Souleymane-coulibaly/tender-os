@@ -1,13 +1,14 @@
+import { Badge, Card, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "../../../../../components/ui";
 import {
   BILLING_INTERVAL_LABELS,
   formatQuotaLimit,
   formatStorageBytes,
   PASS_PURCHASE_STATUS_LABELS,
-  passPurchaseStatusBadgeClass,
+  PASS_PURCHASE_STATUS_TONE,
   PLAN_SOURCE_LABELS,
   PLAN_TIER_LABELS,
   SUBSCRIPTION_STATUS_LABELS,
-  subscriptionStatusBadgeClass,
+  subscriptionStatusTone,
   truncateStripeId,
   UNLIMITED,
 } from "../../../../../lib/billing-types";
@@ -21,6 +22,8 @@ import {
 import { ApiErrorState } from "../../api-error-state";
 import { AdjustAoCreditsForm } from "./adjust-ao-credits-form";
 import { AssignPlanForm } from "./assign-plan-form";
+
+const DT_CLASSES = "text-xs uppercase tracking-wide text-tenderos-slate";
 
 /** Mission §46/§47/§48/§49 — "Platform Admin → Organisations → Abonnement & Usage". */
 export async function OrganizationBillingSection({ organizationId }: { organizationId: string }) {
@@ -46,42 +49,40 @@ export async function OrganizationBillingSection({ organizationId }: { organizat
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="text-lg font-semibold">Abonnement &amp; Usage</h2>
-
-      <div className="rounded border border-neutral-200 p-4">
+      <Card title="Abonnement & Usage">
         {subscription ? (
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-medium">
+              <p className="text-sm font-medium text-tenderos-navy">
                 {PLAN_TIER_LABELS[subscription.planTier]} — {BILLING_INTERVAL_LABELS[subscription.billingInterval]}
               </p>
-              <p className="text-xs text-neutral-500">Source : {PLAN_SOURCE_LABELS[subscription.source]}</p>
+              <p className="text-xs text-tenderos-slate">Source : {PLAN_SOURCE_LABELS[subscription.source]}</p>
               {subscription.currentPeriodEnd ? (
-                <p className="text-xs text-neutral-500">Prochaine échéance : {new Date(subscription.currentPeriodEnd).toLocaleDateString("fr-FR")}</p>
+                <p className="text-xs text-tenderos-slate">Prochaine échéance : {new Date(subscription.currentPeriodEnd).toLocaleDateString("fr-FR")}</p>
               ) : null}
-              {subscription.stripeCustomerId ? <p className="text-xs text-neutral-500">Stripe Customer : {truncateStripeId(subscription.stripeCustomerId)}</p> : null}
+              {subscription.stripeCustomerId ? <p className="text-xs text-tenderos-slate">Stripe Customer : {truncateStripeId(subscription.stripeCustomerId)}</p> : null}
             </div>
-            <span className={`rounded px-2 py-0.5 text-xs font-medium ${subscriptionStatusBadgeClass(subscription.status)}`}>{SUBSCRIPTION_STATUS_LABELS[subscription.status]}</span>
+            <Badge tone={subscriptionStatusTone(subscription.status)}>{SUBSCRIPTION_STATUS_LABELS[subscription.status]}</Badge>
           </div>
         ) : (
-          <p className="mb-3 text-sm text-neutral-600">Aucun abonnement (Pass AO seul, ou aucun plan).</p>
+          <p className="mb-3 text-sm text-tenderos-slate">Aucun abonnement (Pass AO seul, ou aucun plan).</p>
         )}
 
-        <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <dl className="grid grid-cols-2 gap-3 text-sm text-tenderos-navy sm:grid-cols-4">
           <div>
-            <dt className="text-xs uppercase tracking-wide text-neutral-500">Crédits AO</dt>
+            <dt className={DT_CLASSES}>Crédits AO</dt>
             <dd>{aoCreditBalance}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-neutral-500">Grant mensuel</dt>
+            <dt className={DT_CLASSES}>Grant mensuel</dt>
             <dd>{quotas ? formatQuotaLimit(quotas.AO_MONTHLY_GRANT) : "—"}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-neutral-500">Plafond de report</dt>
+            <dt className={DT_CLASSES}>Plafond de report</dt>
             <dd>{quotas ? formatQuotaLimit(quotas.AO_ROLLOVER_CAP) : "—"}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-neutral-500">Prochain grant</dt>
+            <dt className={DT_CLASSES}>Prochain grant</dt>
             <dd>
               {subscription && subscription.status === "ACTIVE" && quotas && quotas.AO_MONTHLY_GRANT !== UNLIMITED && quotas.AO_MONTHLY_GRANT > 0
                 ? `+${quotas.AO_MONTHLY_GRANT}${subscription.billingInterval === "MONTHLY" && subscription.currentPeriodEnd ? ` le ${new Date(subscription.currentPeriodEnd).toLocaleDateString("fr-FR")}` : "/mois"}`
@@ -89,54 +90,51 @@ export async function OrganizationBillingSection({ organizationId }: { organizat
             </dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-neutral-500">Utilisateurs</dt>
+            <dt className={DT_CLASSES}>Utilisateurs</dt>
             <dd>
               {usage.activeUsers} / {quotas ? formatQuotaLimit(quotas.USERS_MAX) : "—"}
             </dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-neutral-500">Chat IA (jour)</dt>
+            <dt className={DT_CLASSES}>Chat IA (jour)</dt>
             <dd>
               {usage.chatMessagesToday} / {quotas ? formatQuotaLimit(quotas.CHAT_AI_DAILY_MAX) : "—"}
             </dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-neutral-500">Stockage</dt>
+            <dt className={DT_CLASSES}>Stockage</dt>
             <dd>
               {formatStorageBytes(usage.storageBytesUsed)} / {quotas && quotas.STORAGE_GB_MAX !== UNLIMITED ? `${quotas.STORAGE_GB_MAX} Go` : "Illimité*"}
             </dd>
           </div>
         </dl>
-      </div>
+      </Card>
 
       {passPurchases.items.length > 0 ? (
-        <div className="rounded border border-neutral-200 p-4">
-          <h3 className="mb-2 text-sm font-semibold">Pass AO achetés</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                  <th className="py-2 pr-4">Achat</th>
-                  <th className="py-2 pr-4">Statut</th>
-                  <th className="py-2 pr-4">Dossier associé</th>
-                  <th className="py-2 pr-4">Référence</th>
-                </tr>
-              </thead>
-              <tbody>
-                {passPurchases.items.map((purchase) => (
-                  <tr key={purchase.id} className="border-b border-neutral-100">
-                    <td className="py-2 pr-4">{new Date(purchase.purchasedAt).toLocaleDateString("fr-FR")}</td>
-                    <td className="py-2 pr-4">
-                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${passPurchaseStatusBadgeClass(purchase.status)}`}>{PASS_PURCHASE_STATUS_LABELS[purchase.status]}</span>
-                    </td>
-                    <td className="py-2 pr-4 text-neutral-600">{purchase.consumedTenderId ?? "—"}</td>
-                    <td className="py-2 pr-4 text-neutral-600">{purchase.externalReference}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <Card title="Pass AO achetés">
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableHeaderCell>Achat</TableHeaderCell>
+                <TableHeaderCell>Statut</TableHeaderCell>
+                <TableHeaderCell>Dossier associé</TableHeaderCell>
+                <TableHeaderCell>Référence</TableHeaderCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {passPurchases.items.map((purchase) => (
+                <TableRow key={purchase.id}>
+                  <TableCell>{new Date(purchase.purchasedAt).toLocaleDateString("fr-FR")}</TableCell>
+                  <TableCell>
+                    <Badge tone={PASS_PURCHASE_STATUS_TONE[purchase.status]}>{PASS_PURCHASE_STATUS_LABELS[purchase.status]}</Badge>
+                  </TableCell>
+                  <TableCell className="text-tenderos-slate">{purchase.consumedTenderId ?? "—"}</TableCell>
+                  <TableCell className="text-tenderos-slate">{purchase.externalReference}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       ) : null}
 
       <AssignPlanForm organizationId={organizationId} />

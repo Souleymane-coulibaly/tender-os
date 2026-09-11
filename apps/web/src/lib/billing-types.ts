@@ -36,23 +36,10 @@ export const SUBSCRIPTION_STATUS_LABELS: Record<SubscriptionStatus, string> = {
   CANCELED: "Résilié",
 };
 
-export function subscriptionStatusBadgeClass(status: SubscriptionStatus): string {
-  switch (status) {
-    case "ACTIVE":
-      return "bg-green-100 text-green-800";
-    case "TRIALING":
-      return "bg-tenderos-gold/15 text-tenderos-navy";
-    case "PAST_DUE":
-      return "bg-amber-100 text-amber-800";
-    case "CANCELED":
-      return "bg-neutral-200 text-neutral-500";
-  }
-}
-
-/** Checkpoint TENDEROS-2.1-P2.3-E8 — équivalent `BadgeTone` de `subscriptionStatusBadgeClass`
- *  (motif déjà établi ailleurs, `deadlineBucketTone`/`membershipStatusTone`), pour `/app/subscription`
- *  (Design System E5.1, `&lt;Badge tone={...}&gt;`). `subscriptionStatusBadgeClass` reste inchangée —
- *  encore utilisée par `platform-admin/organization-billing-section.tsx`, hors périmètre E8. */
+/** Checkpoint TENDEROS-2.1-P2.3-E8 — ton `Badge` d'un statut d'abonnement (motif déjà établi
+ *  ailleurs, `deadlineBucketTone`/`membershipStatusTone`), partagé par `/app/subscription` et la
+ *  fiche organisation du back-office (`platform-admin/organization-billing-section.tsx`). L'ancienne
+ *  `subscriptionStatusBadgeClass` (classes de badge écrites à la main) a été supprimée. */
 export function subscriptionStatusTone(status: SubscriptionStatus): BadgeTone {
   switch (status) {
     case "ACTIVE":
@@ -81,9 +68,11 @@ export const PASS_PURCHASE_STATUS_LABELS: Record<PassPurchaseStatus, string> = {
   CONSUMED: "Consommé",
 };
 
-export function passPurchaseStatusBadgeClass(status: PassPurchaseStatus): string {
-  return status === "AVAILABLE" ? "bg-green-100 text-green-800" : "bg-neutral-200 text-neutral-700";
-}
+/** Ton `Badge` d'un Pass AO — rendu par `<Badge tone={...}>` (DESIGN_SYSTEM.md §4). */
+export const PASS_PURCHASE_STATUS_TONE: Record<PassPurchaseStatus, BadgeTone> = {
+  AVAILABLE: "success",
+  CONSUMED: "neutral",
+};
 
 export const ENTITLEMENT_FEATURES = ["ADVANCED_COLLABORATION", "APPROVAL_WORKFLOWS", "PUBLIC_API", "WEBHOOKS", "AUTOMATION_CONNECTORS"] as const;
 export type EntitlementFeature = (typeof ENTITLEMENT_FEATURES)[number];

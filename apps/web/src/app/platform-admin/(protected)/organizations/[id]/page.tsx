@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Card, PageHeader } from "../../../../../components/ui";
 import { platformApiFetch } from "../../../../../lib/platform-api-client";
 import {
   ORGANIZATION_STATUS_LABELS,
@@ -28,38 +29,39 @@ export default async function PlatformAdminOrganizationDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">{organization.name}</h1>
-          <p className="text-sm text-neutral-500">{organization.slug}</p>
-        </div>
-        <SuspendReactivateButton organizationId={organization.id} status={organization.status} />
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Organisations", href: "/platform-admin/organizations" }, { label: organization.name }]}
+        title={organization.name}
+        description={organization.slug}
+        actions={<SuspendReactivateButton organizationId={organization.id} status={organization.status} />}
+      />
 
-      <dl className="grid grid-cols-1 gap-4 rounded border border-neutral-200 p-4 sm:grid-cols-2">
-        <div>
-          <dt className="text-xs uppercase tracking-wide text-neutral-500">Identifiant</dt>
-          <dd className="text-sm">{organization.id}</dd>
-        </div>
-        <div>
-          <dt className="text-xs uppercase tracking-wide text-neutral-500">Statut</dt>
-          <dd className="text-sm">
-            {ORGANIZATION_STATUS_LABELS[organization.status] ?? organization.status}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs uppercase tracking-wide text-neutral-500">Membres actifs</dt>
-          <dd className="text-sm">{organization.activeMemberCount}</dd>
-        </div>
-        <div>
-          <dt className="text-xs uppercase tracking-wide text-neutral-500">Créée le</dt>
-          <dd className="text-sm">{new Date(organization.createdAt).toLocaleString("fr-FR")}</dd>
-        </div>
-        <div>
-          <dt className="text-xs uppercase tracking-wide text-neutral-500">Mise à jour le</dt>
-          <dd className="text-sm">{new Date(organization.updatedAt).toLocaleString("fr-FR")}</dd>
-        </div>
-      </dl>
+      <Card>
+        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-tenderos-slate">Identifiant</dt>
+            <dd className="break-all text-sm text-tenderos-navy">{organization.id}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-tenderos-slate">Statut</dt>
+            <dd className="text-sm text-tenderos-navy">
+              {ORGANIZATION_STATUS_LABELS[organization.status] ?? organization.status}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-tenderos-slate">Membres actifs</dt>
+            <dd className="text-sm text-tenderos-navy">{organization.activeMemberCount}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-tenderos-slate">Créée le</dt>
+            <dd className="text-sm text-tenderos-navy">{new Date(organization.createdAt).toLocaleString("fr-FR")}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-tenderos-slate">Mise à jour le</dt>
+            <dd className="text-sm text-tenderos-navy">{new Date(organization.updatedAt).toLocaleString("fr-FR")}</dd>
+          </div>
+        </dl>
+      </Card>
 
       <OrganizationBillingSection organizationId={organization.id} />
     </div>

@@ -10,8 +10,8 @@ import {
   formatEurosFromCents,
   formatQuotaLimit,
   formatStorageBytes,
-  passPurchaseStatusBadgeClass,
   PASS_PURCHASE_STATUS_LABELS,
+  PASS_PURCHASE_STATUS_TONE,
   PLAN_TIER_LABELS,
   subscriptionStatusTone,
   UNLIMITED,
@@ -233,7 +233,7 @@ export default async function SubscriptionPage() {
                   <tr key={purchase.id} className="border-b border-tenderos-navy/5">
                     <td className="py-2 pr-4">{new Date(purchase.purchasedAt).toLocaleDateString("fr-FR")}</td>
                     <td className="py-2 pr-4">
-                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${passPurchaseStatusBadgeClass(purchase.status)}`}>{PASS_PURCHASE_STATUS_LABELS[purchase.status]}</span>
+                      <Badge tone={PASS_PURCHASE_STATUS_TONE[purchase.status]}>{PASS_PURCHASE_STATUS_LABELS[purchase.status]}</Badge>
                     </td>
                     <td className="py-2 pr-4 text-tenderos-slate">{purchase.consumedTenderId ?? "—"}</td>
                   </tr>

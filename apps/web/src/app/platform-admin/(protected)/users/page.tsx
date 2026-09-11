@@ -1,5 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  PageHeader,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  type BadgeTone,
+} from "../../../../components/ui";
 import { platformApiFetch } from "../../../../lib/platform-api-client";
 import type { PageResponse, PlatformUser } from "../../../../lib/platform-admin-types";
 import { ApiErrorState } from "../api-error-state";
@@ -8,17 +22,13 @@ export const metadata: Metadata = { title: "Utilisateurs — Platform Admin — 
 
 const STATUS_FILTERS = ["ALL", "SUSPENDED", "DEACTIVATED"] as const;
 
-function statusBadgeClass(status: PlatformUser["status"]): string {
-  switch (status) {
-    case "SUSPENDED":
-    case "DEACTIVATED":
-      return "bg-red-100 text-red-800";
-    case "INVITED":
-      return "bg-amber-100 text-amber-800";
-    default:
-      return "bg-green-100 text-green-800";
-  }
-}
+/** Ton `Badge` d'un statut d'utilisateur (remplace l'ancien `statusBadgeClass()` local). */
+const USER_STATUS_TONE: Record<PlatformUser["status"], BadgeTone> = {
+  INVITED: "warning",
+  ACTIVE: "success",
+  SUSPENDED: "danger",
+  DEACTIVATED: "danger",
+};
 
 export default async function PlatformAdminUsersPage({
   searchParams,
@@ -48,60 +58,63 @@ export default async function PlatformAdminUsersPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Utilisateurs</h1>
-      <nav className="flex gap-2 text-sm">
-        {STATUS_FILTERS.map((filter) => (
-          <Link
-            key={filter}
-            href={filter === "ALL" ? "/platform-admin/users" : `/platform-admin/users?status=${filter}`}
-            className={`rounded px-3 py-1 ${
-              activeStatus === filter ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-700"
-            }`}
-          >
-            {filter === "ALL" ? "Tous" : filter === "SUSPENDED" ? "Suspendus" : "Désactivés"}
-          </Link>
-        ))}
-      </nav>
+      <PageHeader breadcrumb={[{ label: "Back-office", href: "/platform-admin" }, { label: "Utilisateurs" }]} title="Utilisateurs" />
+      <Card padding="tight">
+        <nav className="flex flex-wrap gap-2 text-sm">
+          {STATUS_FILTERS.map((filter) => (
+            <Link
+              key={filter}
+              href={filter === "ALL" ? "/platform-admin/users" : `/platform-admin/users?status=${filter}`}
+              className={`rounded-lg px-3 py-1 font-medium transition ${
+                activeStatus === filter
+                  ? "bg-tenderos-navy text-white"
+                  : "border border-tenderos-navy/15 text-tenderos-navy hover:bg-tenderos-light"
+              }`}
+            >
+              {filter === "ALL" ? "Tous" : filter === "SUSPENDED" ? "Suspendus" : "Désactivés"}
+            </Link>
+          ))}
+        </nav>
+      </Card>
 
       {page.items.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucun utilisateur à afficher pour ce filtre.</p>
+        <EmptyState title="Aucun utilisateur à afficher pour ce filtre." />
       ) : (
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-neutral-200 text-left text-neutral-500">
-              <th className="py-2 pr-4">Nom</th>
-              <th className="py-2 pr-4">Email</th>
-              <th className="py-2 pr-4">Statut</th>
-              <th className="py-2 pr-4">Créé le</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableHeaderCell>Nom</TableHeaderCell>
+              <TableHeaderCell>Email</TableHeaderCell>
+              <TableHeaderCell>Statut</TableHeaderCell>
+              <TableHeaderCell>Créé le</TableHeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {page.items.map((user) => (
-              <tr key={user.id} className="border-b border-neutral-100">
-                <td className="py-2 pr-4 font-medium">{user.displayName}</td>
-                <td className="py-2 pr-4 text-neutral-600">{user.email}</td>
-                <td className="py-2 pr-4">
-                  <span className={`rounded px-2 py-0.5 text-xs font-medium ${statusBadgeClass(user.status)}`}>
-                    {user.status}
-                  </span>
-                </td>
-                <td className="py-2 pr-4 text-neutral-600">{new Date(user.createdAt).toLocaleDateString("fr-FR")}</td>
-              </tr>
+              <TableRow key={user.id}>
+                <TableCell className="font-medium">{user.displayName}</TableCell>
+                <TableCell className="text-tenderos-slate">{user.email}</TableCell>
+                <TableCell>
+                  <Badge tone={USER_STATUS_TONE[user.status] ?? "success"}>{user.status}</Badge>
+                </TableCell>
+                <TableCell className="text-tenderos-slate">{new Date(user.createdAt).toLocaleDateString("fr-FR")}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
 
       {page.pageInfo.hasNextPage && page.pageInfo.nextCursor ? (
-        <Link
+        <Button
+          variant="link"
           href={`/platform-admin/users?${new URLSearchParams({
             ...(activeStatus !== "ALL" ? { status: activeStatus } : {}),
             cursor: page.pageInfo.nextCursor,
           }).toString()}`}
-          className="self-start text-sm text-neutral-700 hover:underline"
+          className="self-start"
         >
           Page suivante →
-        </Link>
+        </Button>
       ) : null}
     </div>
   );

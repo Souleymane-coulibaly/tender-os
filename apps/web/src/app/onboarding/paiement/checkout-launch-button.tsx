@@ -33,7 +33,7 @@ export function CheckoutLaunchButton({ target, label }: { target: CheckoutTarget
         {isPending ? "Redirection vers Stripe..." : label}
       </button>
       {error ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger-fg">
           {error}
         </p>
       ) : null}

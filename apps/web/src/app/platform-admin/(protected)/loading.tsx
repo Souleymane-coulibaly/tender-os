@@ -1,3 +1,11 @@
+import { CardSkeleton, TableSkeleton } from "../../../components/ui";
+
 export default function PlatformAdminLoading() {
-  return <p className="text-sm text-neutral-500">Chargement...</p>;
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-tenderos-slate">Chargement...</p>
+      <CardSkeleton />
+      <TableSkeleton />
+    </div>
+  );
 }

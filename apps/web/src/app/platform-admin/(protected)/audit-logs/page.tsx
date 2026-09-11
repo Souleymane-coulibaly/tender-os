@@ -1,5 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  PageHeader,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  type BadgeTone,
+} from "../../../../components/ui";
 import { platformApiFetch } from "../../../../lib/platform-api-client";
 import {
   PLATFORM_AUDIT_RESULT_LABELS,
@@ -9,6 +22,15 @@ import {
 import { ApiErrorState } from "../api-error-state";
 
 export const metadata: Metadata = { title: "Audit — Platform Admin — TenderOS" };
+
+/** Ton `Badge` d'un résultat journalisé — un résultat inconnu reste affiché tel quel, en neutre. */
+const AUDIT_RESULT_TONE: Record<string, BadgeTone> = {
+  SUCCESS: "success",
+  FAILURE: "danger",
+  DENIED: "warning",
+};
+
+const BREADCRUMB = [{ label: "Back-office", href: "/platform-admin" }, { label: "Audit" }];
 
 export default async function PlatformAdminAuditLogsPage({
   searchParams,
@@ -31,55 +53,58 @@ export default async function PlatformAdminAuditLogsPage({
   if (page.items.length === 0) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-xl font-semibold">Journal d&apos;audit</h1>
-        <p className="text-sm text-neutral-600">Aucun événement à afficher.</p>
+        <PageHeader breadcrumb={BREADCRUMB} title="Journal d'audit" />
+        <EmptyState title="Aucun événement à afficher." />
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Journal d&apos;audit</h1>
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-neutral-200 text-left text-neutral-500">
-            <th className="py-2 pr-4">Action</th>
-            <th className="py-2 pr-4">Organisation</th>
-            <th className="py-2 pr-4">Acteur</th>
-            <th className="py-2 pr-4">Résultat</th>
-            <th className="py-2 pr-4">Date</th>
-          </tr>
-        </thead>
-        <tbody>
+      <PageHeader breadcrumb={BREADCRUMB} title="Journal d'audit" />
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableHeaderCell>Action</TableHeaderCell>
+            <TableHeaderCell>Organisation</TableHeaderCell>
+            <TableHeaderCell>Acteur</TableHeaderCell>
+            <TableHeaderCell>Résultat</TableHeaderCell>
+            <TableHeaderCell>Date</TableHeaderCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
           {page.items.map((entry) => (
-            <tr key={entry.id} className="border-b border-neutral-100">
-              <td className="py-2 pr-4 font-mono text-xs">{entry.action}</td>
-              <td className="py-2 pr-4 text-neutral-600">
+            <TableRow key={entry.id}>
+              <TableCell className="font-mono text-xs">{entry.action}</TableCell>
+              <TableCell className="text-tenderos-slate">
                 <Link
                   href={`/platform-admin/organizations/${entry.organizationId}`}
                   className="hover:underline"
                 >
                   {entry.organizationId}
                 </Link>
-              </td>
-              <td className="py-2 pr-4 text-neutral-600">{entry.actorId ?? "—"}</td>
-              <td className="py-2 pr-4">
-                {PLATFORM_AUDIT_RESULT_LABELS[entry.result] ?? entry.result}
-              </td>
-              <td className="py-2 pr-4 text-neutral-600">
+              </TableCell>
+              <TableCell className="text-tenderos-slate">{entry.actorId ?? "—"}</TableCell>
+              <TableCell>
+                <Badge tone={AUDIT_RESULT_TONE[entry.result] ?? "neutral"}>
+                  {PLATFORM_AUDIT_RESULT_LABELS[entry.result] ?? entry.result}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-tenderos-slate">
                 {new Date(entry.createdAt).toLocaleString("fr-FR")}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       {page.pageInfo.hasNextPage && page.pageInfo.nextCursor ? (
-        <Link
+        <Button
+          variant="link"
           href={`/platform-admin/audit-logs?cursor=${encodeURIComponent(page.pageInfo.nextCursor)}`}
-          className="self-start text-sm text-neutral-700 hover:underline"
+          className="self-start"
         >
           Page suivante →
-        </Link>
+        </Button>
       ) : null}
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Button, Input } from "../../../../../components/ui";
 import { reactivateOrganizationAction, suspendOrganizationAction, type SuspendActionState } from "../../../actions";
 
 const INITIAL_STATE: SuspendActionState = {};
@@ -26,46 +27,31 @@ export function SuspendReactivateButton({
 
   if (!confirming) {
     return (
-      <button
-        type="button"
-        onClick={() => setConfirming(true)}
-        className="rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
-      >
+      <Button type="button" variant="danger" onClick={() => setConfirming(true)}>
         Suspendre
-      </button>
+      </Button>
     );
   }
 
   return (
-    <form action={suspendFormAction} className="flex flex-col gap-2 rounded border border-red-200 p-3">
-      <p className="text-sm font-medium text-red-800">
+    <form action={suspendFormAction} className="flex max-w-sm flex-col gap-2 rounded-lg bg-danger-bg p-3">
+      <p className="text-sm font-medium text-danger-fg">
         Confirmer la suspension de cette organisation ? Ses membres perdront immédiatement l&apos;accès.
         L&apos;action est réversible.
       </p>
-      <label htmlFor="reason" className="text-xs text-neutral-600">
-        Motif (facultatif)
-      </label>
-      <input id="reason" name="reason" type="text" className="rounded border border-neutral-300 px-2 py-1 text-sm" />
+      <Input label="Motif (facultatif)" id="reason" name="reason" type="text" />
       {suspendState.error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {suspendState.error}
         </p>
       ) : null}
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={isSuspendPending}
-          className="rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <Button type="submit" variant="danger" size="sm" disabled={isSuspendPending}>
           {isSuspendPending ? "Suspension..." : "Confirmer la suspension"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setConfirming(false)}
-          className="rounded px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100"
-        >
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)}>
           Annuler
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -78,27 +64,25 @@ function ReactivateButton({ organizationId }: { organizationId: string }) {
 
   if (!confirming) {
     return (
-      <button
-        type="button"
-        onClick={() => setConfirming(true)}
-        className="rounded border border-green-300 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-50"
-      >
+      <Button type="button" onClick={() => setConfirming(true)}>
         Réactiver
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-green-200 p-3">
-      <p className="text-sm font-medium text-green-800">Confirmer la réactivation de cette organisation ?</p>
+    <div className="flex max-w-sm flex-col gap-2 rounded-lg bg-success-bg p-3">
+      <p className="text-sm font-medium text-success-fg">Confirmer la réactivation de cette organisation ?</p>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
       <div className="flex gap-2">
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="sm"
           disabled={isPending}
           onClick={async () => {
             setIsPending(true);
@@ -110,17 +94,12 @@ function ReactivateButton({ organizationId }: { organizationId: string }) {
               setConfirming(false);
             }
           }}
-          className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
         >
           {isPending ? "Réactivation..." : "Confirmer la réactivation"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setConfirming(false)}
-          className="rounded px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100"
-        >
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)}>
           Annuler
-        </button>
+        </Button>
       </div>
     </div>
   );

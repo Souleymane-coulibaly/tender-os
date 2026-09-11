@@ -51,7 +51,7 @@ export function EntrepriseForm({ queryString }: { queryString: string }) {
       </div>
 
       {state.error ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger-fg">
           {state.error}
         </p>
       ) : null}

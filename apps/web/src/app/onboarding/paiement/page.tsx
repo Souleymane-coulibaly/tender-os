@@ -56,7 +56,7 @@ export default async function OnboardingPaiementPage({ searchParams }: { searchP
       </div>
 
       {checkoutStatus === "canceled" ? (
-        <p role="alert" className="text-sm text-amber-700">
+        <p role="alert" className="text-sm text-warning-fg">
           Le paiement a été annulé. Vous pouvez réessayer ci-dessous.
         </p>
       ) : null}

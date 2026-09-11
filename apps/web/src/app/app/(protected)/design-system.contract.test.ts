@@ -11,6 +11,17 @@ import { describe, expect, it } from "vitest";
  * composant.
  */
 const PROTECTED = fileURLToPath(new URL(".", import.meta.url));
+/** `src/app` : racine des écrans hors application connectée (back-office, onboarding, connexion). */
+const APP_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+
+const MIGRATED_OUTSIDE_PROTECTED = [
+  // Lot 4
+  "platform-admin",
+  "onboarding",
+  "app/login",
+  "app/forgot-password",
+  "app/reset-password",
+];
 
 const MIGRATED = [
   "tenders",
@@ -58,11 +69,15 @@ function sourceFiles(dir: string): string[] {
   return files;
 }
 
-const migratedFiles = MIGRATED.flatMap((dir) => sourceFiles(join(PROTECTED, dir)));
+const migratedPaths = [
+  ...MIGRATED.map((dir) => join(PROTECTED, dir)),
+  ...MIGRATED_OUTSIDE_PROTECTED.map((dir) => join(APP_ROOT, dir)),
+];
+const migratedFiles = migratedPaths.flatMap((path) => sourceFiles(path));
 
 describe("design system — pages migrées", () => {
   it("chaque dossier déclaré migré existe et contient des pages (garde-fou du test lui-même)", () => {
-    for (const dir of MIGRATED) expect(existsSync(join(PROTECTED, dir)), dir).toBe(true);
+    for (const path of migratedPaths) expect(existsSync(path), relative(APP_ROOT, path)).toBe(true);
     expect(migratedFiles.length).toBeGreaterThan(100);
   });
 
@@ -74,7 +89,7 @@ describe("design system — pages migrées", () => {
         .forEach((line, index) => {
           for (const { label, pattern } of LEGACY_PATTERNS) {
             const match = pattern.exec(line);
-            if (match) offenders.push(`${relative(PROTECTED, file)}:${index + 1} — ${label} : ${match[0]}`);
+            if (match) offenders.push(`${relative(APP_ROOT, file)}:${index + 1} — ${label} : ${match[0]}`);
           }
         });
     }

@@ -1,6 +1,12 @@
 import { apiErrorMessage, describeApiError } from "../../../lib/api-error-messages";
 import { SERVICE_UNREACHABLE_MESSAGE, asApiError, isNetworkFailure } from "../../../lib/page-load-error";
 
+/** Jetons d'état (DESIGN_SYSTEM.md §1) — même carte que l'état d'erreur de l'espace organisation.
+ *  Un `<div role="alert">` plutôt que `Alert` : `Alert` pose `role="status"` pour un ton
+ *  `warning`, alors que chaque variante de cet écran doit rester annoncée comme une alerte. */
+const WARNING_CLASSES = "rounded-2xl border border-tenderos-navy/10 bg-warning-bg p-4 text-sm text-warning-fg shadow-sm";
+const DANGER_CLASSES = "rounded-2xl border border-tenderos-navy/10 bg-danger-bg p-4 text-sm text-danger-fg shadow-sm";
+
 /**
  * État "erreur" / "accès refusé" partagé par les pages du back-office plateforme
  * (skills/platform-foundation/FRONTEND_PATTERNS.md §26 — états UI obligatoires).
@@ -15,7 +21,7 @@ export function ApiErrorState({ error }: { error: unknown }) {
   if (apiError) {
     if (apiError.status === 403) {
       return (
-        <div role="alert" className="rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+        <div role="alert" className={WARNING_CLASSES}>
           {apiErrorMessage(error) ?? "Accès refusé : vous n'avez pas les droits nécessaires pour cette page."}
         </div>
       );
@@ -23,14 +29,14 @@ export function ApiErrorState({ error }: { error: unknown }) {
 
     if (apiError.status === 401) {
       return (
-        <div role="alert" className="rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+        <div role="alert" className={WARNING_CLASSES}>
           Votre session a expiré. Reconnectez-vous.
         </div>
       );
     }
 
     return (
-      <div role="alert" className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+      <div role="alert" className={DANGER_CLASSES}>
         {describeApiError(error)}
       </div>
     );
@@ -38,7 +44,7 @@ export function ApiErrorState({ error }: { error: unknown }) {
 
   console.error("[TenderOS] Platform Admin page data load failed (not an API response):", error);
   return (
-    <div role="alert" className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+    <div role="alert" className={DANGER_CLASSES}>
       {isNetworkFailure(error)
         ? SERVICE_UNREACHABLE_MESSAGE
         : "Une erreur inattendue est survenue. Réessayez ; si le problème persiste, contactez le support."}

@@ -51,7 +51,7 @@ export function ConfigurationForm() {
       </div>
 
       {state.error ? (
-        <p role="alert" className="text-sm text-amber-700">
+        <p role="alert" className="text-sm text-warning-fg">
           {state.error}
         </p>
       ) : null}

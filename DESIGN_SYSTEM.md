@@ -8,7 +8,9 @@ d'écart, le code fait foi :
 - page de référence : la fiche appel d'offres (`app/(protected)/tenders/[id]`).
 
 Garde-fou : `app/(protected)/design-system.contract.test.ts` interdit, dans les pages migrées, les
-gris bruts, les couleurs brutes (verts, rouges, ambres…) et les titres de page écrits à la main.
+gris bruts, les couleurs brutes (verts, rouges, ambres…), les jetons inexistants
+(`text-tenderos-danger`…) et les titres de page écrits à la main. Il couvre aussi les écrans hors
+application connectée : back-office (`platform-admin`), onboarding, connexion et mot de passe oublié.
 
 ---
 
