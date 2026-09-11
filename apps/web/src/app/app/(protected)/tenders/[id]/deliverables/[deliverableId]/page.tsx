@@ -3,7 +3,7 @@ import Link from "next/link";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../../lib/app-api-client";
 import { DELIVERABLE_TYPE_LABELS, OVERLAY_DELIVERABLE_TYPES, READ_ONLY_DELIVERABLE_TYPES, STRUCTURED_DELIVERABLE_TYPES, type DeliverableSummary } from "../../../../../../../lib/deliverable-types";
 import type { DocumentSummary, PageResponse } from "../../../../../../../lib/documents-types";
-import { Alert } from "../../../../../../../components/ui/alert";
+import { Alert, PageHeader } from "../../../../../../../components/ui";
 import { ApiErrorState } from "../../../../api-error-state";
 import { MemoEditor } from "./memo-editor";
 import { OverlayDeliverable } from "./overlay-deliverable";
@@ -50,9 +50,15 @@ export default async function DeliverableDetailPage({ params }: { params: Promis
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">{DELIVERABLE_TYPE_LABELS[deliverable.type] ?? deliverable.type}</h1>
-      </div>
+      <PageHeader
+        breadcrumb={[
+          { label: "Appels d'offres", href: "/app/tenders" },
+          { label: "Dossier", href: `/app/tenders/${tenderId}` },
+          { label: "Livrables", href: `/app/tenders/${tenderId}/deliverables` },
+          { label: DELIVERABLE_TYPE_LABELS[deliverable.type] ?? deliverable.type },
+        ]}
+        title={DELIVERABLE_TYPE_LABELS[deliverable.type] ?? deliverable.type}
+      />
       {deliverable.type === "TECHNICAL_MEMO" ? (
         <Alert tone="info" title="Deux emplacements pour le mémoire technique">
           Ce livrable est un espace de rédaction distinct de l&apos;onglet{" "}

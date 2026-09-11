@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Badge, Button, Card, Select } from "../../../../../components/ui";
 import {
   browseRemoteFolder,
   createCalendarEventAction,
@@ -16,14 +17,18 @@ import {
 } from "../../../connectors-actions";
 import {
   CONNECTION_STATUS_LABELS,
+  CONNECTION_STATUS_TONE,
   CONNECTOR_PROVIDER_FEATURES,
   CONNECTOR_PROVIDER_LABELS,
-  connectionStatusBadgeClass,
   type BrowseResult,
   type ConnectorProvider,
   type ExternalConnectionSummary,
 } from "../../../../../lib/connectors-types";
 import { EntitlementUpgradeNotice } from "../../entitlement-upgrade-notice";
+
+/** Encadré d'un sous-formulaire du panneau Parcourir (import/export/calendrier) — un simple fond
+ *  clair dans la carte du fournisseur plutôt qu'une `Card` imbriquée dans une `Card`. */
+const SUB_FORM_CLASSES = "flex flex-wrap items-end gap-2 rounded-lg border border-tenderos-navy/10 bg-tenderos-light p-2";
 
 function BrowsePanel({ connectionId, tenders, documents }: { connectionId: string; tenders: TenderPickerOption[]; documents: DocumentPickerOption[] }) {
   const [containerId, setContainerId] = useState<string | undefined>();
@@ -70,27 +75,27 @@ function BrowsePanel({ connectionId, tenders, documents }: { connectionId: strin
   const selectedDocument = documents.find((d) => d.id === exportDocumentId);
 
   return (
-    <div className="mt-3 flex flex-col gap-3 border-t border-neutral-100 pt-3">
+    <div className="mt-3 flex flex-col gap-3 border-t border-tenderos-navy/10 pt-3">
       <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Parcourir</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-tenderos-slate">Parcourir</h3>
         {!containerId ? (
-          <button type="button" onClick={() => load(undefined, undefined)} disabled={loading} className="mt-1 rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50">
+          <Button type="button" variant="secondary" size="sm" onClick={() => load(undefined, undefined)} disabled={loading} className="mt-1">
             {loading ? "Chargement..." : "Afficher les emplacements disponibles"}
-          </button>
+          </Button>
         ) : (
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
-            <button type="button" onClick={() => load(undefined, undefined)} className="underline hover:no-underline">
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-tenderos-slate">
+            <Button type="button" variant="link" onClick={() => load(undefined, undefined)}>
               Emplacements
-            </button>
+            </Button>
             {folderId ? (
-              <button type="button" onClick={goUp} className="rounded border border-neutral-300 px-2 py-0.5 hover:bg-neutral-100">
+              <Button type="button" variant="secondary" size="sm" onClick={goUp}>
                 Remonter
-              </button>
+              </Button>
             ) : null}
           </div>
         )}
         {error ? (
-          <p role="alert" className="mt-1 text-xs text-red-600">
+          <p role="alert" className="mt-1 text-xs text-danger-fg">
             {error}
           </p>
         ) : null}
@@ -99,12 +104,12 @@ function BrowsePanel({ connectionId, tenders, documents }: { connectionId: strin
           <ul className="mt-2 flex flex-col gap-1">
             {result.containers.map((c) => (
               <li key={c.id}>
-                <button type="button" onClick={() => load(c.id, undefined)} className="text-xs text-blue-700 underline hover:no-underline">
+                <Button type="button" variant="link" onClick={() => load(c.id, undefined)} className="text-xs">
                   📁 {c.name}
-                </button>
+                </Button>
               </li>
             ))}
-            {result.containers.length === 0 ? <li className="text-xs text-neutral-500">Aucun emplacement accessible.</li> : null}
+            {result.containers.length === 0 ? <li className="text-xs text-tenderos-slate">Aucun emplacement accessible.</li> : null}
           </ul>
         ) : null}
 
@@ -112,27 +117,29 @@ function BrowsePanel({ connectionId, tenders, documents }: { connectionId: strin
           <ul className="mt-2 flex flex-col gap-1">
             {result.listing.folders.map((f) => (
               <li key={f.id}>
-                <button type="button" onClick={() => openFolder(f.id)} className="text-xs text-blue-700 underline hover:no-underline">
+                <Button type="button" variant="link" onClick={() => openFolder(f.id)} className="text-xs">
                   📁 {f.name}
-                </button>
+                </Button>
               </li>
             ))}
             {result.listing.files.map((f) => (
-              <li key={f.id} className={`flex items-center gap-2 text-xs ${selectedFile?.id === f.id ? "font-semibold text-neutral-900" : "text-neutral-700"}`}>
+              <li key={f.id} className={`flex items-center gap-2 text-xs ${selectedFile?.id === f.id ? "font-semibold text-tenderos-navy" : "text-tenderos-navy"}`}>
+                {/* Laissé en <button> natif volontairement : `Button` impose `font-semibold`, ce qui
+                    effacerait la distinction fichier sélectionné (gras) / non sélectionné. */}
                 <button type="button" onClick={() => setSelectedFile({ id: f.id, name: f.name, mimeType: f.mimeType })} className="text-left hover:underline">
                   📄 {f.name}
                 </button>
-                {selectedFile?.id === f.id ? <span className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-800">Sélectionné</span> : null}
+                {selectedFile?.id === f.id ? <Badge tone="info">Sélectionné</Badge> : null}
               </li>
             ))}
-            {result.listing.folders.length === 0 && result.listing.files.length === 0 ? <li className="text-xs text-neutral-500">Dossier vide.</li> : null}
+            {result.listing.folders.length === 0 && result.listing.files.length === 0 ? <li className="text-xs text-tenderos-slate">Dossier vide.</li> : null}
           </ul>
         ) : null}
       </div>
 
       {selectedFile ? (
         <form
-          className="flex flex-wrap items-end gap-2 rounded border border-neutral-200 bg-neutral-50 p-2"
+          className={SUB_FORM_CLASSES}
           onSubmit={async (event) => {
             event.preventDefault();
             setMessage(undefined);
@@ -147,24 +154,27 @@ function BrowsePanel({ connectionId, tenders, documents }: { connectionId: strin
             setMessage(result.error ?? `Importé — document TenderOS ${result.documentId}`);
           }}
         >
-          <span className="text-xs text-neutral-700">Importer « {selectedFile.name} » vers :</span>
-          <select value={importTenderId} onChange={(e) => setImportTenderId(e.target.value)} className="rounded border border-neutral-300 px-2 py-1 text-xs">
-            <option value="">Bibliothèque organisation (sans Tender)</option>
-            {tenders.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.title}
-              </option>
-            ))}
-          </select>
-          <button type="submit" className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100">
+          <span className="text-xs text-tenderos-navy">Importer « {selectedFile.name} » vers :</span>
+          {/* `Select` sans `label` rend le contrôle nu (w-full) : la largeur est portée par le conteneur. */}
+          <div className="min-w-[12rem] flex-1">
+            <Select value={importTenderId} onChange={(e) => setImportTenderId(e.target.value)}>
+              <option value="">Bibliothèque organisation (sans Tender)</option>
+              {tenders.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <Button type="submit" variant="secondary" size="sm">
             Importer
-          </button>
+          </Button>
         </form>
       ) : null}
 
       {containerId && result?.listing ? (
         <form
-          className="flex flex-wrap items-end gap-2 rounded border border-neutral-200 bg-neutral-50 p-2"
+          className={SUB_FORM_CLASSES}
           onSubmit={async (event) => {
             event.preventDefault();
             setMessage(undefined);
@@ -180,34 +190,38 @@ function BrowsePanel({ connectionId, tenders, documents }: { connectionId: strin
             setMessage(result.error ?? `Exporté vers le dossier distant — ${result.remoteFileId}`);
           }}
         >
-          <span className="text-xs text-neutral-700">Exporter un document TenderOS ici :</span>
-          <select value={exportDocumentId} onChange={(e) => setExportDocumentId(e.target.value)} className="rounded border border-neutral-300 px-2 py-1 text-xs">
-            <option value="">Choisir un document...</option>
-            {documents.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.title} (v{d.currentVersion.versionNumber})
-              </option>
-            ))}
-          </select>
+          <span className="text-xs text-tenderos-navy">Exporter un document TenderOS ici :</span>
+          <div className="min-w-[12rem] flex-1">
+            <Select value={exportDocumentId} onChange={(e) => setExportDocumentId(e.target.value)}>
+              <option value="">Choisir un document...</option>
+              {documents.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.title} (v{d.currentVersion.versionNumber})
+                </option>
+              ))}
+            </Select>
+          </div>
           {/* La connexion peut être restreinte à certains clients (mission §49/§52) : le Tender
               choisi ici fournit le `clientAccountId` vérifié côté backend contre cette restriction —
               jamais deviné, jamais optionnel dès qu'une connexion est narrowed. */}
-          <select value={exportTenderId} onChange={(e) => setExportTenderId(e.target.value)} className="rounded border border-neutral-300 px-2 py-1 text-xs">
-            <option value="">Client/Tender concerné (optionnel)...</option>
-            {tenders.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.title}
-              </option>
-            ))}
-          </select>
-          <button type="submit" disabled={!selectedDocument} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50">
+          <div className="min-w-[12rem] flex-1">
+            <Select value={exportTenderId} onChange={(e) => setExportTenderId(e.target.value)}>
+              <option value="">Client/Tender concerné (optionnel)...</option>
+              {tenders.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <Button type="submit" variant="secondary" size="sm" disabled={!selectedDocument}>
             Exporter la version courante
-          </button>
+          </Button>
         </form>
       ) : null}
 
       <form
-        className="flex flex-wrap items-end gap-2 rounded border border-neutral-200 bg-neutral-50 p-2"
+        className={SUB_FORM_CLASSES}
         onSubmit={async (event) => {
           event.preventDefault();
           setMessage(undefined);
@@ -216,21 +230,23 @@ function BrowsePanel({ connectionId, tenders, documents }: { connectionId: strin
           setMessage(result.error ?? (result.alreadyExisted ? "Événement déjà existant (aucun doublon créé)." : "Événement calendrier créé."));
         }}
       >
-        <span className="text-xs text-neutral-700">Créer un événement calendrier pour l&apos;échéance de :</span>
-        <select value={calendarTenderId} onChange={(e) => setCalendarTenderId(e.target.value)} className="rounded border border-neutral-300 px-2 py-1 text-xs">
-          <option value="">Choisir un Tender...</option>
-          {tenders.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.title}
-            </option>
-          ))}
-        </select>
-        <button type="submit" disabled={!calendarTenderId} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50">
+        <span className="text-xs text-tenderos-navy">Créer un événement calendrier pour l&apos;échéance de :</span>
+        <div className="min-w-[12rem] flex-1">
+          <Select value={calendarTenderId} onChange={(e) => setCalendarTenderId(e.target.value)}>
+            <option value="">Choisir un Tender...</option>
+            {tenders.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.title}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <Button type="submit" variant="secondary" size="sm" disabled={!calendarTenderId}>
           Créer l&apos;événement
-        </button>
+        </Button>
       </form>
 
-      {message ? <p className="text-xs text-neutral-700">{message}</p> : null}
+      {message ? <p className="text-xs text-tenderos-navy">{message}</p> : null}
     </div>
   );
 }
@@ -297,72 +313,71 @@ export function ConnectorProviderCard({
   }
 
   return (
-    <section className="flex flex-col gap-2 rounded border border-neutral-200 p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-semibold text-neutral-900">{CONNECTOR_PROVIDER_LABELS[provider]}</h2>
-          <p className="text-xs text-neutral-500">{CONNECTOR_PROVIDER_FEATURES[provider]}</p>
-        </div>
-        {connection ? <span className={`rounded px-2 py-0.5 text-xs font-medium ${connectionStatusBadgeClass(connection.status)}`}>{CONNECTION_STATUS_LABELS[connection.status]}</span> : null}
-      </div>
+    <Card
+      padding="tight"
+      title={CONNECTOR_PROVIDER_LABELS[provider]}
+      description={CONNECTOR_PROVIDER_FEATURES[provider]}
+      actions={connection ? <Badge tone={CONNECTION_STATUS_TONE[connection.status]}>{CONNECTION_STATUS_LABELS[connection.status]}</Badge> : undefined}
+    >
+      <div className="flex flex-col gap-2">
+        {error ? (
+          <p role="alert" className="text-xs text-danger-fg">
+            {error}
+          </p>
+        ) : null}
 
-      {error ? (
-        <p role="alert" className="text-xs text-red-600">
-          {error}
-        </p>
-      ) : null}
-
-      {!connection ? (
-        canManage ? (
-          hasEntitlement ? (
-            <button type="button" disabled={isPending} onClick={() => handleConnect(false)} className="self-start rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50">
-              Connecter
-            </button>
+        {!connection ? (
+          canManage ? (
+            hasEntitlement ? (
+              <Button type="button" variant="secondary" disabled={isPending} onClick={() => handleConnect(false)} className="self-start">
+                Connecter
+              </Button>
+            ) : (
+              <EntitlementUpgradeNotice featureLabel="Les connecteurs (Microsoft 365 / Google Workspace)" />
+            )
           ) : (
-            <EntitlementUpgradeNotice featureLabel="Les connecteurs (Microsoft 365 / Google Workspace)" />
+            <p className="text-xs text-tenderos-slate">Réservé Propriétaire/Administrateur.</p>
           )
         ) : (
-          <p className="text-xs text-neutral-500">Réservé Propriétaire/Administrateur.</p>
-        )
-      ) : (
-        <div className="flex flex-col gap-2">
-          <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-neutral-600">
-            <dt className="text-neutral-400">Compte</dt>
-            <dd>{connection.externalAccountLabel ?? "—"}</dd>
-            <dt className="text-neutral-400">Connecté par</dt>
-            <dd>{connection.connectedBy}</dd>
-            <dt className="text-neutral-400">Dernière synchro</dt>
-            <dd>{connection.lastSuccessfulSyncAt ? new Date(connection.lastSuccessfulSyncAt).toLocaleString("fr-FR") : "Jamais"}</dd>
-            {connection.lastError ? (
-              <>
-                <dt className="text-neutral-400">Dernière erreur</dt>
-                <dd className="text-red-700">{connection.lastError}</dd>
-              </>
+          <div className="flex flex-col gap-2">
+            <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-tenderos-slate">
+              <dt className="text-tenderos-slate/70">Compte</dt>
+              <dd>{connection.externalAccountLabel ?? "—"}</dd>
+              <dt className="text-tenderos-slate/70">Connecté par</dt>
+              <dd>{connection.connectedBy}</dd>
+              <dt className="text-tenderos-slate/70">Dernière synchro</dt>
+              <dd>{connection.lastSuccessfulSyncAt ? new Date(connection.lastSuccessfulSyncAt).toLocaleString("fr-FR") : "Jamais"}</dd>
+              {connection.lastError ? (
+                <>
+                  <dt className="text-tenderos-slate/70">Dernière erreur</dt>
+                  <dd className="text-danger-fg">{connection.lastError}</dd>
+                </>
+              ) : null}
+            </dl>
+
+            {canManage || canUse ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {connection.status === "REAUTH_REQUIRED" && canManage ? (
+                  <Button type="button" variant="primary" size="sm" disabled={isPending} onClick={() => handleConnect(true)}>
+                    Reconnecter
+                  </Button>
+                ) : null}
+                <Button type="button" variant="secondary" size="sm" disabled={isPending} onClick={handleTestConnection}>
+                  Tester la connexion
+                </Button>
+                {canManage ? (
+                  <Button type="button" variant="danger" size="sm" disabled={isPending} onClick={handleDisconnect}>
+                    Déconnecter
+                  </Button>
+                ) : null}
+                {testMessage ? <span className="text-xs text-tenderos-slate">{testMessage}</span> : null}
+              </div>
             ) : null}
-          </dl>
 
-          {canManage || canUse ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {connection.status === "REAUTH_REQUIRED" && canManage ? (
-                <button type="button" disabled={isPending} onClick={() => handleConnect(true)} className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 hover:bg-amber-100 disabled:opacity-50">
-                  Reconnecter
-                </button>
-              ) : null}
-              <button type="button" disabled={isPending} onClick={handleTestConnection} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 disabled:opacity-50">
-                Tester la connexion
-              </button>
-              {canManage ? (
-                <button type="button" disabled={isPending} onClick={handleDisconnect} className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-800 hover:bg-red-100 disabled:opacity-50">
-                  Déconnecter
-                </button>
-              ) : null}
-              {testMessage ? <span className="text-xs text-neutral-600">{testMessage}</span> : null}
-            </div>
-          ) : null}
-
-          {connection.status === "ACTIVE" && canUse ? <BrowsePanel connectionId={connection.id} tenders={tenders} documents={documents} /> : null}
-        </div>
-      )}
-    </section>
+            {connection.status === "ACTIVE" && canUse ? <BrowsePanel connectionId={connection.id} tenders={tenders} documents={documents} /> : null}
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Button, Card } from "../../../../../../components/ui";
 import { CreatePromptTemplateForm } from "./create-prompt-template-form";
 
 export const metadata: Metadata = { title: "Nouveau template de prompt — TenderOS" };
@@ -6,8 +7,12 @@ export const metadata: Metadata = { title: "Nouveau template de prompt — Tende
 export default function NewPromptTemplatePage() {
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Nouveau template de prompt</h1>
-      <CreatePromptTemplateForm />
+      <Button variant="link" href="/app/ai-configuration/prompts" className="self-start">
+        ← Prompts
+      </Button>
+      <Card title="Nouveau template de prompt">
+        <CreatePromptTemplateForm />
+      </Card>
     </div>
   );
 }

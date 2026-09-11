@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
+import { PageHeader, SectionTabs } from "../../../../components/ui";
 
 const SUB_NAV_ITEMS = [
   { href: "/app/ai-configuration/models", label: "Modèles" },
@@ -11,23 +11,18 @@ const SUB_NAV_ITEMS = [
   { href: "/app/ai-configuration/document-themes", label: "Identité documentaire" },
 ];
 
-/** Sous-navigation locale à la section Configuration IA (Sprint 5.2) — un seul NAV_ITEMS de haut
- *  niveau pointe ici (même motif que le reste de l'app : pas de sur-imbrication de la nav
- *  principale). */
+/** Section Configuration IA (Sprint 5.2) : en-tête et onglets communs, puis la page de l'onglet —
+ *  même anatomie que la fiche appel d'offres (PageHeader puis barre d'onglets). Les pages ne
+ *  rendent donc jamais leur propre PageHeader : leur contenu vit dans des `Card`. */
 export default function AiConfigurationLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-col gap-4">
-      <nav className="flex gap-1 border-b border-neutral-200">
-        {SUB_NAV_ITEMS.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="rounded-t px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
-          >
-            {item.label}
-          </Link>
-        ))}
-      </nav>
+      <PageHeader
+        breadcrumb={[{ label: "Paramètres" }, { label: "Configuration IA" }]}
+        title="Configuration IA"
+        description="Modèles d'IA, prompts et modèles de documents utilisés par TenderOS."
+      />
+      <SectionTabs items={SUB_NAV_ITEMS} ariaLabel="Navigation de la configuration IA" />
       {children}
     </div>
   );

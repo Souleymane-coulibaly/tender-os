@@ -11,6 +11,7 @@ import type {
   SigningPowerSummary,
   SubcontractorDeclarationSummary,
 } from "../../../../../../../lib/administrative-dossier-types";
+import { PageHeader } from "../../../../../../../components/ui";
 import { ApiErrorState } from "../../../../api-error-state";
 import { AdministrativeStructuredSection } from "./administrative-structured-section";
 
@@ -79,13 +80,16 @@ export default async function AdministrativeStructuredPage({
 
     return (
       <div className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">Dossier structuré</h1>
-          <p className="text-sm text-tenderos-slate">
-            Groupement, DC1, DC2, DUME, sous-traitance, acte d&apos;engagement et pouvoirs de
-            signature — TenderOS assiste la saisie, la vérification finale reste humaine.
-          </p>
-        </div>
+        <PageHeader
+          breadcrumb={[
+            { label: "Appels d'offres", href: "/app/tenders" },
+            { label: "Dossier", href: `/app/tenders/${tenderId}` },
+            { label: "Dossier administratif", href: `/app/tenders/${tenderId}/administrative-dossier` },
+            { label: "Dossier structuré" },
+          ]}
+          title="Dossier structuré"
+          description="Groupement, DC1, DC2, DUME, sous-traitance, acte d'engagement et pouvoirs de signature — TenderOS assiste la saisie, la vérification finale reste humaine."
+        />
         <AdministrativeStructuredSection
           tenderId={tenderId}
           capabilities={capabilities}

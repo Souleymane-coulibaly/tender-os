@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Alert } from "../../../../../components/ui";
 import { getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import { CONNECTOR_PROVIDERS, canManageConnectors, canUseConnectors, type ExternalConnectionSummary } from "../../../../../lib/connectors-types";
 import { fetchDocumentsForPicker, fetchExternalConnections, fetchTendersForPicker } from "../../../connectors-actions";
@@ -35,10 +36,11 @@ export default async function ConnectorsPage({ searchParams }: { searchParams: P
 
   return (
     <div className="flex flex-col gap-6">
-      {params.connectorConnected ? <p role="status" className="rounded border border-green-300 bg-green-50 p-3 text-sm text-green-800">Connexion établie avec succès.</p> : null}
-      {params.connectorError ? <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">La connexion a échoué ({params.connectorError}). Réessayez.</p> : null}
+      {/* `Alert` porte lui-même role="status" (success) / role="alert" (danger), comme les <p> précédents. */}
+      {params.connectorConnected ? <Alert tone="success">Connexion établie avec succès.</Alert> : null}
+      {params.connectorError ? <Alert tone="danger">La connexion a échoué ({params.connectorError}). Réessayez.</Alert> : null}
 
-      <p className="text-sm text-neutral-600">
+      <p className="text-sm text-tenderos-slate">
         Connectez l&apos;environnement Microsoft 365 ou Google Workspace de votre organisation pour importer/exporter des documents et synchroniser les échéances calendrier. TenderOS reste la source de
         vérité métier — connecter n&apos;élargit jamais vos droits d&apos;accès aux Clients/Tenders.
       </p>

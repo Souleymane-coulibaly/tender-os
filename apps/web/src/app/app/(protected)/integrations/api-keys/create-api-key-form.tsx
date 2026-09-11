@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button, Checkbox, Input } from "../../../../../components/ui";
 import type { ClientAccountSummary } from "../../../../../lib/client-portfolio-types";
 import { API_KEY_SCOPES, API_KEY_SCOPE_LABELS, type ApiKeyScope } from "../../../../../lib/integrations-types";
 import { createApiKeyAction } from "../../../integrations-actions";
@@ -51,62 +52,44 @@ export function CreateApiKeyForm({ clients }: { clients: ClientAccountSummary[] 
     return (
       <div className="flex flex-col gap-3">
         <CopySecretBox label="Clé API" value={created.fullKey} />
-        <button type="button" onClick={() => setCreated(undefined)} className="self-start rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">
+        <Button type="button" variant="secondary" size="sm" onClick={() => setCreated(undefined)} className="self-start">
           Créer une autre clé
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <label htmlFor="api-key-name" className="text-sm font-medium text-neutral-700">
-        Nom
-      </label>
-      <input
-        id="api-key-name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="ex. n8n production"
-        className="max-w-md rounded border border-neutral-300 px-3 py-2 text-sm"
-      />
+      <Input id="api-key-name" label="Nom" value={name} onChange={(e) => setName(e.target.value)} placeholder="ex. n8n production" wrapperClassName="max-w-md" />
 
-      <span className="text-sm font-medium text-neutral-700">Scopes</span>
+      <span className="text-sm font-medium text-tenderos-navy">Scopes</span>
       <div className="flex flex-wrap gap-x-4 gap-y-2">
         {API_KEY_SCOPES.map((scope) => (
-          <label key={scope} className="flex items-center gap-1.5 text-sm text-neutral-700">
-            <input type="checkbox" checked={scopes.includes(scope)} onChange={() => toggleScope(scope)} />
-            {API_KEY_SCOPE_LABELS[scope]}
-          </label>
+          <Checkbox key={scope} label={API_KEY_SCOPE_LABELS[scope]} checked={scopes.includes(scope)} onChange={() => toggleScope(scope)} />
         ))}
       </div>
 
-      <span className="text-sm font-medium text-neutral-700">Restriction client (facultatif)</span>
-      <p className="text-xs text-neutral-500">Aucune sélection = accès à toute l&apos;organisation (selon les scopes). Une sélection restreint strictement aux clients cochés.</p>
+      <span className="text-sm font-medium text-tenderos-navy">Restriction client (facultatif)</span>
+      <p className="text-xs text-tenderos-slate">Aucune sélection = accès à toute l&apos;organisation (selon les scopes). Une sélection restreint strictement aux clients cochés.</p>
       {clients.length === 0 ? (
-        <p className="text-xs text-neutral-500">Aucun client actif.</p>
+        <p className="text-xs text-tenderos-slate">Aucun client actif.</p>
       ) : (
-        <div className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded border border-neutral-200 p-2">
+        <div className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg border border-tenderos-navy/10 p-2">
           {clients.map((client) => (
-            <label key={client.id} className="flex items-center gap-1.5 text-sm text-neutral-700">
-              <input type="checkbox" checked={allowedClientAccountIds.includes(client.id)} onChange={() => toggleClient(client.id)} />
-              {client.name}
-            </label>
+            <Checkbox key={client.id} label={client.name} checked={allowedClientAccountIds.includes(client.id)} onChange={() => toggleClient(client.id)} />
           ))}
         </div>
       )}
 
-      <label htmlFor="api-key-expires" className="text-sm font-medium text-neutral-700">
-        Expiration (facultatif)
-      </label>
-      <input id="api-key-expires" type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="max-w-xs rounded border border-neutral-300 px-3 py-2 text-sm" />
+      <Input id="api-key-expires" label="Expiration (facultatif)" type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} wrapperClassName="max-w-xs" />
 
-      <button type="button" disabled={isPending} onClick={handleCreate} className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+      <Button type="button" variant="primary" disabled={isPending} onClick={handleCreate} className="self-start">
         {isPending ? "Création..." : "Créer la clé"}
-      </button>
+      </Button>
 
       {error ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger-fg">
           {error}
         </p>
       ) : null}

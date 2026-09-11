@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Button, Card } from "../../../../../../components/ui";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
 import { DELIVERABLE_TYPE_LABELS, canManageDeliverableTemplates } from "../../../../../../lib/deliverable-types";
 import type { DeliverableTemplateSummary } from "../../../../deliverable-actions";
@@ -31,31 +32,29 @@ export default async function DeliverableTemplateDetailPage({ params }: { params
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">{template.name}</h1>
-        <p className="text-sm text-neutral-600">
-          {DELIVERABLE_TYPE_LABELS[template.documentType] ?? template.documentType} — {template.scopeLevel}
-        </p>
-        {template.note ? <p className="mt-1 text-sm italic text-neutral-500">{template.note}</p> : null}
-      </div>
+      <Button variant="link" href="/app/ai-configuration/deliverable-templates" className="self-start">
+        ← Templates de mémoire
+      </Button>
 
-      <section className="rounded border border-neutral-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-900">Version active</h2>
-        {template.activeVersion ? (
-          <div className="flex flex-col gap-2">
-            <span className="text-sm text-neutral-700">v{template.activeVersion.version}</span>
-            <pre className="overflow-x-auto rounded bg-neutral-50 p-3 text-xs text-neutral-700">{JSON.stringify(template.activeVersion.sections, null, 2)}</pre>
-          </div>
-        ) : (
-          <p className="text-sm text-amber-700">Aucune version active — les Mémoires techniques de ce type resteront sans section tant qu&apos;aucune version n&apos;est activée.</p>
-        )}
-      </section>
+      <Card title={template.name} description={`${DELIVERABLE_TYPE_LABELS[template.documentType] ?? template.documentType} — ${template.scopeLevel}`}>
+        <div className="flex flex-col gap-3">
+          {template.note ? <p className="text-sm italic text-tenderos-slate">{template.note}</p> : null}
+          <h3 className="text-sm font-semibold text-tenderos-navy">Version active</h3>
+          {template.activeVersion ? (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm text-tenderos-navy">v{template.activeVersion.version}</span>
+              <pre className="overflow-x-auto rounded-lg bg-tenderos-light p-3 text-xs text-tenderos-navy">{JSON.stringify(template.activeVersion.sections, null, 2)}</pre>
+            </div>
+          ) : (
+            <p className="text-sm text-warning-fg">Aucune version active — les Mémoires techniques de ce type resteront sans section tant qu&apos;aucune version n&apos;est activée.</p>
+          )}
+        </div>
+      </Card>
 
       {canManage ? (
-        <section className="rounded border border-neutral-200 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-neutral-900">Gestion des versions</h2>
+        <Card title="Gestion des versions">
           <DeliverableTemplateVersionManager templateId={template.id} defaultSections={defaultSections} />
-        </section>
+        </Card>
       ) : null}
     </div>
   );

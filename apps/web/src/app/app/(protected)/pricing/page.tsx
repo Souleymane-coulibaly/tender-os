@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PageHeader } from "../../../../components/ui";
 import { appApiFetch } from "../../../../lib/app-api-client";
 import type { OrganizationCostSummary } from "../../../../lib/pricing-types";
 import { ApiErrorState } from "../api-error-state";
@@ -16,13 +17,11 @@ export default async function OrganizationPricingPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">Coûts IA</h1>
-        <p className="text-sm text-neutral-600">
-          Coût technique IA réel agrégé par client et par type de tâche. Réservé aux propriétaires et administrateurs
-          d&apos;organisation. Aucun montant affiché ici n&apos;est un prix réel garanti du marché.
-        </p>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Coûts IA" }]}
+        title="Coûts IA"
+        description="Coût technique IA réel agrégé par client et par type de tâche. Réservé aux propriétaires et administrateurs d'organisation. Aucun montant affiché ici n'est un prix réel garanti du marché."
+      />
       <OrganizationPricingSection summary={summary} />
     </div>
   );

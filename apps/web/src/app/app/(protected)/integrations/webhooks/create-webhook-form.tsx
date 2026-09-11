@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button, Checkbox, Input } from "../../../../../components/ui";
 import type { ClientAccountSummary } from "../../../../../lib/client-portfolio-types";
 import { GOVERNED_WEBHOOK_EVENT_TYPES, WEBHOOK_EVENT_TYPE_LABELS, type GovernedWebhookEventType } from "../../../../../lib/integrations-types";
 import { createWebhookAction } from "../../../integrations-actions";
@@ -49,69 +50,60 @@ export function CreateWebhookForm({ clients }: { clients: ClientAccountSummary[]
     return (
       <div className="flex flex-col gap-3">
         <CopySecretBox label="Secret de signature (whsec_…)" value={created.secret} />
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-tenderos-slate">
           Utilisez ce secret pour vérifier la signature HMAC-SHA256 des en-têtes <code>X-TenderOS-Signature</code>. Il ne sera plus jamais affiché.
         </p>
-        <button type="button" onClick={() => router.push(`/app/integrations/webhooks/${created.subscriptionId}`)} className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white">
+        <Button type="button" variant="primary" onClick={() => router.push(`/app/integrations/webhooks/${created.subscriptionId}`)} className="self-start">
           Voir le webhook
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <label htmlFor="webhook-url" className="text-sm font-medium text-neutral-700">
-        URL de destination
-      </label>
-      <input
-        id="webhook-url"
-        value={endpointUrl}
-        onChange={(e) => setEndpointUrl(e.target.value)}
-        placeholder="https://…"
-        className="max-w-md rounded border border-neutral-300 px-3 py-2 text-sm"
-      />
+      <Input id="webhook-url" label="URL de destination" value={endpointUrl} onChange={(e) => setEndpointUrl(e.target.value)} placeholder="https://…" wrapperClassName="max-w-md" />
 
-      <label htmlFor="webhook-description" className="text-sm font-medium text-neutral-700">
-        Description (facultatif)
-      </label>
-      <input id="webhook-description" value={description} onChange={(e) => setDescription(e.target.value)} className="max-w-md rounded border border-neutral-300 px-3 py-2 text-sm" />
+      <Input id="webhook-description" label="Description (facultatif)" value={description} onChange={(e) => setDescription(e.target.value)} wrapperClassName="max-w-md" />
 
-      <span className="text-sm font-medium text-neutral-700">Événements</span>
+      <span className="text-sm font-medium text-tenderos-navy">Événements</span>
       <div className="flex flex-col gap-1.5">
         {GOVERNED_WEBHOOK_EVENT_TYPES.map((eventType) => (
-          <label key={eventType} className="flex items-center gap-1.5 text-sm text-neutral-700">
-            <input type="checkbox" checked={events.includes(eventType)} onChange={() => toggleEvent(eventType)} />
-            {WEBHOOK_EVENT_TYPE_LABELS[eventType]}
-            <code className="text-xs text-neutral-400">{eventType}</code>
-          </label>
+          <Checkbox
+            key={eventType}
+            checked={events.includes(eventType)}
+            onChange={() => toggleEvent(eventType)}
+            label={
+              <>
+                {WEBHOOK_EVENT_TYPE_LABELS[eventType]}
+                <code className="font-mono text-xs text-tenderos-slate/70">{eventType}</code>
+              </>
+            }
+          />
         ))}
       </div>
 
-      <span className="text-sm font-medium text-neutral-700">Restriction client (facultatif)</span>
-      <p className="text-xs text-neutral-500">
+      <span className="text-sm font-medium text-tenderos-navy">Restriction client (facultatif)</span>
+      <p className="text-xs text-tenderos-slate">
         Aucune sélection = tous les événements de l&apos;organisation. Une sélection restreint aux clients cochés (uniquement pour les événements portant un client :{" "}
         {WEBHOOK_EVENT_TYPE_LABELS["tender.created"]}, {WEBHOOK_EVENT_TYPE_LABELS["response_package.validated"]}, {WEBHOOK_EVENT_TYPE_LABELS["response_package.generated"]}).
       </p>
       {clients.length === 0 ? (
-        <p className="text-xs text-neutral-500">Aucun client actif.</p>
+        <p className="text-xs text-tenderos-slate">Aucun client actif.</p>
       ) : (
-        <div className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded border border-neutral-200 p-2">
+        <div className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg border border-tenderos-navy/10 p-2">
           {clients.map((client) => (
-            <label key={client.id} className="flex items-center gap-1.5 text-sm text-neutral-700">
-              <input type="checkbox" checked={allowedClientAccountIds.includes(client.id)} onChange={() => toggleClient(client.id)} />
-              {client.name}
-            </label>
+            <Checkbox key={client.id} label={client.name} checked={allowedClientAccountIds.includes(client.id)} onChange={() => toggleClient(client.id)} />
           ))}
         </div>
       )}
 
-      <button type="button" disabled={isPending} onClick={handleCreate} className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+      <Button type="button" variant="primary" disabled={isPending} onClick={handleCreate} className="self-start">
         {isPending ? "Création..." : "Créer le webhook"}
-      </button>
+      </Button>
 
       {error ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger-fg">
           {error}
         </p>
       ) : null}

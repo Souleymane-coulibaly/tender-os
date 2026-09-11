@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Button } from "../../../../../components/ui";
 import { revokeApiKeyAction } from "../../../integrations-actions";
 
 export function RevokeApiKeyButton({ apiKeyId }: { apiKeyId: string }) {
@@ -10,23 +11,25 @@ export function RevokeApiKeyButton({ apiKeyId }: { apiKeyId: string }) {
 
   if (!confirming) {
     return (
-      <button type="button" onClick={() => setConfirming(true)} className="rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">
+      <Button type="button" variant="danger" size="sm" onClick={() => setConfirming(true)}>
         Révoquer
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-red-200 p-3">
-      <p className="text-sm font-medium text-red-800">Révoquer cette clé ? L&apos;effet est immédiat et irréversible.</p>
+    <div className="flex flex-col gap-2 rounded-lg bg-danger-bg p-3">
+      <p className="text-sm font-medium text-danger-fg">Révoquer cette clé ? L&apos;effet est immédiat et irréversible.</p>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
       <div className="flex gap-2">
-        <button
+        <Button
           type="button"
+          variant="danger"
+          size="sm"
           disabled={isPending}
           onClick={() =>
             startTransition(async () => {
@@ -35,13 +38,12 @@ export function RevokeApiKeyButton({ apiKeyId }: { apiKeyId: string }) {
               else setConfirming(false);
             })
           }
-          className="rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
         >
           {isPending ? "Révocation..." : "Confirmer la révocation"}
-        </button>
-        <button type="button" onClick={() => setConfirming(false)} className="rounded px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100">
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)}>
           Annuler
-        </button>
+        </Button>
       </div>
     </div>
   );

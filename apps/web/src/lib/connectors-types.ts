@@ -1,3 +1,5 @@
+import type { BadgeTone } from "../components/ui";
+
 export const CONNECTOR_PROVIDERS = ["MICROSOFT_365", "GOOGLE_WORKSPACE"] as const;
 export type ConnectorProvider = (typeof CONNECTOR_PROVIDERS)[number];
 
@@ -20,18 +22,14 @@ export const CONNECTION_STATUS_LABELS: Record<ConnectionStatus, string> = {
   REVOKED: "Déconnecté",
 };
 
-export function connectionStatusBadgeClass(status: ConnectionStatus): string {
-  switch (status) {
-    case "ACTIVE":
-      return "bg-green-100 text-green-800";
-    case "REAUTH_REQUIRED":
-      return "bg-amber-100 text-amber-800";
-    case "PENDING":
-      return "bg-neutral-200 text-neutral-700";
-    case "REVOKED":
-      return "bg-neutral-200 text-neutral-500";
-  }
-}
+/** Design System — ton du `<Badge>` par statut de connexion (remplace l'ancien
+ *  `connectionStatusBadgeClass()`, classes Tailwind brutes ; mêmes couleurs sémantiques). */
+export const CONNECTION_STATUS_TONE: Record<ConnectionStatus, BadgeTone> = {
+  ACTIVE: "success",
+  REAUTH_REQUIRED: "warning",
+  PENDING: "neutral",
+  REVOKED: "neutral",
+};
 
 export type ExternalConnectionSummary = {
   id: string;

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Card } from "../../../../../components/ui";
 import { fetchAiModelPreferences } from "../../../ai-routing-actions";
 import { CONFIGURABLE_AI_FEATURES } from "../../../../../lib/ai-routing-types";
 import { ApiErrorState } from "../../api-error-state";
@@ -25,21 +26,23 @@ export default async function AiModelPreferencesPage() {
 
   return (
     <div className="flex max-w-2xl flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold text-neutral-900">Choix des modèles</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          TenderOS choisit automatiquement le meilleur modèle selon la nature de chaque tâche. Vous pouvez modifier ce choix pour les
-          fonctionnalités ci-dessous, lorsque c&apos;est possible.
-        </p>
-      </div>
-
-      <div className="flex flex-col divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white">
-        {CONFIGURABLE_AI_FEATURES.map((feature) => {
-          const preference = byTaskType.get(feature.taskType);
-          if (!preference) return null;
-          return <AiPreferenceRow key={feature.taskType} label={feature.label} preference={preference} />;
-        })}
-      </div>
+      <Card
+        title="Choix des modèles"
+        description={
+          <>
+            TenderOS choisit automatiquement le meilleur modèle selon la nature de chaque tâche. Vous pouvez modifier ce choix pour les
+            fonctionnalités ci-dessous, lorsque c&apos;est possible.
+          </>
+        }
+      >
+        <div className="flex flex-col divide-y divide-tenderos-navy/10 rounded-lg border border-tenderos-navy/10">
+          {CONFIGURABLE_AI_FEATURES.map((feature) => {
+            const preference = byTaskType.get(feature.taskType);
+            if (!preference) return null;
+            return <AiPreferenceRow key={feature.taskType} label={feature.label} preference={preference} />;
+          })}
+        </div>
+      </Card>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Badge, Card, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "../../../../../components/ui";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import { DELIVERABLE_TYPE_LABELS, canManageDeliverableTemplates } from "../../../../../lib/deliverable-types";
 import type { DeliverableTemplateSummary } from "../../../deliverable-actions";
@@ -27,53 +28,46 @@ export default async function DeliverableTemplatesListPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">Templates de mémoire</h1>
-        <p className="text-sm text-neutral-600">Structure des sections du Mémoire technique/de la Synthèse exécutive — obligatoires/facultatives, instructions, type de génération IA. Réservé OWNER/Administrateur.</p>
-      </div>
-
-      {templates.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucun template pour l&apos;instant.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="py-2 pr-4">Nom</th>
-                <th className="py-2 pr-4">Type de document</th>
-                <th className="py-2 pr-4">Palier</th>
-                <th className="py-2 pr-4">Version active</th>
-              </tr>
-            </thead>
-            <tbody>
+      <Card
+        title="Templates de mémoire"
+        description="Structure des sections du Mémoire technique/de la Synthèse exécutive — obligatoires/facultatives, instructions, type de génération IA. Réservé OWNER/Administrateur."
+      >
+        {templates.length === 0 ? (
+          <p className="text-sm text-tenderos-slate">Aucun template pour l&apos;instant.</p>
+        ) : (
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableHeaderCell>Nom</TableHeaderCell>
+                <TableHeaderCell>Type de document</TableHeaderCell>
+                <TableHeaderCell>Palier</TableHeaderCell>
+                <TableHeaderCell>Version active</TableHeaderCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
               {templates.map((template) => (
-                <tr key={template.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4">
-                    <Link href={`/app/ai-configuration/deliverable-templates/${template.id}`} className="font-medium text-neutral-900 hover:underline">
+                <TableRow key={template.id}>
+                  <TableCell>
+                    <Link href={`/app/ai-configuration/deliverable-templates/${template.id}`} className="font-medium text-tenderos-navy hover:underline">
                       {template.name}
                     </Link>
-                  </td>
-                  <td className="py-2 pr-4 text-neutral-600">{DELIVERABLE_TYPE_LABELS[template.documentType] ?? template.documentType}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{template.scopeLevel}</td>
-                  <td className="py-2 pr-4 text-neutral-600">
-                    {template.activeVersion ? (
-                      `v${template.activeVersion.version}`
-                    ) : (
-                      <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Aucune version active</span>
-                    )}
-                  </td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="text-tenderos-slate">{DELIVERABLE_TYPE_LABELS[template.documentType] ?? template.documentType}</TableCell>
+                  <TableCell className="text-tenderos-slate">{template.scopeLevel}</TableCell>
+                  <TableCell className="text-tenderos-slate">
+                    {template.activeVersion ? `v${template.activeVersion.version}` : <Badge tone="warning">Aucune version active</Badge>}
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
 
       {canManage ? (
-        <section className="rounded border border-neutral-200 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-neutral-900">Nouveau template</h2>
+        <Card title="Nouveau template">
           <CreateDeliverableTemplateForm />
-        </section>
+        </Card>
       ) : null}
     </div>
   );

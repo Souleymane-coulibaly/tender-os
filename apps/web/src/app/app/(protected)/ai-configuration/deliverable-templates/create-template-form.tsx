@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button, Input, Select, Textarea } from "../../../../../components/ui";
 import { createDeliverableTemplateAction } from "../../../deliverable-actions";
 import { DELIVERABLE_TYPE_LABELS } from "../../../../../lib/deliverable-types";
 
@@ -37,30 +38,21 @@ export function CreateDeliverableTemplateForm() {
 
   return (
     <div className="flex flex-col gap-3">
-      <label htmlFor="documentType" className="text-sm font-medium text-neutral-700">
-        Type de document
-      </label>
-      <select id="documentType" value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="max-w-md rounded border border-neutral-300 px-3 py-2 text-sm">
+      <Select id="documentType" label="Type de document" value={documentType} onChange={(e) => setDocumentType(e.target.value)} wrapperClassName="max-w-md">
         <option value="TECHNICAL_MEMO">{DELIVERABLE_TYPE_LABELS.TECHNICAL_MEMO}</option>
         <option value="EXECUTIVE_SUMMARY">{DELIVERABLE_TYPE_LABELS.EXECUTIVE_SUMMARY}</option>
-      </select>
+      </Select>
 
-      <label htmlFor="name" className="text-sm font-medium text-neutral-700">
-        Nom
-      </label>
-      <input id="name" value={name} onChange={(e) => setName(e.target.value)} className="max-w-md rounded border border-neutral-300 px-3 py-2 text-sm" />
+      <Input id="name" label="Nom" value={name} onChange={(e) => setName(e.target.value)} wrapperClassName="max-w-md" />
 
-      <label htmlFor="sections" className="text-sm font-medium text-neutral-700">
-        Sections (JSON)
-      </label>
-      <textarea id="sections" value={sections} onChange={(e) => setSections(e.target.value)} rows={12} className="rounded border border-neutral-300 px-3 py-2 font-mono text-xs" />
+      <Textarea id="sections" label="Sections (JSON)" value={sections} onChange={(e) => setSections(e.target.value)} rows={12} className="font-mono" />
 
-      <button type="button" disabled={isPending} onClick={handleCreate} className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+      <Button type="button" variant="primary" disabled={isPending} onClick={handleCreate} className="self-start">
         {isPending ? "Création..." : "Créer le template"}
-      </button>
+      </Button>
 
       {error ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger-fg">
           {error}
         </p>
       ) : null}

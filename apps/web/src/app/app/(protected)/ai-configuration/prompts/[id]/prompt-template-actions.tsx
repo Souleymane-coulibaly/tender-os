@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button, Card, FieldWrapper, Textarea } from "../../../../../../components/ui";
 import { activatePromptVersionAction, archivePromptTemplateAction, createPromptVersionAction, type FormActionState } from "../../../../generation-actions";
 
 const INITIAL_STATE: FormActionState = {};
@@ -11,30 +12,34 @@ export function CreatePromptVersionForm({ templateId }: { templateId: string }) 
   const [state, formAction, isPending] = useActionState(action, INITIAL_STATE);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3 rounded border border-neutral-200 p-4">
-      <h3 className="text-sm font-semibold text-neutral-900">Nouvelle version</h3>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="systemPrompt" className="text-sm font-medium text-neutral-700">
-          Prompt système *
-        </label>
-        <textarea id="systemPrompt" name="systemPrompt" required rows={3} className="rounded border border-neutral-300 px-3 py-2 text-sm" />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="userPromptTemplate" className="text-sm font-medium text-neutral-700">
-          Prompt utilisateur * (variables : <code>{"{{tender.title}}"}</code>, <code>{"{{client.name}}"}</code>,{" "}
-          <code>{"{{analysis.scoringCriteria}}"}</code>, …)
-        </label>
-        <textarea id="userPromptTemplate" name="userPromptTemplate" required rows={6} className="rounded border border-neutral-300 px-3 py-2 text-sm" />
-      </div>
-      {state.error ? (
-        <p role="alert" className="text-sm text-red-600">
-          {state.error}
-        </p>
-      ) : null}
-      <button type="submit" disabled={isPending} className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
-        {isPending ? "Création..." : "Créer la version (brouillon)"}
-      </button>
-    </form>
+    <Card title="Nouvelle version" padding="tight">
+      <form action={formAction} className="flex flex-col gap-3">
+        <Textarea label="Prompt système" id="systemPrompt" name="systemPrompt" required rows={3} />
+        {/* Libellé riche (balises `<code>`) : `Textarea` n'accepte qu'un libellé texte, d'où
+            `FieldWrapper` directement — même rendu, astérisque conservé à sa place d'origine. */}
+        <FieldWrapper
+          label={
+            <>
+              Prompt utilisateur
+              <span className="ml-0.5 text-danger-fg" aria-hidden="true">
+                *
+              </span>{" "}
+              (variables : <code>{"{{tender.title}}"}</code>, <code>{"{{client.name}}"}</code>, <code>{"{{analysis.scoringCriteria}}"}</code>, …)
+            </>
+          }
+        >
+          <Textarea id="userPromptTemplate" name="userPromptTemplate" required rows={6} />
+        </FieldWrapper>
+        {state.error ? (
+          <p role="alert" className="text-sm text-danger-fg">
+            {state.error}
+          </p>
+        ) : null}
+        <Button type="submit" variant="primary" disabled={isPending} className="self-start">
+          {isPending ? "Création..." : "Créer la version (brouillon)"}
+        </Button>
+      </form>
+    </Card>
   );
 }
 
@@ -53,16 +58,11 @@ export function PromptVersionActivateButton({ templateId, versionId }: { templat
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <button
-        type="button"
-        onClick={handleActivate}
-        disabled={isPending}
-        className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-      >
+      <Button type="button" variant="primary" onClick={handleActivate} disabled={isPending}>
         {isPending ? "Activation..." : "Activer"}
-      </button>
+      </Button>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
@@ -86,29 +86,24 @@ export function ArchivePromptTemplateButton({ templateId }: { templateId: string
 
   if (!confirming) {
     return (
-      <button type="button" onClick={() => setConfirming(true)} className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50">
+      <Button type="button" variant="danger" onClick={() => setConfirming(true)}>
         Archiver
-      </button>
+      </Button>
     );
   }
 
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={handleArchive}
-          disabled={isPending}
-          className="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <Button type="button" variant="danger" onClick={handleArchive} disabled={isPending}>
           {isPending ? "Archivage..." : "Confirmer l'archivage"}
-        </button>
-        <button type="button" onClick={() => setConfirming(false)} className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700">
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => setConfirming(false)}>
           Annuler
-        </button>
+        </Button>
       </div>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}

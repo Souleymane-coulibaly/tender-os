@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import { Badge, Card, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "../../../../../components/ui";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import type { ClientAccountSummary, ClientPortfolioPage } from "../../../../../lib/client-portfolio-types";
-import { API_KEY_SCOPE_LABELS, API_KEY_STATUS_LABELS, apiKeyStatusBadgeClass, canManageIntegrations, type ApiKeySummary } from "../../../../../lib/integrations-types";
+import { API_KEY_SCOPE_LABELS, API_KEY_STATUS_LABELS, API_KEY_STATUS_TONE, canManageIntegrations, type ApiKeySummary } from "../../../../../lib/integrations-types";
 import { fetchApiKeys } from "../../../integrations-actions";
 import { fetchEntitlements } from "../../../billing-actions";
 import { ApiErrorState } from "../../api-error-state";
@@ -37,54 +38,50 @@ export default async function ApiKeysPage() {
     <div className="flex flex-col gap-6">
       {canManage ? (
         hasPublicApiEntitlement ? (
-          <section className="rounded border border-neutral-200 p-4">
-            <h2 className="mb-3 text-sm font-semibold">Nouvelle clé API</h2>
+          <Card title="Nouvelle clé API">
             <CreateApiKeyForm clients={clients} />
-          </section>
+          </Card>
         ) : (
           <EntitlementUpgradeNotice featureLabel="L'accès à l'API publique" />
         )
       ) : null}
 
-      <section>
-        <h2 className="mb-2 text-sm font-semibold">Clés existantes</h2>
+      <Card title="Clés existantes">
         {apiKeys.length === 0 ? (
-          <p className="text-sm text-neutral-600">Aucune clé API pour l&apos;instant.</p>
+          <p className="text-sm text-tenderos-slate">Aucune clé API pour l&apos;instant.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                  <th className="py-2 pr-4">Nom</th>
-                  <th className="py-2 pr-4">Préfixe</th>
-                  <th className="py-2 pr-4">Scopes</th>
-                  <th className="py-2 pr-4">Restriction client</th>
-                  <th className="py-2 pr-4">Statut</th>
-                  <th className="py-2 pr-4">Dernière utilisation</th>
-                  {canManage ? <th className="py-2 pr-4">Actions</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {apiKeys.map((key) => (
-                  <tr key={key.id} className="border-b border-neutral-100">
-                    <td className="py-2 pr-4 font-medium text-neutral-900">{key.name}</td>
-                    <td className="py-2 pr-4">
-                      <code className="text-xs text-neutral-600">{key.keyPrefix}…</code>
-                    </td>
-                    <td className="py-2 pr-4 text-neutral-600">{key.scopes.map((scope) => API_KEY_SCOPE_LABELS[scope] ?? scope).join(", ")}</td>
-                    <td className="py-2 pr-4 text-neutral-600">{key.allowedClientAccountIds.length === 0 ? "Toute l'organisation" : `${key.allowedClientAccountIds.length} client(s)`}</td>
-                    <td className="py-2 pr-4">
-                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${apiKeyStatusBadgeClass(key.status)}`}>{API_KEY_STATUS_LABELS[key.status]}</span>
-                    </td>
-                    <td className="py-2 pr-4 text-neutral-600">{key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString("fr-FR") : "Jamais"}</td>
-                    {canManage ? <td className="py-2 pr-4">{key.status === "ACTIVE" ? <RevokeApiKeyButton apiKeyId={key.id} /> : null}</td> : null}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableHeaderCell>Nom</TableHeaderCell>
+                <TableHeaderCell>Préfixe</TableHeaderCell>
+                <TableHeaderCell>Scopes</TableHeaderCell>
+                <TableHeaderCell>Restriction client</TableHeaderCell>
+                <TableHeaderCell>Statut</TableHeaderCell>
+                <TableHeaderCell>Dernière utilisation</TableHeaderCell>
+                {canManage ? <TableHeaderCell>Actions</TableHeaderCell> : null}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {apiKeys.map((key) => (
+                <TableRow key={key.id}>
+                  <TableCell className="font-medium text-tenderos-navy">{key.name}</TableCell>
+                  <TableCell>
+                    <code className="text-xs text-tenderos-slate">{key.keyPrefix}…</code>
+                  </TableCell>
+                  <TableCell className="text-tenderos-slate">{key.scopes.map((scope) => API_KEY_SCOPE_LABELS[scope] ?? scope).join(", ")}</TableCell>
+                  <TableCell className="text-tenderos-slate">{key.allowedClientAccountIds.length === 0 ? "Toute l'organisation" : `${key.allowedClientAccountIds.length} client(s)`}</TableCell>
+                  <TableCell>
+                    <Badge tone={API_KEY_STATUS_TONE[key.status]}>{API_KEY_STATUS_LABELS[key.status]}</Badge>
+                  </TableCell>
+                  <TableCell className="text-tenderos-slate">{key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString("fr-FR") : "Jamais"}</TableCell>
+                  {canManage ? <TableCell>{key.status === "ACTIVE" ? <RevokeApiKeyButton apiKeyId={key.id} /> : null}</TableCell> : null}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
-      </section>
+      </Card>
     </div>
   );
 }

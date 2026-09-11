@@ -17,7 +17,20 @@ import {
   type FieldType,
 } from "../../../../../lib/document-generation-types";
 import { VERSION_STATUS_LABELS } from "../../../../../lib/version-status";
-import { FileInput } from "../../../../../components/ui/file-input";
+import {
+  Button,
+  Card,
+  Checkbox,
+  FileInput,
+  Input,
+  Select,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+} from "../../../../../components/ui";
 
 const INITIAL_STATE: FormActionState = {};
 const FIELD_TYPES = Object.keys(FIELD_TYPE_LABELS) as FieldType[];
@@ -28,52 +41,41 @@ function CreateTemplateForm() {
     INITIAL_STATE,
   );
   return (
-    <form
-      action={formAction}
-      className="flex flex-wrap items-end gap-2 rounded border border-neutral-200 p-3"
-    >
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-neutral-600">Nom</label>
-        <input
+    <Card padding="tight">
+      <form action={formAction} className="flex flex-wrap items-end gap-2">
+        <Input
+          label="Nom"
           name="name"
           type="text"
           required
           placeholder="Modèle de mémoire technique..."
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          wrapperClassName="min-w-[10rem] flex-1"
         />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-neutral-600">Portée</label>
-        <select
+        <Select
+          label="Portée"
           name="scope"
           defaultValue="ORGANIZATION"
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          wrapperClassName="shrink-0 grow-0 basis-40"
         >
           <option value="ORGANIZATION">Organisation</option>
           <option value="SYSTEM">Système</option>
-        </select>
-      </div>
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-neutral-600">Description</label>
-        <input
+        </Select>
+        <Input
+          label="Description"
           name="description"
           type="text"
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          wrapperClassName="min-w-[10rem] flex-1"
         />
-      </div>
-      <button
-        type="submit"
-        disabled={isPending}
-        className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-      >
-        {isPending ? "Création..." : "Créer le template"}
-      </button>
-      {state.error ? (
-        <p role="alert" className="text-xs text-red-600">
-          {state.error}
-        </p>
-      ) : null}
-    </form>
+        <Button type="submit" variant="primary" disabled={isPending}>
+          {isPending ? "Création..." : "Créer le template"}
+        </Button>
+        {state.error ? (
+          <p role="alert" className="text-xs text-danger-fg">
+            {state.error}
+          </p>
+        ) : null}
+      </form>
+    </Card>
   );
 }
 
@@ -96,60 +98,54 @@ function FieldMappingEditor({
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs text-neutral-600">
+      <p className="text-xs text-tenderos-slate">
         Field Mapping — un placeholder doit correspondre EXACTEMENT à un tag présent dans le fichier
-        (ex. <code className="rounded bg-neutral-100 px-1">tender.reference</code> pour{" "}
-        <code className="rounded bg-neutral-100 px-1">{"{{tender.reference}}"}</code>).
+        (ex. <code className="rounded bg-tenderos-light px-1">tender.reference</code> pour{" "}
+        <code className="rounded bg-tenderos-light px-1">{"{{tender.reference}}"}</code>).
       </p>
       {rows.map((row, index) => (
         <div key={index} className="flex flex-wrap items-center gap-2">
-          <input
-            placeholder="clé (ex. tender.reference)"
-            value={row.fieldKey}
-            onChange={(e) => updateRow(index, { fieldKey: e.target.value })}
-            className="w-56 rounded border border-neutral-300 px-2 py-1 text-sm"
-          />
-          <input
-            placeholder="Libellé"
-            value={row.label}
-            onChange={(e) => updateRow(index, { label: e.target.value })}
-            className="w-40 rounded border border-neutral-300 px-2 py-1 text-sm"
-          />
-          <select
-            value={row.fieldType}
-            onChange={(e) => updateRow(index, { fieldType: e.target.value })}
-            className="rounded border border-neutral-300 px-2 py-1 text-sm"
-          >
-            {FIELD_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {FIELD_TYPE_LABELS[type]}
-              </option>
-            ))}
-          </select>
-          <label className="flex items-center gap-1 text-xs text-neutral-700">
-            <input
-              type="checkbox"
-              checked={row.required}
-              onChange={(e) => updateRow(index, { required: e.target.checked })}
+          {/* Largeur portée par un conteneur : `Input`/`Select` sans `label` rendent le contrôle nu
+              en `w-full`, sans appliquer `wrapperClassName`. */}
+          <div className="w-56">
+            <Input
+              placeholder="clé (ex. tender.reference)"
+              value={row.fieldKey}
+              onChange={(e) => updateRow(index, { fieldKey: e.target.value })}
             />
-            Requis
-          </label>
-          <button
-            type="button"
-            onClick={() => removeRow(index)}
-            className="text-xs text-red-700 hover:underline"
-          >
+          </div>
+          <div className="w-40">
+            <Input
+              placeholder="Libellé"
+              value={row.label}
+              onChange={(e) => updateRow(index, { label: e.target.value })}
+            />
+          </div>
+          <div className="w-40">
+            <Select
+              value={row.fieldType}
+              onChange={(e) => updateRow(index, { fieldType: e.target.value })}
+            >
+              {FIELD_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {FIELD_TYPE_LABELS[type]}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <Checkbox
+            label="Requis"
+            checked={row.required}
+            onChange={(e) => updateRow(index, { required: e.target.checked })}
+          />
+          <Button type="button" variant="danger" size="sm" onClick={() => removeRow(index)}>
             Retirer
-          </button>
+          </Button>
         </div>
       ))}
-      <button
-        type="button"
-        onClick={addRow}
-        className="self-start text-xs text-neutral-700 hover:underline"
-      >
+      <Button type="button" variant="link" onClick={addRow} className="self-start text-xs">
         + Ajouter un champ
-      </button>
+      </Button>
     </div>
   );
 }
@@ -190,29 +186,22 @@ function UploadVersionForm({
   return (
     <form
       action={handleSubmit}
-      className="flex flex-col gap-3 rounded border border-dashed border-neutral-300 p-3"
+      className="flex flex-col gap-3 rounded-lg border border-dashed border-tenderos-navy/15 p-3"
     >
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <FileInput name="file" accept=".docx" required aria-label="Modèle Word (.docx)" />
-        <label className="flex items-center gap-1 text-xs text-neutral-700">
-          <input
-            type="checkbox"
-            checked={allowPartialGeneration}
-            onChange={(e) => setAllowPartialGeneration(e.target.checked)}
-          />
-          Autoriser la génération partielle si un champ requis manque
-        </label>
+        <Checkbox
+          label="Autoriser la génération partielle si un champ requis manque"
+          checked={allowPartialGeneration}
+          onChange={(e) => setAllowPartialGeneration(e.target.checked)}
+        />
       </div>
       <FieldMappingEditor rows={fieldMappings} onChange={setFieldMappings} />
-      <button
-        type="submit"
-        disabled={isPending}
-        className="self-start rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-      >
+      <Button type="submit" variant="primary" disabled={isPending} className="self-start">
         {isPending ? "Envoi..." : "Envoyer la nouvelle version"}
-      </button>
+      </Button>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
@@ -254,21 +243,17 @@ function TemplateRow({
   }
 
   return (
-    <div className="rounded border border-neutral-200 p-3">
-      <div className="flex items-center justify-between">
+    <Card padding="tight">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <button
-            type="button"
-            onClick={toggle}
-            className="text-sm font-medium text-neutral-900 hover:underline"
-          >
+          <Button type="button" variant="link" onClick={toggle} className="text-sm">
             {template.name}
-          </button>
-          <span className="ml-2 text-xs text-neutral-500">
+          </Button>
+          <span className="ml-2 text-xs text-tenderos-slate">
             {template.scope === "SYSTEM" ? "Système" : "Organisation"}
           </span>
         </div>
-        <span className="text-xs text-neutral-600">
+        <span className="text-xs text-tenderos-slate">
           {template.activeVersion
             ? `v${template.activeVersion.version} active`
             : "Aucune version active"}
@@ -276,9 +261,9 @@ function TemplateRow({
       </div>
 
       {expanded ? (
-        <div className="mt-3 flex flex-col gap-3 border-t border-neutral-100 pt-3">
+        <div className="mt-3 flex flex-col gap-3 border-t border-tenderos-navy/10 pt-3">
           {error ? (
-            <p role="alert" className="text-xs text-red-600">
+            <p role="alert" className="text-xs text-danger-fg">
               {error}
             </p>
           ) : null}
@@ -286,45 +271,45 @@ function TemplateRow({
           {detail ? (
             <div className="flex flex-col gap-2">
               {detail.versions.length === 0 ? (
-                <p className="text-xs text-neutral-500">
+                <p className="text-xs text-tenderos-slate">
                   Aucune version envoyée pour l&apos;instant.
                 </p>
               ) : (
-                <table className="w-full border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                      <th className="py-1 pr-4">Version</th>
-                      <th className="py-1 pr-4">Statut</th>
-                      <th className="py-1 pr-4">Placeholders détectés</th>
-                      <th className="py-1 pr-4">Champs mappés</th>
-                      <th className="py-1 pr-4"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableHeaderCell>Version</TableHeaderCell>
+                      <TableHeaderCell>Statut</TableHeaderCell>
+                      <TableHeaderCell>Placeholders détectés</TableHeaderCell>
+                      <TableHeaderCell>Champs mappés</TableHeaderCell>
+                      <TableHeaderCell>{null}</TableHeaderCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
                     {detail.versions.map((version) => (
-                      <tr key={version.id} className="border-b border-neutral-100">
-                        <td className="py-1 pr-4">v{version.version}</td>
-                        <td className="py-1 pr-4">
+                      <TableRow key={version.id}>
+                        <TableCell>v{version.version}</TableCell>
+                        <TableCell className="text-tenderos-slate">
                           {VERSION_STATUS_LABELS[version.status] ?? version.status}
-                        </td>
-                        <td className="py-1 pr-4">{version.discoveredPlaceholders.length}</td>
-                        <td className="py-1 pr-4">{version.fieldMappings.length}</td>
-                        <td className="py-1 pr-4">
+                        </TableCell>
+                        <TableCell className="text-tenderos-slate">{version.discoveredPlaceholders.length}</TableCell>
+                        <TableCell className="text-tenderos-slate">{version.fieldMappings.length}</TableCell>
+                        <TableCell>
                           {canManage && version.status === "DRAFT" ? (
-                            <button
+                            <Button
                               type="button"
+                              variant="link"
                               disabled={activating === version.id}
                               onClick={() => handleActivate(version.id)}
-                              className="text-neutral-900 hover:underline disabled:opacity-50"
                             >
                               {activating === version.id ? "Activation..." : "Activer"}
-                            </button>
+                            </Button>
                           ) : null}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               )}
             </div>
           ) : null}
@@ -334,7 +319,7 @@ function TemplateRow({
           ) : null}
         </div>
       ) : null}
-    </div>
+    </Card>
   );
 }
 
@@ -352,7 +337,7 @@ export function DocumentTemplatesSection({
       {canManage ? <CreateTemplateForm /> : null}
 
       {initialTemplates.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucun template documentaire pour l&apos;instant.</p>
+        <p className="text-sm text-tenderos-slate">Aucun template documentaire pour l&apos;instant.</p>
       ) : (
         <div className="flex flex-col gap-2">
           {initialTemplates.map((template) => (

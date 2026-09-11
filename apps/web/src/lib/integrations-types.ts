@@ -1,3 +1,5 @@
+import type { BadgeTone } from "../components/ui";
+
 export const API_KEY_SCOPES = [
   "tenders:read",
   "lots:read",
@@ -29,16 +31,13 @@ export const API_KEY_STATUS_LABELS: Record<ApiKeyStatus, string> = {
   REVOKED: "Révoquée",
 };
 
-export function apiKeyStatusBadgeClass(status: ApiKeyStatus): string {
-  switch (status) {
-    case "ACTIVE":
-      return "bg-green-100 text-green-800";
-    case "EXPIRED":
-      return "bg-amber-100 text-amber-800";
-    case "REVOKED":
-      return "bg-neutral-200 text-neutral-500";
-  }
-}
+/** Design System — ton du `<Badge>` par statut de clé API (remplace l'ancien
+ *  `apiKeyStatusBadgeClass()`, classes Tailwind brutes ; mêmes couleurs sémantiques). */
+export const API_KEY_STATUS_TONE: Record<ApiKeyStatus, BadgeTone> = {
+  ACTIVE: "success",
+  EXPIRED: "warning",
+  REVOKED: "neutral",
+};
 
 export type ApiKeySummary = {
   id: string;
@@ -82,9 +81,12 @@ export const WEBHOOK_SUBSCRIPTION_STATUS_LABELS: Record<WebhookSubscriptionStatu
   DISABLED: "Désactivé",
 };
 
-export function webhookSubscriptionStatusBadgeClass(status: WebhookSubscriptionStatus): string {
-  return status === "ACTIVE" ? "bg-green-100 text-green-800" : "bg-neutral-200 text-neutral-500";
-}
+/** Design System — ton du `<Badge>` par statut d'abonnement webhook (remplace l'ancien
+ *  `webhookSubscriptionStatusBadgeClass()`). */
+export const WEBHOOK_SUBSCRIPTION_STATUS_TONE: Record<WebhookSubscriptionStatus, BadgeTone> = {
+  ACTIVE: "success",
+  DISABLED: "neutral",
+};
 
 export type WebhookSubscriptionSummary = {
   id: string;
@@ -108,19 +110,15 @@ export const WEBHOOK_DELIVERY_STATUS_LABELS: Record<WebhookDeliveryStatus, strin
   DEAD: "Échec définitif",
 };
 
-export function webhookDeliveryStatusBadgeClass(status: WebhookDeliveryStatus): string {
-  switch (status) {
-    case "SUCCEEDED":
-      return "bg-green-100 text-green-800";
-    case "PENDING":
-    case "DELIVERING":
-      return "bg-neutral-200 text-neutral-700";
-    case "RETRYING":
-      return "bg-amber-100 text-amber-800";
-    case "DEAD":
-      return "bg-red-100 text-red-800";
-  }
-}
+/** Design System — ton du `<Badge>` par statut de livraison webhook (remplace l'ancien
+ *  `webhookDeliveryStatusBadgeClass()`). */
+export const WEBHOOK_DELIVERY_STATUS_TONE: Record<WebhookDeliveryStatus, BadgeTone> = {
+  SUCCEEDED: "success",
+  PENDING: "neutral",
+  DELIVERING: "neutral",
+  RETRYING: "warning",
+  DEAD: "danger",
+};
 
 export type WebhookDeliverySummary = {
   id: string;

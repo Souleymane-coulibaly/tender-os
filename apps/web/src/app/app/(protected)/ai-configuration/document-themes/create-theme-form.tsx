@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button, Input } from "../../../../../components/ui";
 import { createDocumentThemeAction } from "../../../deliverable-actions";
 
 export function CreateDocumentThemeForm() {
@@ -27,27 +28,25 @@ export function CreateDocumentThemeForm() {
 
   return (
     <div className="flex flex-col gap-3">
-      <label htmlFor="theme-name" className="text-sm font-medium text-neutral-700">
-        Nom
-      </label>
-      <input id="theme-name" value={name} onChange={(e) => setName(e.target.value)} className="max-w-md rounded border border-neutral-300 px-3 py-2 text-sm" />
+      <Input id="theme-name" label="Nom" value={name} onChange={(e) => setName(e.target.value)} wrapperClassName="max-w-md" />
 
-      <label htmlFor="theme-accent" className="text-sm font-medium text-neutral-700">
-        Couleur d&apos;accent
-      </label>
-      <input id="theme-accent" type="color" value={accentColor} onChange={(e) => setAccentColor(e.target.value)} className="h-10 w-20 rounded border border-neutral-300" />
+      {/* Sélecteur de couleur natif conservé : `Input` imposerait `w-full` et un padding de champ
+          texte, inadaptés au nuancier du navigateur. */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="theme-accent" className="text-sm font-medium text-tenderos-navy">
+          Couleur d&apos;accent
+        </label>
+        <input id="theme-accent" type="color" value={accentColor} onChange={(e) => setAccentColor(e.target.value)} className="h-10 w-20 rounded-lg border border-tenderos-navy/15" />
+      </div>
 
-      <label htmlFor="theme-font" className="text-sm font-medium text-neutral-700">
-        Police (optionnelle)
-      </label>
-      <input id="theme-font" value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} placeholder="ex. Calibri" className="max-w-md rounded border border-neutral-300 px-3 py-2 text-sm" />
+      <Input id="theme-font" label="Police (optionnelle)" value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} placeholder="ex. Calibri" wrapperClassName="max-w-md" />
 
-      <button type="button" disabled={isPending} onClick={handleCreate} className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+      <Button type="button" variant="primary" disabled={isPending} onClick={handleCreate} className="self-start">
         {isPending ? "Création..." : "Créer le thème"}
-      </button>
+      </Button>
 
       {error ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger-fg">
           {error}
         </p>
       ) : null}

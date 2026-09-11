@@ -7,6 +7,7 @@ import type {
   AdministrativeRequirementSummary,
 } from "../../../../../../../lib/administrative-dossier-types";
 import type { DocumentSummary } from "../../../../../../../lib/documents-types";
+import { PageHeader } from "../../../../../../../components/ui";
 import { ApiErrorState } from "../../../../api-error-state";
 import { AdministrativeChecklistSection } from "./administrative-checklist-section";
 
@@ -37,12 +38,16 @@ export default async function AdministrativeChecklistPage({
 
     return (
       <div className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">Checklist administrative</h1>
-          <p className="text-sm text-tenderos-slate">
-            {checklist.completionPercentage}% des pièces obligatoires sont prêtes.
-          </p>
-        </div>
+        <PageHeader
+          breadcrumb={[
+            { label: "Appels d'offres", href: "/app/tenders" },
+            { label: "Dossier", href: `/app/tenders/${tenderId}` },
+            { label: "Dossier administratif", href: `/app/tenders/${tenderId}/administrative-dossier` },
+            { label: "Checklist" },
+          ]}
+          title="Checklist administrative"
+          description={`${checklist.completionPercentage}% des pièces obligatoires sont prêtes.`}
+        />
         <AdministrativeChecklistSection
           tenderId={tenderId}
           checklist={checklist}

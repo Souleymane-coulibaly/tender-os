@@ -1,3 +1,4 @@
+import type { BadgeTone } from "../components/ui";
 import { VERSION_STATUS_LABELS } from "./version-status";
 export type ExportTemplateVersionSummary = {
   id: string;
@@ -111,18 +112,16 @@ export function exportJobStatusBadgeClass(status: string): string {
   }
 }
 
-export function exportTemplateVersionStatusBadgeClass(status: string): string {
-  switch (status) {
-    case "ACTIVE":
-      return "bg-green-100 text-green-800";
-    case "DRAFT":
-      return "bg-amber-100 text-amber-800";
-    case "ARCHIVED":
-      return "bg-neutral-200 text-neutral-500";
-    default:
-      return "bg-neutral-200 text-neutral-700";
-  }
-}
+/**
+ * Design System — ton de `Badge` par statut de version de template d'export (remplace l'ancien
+ * `exportTemplateVersionStatusBadgeClass()`, qui recopiait à la main les classes de `Badge`).
+ * Un statut inconnu n'a pas d'entrée : l'appelant retombe sur `"neutral"`, comme l'ancien `default`.
+ */
+export const EXPORT_TEMPLATE_VERSION_STATUS_TONE: Record<string, BadgeTone> = {
+  ACTIVE: "success",
+  DRAFT: "warning",
+  ARCHIVED: "neutral",
+};
 
 export type ExportCapabilityBlocker = { code: string };
 

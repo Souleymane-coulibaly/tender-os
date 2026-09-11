@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button, Input } from "../../../../../../components/ui";
 import {
   addPricingSnapshotAction,
   disableAiModelAction,
@@ -28,16 +29,11 @@ export function AiModelStatusToggle({ model }: { model: AiModelSummary }) {
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <button
-        type="button"
-        onClick={handleToggle}
-        disabled={isPending}
-        className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
-      >
+      <Button type="button" variant="secondary" onClick={handleToggle} disabled={isPending}>
         {model.status === "ENABLED" ? "Désactiver" : "Activer"}
-      </button>
+      </Button>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
@@ -60,16 +56,11 @@ export function AiModelProductionToggle({ model }: { model: AiModelSummary }) {
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <button
-        type="button"
-        onClick={handleToggle}
-        disabled={isPending}
-        className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
-      >
+      <Button type="button" variant="secondary" onClick={handleToggle} disabled={isPending}>
         {model.enabledForProduction ? "Retirer de la production" : "Autoriser en production"}
-      </button>
+      </Button>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}
@@ -84,61 +75,44 @@ export function AddPricingSnapshotForm({ modelId }: { modelId: string }) {
   return (
     <form action={formAction} className="flex max-w-md flex-col gap-3">
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="inputPricePerMillionTokens" className="text-sm font-medium text-neutral-700">
-            Prix / M tokens entrée *
-          </label>
-          <input
-            id="inputPricePerMillionTokens"
-            name="inputPricePerMillionTokens"
-            type="text"
-            required
-            placeholder="5.00"
-            className="rounded border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="outputPricePerMillionTokens" className="text-sm font-medium text-neutral-700">
-            Prix / M tokens sortie *
-          </label>
-          <input
-            id="outputPricePerMillionTokens"
-            name="outputPricePerMillionTokens"
-            type="text"
-            required
-            placeholder="15.00"
-            className="rounded border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </div>
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="currency" className="text-sm font-medium text-neutral-700">
-          Devise (ISO 3) *
-        </label>
-        <input
-          id="currency"
-          name="currency"
+        <Input
+          label="Prix / M tokens entrée"
+          id="inputPricePerMillionTokens"
+          name="inputPricePerMillionTokens"
           type="text"
           required
-          maxLength={3}
-          defaultValue="USD"
-          className="w-24 rounded border border-neutral-300 px-3 py-2 text-sm"
+          placeholder="5.00"
+        />
+        <Input
+          label="Prix / M tokens sortie"
+          id="outputPricePerMillionTokens"
+          name="outputPricePerMillionTokens"
+          type="text"
+          required
+          placeholder="15.00"
         />
       </div>
+      {/* Largeur courte portée par le wrapper (jamais un `w-*` sur l'Input, que `w-full` écraserait). */}
+      <Input
+        label="Devise (ISO 3)"
+        id="currency"
+        name="currency"
+        type="text"
+        required
+        maxLength={3}
+        defaultValue="USD"
+        wrapperClassName="w-32"
+      />
 
       {state.error ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger-fg">
           {state.error}
         </p>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
+      <Button type="submit" variant="primary" disabled={isPending} className="self-start">
         {isPending ? "Enregistrement..." : "Ajouter un tarif"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -24,6 +24,7 @@ export { Input } from "./input";
 export { PageHeader, type Breadcrumb } from "./page-header";
 export { SearchSelect, type SearchSelectOption } from "./search-select";
 export { Section } from "./section";
+export { SectionTabs } from "./section-tabs";
 export { Select } from "./select";
 export { CardSkeleton, Skeleton, TableSkeleton } from "./skeleton";
 export { StatCard, type StatVariation, type StatVariationDirection } from "./stat-card";

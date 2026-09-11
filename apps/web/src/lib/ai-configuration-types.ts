@@ -1,3 +1,5 @@
+import type { BadgeTone } from "../components/ui";
+
 export type AiModelStatus = "ENABLED" | "DISABLED";
 
 export const AI_MODEL_STATUS_LABELS: Record<AiModelStatus, string> = {
@@ -5,9 +7,12 @@ export const AI_MODEL_STATUS_LABELS: Record<AiModelStatus, string> = {
   DISABLED: "Désactivé",
 };
 
-export function aiModelStatusBadgeClass(status: AiModelStatus): string {
-  return status === "ENABLED" ? "bg-green-100 text-green-800" : "bg-neutral-200 text-neutral-700";
-}
+/** Design System — ton du `Badge` de statut d'un modèle IA (remplace l'ancien
+ *  `aiModelStatusBadgeClass()`, qui reproduisait à la main les classes de `Badge`). */
+export const AI_MODEL_STATUS_TONE: Record<AiModelStatus, BadgeTone> = {
+  ENABLED: "success",
+  DISABLED: "neutral",
+};
 
 export type AiModelCapabilities = {
   supportsStructuredOutput: boolean;

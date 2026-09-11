@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Button, Card } from "../../../../../../components/ui";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
 import { canManageDeliverableTemplates } from "../../../../../../lib/deliverable-types";
 import type { DocumentThemeSummary } from "../../../../deliverable-actions";
@@ -28,34 +29,35 @@ export default async function DocumentThemeDetailPage({ params }: { params: Prom
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">{theme.name}</h1>
-        <p className="text-sm text-neutral-600">{theme.scopeLevel}</p>
-      </div>
+      <Button variant="link" href="/app/ai-configuration/document-themes" className="self-start">
+        ← Identité documentaire
+      </Button>
 
-      <section className="rounded border border-neutral-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-900">Version active</h2>
-        {theme.activeVersion ? (
-          <div className="flex items-center gap-3 text-sm text-neutral-700">
-            <span>v{theme.activeVersion.version}</span>
-            {theme.activeVersion.accentColor ? (
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-4 w-4 rounded border border-neutral-300" style={{ backgroundColor: theme.activeVersion.accentColor }} />
-                {theme.activeVersion.accentColor}
-              </span>
-            ) : null}
-            {theme.activeVersion.fontFamily ? <span>{theme.activeVersion.fontFamily}</span> : null}
-          </div>
-        ) : (
-          <p className="text-sm text-amber-700">Aucune version active — les exports utiliseront la mise en forme par défaut.</p>
-        )}
-      </section>
+      <Card title={theme.name} description={theme.scopeLevel}>
+        <div className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold text-tenderos-navy">Version active</h3>
+          {theme.activeVersion ? (
+            <div className="flex items-center gap-3 text-sm text-tenderos-navy">
+              <span>v{theme.activeVersion.version}</span>
+              {theme.activeVersion.accentColor ? (
+                <span className="flex items-center gap-1">
+                  {/* Seul style inline autorisé : aperçu de la couleur choisie par l'utilisateur. */}
+                  <span className="inline-block h-4 w-4 rounded border border-tenderos-navy/15" style={{ backgroundColor: theme.activeVersion.accentColor }} />
+                  {theme.activeVersion.accentColor}
+                </span>
+              ) : null}
+              {theme.activeVersion.fontFamily ? <span>{theme.activeVersion.fontFamily}</span> : null}
+            </div>
+          ) : (
+            <p className="text-sm text-warning-fg">Aucune version active — les exports utiliseront la mise en forme par défaut.</p>
+          )}
+        </div>
+      </Card>
 
       {canManage ? (
-        <section className="rounded border border-neutral-200 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-neutral-900">Gestion des versions</h2>
+        <Card title="Gestion des versions">
           <DocumentThemeVersionManager themeId={theme.id} defaultAccentColor={theme.activeVersion?.accentColor ?? "#1A56DB"} defaultFontFamily={theme.activeVersion?.fontFamily ?? ""} />
-        </section>
+        </Card>
       ) : null}
     </div>
   );

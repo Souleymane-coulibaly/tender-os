@@ -1,21 +1,24 @@
+import { Card } from "../../../../components/ui";
 import { ESTIMATE_DISCLAIMER_TEXT, type CostAggregateSummary, type OrganizationCostSummary } from "../../../../lib/pricing-types";
 
 function CostAggregateCard({ title, aggregate }: { title: string; aggregate: CostAggregateSummary }) {
   const currencies = Object.entries(aggregate.totalsByCurrency);
   return (
-    <div className="flex flex-col gap-1 rounded border border-neutral-200 p-3">
-      <span className="text-xs font-medium text-neutral-500">{title}</span>
-      {currencies.length === 0 ? (
-        <span className="text-sm text-neutral-500">Coût non disponible</span>
-      ) : (
-        currencies.map(([currency, amount]) => (
-          <span key={currency} className="text-lg font-semibold text-neutral-900">
-            {amount} {currency}
-          </span>
-        ))
-      )}
-      {aggregate.mixedCurrencies ? <p className="text-xs text-amber-700">Plusieurs devises détectées — totaux affichés séparément.</p> : null}
-    </div>
+    <Card padding="tight">
+      <div className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-tenderos-slate">{title}</span>
+        {currencies.length === 0 ? (
+          <span className="text-sm text-tenderos-slate">Coût non disponible</span>
+        ) : (
+          currencies.map(([currency, amount]) => (
+            <span key={currency} className="text-base font-semibold text-tenderos-navy">
+              {amount} {currency}
+            </span>
+          ))
+        )}
+        {aggregate.mixedCurrencies ? <p className="text-xs text-warning-fg">Plusieurs devises détectées — totaux affichés séparément.</p> : null}
+      </div>
+    </Card>
   );
 }
 
@@ -30,17 +33,17 @@ export function OrganizationPricingSection({ summary }: { summary: OrganizationC
       <CostAggregateCard title="Coût IA réel — toute l'organisation" aggregate={summary.technicalCost} />
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-neutral-900">Par client</h2>
+        <h3 className="mb-2 text-sm font-semibold text-tenderos-navy">Par client</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(summary.byClient).map(([clientAccountId, aggregate]) => (
             <CostAggregateCard key={clientAccountId} title={`Client ${clientAccountId.slice(0, 8)}`} aggregate={aggregate} />
           ))}
         </div>
-        {Object.keys(summary.byClient).length === 0 ? <p className="text-sm text-neutral-600">Aucune donnée de coût pour l&apos;instant.</p> : null}
+        {Object.keys(summary.byClient).length === 0 ? <p className="text-sm text-tenderos-slate">Aucune donnée de coût pour l&apos;instant.</p> : null}
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-neutral-900">Par type de tâche IA</h2>
+        <h3 className="mb-2 text-sm font-semibold text-tenderos-navy">Par type de tâche IA</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(summary.byTaskType).map(([taskType, aggregate]) => (
             <CostAggregateCard key={taskType} title={taskType} aggregate={aggregate} />
@@ -48,7 +51,7 @@ export function OrganizationPricingSection({ summary }: { summary: OrganizationC
         </div>
       </div>
 
-      <p role="note" className="rounded border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
+      <p role="note" className="rounded-lg border border-tenderos-navy/10 bg-tenderos-light p-3 text-xs text-tenderos-slate">
         {ESTIMATE_DISCLAIMER_TEXT}
       </p>
     </div>

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "../../../../../../components/ui";
 import { deleteWebhookAction, retryWebhookDeliveryAction, sendTestWebhookEventAction, setWebhookStatusAction } from "../../../../integrations-actions";
 
 export function SendTestEventButton({ subscriptionId }: { subscriptionId: string }) {
@@ -10,8 +11,9 @@ export function SendTestEventButton({ subscriptionId }: { subscriptionId: string
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <button
+      <Button
         type="button"
+        variant="secondary"
         disabled={isPending}
         onClick={() =>
           startTransition(async () => {
@@ -19,11 +21,10 @@ export function SendTestEventButton({ subscriptionId }: { subscriptionId: string
             setMessage(result.error ?? "Événement de test envoyé — il apparaîtra dans le journal ci-dessous.");
           })
         }
-        className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
       >
         {isPending ? "Envoi..." : "Envoyer un événement de test"}
-      </button>
-      {message ? <p className="text-xs text-neutral-600">{message}</p> : null}
+      </Button>
+      {message ? <p className="text-xs text-tenderos-slate">{message}</p> : null}
     </div>
   );
 }
@@ -35,8 +36,9 @@ export function ToggleWebhookStatusButton({ subscriptionId, currentlyEnabled }: 
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <button
+      <Button
         type="button"
+        variant="secondary"
         disabled={isPending}
         onClick={() =>
           startTransition(async () => {
@@ -45,11 +47,10 @@ export function ToggleWebhookStatusButton({ subscriptionId, currentlyEnabled }: 
             else router.refresh();
           })
         }
-        className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
       >
         {isPending ? "..." : currentlyEnabled ? "Désactiver" : "Activer"}
-      </button>
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      </Button>
+      {error ? <p className="text-xs text-danger-fg">{error}</p> : null}
     </div>
   );
 }
@@ -62,19 +63,21 @@ export function DeleteWebhookButton({ subscriptionId }: { subscriptionId: string
 
   if (!confirming) {
     return (
-      <button type="button" onClick={() => setConfirming(true)} className="rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">
+      <Button type="button" variant="danger" onClick={() => setConfirming(true)}>
         Supprimer
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-red-200 p-3">
-      <p className="text-sm font-medium text-red-800">Supprimer ce webhook ? Il ne recevra plus aucune livraison, et cette action est irréversible.</p>
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+    <div className="flex flex-col gap-2 rounded-lg bg-danger-bg p-3">
+      <p className="text-sm font-medium text-danger-fg">Supprimer ce webhook ? Il ne recevra plus aucune livraison, et cette action est irréversible.</p>
+      {error ? <p className="text-xs text-danger-fg">{error}</p> : null}
       <div className="flex gap-2">
-        <button
+        <Button
           type="button"
+          variant="danger"
+          size="sm"
           disabled={isPending}
           onClick={() =>
             startTransition(async () => {
@@ -83,13 +86,12 @@ export function DeleteWebhookButton({ subscriptionId }: { subscriptionId: string
               else router.push("/app/integrations/webhooks");
             })
           }
-          className="rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
         >
           {isPending ? "Suppression..." : "Confirmer la suppression"}
-        </button>
-        <button type="button" onClick={() => setConfirming(false)} className="rounded px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100">
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)}>
           Annuler
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -102,8 +104,10 @@ export function RetryDeliveryButton({ subscriptionId, deliveryId }: { subscripti
 
   return (
     <div className="flex flex-col gap-1">
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         disabled={isPending}
         onClick={() =>
           startTransition(async () => {
@@ -112,11 +116,10 @@ export function RetryDeliveryButton({ subscriptionId, deliveryId }: { subscripti
             else router.refresh();
           })
         }
-        className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50"
       >
         {isPending ? "..." : "Relancer"}
-      </button>
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      </Button>
+      {error ? <p className="text-xs text-danger-fg">{error}</p> : null}
     </div>
   );
 }

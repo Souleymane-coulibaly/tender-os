@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Button, Card, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "../../../../../components/ui";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../lib/app-api-client";
 import { GENERATION_TASK_TYPE_LABELS, type PromptTemplateSummary } from "../../../../../lib/generation-types";
 import { isOrganizationAdmin } from "../../../../../lib/authorization";
@@ -26,55 +27,50 @@ export default async function PromptTemplatesListPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Templates de prompts</h1>
-          <p className="text-sm text-neutral-600">
-            Un template par type de contenu généré. Chaque génération utilise la version ACTIVE au moment où elle est lancée
-            — jamais recalculée après coup.
-          </p>
-        </div>
-        {canManage ? (
-          <Link href="/app/ai-configuration/prompts/new" className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
-            Nouveau template
-          </Link>
-        ) : null}
-      </div>
-
-      {templates.length === 0 ? (
-        <p className="text-sm text-neutral-600">Aucun template de prompt pour l&apos;instant.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="py-2 pr-4">Nom</th>
-                <th className="py-2 pr-4">Type de tâche</th>
-                <th className="py-2 pr-4">Mode de sortie</th>
-                <th className="py-2 pr-4">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+      <Card
+        title="Templates de prompts"
+        description="Un template par type de contenu généré. Chaque génération utilise la version ACTIVE au moment où elle est lancée — jamais recalculée après coup."
+        actions={
+          canManage ? (
+            <Button href="/app/ai-configuration/prompts/new" variant="primary">
+              Nouveau template
+            </Button>
+          ) : null
+        }
+      >
+        {templates.length === 0 ? (
+          <p className="text-sm text-tenderos-slate">Aucun template de prompt pour l&apos;instant.</p>
+        ) : (
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableHeaderCell>Nom</TableHeaderCell>
+                <TableHeaderCell>Type de tâche</TableHeaderCell>
+                <TableHeaderCell>Mode de sortie</TableHeaderCell>
+                <TableHeaderCell>Actions</TableHeaderCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
               {templates.map((template) => (
-                <tr key={template.id} className="border-b border-neutral-100">
-                  <td className="py-2 pr-4">
-                    <Link href={`/app/ai-configuration/prompts/${template.id}`} className="font-medium text-neutral-900 hover:underline">
+                <TableRow key={template.id}>
+                  <TableCell>
+                    <Link href={`/app/ai-configuration/prompts/${template.id}`} className="font-medium text-tenderos-navy hover:underline">
                       {template.name}
                     </Link>
-                  </td>
-                  <td className="py-2 pr-4 text-neutral-600">{GENERATION_TASK_TYPE_LABELS[template.taskType] ?? template.taskType}</td>
-                  <td className="py-2 pr-4 text-neutral-600">{template.outputMode === "STRUCTURED" ? "Structuré" : "Texte libre"}</td>
-                  <td className="py-2 pr-4">
-                    <Link href={`/app/ai-configuration/prompts/${template.id}`} className="text-neutral-700 hover:underline">
+                  </TableCell>
+                  <TableCell className="text-tenderos-slate">{GENERATION_TASK_TYPE_LABELS[template.taskType] ?? template.taskType}</TableCell>
+                  <TableCell className="text-tenderos-slate">{template.outputMode === "STRUCTURED" ? "Structuré" : "Texte libre"}</TableCell>
+                  <TableCell>
+                    <Link href={`/app/ai-configuration/prompts/${template.id}`} className="text-tenderos-blue hover:underline">
                       Ouvrir
                     </Link>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Button, Card } from "../../../../../../components/ui";
 import { appApiFetch } from "../../../../../../lib/app-api-client";
 import type { AllowedModelCatalog } from "../../../../../../lib/ai-configuration-types";
 import { ApiErrorState } from "../../../api-error-state";
@@ -16,8 +17,12 @@ export default async function NewAiModelPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Enregistrer un modèle IA</h1>
-      <CreateAiModelForm catalog={catalog} />
+      <Button variant="link" href="/app/ai-configuration/models" className="self-start">
+        ← Modèles
+      </Button>
+      <Card title="Enregistrer un modèle IA">
+        <CreateAiModelForm catalog={catalog} />
+      </Card>
     </div>
   );
 }

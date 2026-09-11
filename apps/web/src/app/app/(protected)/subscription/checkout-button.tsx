@@ -25,7 +25,7 @@ function openSession(props: Props) {
   }
 }
 
-const DEFAULT_CLASS = "rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50";
+const DEFAULT_CLASS = "rounded-lg bg-tenderos-navy px-3 py-1.5 text-sm font-semibold text-white hover:bg-tenderos-navy/90 disabled:opacity-50";
 
 /**
  * V2 Sprint 22 (billing, étape 22D) — jamais de redirection construite côté client : l'URL vient
@@ -54,7 +54,7 @@ export function CheckoutButton(props: Props) {
         {isPending ? "Redirection..." : props.label}
       </button>
       {error ? (
-        <p role="alert" className="text-xs text-red-600">
+        <p role="alert" className="text-xs text-danger-fg">
           {error}
         </p>
       ) : null}

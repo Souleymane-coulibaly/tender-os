@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Badge, Button, Card } from "../../../../../../components/ui";
 import { appApiFetch, getCurrentMembershipRole } from "../../../../../../lib/app-api-client";
-import { EXPORT_DOCUMENT_TYPE_LABELS, EXPORT_TEMPLATE_VERSION_STATUS_LABELS, canManageExportTemplates, exportTemplateVersionStatusBadgeClass, type ExportTemplateSummary } from "../../../../../../lib/export-types";
+import { EXPORT_DOCUMENT_TYPE_LABELS, EXPORT_TEMPLATE_VERSION_STATUS_LABELS, EXPORT_TEMPLATE_VERSION_STATUS_TONE, canManageExportTemplates, type ExportTemplateSummary } from "../../../../../../lib/export-types";
 import { ApiErrorState } from "../../../api-error-state";
 import { ExportTemplateVersionManager } from "./export-template-actions";
 
@@ -31,35 +32,35 @@ export default async function ExportTemplateDetailPage({ params }: { params: Pro
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">{template.name}</h1>
-        <p className="text-sm text-neutral-600">{EXPORT_DOCUMENT_TYPE_LABELS[template.documentType] ?? template.documentType}</p>
-        {template.description ? <p className="mt-1 text-sm text-neutral-600">{template.description}</p> : null}
-      </div>
+      <Button variant="link" href="/app/ai-configuration/export-templates" className="self-start">
+        ← Templates d&apos;export
+      </Button>
 
-      <section className="rounded border border-neutral-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-900">Version active</h2>
-        {template.activeVersion ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-neutral-700">v{template.activeVersion.version}</span>
-              <span className={`rounded px-2 py-0.5 text-xs font-medium ${exportTemplateVersionStatusBadgeClass(template.activeVersion.status)}`}>
-                {EXPORT_TEMPLATE_VERSION_STATUS_LABELS[template.activeVersion.status] ?? template.activeVersion.status}
-              </span>
-              <span className="text-xs text-neutral-500">{template.activeVersion.format}</span>
+      <Card title={template.name} description={EXPORT_DOCUMENT_TYPE_LABELS[template.documentType] ?? template.documentType}>
+        <div className="flex flex-col gap-3">
+          {template.description ? <p className="text-sm text-tenderos-slate">{template.description}</p> : null}
+          <h3 className="text-sm font-semibold text-tenderos-navy">Version active</h3>
+          {template.activeVersion ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-tenderos-navy">v{template.activeVersion.version}</span>
+                <Badge tone={EXPORT_TEMPLATE_VERSION_STATUS_TONE[template.activeVersion.status] ?? "neutral"}>
+                  {EXPORT_TEMPLATE_VERSION_STATUS_LABELS[template.activeVersion.status] ?? template.activeVersion.status}
+                </Badge>
+                <span className="text-xs text-tenderos-slate">{template.activeVersion.format}</span>
+              </div>
+              <pre className="overflow-x-auto rounded-lg bg-tenderos-light p-3 text-xs text-tenderos-navy">{JSON.stringify(template.activeVersion.config, null, 2)}</pre>
             </div>
-            <pre className="overflow-x-auto rounded bg-neutral-50 p-3 text-xs text-neutral-700">{JSON.stringify(template.activeVersion.config, null, 2)}</pre>
-          </div>
-        ) : (
-          <p className="text-sm text-amber-700">Aucune version active — les exports utilisant ce template échoueront tant qu&apos;aucune version n&apos;est activée.</p>
-        )}
-      </section>
+          ) : (
+            <p className="text-sm text-warning-fg">Aucune version active — les exports utilisant ce template échoueront tant qu&apos;aucune version n&apos;est activée.</p>
+          )}
+        </div>
+      </Card>
 
       {canManage ? (
-        <section className="rounded border border-neutral-200 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-neutral-900">Gestion des versions</h2>
+        <Card title="Gestion des versions">
           <ExportTemplateVersionManager templateId={template.id} activeVersion={template.activeVersion} defaultConfig={defaultConfig} />
-        </section>
+        </Card>
       ) : null}
     </div>
   );

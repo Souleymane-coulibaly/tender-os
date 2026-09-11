@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Select } from "../../../../../components/ui";
 import { resetAiModelPreferenceAction, setAiModelPreferenceAction } from "../../../ai-routing-actions";
 import { AI_ROUTING_MODEL_LABELS, type AiModelPreferenceSummary, type AiRoutingModelId } from "../../../../../lib/ai-routing-types";
 
@@ -29,22 +30,21 @@ export function AiPreferenceRow({ label, preference }: { label: string; preferen
   return (
     <div className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-neutral-900">{label}</p>
-        {!preference.override ? <p className="text-xs text-neutral-500">{AI_ROUTING_MODEL_LABELS[preference.effectiveModel].description}</p> : null}
+        <p className="text-sm font-medium text-tenderos-navy">{label}</p>
+        {!preference.override ? <p className="text-xs text-tenderos-slate">{AI_ROUTING_MODEL_LABELS[preference.effectiveModel].description}</p> : null}
       </div>
-      <select
-        value={preference.override ?? AUTOMATIC_VALUE}
-        disabled={isPending}
-        onChange={(event) => handleChange(event.target.value)}
-        className="shrink-0 rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-900 disabled:opacity-50"
-      >
-        <option value={AUTOMATIC_VALUE}>Automatique — {defaultLabel} recommandé</option>
-        {preference.allowedOverrides.map((model) => (
-          <option key={model} value={model}>
-            {AI_ROUTING_MODEL_LABELS[model].name}
-          </option>
-        ))}
-      </select>
+      {/* `Select` sans `label` rend le contrôle dans un conteneur `relative block` : le `shrink-0`
+          doit donc être porté par ce wrapper, pas par la prop `className` du `<select>`. */}
+      <div className="shrink-0">
+        <Select value={preference.override ?? AUTOMATIC_VALUE} disabled={isPending} onChange={(event) => handleChange(event.target.value)}>
+          <option value={AUTOMATIC_VALUE}>Automatique — {defaultLabel} recommandé</option>
+          {preference.allowedOverrides.map((model) => (
+            <option key={model} value={model}>
+              {AI_ROUTING_MODEL_LABELS[model].name}
+            </option>
+          ))}
+        </Select>
+      </div>
     </div>
   );
 }

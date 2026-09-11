@@ -8,9 +8,18 @@ export type TabItem = { label: string; href: string };
  * par la page appelante (chaque route sait déjà quelle page elle est), jamais déduit côté client —
  * évite un flash "aucun onglet actif" avant hydratation.
  */
-export function TabsNav({ items, activeHref }: { items: readonly TabItem[]; activeHref: string }) {
+export function TabsNav({
+  items,
+  activeHref,
+  ariaLabel = "Navigation du dossier",
+}: {
+  items: readonly TabItem[];
+  activeHref: string;
+  /** Nom accessible de la barre — le défaut vaut pour la fiche appel d'offres. */
+  ariaLabel?: string;
+}) {
   return (
-    <nav aria-label="Navigation du dossier" className="flex flex-wrap gap-1 overflow-x-auto border-b border-tenderos-navy/10 pb-px">
+    <nav aria-label={ariaLabel} className="flex flex-wrap gap-1 overflow-x-auto border-b border-tenderos-navy/10 pb-px">
       {items.map((item) => {
         const isActive = item.href === activeHref;
         return (
