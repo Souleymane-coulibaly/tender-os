@@ -70,11 +70,12 @@ export class PreviewGenerationCostUseCase {
       permission: ClientPermission.ManagePricing,
     });
 
-    const routedModel = await this.routingModelReader.resolveActiveModel({
+    const routedModel = await this.routingModelReader.resolveModel({
       organizationId: command.organizationId,
       taskType: command.taskType,
+      userId: command.actorId,
     });
-    const modelPricing = routedModel ? await this.pricingSnapshotReader.findCurrentForModel({ aiModelId: routedModel.aiModelId }) : null;
+    const modelPricing = routedModel?.aiModelId ? await this.pricingSnapshotReader.findCurrentForModel({ aiModelId: routedModel.aiModelId }) : null;
 
     let usedHistoricalAverage = false;
     let inputTokens = command.estimatedInputTokensPerGeneration;

@@ -74,8 +74,10 @@ export class InMemoryGenerationCostReader implements GenerationCostReader {
 }
 
 export class FakeRoutingModelReader implements RoutingModelReader {
+  readonly calls: { organizationId: string; taskType: string; userId?: string | undefined }[] = [];
   constructor(private readonly model: RoutedModel | null = null) {}
-  async resolveActiveModel(): Promise<RoutedModel | null> {
+  async resolveModel(input: { organizationId: string; taskType: string; userId?: string | undefined }): Promise<RoutedModel | null> {
+    this.calls.push(input);
     return this.model;
   }
 }

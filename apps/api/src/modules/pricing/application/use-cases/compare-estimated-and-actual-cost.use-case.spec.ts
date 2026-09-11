@@ -26,7 +26,7 @@ const CLIENT = "client-1";
 const TENDER = "tender-1";
 const NOW = new Date("2026-08-15T10:00:00.000Z");
 
-const ROUTED_MODEL: RoutedModel = { aiModelId: "model-1", provider: "OPENAI", modelKey: "gpt-4o-mini", policyId: "policy-1", policyVersion: 1 };
+const ROUTED_MODEL: RoutedModel = { aiModelId: "model-1", provider: "OPENAI", modelKey: "gpt-4o-mini" };
 const MODEL_PRICING: CurrentModelPricing = {
   aiModelId: "model-1",
   provider: "OPENAI",

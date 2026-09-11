@@ -22,7 +22,7 @@ const CLIENT = "client-1";
 const TENDER = "tender-1";
 const NOW = new Date("2026-08-15T10:00:00.000Z");
 
-const ROUTED_MODEL: RoutedModel = { aiModelId: "model-1", provider: "OPENAI", modelKey: "gpt-4o-mini", policyId: "policy-1", policyVersion: 1 };
+const ROUTED_MODEL: RoutedModel = { aiModelId: "model-1", provider: "OPENAI", modelKey: "gpt-4o-mini" };
 const MODEL_PRICING: CurrentModelPricing = {
   aiModelId: "model-1",
   provider: "OPENAI",
@@ -60,13 +60,37 @@ function buildHarness(options: { routedModel?: RoutedModel | null; modelPricing?
     clock,
   );
 
-  return { preview, generationCostReader, clientAssignmentRepository };
+  return { preview, generationCostReader, clientAssignmentRepository, routingModelReader };
 }
 
 describe("PreviewGenerationCostUseCase", () => {
   let h: ReturnType<typeof buildHarness>;
   beforeEach(() => {
     h = buildHarness();
+  });
+
+  it("prices the model really used at call time — the actor's own model preference applies, as during the generation", async () => {
+    await h.preview.execute({ organizationId: ORG, actorId: "user-owner", actorRole: "OWNER", tenderId: TENDER, taskType: "EXECUTIVE_SUMMARY" });
+    expect(h.routingModelReader.calls).toEqual([{ organizationId: ORG, taskType: "EXECUTIVE_SUMMARY", userId: "user-owner" }]);
+  });
+
+  it("never prices another model: the model really used has no registered price → PARTIAL, without any AI cost line", async () => {
+    const h2 = buildHarness({ routedModel: { provider: "OPENAI", modelKey: "gpt-5.4-mini" } });
+    const result = await h2.preview.execute({
+      organizationId: ORG,
+      actorId: "user-owner",
+      actorRole: "OWNER",
+      tenderId: TENDER,
+      taskType: "EXECUTIVE_SUMMARY",
+      estimatedGenerationsCount: 1,
+      estimatedInputTokensPerGeneration: 1000,
+      estimatedOutputTokensPerGeneration: 1000,
+    });
+    // Contrat de `calculateEstimateBreakdown` : tarif du modèle inconnu → composante inconnue,
+    // statut PARTIAL, aucune ligne « Coût IA » (jamais le tarif d'un autre modèle).
+    expect(result.status).toBe("PARTIAL");
+    expect(result.breakdown).toEqual([]);
+    expect(result.modelKey).toBe("gpt-5.4-mini");
   });
 
   it("computes a preview using the caller-provided token volumes, never persisted", async () => {
@@ -99,7 +123,7 @@ describe("PreviewGenerationCostUseCase", () => {
     expect(result.status).toBe("CALCULATED");
   });
 
-  it("returns UNKNOWN (never 0) when no routing policy is active and no historical average exists", async () => {
+  it("returns UNKNOWN (never 0) when the task type has no routed model and no historical average exists", async () => {
     const h2 = buildHarness({ routedModel: null });
     const result = await h2.preview.execute({ organizationId: ORG, actorId: "user-owner", actorRole: "OWNER", tenderId: TENDER, taskType: "EXECUTIVE_SUMMARY" });
     expect(result.status).toBe("UNKNOWN");

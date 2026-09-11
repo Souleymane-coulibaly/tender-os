@@ -187,7 +187,7 @@ export const API_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   INVALID_GENERATION_TASK_TYPE: "Ce type de contenu n'est pas valide.",
   INVALID_PROMPT_VERSION_STATUS_TRANSITION: "Ce changement de statut n'est pas possible pour cette version de prompt.",
   NO_ACTIVE_PROMPT_VERSION: "Ce type de contenu n'a pas encore de version de prompt active. Demandez à un administrateur d'en activer une.",
-  NO_ACTIVE_ROUTING_POLICY: "Aucune règle de choix du modèle n'est active pour ce contenu. Demandez à un administrateur d'en activer une.",
+  NO_ACTIVE_ROUTING_POLICY: "La génération IA n'est pas configurée pour ce contenu. Contactez le support.",
   PROMPT_TEMPLATE_ARCHIVED: "Ce modèle de prompt est archivé : il ne peut plus recevoir de nouvelle version.",
   PROMPT_TEMPLATE_NOT_FOUND: "Ce modèle de prompt est introuvable.",
   PROMPT_VARIABLE_MISSING: "Le prompt attend une information qui n'a pas été fournie.",

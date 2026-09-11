@@ -210,7 +210,7 @@ export type AnalysisCapability = {
  *  `GetAnalysisCapabilitiesUseCase` (backend), jamais un second vocabulaire divergent. */
 export const ANALYSIS_CAPABILITY_REASON_LABELS: Record<string, string> = {
   AI_PROVIDER_NOT_CONFIGURED:
-    "La génération IA n'est pas configurée pour ce type de contenu. Un administrateur doit activer une politique de routage dans Configuration IA.",
+    "La génération IA n'est pas configurée pour ce type de contenu. Contactez le support.",
 };
 
 /** Meme permission backend que analysis:trigger (ROLE_ANALYSIS_PERMISSIONS — OWNER,

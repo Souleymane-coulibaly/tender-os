@@ -111,8 +111,9 @@ export const GENERATION_CAPABILITY_REASON_LABELS: Record<GenerationCapabilityRea
     "Aucun prompt n'a encore été créé pour ce type de contenu. Un administrateur doit en créer un dans Configuration IA.",
   NO_ACTIVE_PROMPT_VERSION:
     "Aucune version de prompt active pour ce type de contenu. Un administrateur doit en activer une dans Configuration IA.",
-  NO_ACTIVE_ROUTING_POLICY:
-    "La génération IA n'est pas configurée pour ce type de contenu. Un administrateur doit activer une politique de routage dans Configuration IA.",
+  // Plus produit depuis que le modèle est choisi par « Choix des modèles » (P2.3-E4.1) ; gardé pour
+  // l'affichage d'anciens échecs — sans renvoyer vers l'onglet Routing, supprimé.
+  NO_ACTIVE_ROUTING_POLICY: "La génération IA n'est pas configurée pour ce type de contenu. Contactez le support.",
 };
 
 function isGenerationCapabilityReasonCode(value: string): value is GenerationCapabilityReasonCode {

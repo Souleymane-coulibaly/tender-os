@@ -15,7 +15,10 @@ import { AnalysisProvider } from "../../analysis";
  * évolution de contrat, jamais une action à chaud depuis le frontend.
  */
 export const ALLOWED_MODEL_CATALOG: Readonly<Record<string, readonly string[]>> = {
-  [AnalysisProvider.OpenAi]: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini"],
+  // gpt-5.4-mini / gpt-5.4-nano : les seuls modèles réellement appelés (`AiModelRouter`,
+  // `AI_ROUTING_MODEL_CATALOG`). Absents d'ici, ils ne pouvaient ni être enregistrés ni tarifés :
+  // aucun coût IA (prévision ou réel) n'était calculable pour le modèle vraiment utilisé.
+  [AnalysisProvider.OpenAi]: ["gpt-5.4-mini", "gpt-5.4-nano", "gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini"],
   // ANTHROPIC / MISTRAL / AZURE_OPENAI : acceptés par la forme du registre (voir AiModel.provider)
   // pour ne pas devoir modifier le schéma le jour où un adapter réel existe, mais aucune entrée
   // n'est autorisée tant qu'aucun AIProvider concret n'est câblé (Sprint 5.2 §"Ne crée pas de faux

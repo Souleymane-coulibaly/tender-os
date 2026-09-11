@@ -4,9 +4,6 @@ import Link from "next/link";
 const SUB_NAV_ITEMS = [
   { href: "/app/ai-configuration/models", label: "Modèles" },
   { href: "/app/ai-configuration/model-preferences", label: "Choix des modèles" },
-  { href: "/app/ai-configuration/benchmarks", label: "Benchmarks" },
-  { href: "/app/ai-configuration/recommendations", label: "Recommandations" },
-  { href: "/app/ai-configuration/routing-policies", label: "Routing" },
   { href: "/app/ai-configuration/prompts", label: "Prompts" },
   { href: "/app/ai-configuration/export-templates", label: "Templates d'export" },
   { href: "/app/ai-configuration/document-templates", label: "Templates documentaires" },

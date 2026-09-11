@@ -132,7 +132,7 @@ describe("GenerationSection", () => {
 
     expect(
       screen.getByText(
-        "Échec : La génération IA n'est pas configurée pour ce type de contenu. Un administrateur doit activer une politique de routage dans Configuration IA.",
+        "Échec : La génération IA n'est pas configurée pour ce type de contenu. Contactez le support.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/No active routing policy for this task type/)).not.toBeInTheDocument();
@@ -155,7 +155,7 @@ describe("GenerationSection", () => {
       expect(screen.getByRole("button", { name: "Générer" })).toBeDisabled();
       expect(
         screen.getByText(
-          "La génération IA n'est pas configurée pour ce type de contenu. Un administrateur doit activer une politique de routage dans Configuration IA.",
+          "La génération IA n'est pas configurée pour ce type de contenu. Contactez le support.",
         ),
       ).toBeInTheDocument();
       expect(launchGenerationAction).not.toHaveBeenCalled();

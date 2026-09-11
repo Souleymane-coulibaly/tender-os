@@ -63,11 +63,12 @@ export class CreatePricingEstimateUseCase {
 
     let modelPricing;
     if (command.taskType && this.routingModelReader && this.pricingSnapshotReader) {
-      const routedModel = await this.routingModelReader.resolveActiveModel({
+      const routedModel = await this.routingModelReader.resolveModel({
         organizationId: command.organizationId,
         taskType: command.taskType,
+        userId: command.actorId,
       });
-      modelPricing = routedModel
+      modelPricing = routedModel?.aiModelId
         ? ((await this.pricingSnapshotReader.findCurrentForModel({ aiModelId: routedModel.aiModelId })) ?? undefined)
         : undefined;
     }

@@ -177,7 +177,7 @@ describe("generation-actions", () => {
 
       const result = await launchGenerationAction("tender-1", "EXECUTIVE_SUMMARY");
 
-      expect(result.error).toBe("Aucune règle de choix du modèle n'est active pour ce contenu. Demandez à un administrateur d'en activer une.");
+      expect(result.error).toBe("La génération IA n'est pas configurée pour ce contenu. Contactez le support.");
       expect(result.error).not.toContain("NO_ACTIVE_ROUTING_POLICY");
     });
 

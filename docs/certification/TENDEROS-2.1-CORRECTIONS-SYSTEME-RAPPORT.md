@@ -332,6 +332,43 @@ latéral seulement (15 entrées ; les barres d'onglets restent textuelles).
   `app-shell.test.tsx` (chaque lien du menu affiche une icône décorative, nom accessible inchangé).
   Web : typecheck 0, lint 0 erreur.
 
+**Configuration IA — onglets inutilisés retirés** (signalé : « certaines ne sont plus utilisées »).
+Audit du code, preuves fichier:ligne, par onglet : le modèle est choisi à l'appel par
+`AiModelRouter` (« Choix des modèles ») dans les 4 pipelines (analyse, chat, mémoire technique,
+génération) ; la `RoutingPolicy` n'est plus sur ce chemin (commentaires explicites dans les 4 use
+cases). Benchmarks (boucle hors ligne) et Recommandations (approuver = statut seul) n'alimentent rien
+d'utilisé. Routing n'était plus lu que par les prévisions de coût du Chiffrage. Prompts, Templates
+d'export, documentaires, de mémoire et Identité documentaire sont lus par des fonctionnalités en
+production ; Modèles porte les tarifs. Décision utilisateur : retirer les 3 onglets ET chiffrer le
+modèle réellement utilisé.
+
+- Web : pages Benchmarks, Recommandations et Routing supprimées (14 fichiers), sous-navigation et
+  actions serveur associées retirées, types devenus inutilisés supprimés
+  (`ai-configuration-types.ts`, vérifié : 0 usage restant) ; messages qui renvoyaient encore vers
+  « une politique de routage dans Configuration IA » reformulés (analyse, génération, erreur d'API),
+  tests alignés. API et base inchangées pour ces modules (retrait réversible).
+- API, prévisions de coût (aperçu, estimation, recalcul) : nouveau `AiRouterRoutingModelReader` —
+  modèle résolu par `AiModelRouter` avec la préférence de l'utilisateur (`userId` = acteur), comme à
+  la génération ; tarif retrouvé dans le registre par fournisseur + identifiant (même recherche que
+  le coût réel d'une génération). Remplace `PrismaRoutingModelReader` (supprimé). Port simplifié
+  (`resolveModel`, plus d'identifiant de politique ; `aiModelId` absent si le modèle n'est pas au
+  registre → aucun tarif, jamais celui d'un autre modèle).
+- **Défaut trouvé en chemin** : la liste blanche du registre (`allowed-model-catalog.ts`) ne
+  contenait pas `gpt-5.4-mini` ni `gpt-5.4-nano`, les SEULS modèles réellement appelés — ils ne
+  pouvaient être ni enregistrés ni tarifés, donc aucun coût IA (prévision ou réel des générations)
+  n'était calculable pour le modèle vraiment utilisé. Ajoutés ; garde-fou : tout modèle du routeur
+  doit être enregistrable (`allowed-model-catalog.spec.ts`).
+- Tests : `ai-router-routing-model-reader.spec.ts` (modèle du routeur + entrée du registre,
+  préférence utilisateur appliquée, pas de tarif si non enregistré, `null` hors tâche IA) ;
+  aperçu de coût (acteur transmis ; modèle sans tarif → `PARTIAL` sans ligne de coût IA). API :
+  typecheck 0, lint 0, pricing + ai-benchmark + ai-routing 52/52 fichiers, intégration HTTP pricing
+  (PostgreSQL réel) verte. Web : typecheck 0, lint 0 erreur, 98/98 fichiers.
+
+À faire côté exploitation : enregistrer `gpt-5.4-mini` et `gpt-5.4-nano` dans Configuration IA →
+Modèles avec leur tarif, sans quoi les prévisions restent « Partielles » (aucune ligne de coût IA).
+Signalé, non modifié : sans tarif, l'aperçu affiche un total partiel de 0 (« 0.000000 EUR —
+Partiel ») plutôt que « Coût non disponible » — comportement existant de l'estimation partielle.
+
 **Abonnement staging désynchronisé de Stripe** (constaté en même temps : « Essai Starter — 0 jours
 restants », échéance au 05/09/2026 déjà passée). Établi : les variables Stripe du service API
 staging sont toutes définies (clé, secret de webhook, 7 prix, `APP_BASE_URL`) et les webhooks

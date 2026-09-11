@@ -15,7 +15,8 @@ import { ROUTING_POLICY_REPOSITORY } from "../application/ports/routing-policy.r
 import { PrismaAiModelRepository } from "./prisma-ai-model.repository";
 import { PrismaPricingSnapshotRepository } from "./prisma-pricing-snapshot.repository";
 import { PrismaPricingSnapshotReader } from "./prisma-pricing-snapshot-reader";
-import { PrismaRoutingModelReader } from "./prisma-routing-model-reader";
+import { AiRoutingModule } from "../../ai-routing/ai-routing.module";
+import { AiRouterRoutingModelReader } from "./ai-router-routing-model-reader";
 import { PrismaRoutingPolicyRepository } from "./prisma-routing-policy.repository";
 import { PrismaRoutingPolicyResolver } from "./prisma-routing-policy-resolver";
 import { PrismaRoutingDecisionWriter } from "./prisma-routing-decision.writer";
@@ -53,6 +54,8 @@ import { PrismaTechnicalMemoRoutingDecisionWriter } from "./prisma-technical-mem
  */
 @Global()
 @Module({
+  // `AiModelRouter` : le modèle d'une prévision de coût est celui réellement choisi à l'appel.
+  imports: [AiRoutingModule],
   providers: [
     { provide: AI_MODEL_REPOSITORY, useClass: PrismaAiModelRepository },
     { provide: PRICING_SNAPSHOT_REPOSITORY, useClass: PrismaPricingSnapshotRepository },
@@ -61,7 +64,9 @@ import { PrismaTechnicalMemoRoutingDecisionWriter } from "./prisma-technical-mem
     { provide: ROUTING_DECISION_WRITER, useClass: PrismaRoutingDecisionWriter },
     { provide: GENERATION_ROUTING_POLICY_RESOLVER, useClass: PrismaRoutingPolicyResolver },
     { provide: GENERATION_ROUTING_DECISION_WRITER, useClass: PrismaGenerationRoutingDecisionWriter },
-    { provide: ROUTING_MODEL_READER, useClass: PrismaRoutingModelReader },
+    // Prévisions de coût : modèle réellement choisi à l'appel (`AiModelRouter`), jamais une
+    // RoutingPolicy (retirée du chemin runtime, onglet supprimé de Configuration IA).
+    { provide: ROUTING_MODEL_READER, useClass: AiRouterRoutingModelReader },
     { provide: PRICING_SNAPSHOT_READER, useClass: PrismaPricingSnapshotReader },
     // Consolidation IA — Checkpoint A §3 : même resolver, zéro nouvelle classe — Chat et Mémoire
     // technique rejoignent le même moteur de routing qu'Analyse/Génération (jamais un second
