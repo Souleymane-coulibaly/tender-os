@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import Stripe from "stripe";
-import { StripeWebhookSignatureInvalidError } from "../domain/errors";
+import { StripePortalPlanChangeDisabledError, StripeWebhookSignatureInvalidError } from "../domain/errors";
 import type {
   CreatePlanChangePortalSessionInput,
   CreateStripeCheckoutSessionInput,
@@ -27,6 +27,15 @@ import type {
  * construit paresseusement (mémoïsé), au premier appel RÉEL d'une méthode de cette classe —
  * jamais pendant l'instanciation DI.
  */
+/** Refus de Stripe quand le portail client n'autorise pas le changement de forfait (« This
+ *  subscription cannot be updated because the subscription update feature in the portal
+ *  configuration is disabled »). Stripe ne lui donne pas de `code` : seul le type de l'erreur et son
+ *  message l'identifient. */
+export function isPortalPlanChangeDisabledError(error: unknown): boolean {
+  const stripeError = error as { rawType?: string; message?: string } | null;
+  return stripeError?.rawType === "invalid_request_error" && /portal configuration/i.test(stripeError.message ?? "");
+}
+
 @Injectable()
 export class StripeSdkClient implements StripeClient {
   private readonly logger = new Logger(StripeSdkClient.name);
@@ -102,19 +111,27 @@ export class StripeSdkClient implements StripeClient {
   }
 
   async createPlanChangePortalSession(input: CreatePlanChangePortalSessionInput): Promise<{ url: string }> {
-    const session = await this.stripeClient().billingPortal.sessions.create({
-      customer: input.stripeCustomerId,
-      return_url: input.returnUrl,
-      flow_data: {
-        type: "subscription_update_confirm",
-        subscription_update_confirm: {
-          subscription: input.stripeSubscriptionId,
-          items: [{ id: input.subscriptionItemId, price: input.priceId, quantity: 1 }],
+    try {
+      const session = await this.stripeClient().billingPortal.sessions.create({
+        customer: input.stripeCustomerId,
+        return_url: input.returnUrl,
+        flow_data: {
+          type: "subscription_update_confirm",
+          subscription_update_confirm: {
+            subscription: input.stripeSubscriptionId,
+            items: [{ id: input.subscriptionItemId, price: input.priceId, quantity: 1 }],
+          },
+          after_completion: { type: "redirect", redirect: { return_url: input.returnUrl } },
         },
-        after_completion: { type: "redirect", redirect: { return_url: input.returnUrl } },
-      },
-    });
-    return { url: session.url };
+      });
+      return { url: session.url };
+    } catch (error) {
+      if (isPortalPlanChangeDisabledError(error)) {
+        this.logger.error("Stripe customer portal: plan changes are disabled — enable them in Settings → Billing → Customer portal.");
+        throw new StripePortalPlanChangeDisabledError();
+      }
+      throw error;
+    }
   }
 
   constructWebhookEvent(rawBody: Buffer, signatureHeader: string): StripeWebhookEvent {

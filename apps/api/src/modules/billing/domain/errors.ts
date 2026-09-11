@@ -269,6 +269,16 @@ export class StripeSubscriptionNotUpdatableError extends DomainError {
   }
 }
 
+/** Le compte Stripe n'autorise pas le changement de forfait dans son portail client (Paramètres →
+ *  Facturation → Portail client → Abonnements). Configuration de l'environnement, jamais une panne :
+ *  un message explicite plutôt qu'une 500. */
+export class StripePortalPlanChangeDisabledError extends DomainError {
+  readonly code = "STRIPE_PORTAL_PLAN_CHANGE_DISABLED";
+  constructor() {
+    super("Plan changes are disabled in the Stripe customer portal configuration");
+  }
+}
+
 export class BillingManagementPermissionMissingError extends DomainError {
   readonly code = "BILLING_MANAGEMENT_PERMISSION_MISSING";
   constructor() {

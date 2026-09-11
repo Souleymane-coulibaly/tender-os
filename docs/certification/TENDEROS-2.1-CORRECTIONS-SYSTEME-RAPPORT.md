@@ -281,6 +281,19 @@ faisait pas. Décision utilisateur : lien direct vers la confirmation Stripe. Co
 Non vérifiable ici : l'appel réel à Stripe (aucune clé Stripe de test dans cet environnement). À
 valider sur staging.
 
+Premier essai sur staging (déploiement `27bd7d5b`) : « Une erreur serveur est survenue ». Journaux
+de l'API : Stripe refuse la session avec « This subscription cannot be updated because the
+subscription update feature in the portal configuration is disabled ». Le code a bien lu
+l'abonnement Stripe et sa ligne — c'est la **configuration du portail client du compte Stripe** qui
+interdit le changement de forfait. Décision utilisateur : activation dans le tableau de bord Stripe
+(Paramètres → Facturation → Portail client → Abonnements → changement de forfait, avec les produits
+Starter, Business et Enterprise et leurs prix mensuels et annuels ; à refaire en mode Live). Côté
+code, ce refus n'est plus une 500 : l'adaptateur le reconnaît (`isPortalPlanChangeDisabledError`,
+type d'erreur Stripe + message, Stripe ne lui donnant pas de `code`) et lève
+`STRIPE_PORTAL_PLAN_CHANGE_DISABLED` (422, « Le changement de forfait en ligne n'est pas encore
+activé. Contactez le support. »), journalisé en erreur avec la marche à suivre. Tests :
+`stripe-sdk.client.spec.ts` (3 tests) ; billing 31/31 fichiers ; contrat des messages web vert.
+
 **Abonnement staging désynchronisé de Stripe** (constaté en même temps : « Essai Starter — 0 jours
 restants », échéance au 05/09/2026 déjà passée). Établi : les variables Stripe du service API
 staging sont toutes définies (clé, secret de webhook, 7 prix, `APP_BASE_URL`) et les webhooks

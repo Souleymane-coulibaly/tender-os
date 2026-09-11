@@ -46,6 +46,7 @@ const STATUS_BY_CODE: Record<string, number> = {
   // Changement de forfait d'un abonnement existant (lien direct vers la confirmation Stripe).
   PLAN_CHANGE_TARGET_IS_CURRENT_PLAN: HttpStatus.CONFLICT,
   STRIPE_SUBSCRIPTION_NOT_UPDATABLE: HttpStatus.UNPROCESSABLE_ENTITY,
+  STRIPE_PORTAL_PLAN_CHANGE_DISABLED: HttpStatus.UNPROCESSABLE_ENTITY,
 };
 
 @Catch(DomainError)

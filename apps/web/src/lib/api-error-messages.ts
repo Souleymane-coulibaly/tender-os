@@ -127,6 +127,7 @@ export const API_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   PASS_PURCHASE_NOT_FOUND: "Ce Pass est introuvable.",
   PLAN_CHANGE_TARGET_IS_CURRENT_PLAN: "Votre organisation est déjà sur ce forfait.",
   STRIPE_PRICE_NOT_CONFIGURED: "Cette offre n'est pas encore disponible à l'achat. Contactez le support.",
+  STRIPE_PORTAL_PLAN_CHANGE_DISABLED: "Le changement de forfait en ligne n'est pas encore activé. Contactez le support.",
   STRIPE_SUBSCRIPTION_NOT_UPDATABLE: "Votre abonnement ne peut pas être modifié en ligne pour le moment. Contactez le support.",
   STRIPE_UNRECOGNIZED_PRICE: "L'abonnement fait référence à une offre inconnue. Contactez le support.",
   STRIPE_WEBHOOK_SIGNATURE_INVALID: "La notification de paiement reçue n'est pas authentique.",
