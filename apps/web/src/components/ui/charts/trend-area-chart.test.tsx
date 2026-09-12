@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TrendAreaChart } from "./trend-area-chart";
 
@@ -26,6 +27,22 @@ describe("TrendAreaChart — Checkpoint TENDEROS-2.1-P2.3-E5 (Dashboard V2 Premi
     const table = screen.getByRole("table", { name: "Appels d'offres créés, par jour" });
     expect(table).toHaveTextContent("2026-06-13");
     expect(table).toHaveTextContent("2026-06-15");
+  });
+
+  it("chaque <title> du SVG est rendu en un seul texte côté serveur (sinon l'hydratation échoue et fige le tableau de bord)", () => {
+    const points = [
+      { date: "2026-06-13", count: 1 },
+      { date: "2026-06-14", count: 2 },
+    ];
+    const html = renderToString(<TrendAreaChart points={points} seriesLabel="Appels d'offres créés" />);
+
+    const titles = [...html.matchAll(/<title[^>]*>([\s\S]*?)<\/title>/g)].map((match) => match[1] ?? "");
+    expect(titles).toHaveLength(3);
+    // `<!-- -->` sépare les nœuds texte multiples dans le HTML serveur : leur présence dans un
+    // `<title>` est précisément ce que React 19 n'hydratait pas.
+    for (const title of titles) expect(title).not.toContain("<!-- -->");
+    expect(titles[0]).toContain("Appels d&#x27;offres créés : 3 sur la période");
+    expect(titles[1]).toContain("1 appel d&#x27;offres créé");
   });
 
   it("never omits a day — renders exactly as many accessible table rows as points supplied", () => {

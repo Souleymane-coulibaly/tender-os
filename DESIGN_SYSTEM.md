@@ -12,6 +12,21 @@ gris bruts, les couleurs brutes (verts, rouges, ambres…), les jetons inexistan
 (`text-tenderos-danger`…) et les titres de page écrits à la main. Il couvre aussi les écrans hors
 application connectée : back-office (`platform-admin`), onboarding, connexion et mot de passe oublié.
 
+Guides de page : une courte visite propre à chaque écran (3 à 5 étapes), proposée une fois à la
+première visite puis relançable par « Guide de cette page ». Pour en ajouter un :
+
+1. poser `data-tour="guide-<clé>-<élément>"` sur les vrais éléments de la page (bouton principal,
+   filtres, liste…) — sur un conteneur présent aussi quand la liste est vide ; `Button href`, `Card`,
+   `Table`, `EmptyState` et `TabsNav` ne transmettent pas les attributs : envelopper dans un `div`
+   qui a une taille réelle ;
+2. déclarer la clé et les étapes dans `apps/web/src/lib/page-guides.ts` (titre ≤ 40 caractères,
+   texte ≤ 180, ce que la page fait réellement) ;
+3. passer `guideKey="<clé>"` au `PageHeader` de la page.
+
+Une étape dont la cible est absente à l'écran (rôle, forfait, liste vide) est retirée à
+l'exécution. `lib/page-guides.contract.test.ts` vérifie que chaque cible existe dans les sources et
+que chaque page déclare son guide.
+
 ---
 
 ## 1. Couleurs

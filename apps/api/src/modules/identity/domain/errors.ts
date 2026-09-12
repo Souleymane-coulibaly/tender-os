@@ -67,6 +67,16 @@ export class TermsNotAcceptedError extends DomainError {
   }
 }
 
+/** TENDEROS-2.1 (guides de page) — défense en profondeur : le schéma HTTP refuse déjà une clé
+ *  mal formée (400 VALIDATION_FAILED), ce garde-fou refuse en plus tout appel direct au use case. */
+export class InvalidPageGuideKeyError extends DomainError {
+  readonly code = "INVALID_PAGE_GUIDE_KEY";
+
+  constructor(value: string) {
+    super(`"${value.slice(0, 80)}" is not a valid page guide key.`);
+  }
+}
+
 /** V2 Sprint 24 (onboarding) — anti-énumération : un jeton absent, expiré, ou déjà consommé
  *  renvoie TOUJOURS ce même message générique, jamais une nuance qui distinguerait ces cas. */
 export class PasswordResetTokenInvalidError extends DomainError {

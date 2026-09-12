@@ -76,12 +76,15 @@ export function TourProvider({
   // encore l'ancien état côté serveur (`tourDismissedAt`/etc. pas encore persisté) — jamais
   // seulement un souci de test, un utilisateur fermant l'onglet juste après "Plus tard" aurait pu
   // revoir le prompt à la prochaine visite malgré son choix explicite.
+  // START : l'étape 1 est affichée AVANT d'attendre l'écriture — l'inverse laissait l'utilisateur
+  // avancer (« Suivant ») pendant un enregistrement lent, puis le renvoyait à l'étape 1 quand il
+  // aboutissait. L'écriture reste attendue avant de rendre la main.
   const startTour = useCallback(async () => {
     setPromptVisible(false);
     setTourActive(true);
     trackEvent(GA_EVENTS.ProductTourStarted);
-    await updateTourStateAction("START");
     goToStep(0);
+    await updateTourStateAction("START");
   }, [goToStep]);
 
   const dismissPrompt = useCallback(async () => {

@@ -1,3 +1,4 @@
+import type { PageGuideState } from "../domain/page-guide-state.entity";
 import type { User } from "../domain/user.aggregate";
 
 export type UserSummary = {
@@ -37,5 +38,21 @@ export function toUserSummary(user: User): UserSummary {
     tourCompletedAt: user.tourCompletedAt?.toISOString(),
     tourDismissedAt: user.tourDismissedAt?.toISOString(),
     createdAt: user.createdAt.toISOString(),
+  };
+}
+
+/** TENDEROS-2.1 (guides de page) — une date absente est OMISE (jamais `null`) : contrat attendu
+ *  par l'application web. */
+export type PageGuideStateSummary = {
+  guideKey: string;
+  completedAt?: string;
+  dismissedAt?: string;
+};
+
+export function toPageGuideStateSummary(state: PageGuideState): PageGuideStateSummary {
+  return {
+    guideKey: state.guideKey,
+    ...(state.completedAt ? { completedAt: state.completedAt.toISOString() } : {}),
+    ...(state.dismissedAt ? { dismissedAt: state.dismissedAt.toISOString() } : {}),
   };
 }

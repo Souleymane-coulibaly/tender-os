@@ -1,10 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
-import { login, readFixture } from "./fixtures";
+import { ensureLoggedIn, readFixture } from "./fixtures";
 
 /**
  * V2 Sprint 25 (Checkpoint 25D, mission §25.72-§25.90/§25.110) — preuve Playwright bout-en-bout du
- * Guide interactif. `readFixture()` réutilise le membership principal — chaque test se connecte
- * frais (`context.clearCookies` implicite via une nouvelle session Playwright par test) mais
+ * Guide interactif. `readFixture()` réutilise le membership principal — la session est réutilisée
+ * (`ensureLoggedIn` : une connexion par test dépassait la limite partagée de 10 connexions par
+ * minute, « Trop de tentatives », sans rapport avec la visite) mais chaque test
  * partage le MÊME utilisateur : l'état `tourStartedAt/CompletedAt/DismissedAt` persiste réellement
  * entre les tests (mission §25.82 "user-scoped"), donc ces tests sont volontairement `.serial()`.
  */
@@ -52,7 +53,7 @@ async function seedAcceptedConsent(page: Page): Promise<void> {
 test.describe.serial("Guide interactif — flux principal", () => {
   test("mission §25.72 — première arrivée : prompt \"Bienvenue dans TenderOS\", jamais forcé (fermable via \"Plus tard\")", async ({ page }) => {
     const fixture = readFixture();
-    await login(page, fixture);
+    await ensureLoggedIn(page, fixture);
     await gotoResilient(page, "/app");
 
     const prompt = page.getByRole("region", { name: "Bienvenue" });
@@ -72,7 +73,7 @@ test.describe.serial("Guide interactif — flux principal", () => {
 
   test("mission §25.73/§25.86/§25.88 — \"Relancer la visite guidée\" ouvre l'étape 1 ancrée sur un target data-tour stable, Suivant avance, Précédent recule", async ({ page }) => {
     const fixture = readFixture();
-    await login(page, fixture);
+    await ensureLoggedIn(page, fixture);
     await gotoResilient(page, "/app");
 
     await page.getByRole("button", { name: "Relancer la visite guidée" }).click();
@@ -94,7 +95,7 @@ test.describe.serial("Guide interactif — flux principal", () => {
     test.setTimeout(60000);
     await seedAcceptedConsent(page);
     const fixture = readFixture();
-    await login(page, fixture);
+    await ensureLoggedIn(page, fixture);
     await gotoResilient(page, "/app");
 
     await page.getByRole("button", { name: "Relancer la visite guidée" }).click();
@@ -138,7 +139,7 @@ test.describe.serial("Guide interactif — flux principal", () => {
 
   test("mission §25.88/§25.89 — \"Passer\"/Escape ferme la visite, jamais de piège de focus", async ({ page }) => {
     const fixture = readFixture();
-    await login(page, fixture);
+    await ensureLoggedIn(page, fixture);
     await gotoResilient(page, "/app");
 
     await page.getByRole("button", { name: "Relancer la visite guidée" }).click();
@@ -154,7 +155,7 @@ test.describe.serial("Guide interactif — flux principal", () => {
 
   test("mission §25.85 — un CONTRIBUTOR voit l'étape \"Abonnement & utilisation\" (page en lecture seule accessible à tous les rôles, jamais une étape pointant vers une page bloquée)", async ({ page }) => {
     const fixture = readFixture();
-    await login(page, fixture);
+    await ensureLoggedIn(page, fixture);
     await gotoResilient(page, "/app");
 
     await page.getByRole("button", { name: "Relancer la visite guidée" }).click();
@@ -172,7 +173,7 @@ test.describe.serial("Guide interactif — flux principal", () => {
   test("mission §25.90 — mobile (390px) : le tooltip du guide ne dépasse jamais de l'écran", async ({ page }) => {
     const fixture = readFixture();
     await page.setViewportSize({ width: 390, height: 844 });
-    await login(page, fixture);
+    await ensureLoggedIn(page, fixture);
     await gotoResilient(page, "/app");
 
     await page.getByRole("button", { name: "Relancer la visite guidée" }).click();

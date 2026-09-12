@@ -94,6 +94,10 @@ export const GA_EVENTS = {
   StarterTrialConversion: "starter_trial_conversion",
   ProductTourStarted: "product_tour_started",
   ProductTourCompleted: "product_tour_completed",
+  // Guides de page — mêmes règles (après consentement, aucune PII) ; seul paramètre : la clé du
+  // guide (`guide_key`, identifiant de page public, jamais une donnée métier).
+  PageGuideStarted: "page_guide_started",
+  PageGuideCompleted: "page_guide_completed",
   FirstTenderStarted: "first_tender_started",
 } as const;
 export type GaEventName = (typeof GA_EVENTS)[keyof typeof GA_EVENTS];

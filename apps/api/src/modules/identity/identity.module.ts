@@ -17,7 +17,11 @@ import { RegisterUserUseCase } from "./application/use-cases/register-user.use-c
 import { RequestPasswordResetUseCase } from "./application/use-cases/request-password-reset.use-case";
 import { ResetPasswordUseCase } from "./application/use-cases/reset-password.use-case";
 import { UpdateTourStateUseCase } from "./application/use-cases/update-tour-state.use-case";
+import { ListPageGuideStatesUseCase } from "./application/use-cases/list-page-guide-states.use-case";
+import { RecordPageGuideActionUseCase } from "./application/use-cases/record-page-guide-action.use-case";
+import { PAGE_GUIDE_STATE_REPOSITORY } from "./application/ports/page-guide-state.repository";
 import { JwtAccessTokenService } from "./infrastructure/jwt-access-token.service";
+import { PrismaPageGuideStateRepository } from "./infrastructure/prisma-page-guide-state.repository";
 import { PrismaPasswordResetTokenRepository } from "./infrastructure/prisma-password-reset-token.repository";
 import { PrismaSessionRepository } from "./infrastructure/prisma-session.repository";
 import { PrismaUserRepository } from "./infrastructure/prisma-user.repository";
@@ -25,6 +29,7 @@ import { ScryptPasswordHasher } from "./infrastructure/scrypt-password-hasher";
 import { AuthController } from "./interfaces/http/auth.controller";
 import { AuthenticatedGuard } from "./interfaces/http/authenticated.guard";
 import { AuthThrottlerGuard } from "./interfaces/http/auth-throttler.guard";
+import { PageGuidesController } from "./interfaces/http/page-guides.controller";
 
 @Module({
   imports: [
@@ -37,7 +42,7 @@ import { AuthThrottlerGuard } from "./interfaces/http/auth-throttler.guard";
     // "public-api" de IntegrationsModule, chaque module possède son propre stockage/config isolés.
     ThrottlerModule.forRoot([{ name: "auth", ttl: 60_000, limit: 10 }]),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, PageGuidesController],
   providers: [
     RegisterUserUseCase,
     AuthenticateUserUseCase,
@@ -49,6 +54,8 @@ import { AuthThrottlerGuard } from "./interfaces/http/auth-throttler.guard";
     RequestPasswordResetUseCase,
     ResetPasswordUseCase,
     UpdateTourStateUseCase,
+    ListPageGuideStatesUseCase,
+    RecordPageGuideActionUseCase,
     AuthenticatedGuard,
     AuthThrottlerGuard,
     { provide: USER_REPOSITORY, useClass: PrismaUserRepository },
@@ -56,6 +63,7 @@ import { AuthThrottlerGuard } from "./interfaces/http/auth-throttler.guard";
     { provide: PASSWORD_HASHER, useClass: ScryptPasswordHasher },
     { provide: ACCESS_TOKEN_SERVICE, useClass: JwtAccessTokenService },
     { provide: PASSWORD_RESET_TOKEN_REPOSITORY, useClass: PrismaPasswordResetTokenRepository },
+    { provide: PAGE_GUIDE_STATE_REPOSITORY, useClass: PrismaPageGuideStateRepository },
   ],
   // ACCESS_TOKEN_SERVICE et SESSION_REPOSITORY sont exportés uniquement pour que
   // AuthenticatedGuard reste résoluble quand il est réutilisé par un autre module

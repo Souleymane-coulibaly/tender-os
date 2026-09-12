@@ -1,4 +1,4 @@
-import type { UserSummary } from "../../application/dtos";
+import type { PageGuideStateSummary, UserSummary } from "../../application/dtos";
 import type { AuthenticateUserResult } from "../../application/use-cases/authenticate-user.use-case";
 
 /**
@@ -24,6 +24,23 @@ export function presentUser(user: UserSummary): UserResponse {
     tourDismissedAt: user.tourDismissedAt,
     createdAt: user.createdAt,
   };
+}
+
+/** TENDEROS-2.1 (guides de page) — liste blanche explicite ; une date absente est omise, jamais
+ *  `null` (contrat de l'application web). */
+export type PageGuideStateResponse = Readonly<PageGuideStateSummary>;
+export type PageGuideStateListResponse = Readonly<{ items: PageGuideStateResponse[] }>;
+
+export function presentPageGuideState(state: PageGuideStateSummary): PageGuideStateResponse {
+  return {
+    guideKey: state.guideKey,
+    ...(state.completedAt !== undefined ? { completedAt: state.completedAt } : {}),
+    ...(state.dismissedAt !== undefined ? { dismissedAt: state.dismissedAt } : {}),
+  };
+}
+
+export function presentPageGuideStates(states: PageGuideStateSummary[]): PageGuideStateListResponse {
+  return { items: states.map(presentPageGuideState) };
 }
 
 export type AuthenticationResponse = Readonly<AuthenticateUserResult>;

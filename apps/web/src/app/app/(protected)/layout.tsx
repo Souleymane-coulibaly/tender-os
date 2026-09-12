@@ -4,11 +4,14 @@ import { appApiFetch, getAppSessionToken, getCurrentMembershipRole } from "../..
 import { fetchEntitlements } from "../billing-actions";
 import { logoutAction } from "../actions";
 import { fetchNotifications, fetchUnreadNotificationCount } from "../notifications-actions";
+import { fetchSeenPageGuides } from "../page-guide-actions";
 import { resolveTourSteps } from "../../../lib/tour-steps";
 import { ToastProvider } from "../../../components/ui/toast";
 import { AppShell } from "./app-shell";
 import { AuthenticatedAnalyticsLoader } from "./authenticated-analytics-loader";
 import { NotificationBell } from "./notification-bell";
+import { PageGuideProvider } from "./page-guide-provider";
+import { PageGuideTooltip } from "./page-guide-tooltip";
 import { RestartTourButton } from "./restart-tour-button";
 import { TourProvider } from "./tour-provider";
 import { TourTooltip } from "./tour-tooltip";
@@ -21,6 +24,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (!token) {
     redirect("/app/login");
   }
+
+  // Guides de page — lancé tout de suite, en parallèle des autres lectures ; ne lève jamais :
+  // `null` (état inconnu) = tous les guides considérés vus, aucun bandeau affiché sur une incertitude.
+  const seenPageGuidesPromise = fetchSeenPageGuides();
 
   // Mission Sprint 17 §37/§99 — jamais bloquant : si la résolution de l'organisation active
   // n'est pas encore possible (première visite, etc.), la cloche s'affiche simplement vide.
@@ -63,6 +70,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     // Dégradation silencieuse — voir commentaire ci-dessus.
   }
 
+  const seenPageGuideKeys = await seenPageGuidesPromise;
+
   return (
     // Design System Checkpoint C — câblage du `ToastProvider` (Checkpoint B, primitive déjà prête
     // mais volontairement non montée alors) au SEUL point d'entrée réel de la surface `/app` :
@@ -70,24 +79,28 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     // modifiée dans ce Checkpoint, mission §38/§39).
     <ToastProvider>
       <TourProvider steps={tourSteps} hasEverInteractedWithTour={hasEverInteractedWithTour}>
-        <AuthenticatedAnalyticsLoader />
-        <AppShell
-          actorRole={actorRole}
-          headerActions={
-            <>
-              <RestartTourButton hasEverInteractedWithTour={hasEverInteractedWithTour} />
-              <NotificationBell initialNotifications={initialNotifications} initialUnreadCount={initialUnreadCount} />
-              <form action={logoutAction}>
-                <button type="submit" className="text-sm text-tenderos-slate hover:text-tenderos-navy hover:underline">
-                  Se déconnecter
-                </button>
-              </form>
-            </>
-          }
-        >
-          {children}
-        </AppShell>
-        <TourTooltip />
+        {/* Guides de page — sous `TourProvider` : la visite de bienvenue garde la priorité. */}
+        <PageGuideProvider seenGuideKeys={seenPageGuideKeys}>
+          <AuthenticatedAnalyticsLoader />
+          <AppShell
+            actorRole={actorRole}
+            headerActions={
+              <>
+                <RestartTourButton hasEverInteractedWithTour={hasEverInteractedWithTour} />
+                <NotificationBell initialNotifications={initialNotifications} initialUnreadCount={initialUnreadCount} />
+                <form action={logoutAction}>
+                  <button type="submit" className="text-sm text-tenderos-slate hover:text-tenderos-navy hover:underline">
+                    Se déconnecter
+                  </button>
+                </form>
+              </>
+            }
+          >
+            {children}
+          </AppShell>
+          <TourTooltip />
+          <PageGuideTooltip />
+        </PageGuideProvider>
       </TourProvider>
     </ToastProvider>
   );

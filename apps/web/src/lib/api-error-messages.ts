@@ -479,6 +479,7 @@ export const API_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   EMAIL_ALREADY_REGISTERED: "Un compte existe déjà avec cette adresse e-mail.",
   INVALID_CREDENTIALS: "L'adresse e-mail ou le mot de passe est incorrect.",
   INVALID_EMAIL_ADDRESS: "Cette adresse e-mail n'est pas valide.",
+  INVALID_PAGE_GUIDE_KEY: "Ce guide de page n'existe pas.",
   PASSWORD_RESET_TOKEN_INVALID: "Ce lien de réinitialisation n'est pas valide ou a expiré.",
   SESSION_NOT_FOUND: "Votre session n'existe plus. Reconnectez-vous.",
   TERMS_NOT_ACCEPTED: "Vous devez accepter les Conditions Générales d'Utilisation pour continuer.",

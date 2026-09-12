@@ -49,8 +49,11 @@ export function TrendAreaChart({ points, seriesLabel }: { points: readonly Trend
         </div>
       ) : (
         <svg viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`} preserveAspectRatio="none" className="h-40 w-full" role="img" aria-labelledby="trend-chart-title">
+          {/* Une seule chaîne par `<title>` : plusieurs nœuds texte y étaient mal hydratés par
+              React 19 (erreur d'hydratation qui figeait le tableau de bord — « Plus tard » de la
+              visite de bienvenue ne répondait plus). */}
           <title id="trend-chart-title">
-            {seriesLabel} : {total} sur la période, de {formatShortDate(points[0]?.date ?? "")} à {formatShortDate(points[points.length - 1]?.date ?? "")}
+            {`${seriesLabel} : ${total} sur la période, de ${formatShortDate(points[0]?.date ?? "")} à ${formatShortDate(points[points.length - 1]?.date ?? "")}`}
           </title>
           {/* Grille horizontale discrète — repère visuel uniquement, jamais porteuse d'information seule. */}
           {[0.25, 0.5, 0.75].map((fraction) => (
@@ -60,9 +63,7 @@ export function TrendAreaChart({ points, seriesLabel }: { points: readonly Trend
           <path d={linePath} fill="none" stroke="#1472FF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           {coords.map((c) => (
             <circle key={c.date} cx={c.x} cy={c.y} r={c.count > 0 ? 3 : 2} fill={c.count > 0 ? "#1472FF" : "#C9D3E0"} stroke="#FFFFFF" strokeWidth={1}>
-              <title>
-                {formatShortDate(c.date)} : {c.count} appel{c.count === 1 ? "" : "s"} d&apos;offres créé{c.count === 1 ? "" : "s"}
-              </title>
+              <title>{`${formatShortDate(c.date)} : ${c.count} appel${c.count === 1 ? "" : "s"} d'offres créé${c.count === 1 ? "" : "s"}`}</title>
             </circle>
           ))}
         </svg>

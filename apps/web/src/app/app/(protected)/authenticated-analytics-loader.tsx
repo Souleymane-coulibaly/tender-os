@@ -19,14 +19,15 @@ import { readStoredConsent } from "../../../lib/consent";
 export function AuthenticatedAnalyticsLoader() {
   const [analyticsGranted, setAnalyticsGranted] = useState(false);
 
+  // Consentement appliqué dans le MÊME effet que sa lecture : en deux temps (état, puis second
+  // effet au rendu suivant), un clic arrivé entre les deux — « Relancer la visite guidée » juste
+  // après le chargement — déclenchait `trackEvent` avant le consentement, et l'événement était perdu.
   useEffect(() => {
     const stored = readStoredConsent();
-    if (stored?.analytics) setAnalyticsGranted(true);
+    if (!stored?.analytics) return;
+    applyConsentToGtag(true);
+    setAnalyticsGranted(true);
   }, []);
-
-  useEffect(() => {
-    if (analyticsGranted) applyConsentToGtag(true);
-  }, [analyticsGranted]);
 
   if (!GA_MEASUREMENT_ID || !analyticsGranted) return null;
 

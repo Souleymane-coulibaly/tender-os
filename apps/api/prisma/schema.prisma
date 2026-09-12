@@ -76,8 +76,34 @@ model User {
   tenderParticipations  TenderParticipant[]
   /// V2 Sprint 24 — jetons de réinitialisation de mot de passe émis pour ce compte.
   passwordResetTokens   PasswordResetToken[]
+  /// TENDEROS-2.1 — guides de page déjà terminés ou écartés par cet utilisateur.
+  pageGuideStates       UserPageGuideState[]
 
   @@map("users")
+}
+
+/// TENDEROS-2.1 (guides de page) — mémoire, PAR UTILISATEUR, des courts guides contextuels (un par
+/// écran) déjà terminés ou écartés. Même motif que `User.tourCompletedAt/tourDismissedAt` (horodatage,
+/// jamais un simple booléen ; user-scoped, jamais organization-scoped) mais une ligne par guide.
+/// L'API ne détient volontairement AUCUNE liste fermée de guides : le registre vit dans l'application
+/// web, `guideKey` n'est contraint que par sa forme (/^[a-z0-9-]{1,64}$/, value object `PageGuideKey`).
+model UserPageGuideState {
+  id String @id @default(uuid()) @db.Uuid
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  guideKey String @map("guide_key") @db.VarChar(64)
+
+  completedAt DateTime? @map("completed_at")
+  dismissedAt DateTime? @map("dismissed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Sert aussi l'index de lecture « tous les guides d'un utilisateur » (user_id en tête).
+  @@unique([userId, guideKey])
+  @@map("user_page_guide_states")
 }
 
 /// Session d'authentification server-side, référencée par le jeton d'accès émis

@@ -140,8 +140,19 @@
     opacity: 1;
   }
 }
+/* Guides (visite de bienvenue et guides de page) — contour de l'élément ciblé par l'étape courante,
+   posé puis retiré par `GuideTooltipPanel` à chaque changement d'étape et à la fermeture. `outline`
+   (jamais `border`) : aucun décalage de mise en page ; il suit l'arrondi existant de l'élément. */
+.tenderos-guide-target {
+  outline: 2px solid var(--tenderos-gold);
+  outline-offset: 3px;
+  transition: outline-offset 150ms ease-out;
+}
 @media (prefers-reduced-motion: reduce) {
   .tenderos-tour-tooltip {
     animation: none;
+  }
+  .tenderos-guide-target {
+    transition: none;
   }
 }

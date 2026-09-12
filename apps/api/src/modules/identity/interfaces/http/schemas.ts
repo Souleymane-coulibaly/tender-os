@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PAGE_GUIDE_KEY_PATTERN } from "../../domain/page-guide-key.value-object";
 
 /** V2 Sprint 24 (onboarding, CGU) — première ligne de contrôle : `!== true` est refusé avec le
  *  message exact requis par la mission, jamais un booléen silencieusement accepté à `false`.
@@ -61,3 +62,15 @@ export const UpdateTourStateBodySchema = z
   .strict();
 
 export type UpdateTourStateBody = z.infer<typeof UpdateTourStateBodySchema>;
+
+/** TENDEROS-2.1 (guides de page) — même expression que le value object `PageGuideKey`
+ *  (`PAGE_GUIDE_KEY_PATTERN`), jamais une seconde règle divergente. */
+export const PageGuideKeyParamSchema = z.string().regex(PAGE_GUIDE_KEY_PATTERN);
+
+export const RecordPageGuideActionBodySchema = z
+  .object({
+    action: z.enum(["COMPLETE", "DISMISS"]),
+  })
+  .strict();
+
+export type RecordPageGuideActionBody = z.infer<typeof RecordPageGuideActionBodySchema>;
