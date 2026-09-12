@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LEGAL_ENTITY } from "../../../lib/legal-entity";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Connexion — TenderOS", robots: { index: false, follow: false } };
@@ -61,7 +62,9 @@ export default async function AppLoginPage({ searchParams }: { searchParams: Pro
             ))}
           </ul>
         </div>
-        <p className="relative text-xs text-white/50">© {new Date().getFullYear()} TenderOS</p>
+        <p className="relative text-xs text-white/50">
+          © {new Date().getFullYear()} {LEGAL_ENTITY.name} — {LEGAL_ENTITY.product}
+        </p>
       </div>
 
       <div className="flex flex-col items-center justify-center gap-6 bg-tenderos-light px-4 py-12 sm:px-6">

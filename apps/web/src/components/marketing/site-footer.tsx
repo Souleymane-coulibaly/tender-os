@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LEGAL_ENTITY } from "../../lib/legal-entity";
 import { useConsent } from "./consent-provider";
 
 const YEAR = new Date().getFullYear();
@@ -66,7 +67,9 @@ export function SiteFooter() {
         </div>
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-6 sm:flex-row">
-          <p className="text-xs text-white/50">© {YEAR} TenderOS. Tous droits réservés.</p>
+          <p className="text-xs text-white/50">
+            © {YEAR} {LEGAL_ENTITY.name}. Tous droits réservés. {LEGAL_ENTITY.product} est un service édité et exploité par {LEGAL_ENTITY.name}.
+          </p>
           <p className="text-xs font-medium text-white/70">Hébergement en France</p>
         </div>
       </div>

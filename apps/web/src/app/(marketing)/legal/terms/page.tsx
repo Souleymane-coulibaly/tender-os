@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PUBLISHER_STATEMENT } from "../../../../lib/legal-entity";
 
 export const metadata: Metadata = {
   title: "Conditions Générales d'Utilisation — TenderOS",
@@ -19,7 +20,8 @@ export default function TermsOfServicePage() {
       <div className="mt-8 space-y-6 text-sm leading-relaxed">
         <div>
           <h2 className="text-base font-bold text-tenderos-navy">1. Objet</h2>
-          <p className="mt-2">Les présentes Conditions Générales d&apos;Utilisation régissent l&apos;accès et l&apos;utilisation de la plateforme TenderOS. Le contenu contractuel définitif est en cours de finalisation : [PENDING LEGAL CONTENT]</p>
+          <p className="mt-2">Les présentes Conditions Générales d&apos;Utilisation régissent l&apos;accès et l&apos;utilisation du service TenderOS. {PUBLISHER_STATEMENT}</p>
+          <p className="mt-2">Le contenu contractuel définitif est en cours de finalisation : [PENDING LEGAL CONTENT]</p>
         </div>
         <div>
           <h2 className="text-base font-bold text-tenderos-navy">2. Accès au service</h2>

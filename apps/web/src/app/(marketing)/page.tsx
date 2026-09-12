@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LANDING_FAQ } from "../../lib/landing-faq";
+import { LEGAL_ENTITY } from "../../lib/legal-entity";
 import { AiSection } from "./ai-section";
 import { BenefitsSection } from "./benefits-section";
 import { FaqSection } from "./faq-section";
@@ -44,10 +45,28 @@ export const metadata: Metadata = {
 const STRUCTURED_DATA = {
   "@context": "https://schema.org",
   "@graph": [
-    { "@type": "Organization", name: "TenderOS", url: "/", logo: "/brand/tenderos-icon-square.svg" },
+    // L'organisation est la société éditrice (Digiura.ai) ; TenderOS est sa marque et son logiciel.
+    // Uniquement les données fournies par l'éditeur (`lib/legal-entity.ts`) — rien d'« À CONFIRMER ».
+    {
+      "@type": "Organization",
+      "@id": "#editeur",
+      name: LEGAL_ENTITY.name,
+      legalName: LEGAL_ENTITY.name,
+      url: "/",
+      vatID: LEGAL_ENTITY.vatNumber,
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: LEGAL_ENTITY.headOffice.street,
+        postalCode: LEGAL_ENTITY.headOffice.postalCode,
+        addressLocality: LEGAL_ENTITY.headOffice.city,
+        addressCountry: "FR",
+      },
+      brand: { "@type": "Brand", name: LEGAL_ENTITY.product, logo: "/brand/tenderos-icon-square.svg" },
+    },
     {
       "@type": "SoftwareApplication",
-      name: "TenderOS",
+      name: LEGAL_ENTITY.product,
+      publisher: { "@id": "#editeur" },
       applicationCategory: "BusinessApplication",
       operatingSystem: "Web",
       description: "Plateforme intelligente de réponse aux appels d'offres.",

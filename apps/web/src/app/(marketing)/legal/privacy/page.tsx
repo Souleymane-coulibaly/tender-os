@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { HEAD_OFFICE_ADDRESS, LEGAL_ENTITY } from "../../../../lib/legal-entity";
 
 export const metadata: Metadata = {
   title: "Politique de confidentialité — TenderOS",
@@ -9,8 +10,8 @@ export const metadata: Metadata = {
 /**
  * V2 Sprint 23 (landing) — mission §54/§12. Les droits RGPD listés (accès/rectification/effacement/
  * portabilité/opposition) sont des droits GÉNÉRAUX garantis par le règlement (articles 15-21),
- * jamais une allégation propre à TenderOS — seules les données d'identification du responsable de
- * traitement/DPO/hébergeur restent des placeholders explicites.
+ * jamais une allégation propre à TenderOS. Identité du responsable de traitement lue dans
+ * `lib/legal-entity.ts` ; contact RGPD / DPO et hébergeur restent « À CONFIRMER », jamais devinés.
  */
 export default function PrivacyPolicyPage() {
   return (
@@ -21,12 +22,15 @@ export default function PrivacyPolicyPage() {
       <div className="mt-8 space-y-6 text-sm leading-relaxed">
         <div>
           <h2 className="text-base font-bold text-tenderos-navy">Responsable de traitement</h2>
-          <p className="mt-2">Identité et coordonnées du responsable de traitement : [PENDING LEGAL CONTENT]</p>
+          <p className="mt-2">
+            Pour les données collectées sur ce site, le responsable de traitement est {LEGAL_ENTITY.name}, {LEGAL_ENTITY.legalForm} au capital de {LEGAL_ENTITY.shareCapital}, dont le siège social est situé {HEAD_OFFICE_ADDRESS}, immatriculée sous le numéro SIREN {LEGAL_ENTITY.siren}, éditeur et exploitant du service {LEGAL_ENTITY.product}.
+          </p>
+          <p className="mt-2">Adresse de contact dédiée à la protection des données : {LEGAL_ENTITY.privacyContact}</p>
         </div>
 
         <div>
           <h2 className="text-base font-bold text-tenderos-navy">Délégué à la protection des données</h2>
-          <p className="mt-2">Contact du DPO (le cas échéant) : [PENDING LEGAL CONTENT]</p>
+          <p className="mt-2">Contact du DPO (le cas échéant) : {LEGAL_ENTITY.privacyContact}</p>
         </div>
 
         <div>
@@ -38,7 +42,7 @@ export default function PrivacyPolicyPage() {
 
         <div>
           <h2 className="text-base font-bold text-tenderos-navy">Hébergement des données</h2>
-          <p className="mt-2">Détail de l&apos;hébergeur et localisation des serveurs : [PENDING LEGAL CONTENT]</p>
+          <p className="mt-2">Hébergeur(s) et localisation des serveurs : {LEGAL_ENTITY.host}</p>
         </div>
 
         <div>
