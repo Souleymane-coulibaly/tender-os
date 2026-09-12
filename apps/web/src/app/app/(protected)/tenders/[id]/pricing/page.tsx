@@ -35,13 +35,17 @@ export default async function TenderPricingPage({ params }: { params: Promise<{ 
         breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Estimation & coûts IA" }]}
         title="Estimation & coûts IA"
         description="Coût technique IA réel de ce Tender et estimations prévisionnelles indicatives. Aucun montant affiché ici n'est un prix réel garanti du marché."
+        guideKey="tender-pricing"
       />
       <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/pricing`} />
       <PricingSection tenderId={tenderId} initialSummary={summary} actorRole={actorRole} />
 
-      <Card title="Historique des estimations">
-        <EstimateHistorySection estimates={history.items} />
-      </Card>
+      {/* Guide de page : `Card` ne transmet pas `data-tour`, d'où l'enveloppe. */}
+      <div data-tour="guide-tender-pricing-history">
+        <Card title="Historique des estimations">
+          <EstimateHistorySection estimates={history.items} />
+        </Card>
+      </div>
     </div>
   );
 }

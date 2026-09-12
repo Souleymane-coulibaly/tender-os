@@ -25,7 +25,7 @@ export default async function AiModelPreferencesPage() {
   const byTaskType = new Map(preferences.map((p) => [p.taskType, p]));
 
   return (
-    <div className="flex max-w-2xl flex-col gap-4">
+    <div data-tour="guide-ai-configuration-model-choice" className="flex max-w-2xl flex-col gap-4">
       <Card
         title="Choix des modèles"
         description={

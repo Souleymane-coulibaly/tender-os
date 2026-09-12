@@ -101,7 +101,7 @@ function CreateMemoForm({
         <Alert tone="danger">{error}</Alert>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div data-tour="guide-tender-technical-memo-template" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {(["TENDEROS_SYSTEM", "COMPANY_TEMPLATE", "DCE_REQUIRED_TEMPLATE"] as const).map(
           (value) => (
             <Button
@@ -143,7 +143,7 @@ function CreateMemoForm({
         </div>
       ) : null}
 
-      <Button type="submit" disabled={isPending} className="self-start" variant="primary" size="sm">
+      <Button data-tour="guide-tender-technical-memo-create" type="submit" disabled={isPending} className="self-start" variant="primary" size="sm">
         {isPending ? "Analyse en cours…" : "Créer et analyser"}
       </Button>
     </form>
@@ -527,7 +527,7 @@ function MemoDetail({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-tenderos-navy/10 p-3">
+      <div data-tour="guide-tender-technical-memo-toolbar" className="flex flex-wrap items-center justify-between gap-3 rounded border border-tenderos-navy/10 p-3">
         <div>
           <p className="text-sm font-medium">
             {TEMPLATE_ORIGIN_LABELS[memo.templateOrigin]} —{" "}
@@ -609,7 +609,7 @@ function MemoDetail({
 
       <CoveragePanel coverage={coverage} />
 
-      <div className="flex flex-col gap-3">
+      <div data-tour="guide-tender-technical-memo-sections" className="flex flex-col gap-3">
         {localSections
           .slice()
           .sort((a, b) => a.order - b.order)

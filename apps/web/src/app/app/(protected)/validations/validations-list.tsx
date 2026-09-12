@@ -130,7 +130,7 @@ export function ValidationsList({ initialApprovals }: { initialApprovals: Approv
 
   return (
     <Card padding="none">
-      <ul className="divide-y divide-tenderos-navy/10">
+      <ul data-tour="guide-validations-items" className="divide-y divide-tenderos-navy/10">
         {initialApprovals.map((approval) => (
           <ValidationRow key={approval.id} approval={approval} />
         ))}

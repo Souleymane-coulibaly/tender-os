@@ -571,6 +571,106 @@ qu'à l'échange du code, après le consentement de l'utilisateur chez le provid
 - Reste à faire côté exploitation (hors code) : définir les 5 variables sur le service API staging
   et déclarer les URL de redirection chez Microsoft Entra et Google Cloud.
 
+**Guides de page — lot A** (demande : « un guide interactif sur chaque page » ; choix validés :
+bouton + proposition à la première visite, mémorisation côté serveur, livraison par lots, étapes
+ancrées sur la page).
+
+- API (module Identity, à côté de l'état de la visite de bienvenue) : table `user_page_guide_states`
+  (migration additive écrite à la main `20261019090000_user_page_guide_states`, prouvée sur une base
+  jetable : 117 migrations rejouées, 0 ligne d'écart sur la nouvelle table), routes
+  `GET /auth/me/page-guides` et `POST /auth/me/page-guides/:guideKey` (`COMPLETE` / `DISMISS`),
+  strictement par utilisateur. Chaque action n'écrit que sa propre date (upsert unique, sans perte en
+  cas d'actions simultanées). Nouvelle erreur `INVALID_PAGE_GUIDE_KEY` (400, message français).
+- Web : l'infobulle de la visite de bienvenue devient un composant partagé (positionnement sous /
+  au-dessus de la cible, bornage à l'écran, défilement vers la cible, surlignage, clavier, Échap,
+  focus) — une seule implémentation pour les deux visites. Bouton « Guide de cette page » et
+  bandeau de première visite portés par `PageHeader` (`guideKey`) ; jamais affichés pendant la
+  visite de bienvenue ; état inconnu (API en échec) = aucun bandeau, bouton toujours utilisable.
+- Contenu : 9 guides (tableau de bord, veille, opportunités, appels d'offres, fiche AO, base de
+  connaissances, documents, clients, validations), 3 à 5 étapes chacun, textes tirés de ce que la
+  page fait réellement ; étapes conditionnelles (rôle, liste vide) retirées à l'exécution.
+- Tests : API — 50 nouveaux (entité, cas d'usage, contrôleur, dépôt Prisma et HTTP réel sur
+  PostgreSQL, dont isolation entre utilisateurs), module Identity 102/102 ; web — moteur (134 tests
+  dans les fichiers touchés), contrat des guides (chaque cible existe dans les sources, chaque page
+  déclare son guide), suite complète verte ; typecheck API et web 0, lint 0 erreur.
+- Environnement local : le serveur de développement avait compilé pendant l'écriture des fichiers
+  et ne rechargeait plus le module Identity (routes en 404) ; redémarré, client Prisma régénéré.
+- Deux défauts préexistants trouvés par la preuve navigateur, corrigés : (1) **erreur d'hydratation
+  du tableau de bord** — les `<title>` SVG du graphique d'activité assemblaient plusieurs nœuds
+  texte, mal hydratés par React 19 ; l'arbre régénéré laissait « Plus tard » de la visite de
+  bienvenue sans effet pour tout nouvel utilisateur (une seule chaîne par `<title>`, test de
+  non-régression par rendu serveur) ; (2) **course au démarrage de la visite de bienvenue** —
+  `startTour` attendait l'enregistrement START avant d'afficher l'étape 1 : un « Suivant » pendant
+  un enregistrement lent était annulé et l'utilisateur renvoyé à l'étape 1 (étape affichée d'abord,
+  test unitaire de la course) ; (3) **événements analytics perdus juste après le chargement** — le
+  consentement déjà accordé n'était appliqué qu'au rendu suivant sa lecture : un clic entre les deux
+  (« Relancer la visite guidée ») envoyait `product_tour_started` avant le consentement, et
+  l'événement était silencieusement abandonné (consentement appliqué dans le même effet que sa
+  lecture ; prouvé par `guide.spec.ts`, qu'un test unitaire ne peut pas voir car `act()` enchaîne
+  les rendus).
+- E2E : la spec des guides réutilise la session (`ensureLoggedIn`) — une connexion par test
+  dépassait la limite partagée de 10 connexions par minute (« Trop de tentatives ») ; même
+  correction dans `guide.spec.ts` (6 connexions par passage, `globalSetup` compris dans le même
+  compteur).
+- Règle de priorité, vérifiée au navigateur : tant qu'un utilisateur n'a pas répondu à la
+  proposition de bienvenue (tableau de bord), aucun bandeau de page n'apparaît ; le bouton « Guide
+  de cette page » reste disponible. Le premier test de la spec des guides passait « à vide » (il
+  n'ouvrait pas le tableau de bord, le bandeau ne pouvait pas apparaître) : il exige désormais le
+  bandeau, après la proposition de bienvenue. Preuve complémentaire avec un utilisateur neuf :
+  API `{"items":[]}`, bandeau « Nouveau sur Documents ? », « Découvrir » ouvre l'étape 1.
+- Navigateur (serveur local, un seul processus) : `page-guides.spec.ts` + `guide.spec.ts`, **17/17**
+  — bandeau exigé puis écarté sans retour après rechargement ; les 9 guides déroulés jusqu'à
+  « Terminer », chaque étape sur un élément visible et surligné, infobulle dans l'écran ; mobile
+  390 px ; visite de bienvenue intacte (prompt, Suivant/Précédent, événements analytics, Passer /
+  Échap, rôle Contributeur, mobile). Captures relues (appels d'offres, fiche AO, Documents, mobile).
+- Web : suite complète 110/110 fichiers, 668/668 tests ; typecheck API et web 0 ; lint API et web
+  0 erreur (1 avertissement préexistant, `<img>` du logo de l'App Shell).
+
+**Guides de page — lot B : les 18 onglets de la fiche AO** (même moteur, même règles ; « Vue
+d'ensemble » était au lot A).
+
+- Registre découpé par étape du flux : `page-guides-tender-preparation.ts` (DCE, Analyse,
+  Checklist, Collaboration, Assistant IA, Rédaction IA du mémoire, Dossier administratif, Chiffrage,
+  Estimation & coûts IA) et `page-guides-tender-finalisation.ts` (Livrables, Générations, Documents
+  générés, Validation, Signature, Dossier de soumission, Dossier final, Dépôt, Export), agrégés dans
+  `page-guides.ts` — 27 guides au total.
+- 3 à 5 étapes par onglet, textes tirés du code de chaque onglet (Dépôt : TenderOS enregistre le
+  dépôt, il n'agit jamais sur la plateforme de l'acheteur) ; la barre d'onglets n'est jamais
+  reciblée (présentée par le guide de la vue d'ensemble). Chaque guide garde au moins deux étapes
+  présentes sur un appel d'offres neuf d'une organisation abonnée ; les étapes liées à un état
+  (DCE initialisé, mémoire créé, contrôle lancé…) ou à un rôle sont retirées quand l'élément manque.
+  Une cible répétée sur les éléments d'une liste désigne le premier affiché.
+- Uniquement des attributs `data-tour` et des conteneurs `div` ajoutés : aucun texte, comportement
+  ni style modifié ; aucun composant partagé avec une autre page touché (`AiSuggestionsSection`,
+  commun à la vue d'ensemble : cible posée dans la page Checklist).
+- Contrat des guides étendu aux 27 pages ; spec E2E étendue aux 18 onglets, parcourus sur
+  l'organisation abonnée de la fixture (plusieurs onglets exigent un droit actif).
+- Web : suite complète 110/110 fichiers, 686/686 tests ; typecheck 0 ; lint 0 erreur.
+- Navigateur (serveur local, un seul processus) : `page-guides.spec.ts` + `guide.spec.ts`, **35/35**
+  — les 18 onglets sur un appel d'offres de l'organisation abonnée, chaque guide déroulé jusqu'à
+  « Terminer » avec au moins deux étapes à l'écran, chaque étape sur un élément visible et surligné,
+  infobulle dans l'écran ; lot A, bandeau, mobile et visite de bienvenue toujours verts.
+
+**Guides de page — lot C : ressources et paramètres de l'organisation** (Abonnement & utilisation,
+Membres, Intégrations, Configuration IA, Coûts IA, plus Entreprises candidates et Sous-traitants,
+deux pages du menu « Ressources » non couvertes par le lot A) — 34 guides au total.
+
+- Registre `page-guides-organisation.ts`, agrégé dans `page-guides.ts`.
+- Intégrations et Configuration IA ont en-tête et onglets dans un layout commun (qui ignore
+  l'onglet ouvert) : un guide par section — une étape sur la barre d'onglets, puis des étapes
+  propres aux onglets, retirées par le moteur là où leur cible manque. Sur les sous-pages
+  (création, fiche), seule l'étape des onglets s'affiche.
+- Vérifié pour un propriétaire SANS abonnement : chaque page et chaque onglet gardent au moins deux
+  étapes (les fonctions réservées à une offre affichent leur avis de mise à niveau ; l'étape vise le
+  conteneur, présent dans les deux cas). Les étapes liées à un rôle ou à des données s'ajoutent
+  quand l'élément existe.
+- `members-section.tsx`, partagé avec l'onboarding, laissé intact (conteneur posé dans la page).
+- Web : suite complète 110/110 fichiers, 693/693 tests ; typecheck 0 ; lint 0 erreur.
+- Navigateur (serveur local, un seul processus) : `page-guides.spec.ts` + `guide.spec.ts`, **44/44**
+  — les 7 pages du lot C (Intégrations parcourue sur ses 3 onglets) sur l'organisation SANS
+  abonnement, chaque guide déroulé jusqu'à « Terminer » avec au moins deux étapes à l'écran ; lots A
+  et B, bandeau, mobile et visite de bienvenue toujours verts.
+
 ## Portes de qualité
 
 | Porte | Résultat |

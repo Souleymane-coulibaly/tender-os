@@ -296,7 +296,7 @@ export function AnalysisSection({
     <section className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4 md:col-span-2">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-tenderos-navy">Analyse IA</h2>
-        <div className="flex items-center gap-2">
+        <div data-tour="guide-tender-analysis-actions" className="flex items-center gap-2">
           {latestJob ? (
             <span
               className={`rounded px-2 py-1 text-xs font-medium ${statusBadgeClass(latestJob.status)}`}
@@ -358,7 +358,7 @@ export function AnalysisSection({
       ) : null}
 
       {summary ? (
-        <div className="flex flex-col gap-3 rounded border border-tenderos-navy/10 bg-tenderos-light p-3">
+        <div data-tour="guide-tender-analysis-summary" className="flex flex-col gap-3 rounded border border-tenderos-navy/10 bg-tenderos-light p-3">
           <div className="flex items-center gap-2">
             <span className="rounded bg-tenderos-light px-2 py-1 text-xs font-medium text-tenderos-navy">
               Complexité : {COMPLEXITY_LABELS[summary.complexityLevel]}
@@ -401,10 +401,11 @@ export function AnalysisSection({
           ) : null}
         </div>
       ) : (
-        <p className="text-sm text-tenderos-slate">Aucune synthèse disponible pour le moment.</p>
+        // Guide de page : même cible que la synthèse, pour que l'étape reste présente avant toute analyse.
+        <p data-tour="guide-tender-analysis-summary" className="text-sm text-tenderos-slate">Aucune synthèse disponible pour le moment.</p>
       )}
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div data-tour="guide-tender-analysis-findings" className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <details className="rounded border border-tenderos-navy/10 p-2">
           <summary className="cursor-pointer text-xs font-semibold text-tenderos-navy">
             Dates et echeances ({data.deadlines.total})

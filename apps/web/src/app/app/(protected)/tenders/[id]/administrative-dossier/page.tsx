@@ -214,6 +214,7 @@ export default async function AdministrativeDossierPage({
           ]}
           title="Dossier administratif"
           description="TenderOS assiste la constitution du dossier sans garantir juridiquement sa conformité — la vérification finale reste humaine."
+          guideKey="tender-administrative-dossier"
           status={
             <Badge tone={dossierStatusTone(dossier.status)}>
               {ADMINISTRATIVE_DOSSIER_STATUS_LABELS[dossier.status] ?? dossier.status}
@@ -226,7 +227,7 @@ export default async function AdministrativeDossierPage({
           activeHref={`/app/tenders/${tenderId}/administrative-dossier`}
         />
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div data-tour="guide-tender-administrative-dossier-summary" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Card padding="tight">
             <span className="text-xs font-medium text-tenderos-slate">Complétude</span>
             <p className="text-lg font-extrabold tabular-nums text-tenderos-navy">
@@ -257,7 +258,7 @@ export default async function AdministrativeDossierPage({
         </div>
 
         {capabilities.blockers.length > 0 ? (
-          <ul className="flex flex-col gap-1.5">
+          <ul data-tour="guide-tender-administrative-dossier-blockers" className="flex flex-col gap-1.5">
             {capabilities.blockers.map((blocker, index) => (
               <li
                 key={index}
@@ -270,7 +271,7 @@ export default async function AdministrativeDossierPage({
           </ul>
         ) : null}
 
-        <div className="flex flex-wrap gap-2">
+        <div data-tour="guide-tender-administrative-dossier-actions" className="flex flex-wrap gap-2">
           <Button
             href={`/app/tenders/${tenderId}/administrative-dossier/checklist`}
             variant="primary"
@@ -285,12 +286,15 @@ export default async function AdministrativeDossierPage({
           </Button>
         </div>
 
-        <Card
-          title="Formulaires officiels"
-          description="Préremplissage automatique depuis les données du dossier. Consultez la disponibilité des champs et générez le DOCX officiel quand vous le souhaitez — jamais requis pour continuer à utiliser TenderOS."
-        >
-          <OfficialFormsSection cards={cards} />
-        </Card>
+        {/* Guide de page : `Card` ne transmet pas `data-tour`, d'où l'enveloppe. */}
+        <div data-tour="guide-tender-administrative-dossier-forms">
+          <Card
+            title="Formulaires officiels"
+            description="Préremplissage automatique depuis les données du dossier. Consultez la disponibilité des champs et générez le DOCX officiel quand vous le souhaitez — jamais requis pour continuer à utiliser TenderOS."
+          >
+            <OfficialFormsSection cards={cards} />
+          </Card>
+        </div>
       </div>
     );
   } catch (error) {

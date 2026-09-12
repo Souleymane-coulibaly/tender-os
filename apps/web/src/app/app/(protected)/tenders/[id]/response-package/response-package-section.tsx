@@ -78,7 +78,7 @@ function CreatePackageForm({
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded border border-tenderos-navy/10 p-3">
+    <div data-tour="guide-tender-response-package-create" className="flex flex-wrap items-end gap-3 rounded border border-tenderos-navy/10 p-3">
       <div className="flex flex-col gap-1">
         <label htmlFor="lot-select" className="text-xs font-medium text-tenderos-slate">
           Lot
@@ -107,7 +107,7 @@ function CompletenessSummary({ completeness }: { completeness: PackageCompletene
       ? "—"
       : `${Math.round(completeness.requiredCompletenessRatio * 100)}%`;
   return (
-    <div className="rounded border border-tenderos-navy/10 p-3">
+    <div data-tour="guide-tender-response-package-completeness" className="rounded border border-tenderos-navy/10 p-3">
       <h3 className="text-sm font-semibold">Complétude — {ratioLabel}</h3>
       <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
         <div className="rounded bg-tenderos-light p-2">
@@ -529,6 +529,7 @@ function PackageDetail({
       ) : null}
 
       <Button
+        data-tour="guide-tender-response-package-build"
         type="button"
         onClick={handleBuild}
         disabled={isBuilding}
@@ -574,7 +575,7 @@ function PackageDetail({
             </table>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 border-t border-tenderos-navy/10 pt-3">
+          <div data-tour="guide-tender-response-package-finalize" className="flex flex-wrap items-center gap-3 border-t border-tenderos-navy/10 pt-3">
             {!isValidated ? (
               <Button
                 type="button"
@@ -702,11 +703,11 @@ export function ResponsePackageSection({
       <CreatePackageForm tenderId={tenderId} lots={lots} onCreated={handleCreated} />
 
       {packages.length === 0 ? (
-        <p className="rounded border border-tenderos-navy/10 p-4 text-sm text-tenderos-slate">
+        <p data-tour="guide-tender-response-package-packages" className="rounded border border-tenderos-navy/10 p-4 text-sm text-tenderos-slate">
           Aucun dossier de réponse pour l&apos;instant.
         </p>
       ) : (
-        <div className="flex flex-col gap-4 lg:flex-row">
+        <div data-tour="guide-tender-response-package-packages" className="flex flex-col gap-4 lg:flex-row">
           <div className="flex w-full flex-col gap-2 lg:w-64">
             <h2 className="text-sm font-semibold">Dossiers</h2>
             {packages.map((pkg) => {

@@ -83,7 +83,7 @@ function SummaryHeader({
   const pendingApprovals = approvals.filter((a) => a.status === "PENDING").length;
 
   return (
-    <div className="flex flex-wrap items-center gap-4 rounded border border-tenderos-navy/10 bg-tenderos-light p-3 text-xs text-tenderos-navy">
+    <div data-tour="guide-tender-collaboration-summary" className="flex flex-wrap items-center gap-4 rounded border border-tenderos-navy/10 bg-tenderos-light p-3 text-xs text-tenderos-navy">
       <span className="font-semibold text-tenderos-navy">
         Équipe : {participants.length} membre(s)
       </span>
@@ -125,7 +125,7 @@ function ParticipantsPanel({
   const candidates = members.filter((m) => !activeUserIds.has(m.userId));
 
   return (
-    <section className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3">
+    <section data-tour="guide-tender-collaboration-team" className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3">
       <h2 className="text-sm font-semibold text-tenderos-navy">Équipe</h2>
       {error ? (
         <p role="alert" className="text-xs text-danger-fg">
@@ -413,7 +413,7 @@ function TasksPanel({
   const filteredTasks = filter === "ALL" ? tasks : tasks.filter((t) => t.status === filter);
 
   return (
-    <section className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3">
+    <section data-tour="guide-tender-collaboration-tasks" className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-tenderos-navy">Tâches</h2>
         <label className="flex items-center gap-1 text-xs text-tenderos-slate">
@@ -536,7 +536,7 @@ function ApprovalsPanel({
   const [rejectReason, setRejectReason] = useState("");
 
   return (
-    <section className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3">
+    <section data-tour="guide-tender-collaboration-approvals" className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3">
       <h2 className="text-sm font-semibold text-tenderos-navy">Validations</h2>
       {error ? (
         <p role="alert" className="text-xs text-danger-fg">
@@ -740,7 +740,7 @@ function ActivityPanel({
   getName: (id: string | undefined) => string;
 }) {
   return (
-    <section className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3">
+    <section data-tour="guide-tender-collaboration-activity" className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-3">
       <h2 className="text-sm font-semibold text-tenderos-navy">Activité récente</h2>
       {activity.items.length === 0 ? (
         <p className="text-sm text-tenderos-slate">Aucune activité pour l&apos;instant.</p>

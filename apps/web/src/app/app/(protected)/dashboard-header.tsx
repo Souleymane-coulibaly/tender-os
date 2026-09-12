@@ -50,6 +50,7 @@ export function DashboardHeader({ firstName, subscription, actorRole }: { firstN
 
   return (
     <PageHeader
+      guideKey="dashboard"
       title={`Bonjour ${firstName} 👋`}
       status={<PlanBadge subscription={subscription} />}
       description={

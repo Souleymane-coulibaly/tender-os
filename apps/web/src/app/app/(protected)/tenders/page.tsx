@@ -67,21 +67,29 @@ export default async function TendersListPage({ searchParams }: { searchParams: 
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        guideKey="tenders"
         breadcrumb={[{ label: "Appels d'offres" }]}
         title="Appels d'offres"
         description="Retrouvez ici vos dossiers en préparation et finalisés."
         actions={
           <>
-            <TenderViewSwitcher active="list" queryString={queryString} />
-            <Button href="/app/tenders/new" variant="primary">
-              Nouvel appel d&apos;offres
-            </Button>
+            <div data-tour="guide-tenders-view-switcher" className="flex">
+              <TenderViewSwitcher active="list" queryString={queryString} />
+            </div>
+            <div data-tour="guide-tenders-create" className="flex">
+              <Button href="/app/tenders/new" variant="primary">
+                Nouvel appel d&apos;offres
+              </Button>
+            </div>
           </>
         }
       />
 
-      <TenderStatistics stats={stats} />
+      <div data-tour="guide-tenders-statistics">
+        <TenderStatistics stats={stats} />
+      </div>
 
+      <div data-tour="guide-tenders-filters">
       <TenderFilters
         basePath="/app/tenders"
         values={{
@@ -96,7 +104,9 @@ export default async function TendersListPage({ searchParams }: { searchParams: 
         sorting={{ sort: params.sort ?? "createdAt", sortDirection: params.sortDirection ?? "desc" }}
         clients={clients.items}
       />
+      </div>
 
+      <div data-tour="guide-tenders-list">
       {page.items.length === 0 ? (
         <EmptyState
           icon={FOLDER_ICON}
@@ -182,6 +192,7 @@ export default async function TendersListPage({ searchParams }: { searchParams: 
           </TableBody>
         </Table>
       )}
+      </div>
 
       {page.pageInfo.hasNextPage && page.pageInfo.nextCursor ? (
         <Button

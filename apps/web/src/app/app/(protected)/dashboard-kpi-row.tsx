@@ -76,7 +76,7 @@ export function DashboardKpiRow({
   goRate: number | null;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+    <div data-tour="guide-dashboard-kpis" className="grid grid-cols-2 gap-4 lg:grid-cols-5">
       <KpiCard label="Appels d'offres en cours" value={activeTenders} subtitle="Dossiers actifs" icon={FOLDER_ICON} iconBg="bg-tenderos-blue/10" href="/app/tenders" />
       <KpiCard label="Échéances à venir" value={deadlinesNext7Days} subtitle="Dans les 7 prochains jours" icon={CALENDAR_ICON} iconBg="bg-purple-100" href="/app/tenders?overdue=false" />
       <KpiCard label="Dossiers à valider" value={pendingApprovals} subtitle="En attente de votre validation" icon={CHECK_CIRCLE_ICON} iconBg="bg-green-100" href="/app/validations" />

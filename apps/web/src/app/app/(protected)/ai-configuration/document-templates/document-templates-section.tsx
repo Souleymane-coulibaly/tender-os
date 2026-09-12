@@ -334,17 +334,23 @@ export function DocumentTemplatesSection({
 
   return (
     <div className="flex flex-col gap-4">
-      {canManage ? <CreateTemplateForm /> : null}
-
-      {initialTemplates.length === 0 ? (
-        <p className="text-sm text-tenderos-slate">Aucun template documentaire pour l&apos;instant.</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {initialTemplates.map((template) => (
-            <TemplateRow key={template.id} template={template} canManage={canManage} />
-          ))}
+      {canManage ? (
+        <div data-tour="guide-ai-configuration-create">
+          <CreateTemplateForm />
         </div>
-      )}
+      ) : null}
+
+      <div data-tour="guide-ai-configuration-list">
+        {initialTemplates.length === 0 ? (
+          <p className="text-sm text-tenderos-slate">Aucun template documentaire pour l&apos;instant.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {initialTemplates.map((template) => (
+              <TemplateRow key={template.id} template={template} canManage={canManage} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

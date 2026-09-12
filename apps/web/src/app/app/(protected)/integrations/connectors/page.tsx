@@ -45,7 +45,7 @@ export default async function ConnectorsPage({ searchParams }: { searchParams: P
         vérité métier — connecter n&apos;élargit jamais vos droits d&apos;accès aux Clients/Tenders.
       </p>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div data-tour="guide-integrations-connectors" className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {CONNECTOR_PROVIDERS.map((provider) => (
           <ConnectorProviderCard
             key={provider}

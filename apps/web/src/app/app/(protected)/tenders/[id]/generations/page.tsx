@@ -29,6 +29,7 @@ export default async function TenderGenerationsPage({ params }: { params: Promis
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        guideKey="tender-generations"
         breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Générations" }]}
         title="Générations de contenu"
         description="Contenus générés par IA pour ce Tender, à partir des analyses, de la Base de connaissances et de prompts versionnés. Toute génération doit être relue et validée par un humain avant utilisation."

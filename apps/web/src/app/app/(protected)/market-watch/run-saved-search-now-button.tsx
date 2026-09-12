@@ -34,7 +34,7 @@ export function RunSavedSearchNowButton({ savedSearchId }: { savedSearchId: stri
   }
 
   return (
-    <div className="flex max-w-xs flex-col gap-1">
+    <div data-tour="guide-market-watch-run-now" className="flex max-w-xs flex-col gap-1">
       <Button type="button" onClick={handleClick} disabled={isPending} className="self-start">
         {isPending ? "Recherche en cours..." : "Tester la veille"}
       </Button>

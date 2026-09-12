@@ -277,7 +277,7 @@ function ScheduleDetail({
   const pricedCount = lines.filter((l) => l.kind === "PRICE_ITEM" && l.status === "PRICED").length;
 
   return (
-    <div className="flex flex-col gap-4 rounded border border-tenderos-navy/10 p-4">
+    <div data-tour="guide-tender-pricing-schedule-detail" className="flex flex-col gap-4 rounded border border-tenderos-navy/10 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold">
@@ -343,7 +343,7 @@ function ScheduleDetail({
 
           <ControlsPanel controls={controls} />
 
-          <div className="flex flex-wrap items-end gap-3 border-t border-tenderos-navy/10 pt-3">
+          <div data-tour="guide-tender-pricing-schedule-finalize" className="flex flex-wrap items-end gap-3 border-t border-tenderos-navy/10 pt-3">
             {!isValidated ? (
               <>
                 {controls && controls.errorCount > 0 ? (
@@ -456,7 +456,7 @@ export function PricingScheduleSection({
   return (
     <div className="flex flex-col gap-6">
       {undetectedFiles.length > 0 ? (
-        <div className="flex flex-col gap-2">
+        <div data-tour="guide-tender-pricing-schedule-detected" className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold">Fichiers financiers détectés dans le DCE</h2>
           {undetectedFiles.map((doc) => (
             <DetectedFileCard
@@ -470,12 +470,12 @@ export function PricingScheduleSection({
       ) : null}
 
       {schedules.length === 0 ? (
-        <p className="rounded border border-tenderos-navy/10 p-4 text-sm text-tenderos-slate">
+        <p data-tour="guide-tender-pricing-schedule-schedules" className="rounded border border-tenderos-navy/10 p-4 text-sm text-tenderos-slate">
           Aucun fichier BPU/DPGF/DQE détecté pour l&apos;instant dans le DCE de cet appel
           d&apos;offres.
         </p>
       ) : (
-        <div className="flex flex-col gap-4 lg:flex-row">
+        <div data-tour="guide-tender-pricing-schedule-schedules" className="flex flex-col gap-4 lg:flex-row">
           <div className="flex w-full flex-col gap-2 lg:w-64">
             <h2 className="text-sm font-semibold">Chiffrages</h2>
             {schedules.map((schedule) => (

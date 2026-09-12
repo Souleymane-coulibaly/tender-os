@@ -57,20 +57,28 @@ export default async function KnowledgeBasePage({ searchParams }: { searchParams
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        guideKey="knowledge"
         breadcrumb={[{ label: "Base de connaissances" }]}
         title="Base de connaissances"
         description={`${page.total} entrée(s)`}
         actions={
           <>
-            <Button href="/app/knowledge/search">Rechercher</Button>
-            <Button href="/app/knowledge/import">Importer un document</Button>
-            <Button href="/app/knowledge/new" variant="primary">
-              Nouvelle entrée
-            </Button>
+            <div data-tour="guide-knowledge-search" className="flex">
+              <Button href="/app/knowledge/search">Rechercher</Button>
+            </div>
+            <div data-tour="guide-knowledge-import" className="flex">
+              <Button href="/app/knowledge/import">Importer un document</Button>
+            </div>
+            <div data-tour="guide-knowledge-create" className="flex">
+              <Button href="/app/knowledge/new" variant="primary">
+                Nouvelle entrée
+              </Button>
+            </div>
           </>
         }
       />
 
+      <div data-tour="guide-knowledge-filters">
       <KnowledgeFilters
         values={{
           titleSearch: params.titleSearch,
@@ -81,6 +89,7 @@ export default async function KnowledgeBasePage({ searchParams }: { searchParams
         }}
         clients={clients.items}
       />
+      </div>
 
       {topTags.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -91,6 +100,7 @@ export default async function KnowledgeBasePage({ searchParams }: { searchParams
         </div>
       ) : null}
 
+      <div data-tour="guide-knowledge-list">
       {page.items.length === 0 ? (
         <EmptyState title="Aucune entrée à afficher." />
       ) : (
@@ -137,6 +147,7 @@ export default async function KnowledgeBasePage({ searchParams }: { searchParams
           </TableBody>
         </Table>
       )}
+      </div>
 
       {page.nextCursor ? (
         <Button variant="link" href={`/app/knowledge?${new URLSearchParams({ ...params, cursor: page.nextCursor }).toString()}`} className="self-start">

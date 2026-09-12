@@ -82,7 +82,7 @@ function RequirementsPanel({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
+    <section data-tour="guide-tender-signature-requirements" className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
       <h2 className="text-sm font-semibold text-tenderos-navy">Exigences de signature</h2>
       {requirements.length === 0 ? (
         <p className="text-sm text-tenderos-slate">Aucune exigence détectée.</p>
@@ -244,7 +244,7 @@ function SignatoriesPanel({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
+    <section data-tour="guide-tender-signature-signatories" className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
       <h2 className="text-sm font-semibold text-tenderos-navy">Signataires</h2>
       {signatories.length === 0 ? (
         <p className="text-sm text-tenderos-slate">Aucun signataire affecté.</p>
@@ -561,7 +561,7 @@ function TransactionsPanel({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
+    <section data-tour="guide-tender-signature-transactions" className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
       <h2 className="text-sm font-semibold text-tenderos-navy">Transactions de signature</h2>
 
       {transactions.length === 0 ? (
@@ -574,7 +574,7 @@ function TransactionsPanel({
       </div>
 
       {canApprove ? (
-        <div className="flex flex-col gap-2 rounded border border-tenderos-navy/10 bg-tenderos-light p-3">
+        <div data-tour="guide-tender-signature-prepare" className="flex flex-col gap-2 rounded border border-tenderos-navy/10 bg-tenderos-light p-3">
           <h3 className="text-sm font-medium text-tenderos-navy">
             Préparer une nouvelle transaction
           </h3>

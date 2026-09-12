@@ -184,7 +184,7 @@ export function PricingSection({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div data-tour="guide-tender-pricing-costs" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <CostAggregateCard title="Coût IA réel (Tender)" aggregate={initialSummary.technicalCost} />
         {Object.entries(initialSummary.byTaskType).map(([taskType, aggregate]) => (
           <CostAggregateCard
@@ -203,7 +203,7 @@ export function PricingSection({
       </p>
 
       {estimate ? (
-        <div className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
+        <div data-tour="guide-tender-pricing-estimate" className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-tenderos-navy">
               Estimation active (v{estimate.currentVersionNumber})
@@ -293,7 +293,7 @@ export function PricingSection({
           ) : null}
         </div>
       ) : canManage ? (
-        <div className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
+        <div data-tour="guide-tender-pricing-create" className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
           <h2 className="text-sm font-semibold text-tenderos-navy">
             Créer une estimation prévisionnelle
           </h2>

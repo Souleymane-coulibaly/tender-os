@@ -145,6 +145,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
     <div className="flex flex-col gap-6">
       <FirstTenderTracker />
       <PageHeader
+        guideKey="tender-overview"
         breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: tender.title }]}
         title={tender.title}
         description={`${tender.reference ? `${tender.reference} — ` : ""}${tender.buyerName ?? "Acheteur non renseigné"}`}
@@ -159,11 +160,17 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         }
       />
 
-      <TabsNav items={navTabs} activeHref={`/app/tenders/${tender.id}`} />
+      <div data-tour="guide-tender-overview-tabs">
+        <TabsNav items={navTabs} activeHref={`/app/tenders/${tender.id}`} />
+      </div>
 
-      <CockpitSection tenderId={tender.id} cockpit={cockpit} />
+      <div data-tour="guide-tender-overview-cockpit">
+        <CockpitSection tenderId={tender.id} cockpit={cockpit} />
+      </div>
 
-      <CompletenessSection completeness={profile.completeness} />
+      <div data-tour="guide-tender-overview-completeness">
+        <CompletenessSection completeness={profile.completeness} />
+      </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <ClientSection
@@ -199,7 +206,7 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
       {tender.status !== "ARCHIVED" ? <StatusChangeForm tenderId={tender.id} status={tender.status} /> : null}
 
       {canEditTenderDetails(role) ? (
-        <details className="rounded-2xl border border-tenderos-navy/10 bg-white p-5 shadow-sm">
+        <details data-tour="guide-tender-overview-edit" className="rounded-2xl border border-tenderos-navy/10 bg-white p-5 shadow-sm">
           <summary className="cursor-pointer font-tenderos-display text-base font-bold text-tenderos-navy">
             Modifier les informations de l&apos;appel d&apos;offres
           </summary>
@@ -209,20 +216,22 @@ export default async function TenderDetailPage({ params }: { params: Promise<{ i
         </details>
       ) : null}
 
-      <Card
-        title="Score de préparation"
-        actions={<Badge tone={readinessTone(readiness.status)}>{readiness.score}/100</Badge>}
-      >
-        <ul className="flex flex-col gap-1 text-xs text-tenderos-slate">
-          {readiness.breakdown.map((entry) => (
-            <li key={entry.label} className="flex justify-between">
-              <span>{entry.label}</span>
-              <span className="tabular-nums">{entry.points.toFixed(1)} / {entry.weight}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-xs italic text-tenderos-slate">{readiness.disclaimer}</p>
-      </Card>
+      <div data-tour="guide-tender-overview-readiness">
+        <Card
+          title="Score de préparation"
+          actions={<Badge tone={readinessTone(readiness.status)}>{readiness.score}/100</Badge>}
+        >
+          <ul className="flex flex-col gap-1 text-xs text-tenderos-slate">
+            {readiness.breakdown.map((entry) => (
+              <li key={entry.label} className="flex justify-between">
+                <span>{entry.label}</span>
+                <span className="tabular-nums">{entry.points.toFixed(1)} / {entry.weight}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs italic text-tenderos-slate">{readiness.disclaimer}</p>
+        </Card>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <LotsSection tenderId={tender.id} lots={lots} canManage={canManageTenderLots(role)} />

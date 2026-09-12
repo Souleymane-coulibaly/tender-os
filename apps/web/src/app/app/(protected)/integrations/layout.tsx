@@ -13,11 +13,14 @@ export default function IntegrationsLayout({ children }: { children: ReactNode }
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        guideKey="integrations"
         breadcrumb={[{ label: "Paramètres" }, { label: "Intégrations" }]}
         title="Intégrations"
         description="API publique, clés API et webhooks pour connecter TenderOS à vos automatisations (n8n, etc.). Réservé Propriétaire/Administrateur."
       />
-      <SectionTabs items={SUB_NAV_ITEMS} ariaLabel="Navigation des intégrations" />
+      <div data-tour="guide-integrations-tabs">
+        <SectionTabs items={SUB_NAV_ITEMS} ariaLabel="Navigation des intégrations" />
+      </div>
       {children}
     </div>
   );

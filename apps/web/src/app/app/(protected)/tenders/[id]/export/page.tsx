@@ -48,6 +48,7 @@ export default async function TenderExportPage({ params }: { params: Promise<{ i
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        guideKey="tender-export"
         breadcrumb={[
           { label: "Appels d'offres", href: "/app/tenders" },
           { label: "Dossier", href: `/app/tenders/${tenderId}` },

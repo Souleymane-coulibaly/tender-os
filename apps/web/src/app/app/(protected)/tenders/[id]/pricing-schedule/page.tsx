@@ -30,9 +30,12 @@ export default async function TenderPricingSchedulePage({ params }: { params: Pr
         breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Chiffrage" }]}
         title="Chiffrage"
         description="Détectez les fichiers BPU/DPGF/DQE du DCE, saisissez vos prix sur les cellules autorisées, validez le chiffrage puis générez le fichier financier final — une copie du classeur acheteur avec uniquement vos prix injectés, jamais un fichier reconstruit."
+        guideKey="tender-pricing-schedule"
       />
       <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/pricing-schedule`} />
-      <PricingScheduleSection tenderId={tenderId} initialSchedules={schedules} detectedFinancialDocuments={detectedFinancialDocuments} />
+      <div data-tour="guide-tender-pricing-schedule-section">
+        <PricingScheduleSection tenderId={tenderId} initialSchedules={schedules} detectedFinancialDocuments={detectedFinancialDocuments} />
+      </div>
     </div>
   );
 }

@@ -67,7 +67,7 @@ function FileReadinessSummary({
   const dossierComplet = blocking.length === 0;
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-4 text-sm">
+    <div data-tour="guide-tender-submission-file-readiness" className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-4 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-medium">Dossier prêt au dépôt</span>
         <span
@@ -137,7 +137,7 @@ function ReadinessCard({
   return (
     <div className="flex flex-col gap-4">
       <FileReadinessSummary tenderId={tenderId} reasons={readiness.fileReadinessReasons} />
-      <div className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-4 text-sm">
+      <div data-tour="guide-tender-submission-readiness" className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-4 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="font-medium">État de préparation</span>
           <span className="rounded bg-tenderos-light px-2 py-1 text-xs font-medium">
@@ -219,7 +219,7 @@ function RecordSubmissionForm({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4 text-sm">
+    <div data-tour="guide-tender-submission-record" className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4 text-sm">
       <span className="font-medium">Enregistrer un dépôt</span>
       <p className="text-xs text-tenderos-slate">
         Package : v{readiness.packageVersion} — hash {readiness.packageHash?.slice(0, 12)} (lecture
@@ -366,7 +366,7 @@ function ActiveSubmissionCard({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4 text-sm">
+    <div data-tour="guide-tender-submission-active" className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-medium">Dépôt actif</span>
         <span className="rounded bg-tenderos-light px-2 py-1 text-xs font-medium">
@@ -637,7 +637,7 @@ function HistoryTimeline({ submissions }: { submissions: TenderSubmissionSummary
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
   return (
-    <div className="flex flex-col gap-2">
+    <div data-tour="guide-tender-submission-history" className="flex flex-col gap-2">
       <span className="text-sm font-medium">Historique</span>
       {ordered.length === 0 ? (
         <p className="text-xs text-tenderos-slate">Aucun dépôt enregistré.</p>

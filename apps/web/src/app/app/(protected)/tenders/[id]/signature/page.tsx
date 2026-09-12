@@ -33,6 +33,7 @@ export default async function TenderSignaturePage({ params }: { params: Promise<
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        guideKey="tender-signature"
         breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Signature" }]}
         title="Signature électronique"
         description="Exigences de signature, signataires et transactions. Une image de signature n'est jamais une preuve de signature électronique ; un statut « Signé » n'est jamais considéré comme vérifié tant qu'un contrôle d'intégrité réel n'a pas été exécuté."

@@ -15,7 +15,7 @@ export function DashboardFilters({ values, clients }: { values: DashboardFilters
   if (clients.length === 0) return null;
 
   return (
-    <form method="GET" action="/app" className="flex flex-wrap items-end gap-3">
+    <form data-tour="guide-dashboard-filters" method="GET" action="/app" className="flex flex-wrap items-end gap-3">
       <div className="flex flex-col gap-1">
         <label htmlFor="clientId" className="text-xs uppercase tracking-wide text-tenderos-slate">
           Client

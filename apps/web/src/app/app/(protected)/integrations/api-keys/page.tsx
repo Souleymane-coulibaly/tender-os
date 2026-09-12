@@ -37,51 +37,55 @@ export default async function ApiKeysPage() {
   return (
     <div className="flex flex-col gap-6">
       {canManage ? (
-        hasPublicApiEntitlement ? (
-          <Card title="Nouvelle clé API">
-            <CreateApiKeyForm clients={clients} />
-          </Card>
-        ) : (
-          <EntitlementUpgradeNotice featureLabel="L'accès à l'API publique" />
-        )
+        <div data-tour="guide-integrations-create">
+          {hasPublicApiEntitlement ? (
+            <Card title="Nouvelle clé API">
+              <CreateApiKeyForm clients={clients} />
+            </Card>
+          ) : (
+            <EntitlementUpgradeNotice featureLabel="L'accès à l'API publique" />
+          )}
+        </div>
       ) : null}
 
-      <Card title="Clés existantes">
-        {apiKeys.length === 0 ? (
-          <p className="text-sm text-tenderos-slate">Aucune clé API pour l&apos;instant.</p>
-        ) : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>Nom</TableHeaderCell>
-                <TableHeaderCell>Préfixe</TableHeaderCell>
-                <TableHeaderCell>Scopes</TableHeaderCell>
-                <TableHeaderCell>Restriction client</TableHeaderCell>
-                <TableHeaderCell>Statut</TableHeaderCell>
-                <TableHeaderCell>Dernière utilisation</TableHeaderCell>
-                {canManage ? <TableHeaderCell>Actions</TableHeaderCell> : null}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {apiKeys.map((key) => (
-                <TableRow key={key.id}>
-                  <TableCell className="font-medium text-tenderos-navy">{key.name}</TableCell>
-                  <TableCell>
-                    <code className="text-xs text-tenderos-slate">{key.keyPrefix}…</code>
-                  </TableCell>
-                  <TableCell className="text-tenderos-slate">{key.scopes.map((scope) => API_KEY_SCOPE_LABELS[scope] ?? scope).join(", ")}</TableCell>
-                  <TableCell className="text-tenderos-slate">{key.allowedClientAccountIds.length === 0 ? "Toute l'organisation" : `${key.allowedClientAccountIds.length} client(s)`}</TableCell>
-                  <TableCell>
-                    <Badge tone={API_KEY_STATUS_TONE[key.status]}>{API_KEY_STATUS_LABELS[key.status]}</Badge>
-                  </TableCell>
-                  <TableCell className="text-tenderos-slate">{key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString("fr-FR") : "Jamais"}</TableCell>
-                  {canManage ? <TableCell>{key.status === "ACTIVE" ? <RevokeApiKeyButton apiKeyId={key.id} /> : null}</TableCell> : null}
+      <div data-tour="guide-integrations-list">
+        <Card title="Clés existantes">
+          {apiKeys.length === 0 ? (
+            <p className="text-sm text-tenderos-slate">Aucune clé API pour l&apos;instant.</p>
+          ) : (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableHeaderCell>Nom</TableHeaderCell>
+                  <TableHeaderCell>Préfixe</TableHeaderCell>
+                  <TableHeaderCell>Scopes</TableHeaderCell>
+                  <TableHeaderCell>Restriction client</TableHeaderCell>
+                  <TableHeaderCell>Statut</TableHeaderCell>
+                  <TableHeaderCell>Dernière utilisation</TableHeaderCell>
+                  {canManage ? <TableHeaderCell>Actions</TableHeaderCell> : null}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Card>
+              </TableHead>
+              <TableBody>
+                {apiKeys.map((key) => (
+                  <TableRow key={key.id}>
+                    <TableCell className="font-medium text-tenderos-navy">{key.name}</TableCell>
+                    <TableCell>
+                      <code className="text-xs text-tenderos-slate">{key.keyPrefix}…</code>
+                    </TableCell>
+                    <TableCell className="text-tenderos-slate">{key.scopes.map((scope) => API_KEY_SCOPE_LABELS[scope] ?? scope).join(", ")}</TableCell>
+                    <TableCell className="text-tenderos-slate">{key.allowedClientAccountIds.length === 0 ? "Toute l'organisation" : `${key.allowedClientAccountIds.length} client(s)`}</TableCell>
+                    <TableCell>
+                      <Badge tone={API_KEY_STATUS_TONE[key.status]}>{API_KEY_STATUS_LABELS[key.status]}</Badge>
+                    </TableCell>
+                    <TableCell className="text-tenderos-slate">{key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString("fr-FR") : "Jamais"}</TableCell>
+                    {canManage ? <TableCell>{key.status === "ACTIVE" ? <RevokeApiKeyButton apiKeyId={key.id} /> : null}</TableCell> : null}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }

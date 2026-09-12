@@ -18,11 +18,14 @@ export default function AiConfigurationLayout({ children }: { children: ReactNod
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        guideKey="ai-configuration"
         breadcrumb={[{ label: "Paramètres" }, { label: "Configuration IA" }]}
         title="Configuration IA"
         description="Modèles d'IA, prompts et modèles de documents utilisés par TenderOS."
       />
-      <SectionTabs items={SUB_NAV_ITEMS} ariaLabel="Navigation de la configuration IA" />
+      <div data-tour="guide-ai-configuration-tabs">
+        <SectionTabs items={SUB_NAV_ITEMS} ariaLabel="Navigation de la configuration IA" />
+      </div>
       {children}
     </div>
   );

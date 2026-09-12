@@ -51,6 +51,7 @@ export default async function TenderWorkspacePage({ params }: { params: Promise<
         breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Collaboration" }]}
         title="Espace collaboratif"
         description="Qui travaille sur ce dossier, quelles tâches restent à faire, quelles validations sont en attente — un score de complétude Workspace distinct du GO/NO-GO et de la checklist, jamais recalculé automatiquement."
+        guideKey="tender-collaboration"
       />
       <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/workspace`} />
       <WorkspaceSection

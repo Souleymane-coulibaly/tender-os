@@ -19,15 +19,17 @@ export default async function ExportTemplatesListPage() {
   const canManage = canManageExportTemplates(actorRole);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div data-tour="guide-ai-configuration-list" className="flex flex-col gap-4">
       <Card
         title="Templates d'export"
         description="Structure et mise en forme des documents générés (mémoire technique, matrice de conformité, etc.). Réservé OWNER/Administrateur."
         actions={
           canManage ? (
-            <Button href="/app/ai-configuration/export-templates/new" variant="primary">
-              Nouveau template
-            </Button>
+            <div data-tour="guide-ai-configuration-create" className="flex">
+              <Button href="/app/ai-configuration/export-templates/new" variant="primary">
+                Nouveau template
+              </Button>
+            </div>
           ) : null
         }
       >

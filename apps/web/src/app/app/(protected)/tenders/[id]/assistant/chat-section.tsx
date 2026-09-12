@@ -264,7 +264,7 @@ export function ChatSection({
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-[220px_1fr]">
-      <aside className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-2">
+      <aside data-tour="guide-tender-assistant-conversations" className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-2">
         <Button type="button" onClick={handleCreateConversation} variant="primary" size="sm">
           + Nouvelle conversation
         </Button>
@@ -281,13 +281,13 @@ export function ChatSection({
           <Alert tone="danger">{error}</Alert>
         ) : null}
 
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
+        <div data-tour="guide-tender-assistant-thread" className="flex flex-1 flex-col gap-3 overflow-y-auto">
           {isLoadingMessages ? <p className="text-sm text-tenderos-slate">Chargement…</p> : null}
           {!isLoadingMessages && selectedId && messages.length === 0 ? (
             <p className="text-sm text-tenderos-slate">Aucun message pour l&apos;instant.</p>
           ) : null}
           {!selectedId && messages.length === 0 ? (
-            <div className="flex flex-col gap-2">
+            <div data-tour="guide-tender-assistant-suggestions" className="flex flex-col gap-2">
               <p className="text-sm text-tenderos-slate">
                 Posez une question pour démarrer une conversation. Exemples :
               </p>
@@ -312,6 +312,7 @@ export function ChatSection({
         </div>
 
         <form
+          data-tour="guide-tender-assistant-composer"
           className="flex gap-2"
           onSubmit={(event) => {
             event.preventDefault();

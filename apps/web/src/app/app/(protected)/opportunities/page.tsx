@@ -32,17 +32,20 @@ export default async function OpportunitiesListPage({ searchParams }: { searchPa
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        guideKey="opportunities"
         breadcrumb={[{ label: "Opportunités" }]}
         title="Opportunités"
         description="Préqualification avant création d'un appel d'offres — score, décision, puis promotion."
         actions={
-          <Button href="/app/opportunities/new" variant="primary">
-            Nouvelle opportunité
-          </Button>
+          <div data-tour="guide-opportunities-create" className="flex">
+            <Button href="/app/opportunities/new" variant="primary">
+              Nouvelle opportunité
+            </Button>
+          </div>
         }
       />
 
-      <div className="flex flex-wrap gap-2 text-xs">
+      <div data-tour="guide-opportunities-filters" className="flex flex-wrap gap-2 text-xs">
         <Link href="/app/opportunities" className={filterClasses(!params.status)}>
           Toutes
         </Link>
@@ -53,6 +56,7 @@ export default async function OpportunitiesListPage({ searchParams }: { searchPa
         ))}
       </div>
 
+      <div data-tour="guide-opportunities-list">
       {page.items.length === 0 ? (
         <EmptyState title="Aucune opportunité à afficher." />
       ) : (
@@ -93,6 +97,7 @@ export default async function OpportunitiesListPage({ searchParams }: { searchPa
           </TableBody>
         </Table>
       )}
+      </div>
 
       {page.pageInfo.hasNextPage && page.pageInfo.nextCursor ? (
         <Button

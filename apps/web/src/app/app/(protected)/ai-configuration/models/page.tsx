@@ -31,15 +31,17 @@ export default async function AiModelsListPage() {
   const canManage = canManageAi(actorRole);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div data-tour="guide-ai-configuration-list" className="flex flex-col gap-4">
       <Card
         title="Modèles IA"
         description="Registre des modèles autorisés à être benchmarkés ou utilisés en production. Aucun modèle en dehors de cette liste ne peut être appelé par TenderOS."
         actions={
           canManage ? (
-            <Button href="/app/ai-configuration/models/new" variant="primary">
-              Enregistrer un modèle
-            </Button>
+            <div data-tour="guide-ai-configuration-create" className="flex">
+              <Button href="/app/ai-configuration/models/new" variant="primary">
+                Enregistrer un modèle
+              </Button>
+            </div>
           ) : null
         }
       >

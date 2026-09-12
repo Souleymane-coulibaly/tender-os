@@ -18,6 +18,7 @@ export default async function OrganizationPricingPage() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        guideKey="ai-costs"
         breadcrumb={[{ label: "Coûts IA" }]}
         title="Coûts IA"
         description="Coût technique IA réel agrégé par client et par type de tâche. Réservé aux propriétaires et administrateurs d'organisation. Aucun montant affiché ici n'est un prix réel garanti du marché."

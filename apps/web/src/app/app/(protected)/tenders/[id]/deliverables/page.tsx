@@ -23,6 +23,7 @@ export default async function TenderDeliverablesPage({ params }: { params: Promi
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        guideKey="tender-deliverables"
         breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Livrables" }]}
         title="Livrables"
         description="Mémoire technique, synthèse exécutive, matrice de conformité, checklist, rapports et documents de soumission — structurés, générés par IA, édités et validés depuis un seul espace."

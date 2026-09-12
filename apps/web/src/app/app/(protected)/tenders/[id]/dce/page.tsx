@@ -41,17 +41,20 @@ export default async function TenderDcePage({ params }: { params: Promise<{ id: 
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: tender.title, href: `/app/tenders/${tenderId}` }, { label: "DCE" }]} title="DCE" />
+      <PageHeader breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: tender.title, href: `/app/tenders/${tenderId}` }, { label: "DCE" }]} title="DCE" guideKey="tender-dce" />
       <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/dce`} />
-      <DceSection
-        tenderId={tenderId}
-        dce={dceSection.dce}
-        documents={dceSection.documents}
-        canManage={canImportOrReplaceDceDocument(role)}
-        canDelete={canDeleteDceDocument(role)}
-        canAnalyze={canTriggerAnalysis(role)}
-        analysisCapability={analysisCapabilities.find((c) => c.taskType === "ANALYZE_DOCUMENT")}
-      />
+      {/* Guide de page : `Card` ne transmet pas `data-tour`, d'où l'enveloppe. */}
+      <div data-tour="guide-tender-dce-section">
+        <DceSection
+          tenderId={tenderId}
+          dce={dceSection.dce}
+          documents={dceSection.documents}
+          canManage={canImportOrReplaceDceDocument(role)}
+          canDelete={canDeleteDceDocument(role)}
+          canAnalyze={canTriggerAnalysis(role)}
+          analysisCapability={analysisCapabilities.find((c) => c.taskType === "ANALYZE_DOCUMENT")}
+        />
+      </div>
     </div>
   );
 }

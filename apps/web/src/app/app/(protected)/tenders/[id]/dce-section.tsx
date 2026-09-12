@@ -242,7 +242,7 @@ function InitDceButton({ tenderId, onSettled }: { tenderId: string; onSettled: (
   const [error, setError] = useState<string | undefined>();
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div data-tour="guide-tender-dce-init" className="flex flex-col items-center gap-1">
       <Button
         variant="primary"
         disabled={isPending}
@@ -418,49 +418,53 @@ export function DceSection({
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {liveDocuments.length === 0 ? (
-            <EmptyState
-              title="Aucun document du DCE."
-              description="Importez des fichiers individuels ou une archive ZIP ci-dessous."
-            />
-          ) : (
-            <ul>
-              {liveDocuments.map((doc) => (
-                <li
-                  key={doc.documentId}
-                  className="flex items-center justify-between gap-2 border-b border-tenderos-navy/5 py-2.5 text-sm last:border-b-0"
-                >
-                  <div>
-                    <span className="font-semibold text-tenderos-navy">{doc.originalFilename}</span>
-                    <span className="ml-2 text-xs text-tenderos-slate">
-                      {formatDceFileSize(doc.sizeBytes)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <DocumentAnalysisControl
-                      tenderId={tenderId}
-                      documentId={doc.documentId}
-                      processingStatus={doc.processingStatus}
-                      canAnalyze={canAnalyze}
-                      analysisCapability={analysisCapability}
-                    />
-                    <a
-                      href={`/app/tenders/${tenderId}/dce-documents/${doc.documentId}/download`}
-                      className="text-xs font-medium text-tenderos-blue hover:underline"
-                    >
-                      Télécharger
-                    </a>
-                    {canDelete ? (
-                      <DeleteDocumentButton tenderId={tenderId} documentId={doc.documentId} />
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          {/* Guide de page : enveloppe commune à la liste et à son état vide (`EmptyState` ne
+              transmet pas `data-tour`). */}
+          <div data-tour="guide-tender-dce-documents">
+            {liveDocuments.length === 0 ? (
+              <EmptyState
+                title="Aucun document du DCE."
+                description="Importez des fichiers individuels ou une archive ZIP ci-dessous."
+              />
+            ) : (
+              <ul>
+                {liveDocuments.map((doc) => (
+                  <li
+                    key={doc.documentId}
+                    className="flex items-center justify-between gap-2 border-b border-tenderos-navy/5 py-2.5 text-sm last:border-b-0"
+                  >
+                    <div>
+                      <span className="font-semibold text-tenderos-navy">{doc.originalFilename}</span>
+                      <span className="ml-2 text-xs text-tenderos-slate">
+                        {formatDceFileSize(doc.sizeBytes)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <DocumentAnalysisControl
+                        tenderId={tenderId}
+                        documentId={doc.documentId}
+                        processingStatus={doc.processingStatus}
+                        canAnalyze={canAnalyze}
+                        analysisCapability={analysisCapability}
+                      />
+                      <a
+                        href={`/app/tenders/${tenderId}/dce-documents/${doc.documentId}/download`}
+                        className="text-xs font-medium text-tenderos-blue hover:underline"
+                      >
+                        Télécharger
+                      </a>
+                      {canDelete ? (
+                        <DeleteDocumentButton tenderId={tenderId} documentId={doc.documentId} />
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           {canManage ? (
-            <div className="flex flex-col gap-3 border-t border-tenderos-navy/10 pt-3">
+            <div data-tour="guide-tender-dce-import" className="flex flex-col gap-3 border-t border-tenderos-navy/10 pt-3">
               <form action={importFilesFormAction} className="flex flex-col items-start gap-2">
                 <div className="flex flex-wrap items-end gap-2">
                   <FileInput name="files" multiple aria-label="Fichiers du DCE" />

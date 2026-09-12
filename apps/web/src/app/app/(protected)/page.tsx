@@ -129,13 +129,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           réelle `test-results/e5-1-dashboard-laptop-1024.png`). Repoussé à `xl:` (1280px) : au
           pire les 3 lignes restent empilées en pleine largeur jusqu'à 1279px, jamais un retour
           au chevauchement/repli observé. */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <div data-tour="guide-dashboard-pipeline" className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <PipelineDistributionWidget pipeline={overview.pipeline} />
         <GoNoGoWidget goNoGo={overview.goNoGo} goRate={overview.analytics.goRate} />
         <ReadinessDistributionWidget readiness={overview.analytics.readinessDistribution} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+      <div data-tour="guide-dashboard-priorities" className="grid grid-cols-1 gap-4 xl:grid-cols-4">
         <PriorityTendersWidget items={overview.attentionItems} />
         <DeadlinesWidget deadlines={overview.deadlines} />
         {billingSummary ? (
@@ -143,7 +143,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         ) : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+      <div data-tour="guide-dashboard-follow-up" className="grid grid-cols-1 gap-4 xl:grid-cols-4">
         <MarketWatchWidget marketWatch={overview.marketWatch} />
         <ActivityWidget activity={overview.activity} />
         <MyTasksWidget myTasks={overview.myTasks} />

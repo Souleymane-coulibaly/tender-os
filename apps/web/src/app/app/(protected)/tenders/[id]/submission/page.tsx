@@ -29,6 +29,7 @@ export default async function TenderSubmissionPage({ params }: { params: Promise
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        guideKey="tender-submission"
         breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Dépôt" }]}
         title="Dépôt"
         description="TenderOS prépare et trace votre dépôt. Le dépôt sur la plateforme acheteur reste une action manuelle."

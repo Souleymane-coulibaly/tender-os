@@ -45,24 +45,30 @@ export default async function DocumentsLibraryPage({ searchParams }: { searchPar
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        guideKey="documents"
         breadcrumb={[{ label: "Documents" }]}
         title="Documents"
         actions={
-          <Button href="/app/documents/new" variant="primary">
-            Nouveau document
-          </Button>
+          <div data-tour="guide-documents-create" className="flex">
+            <Button href="/app/documents/new" variant="primary">
+              Nouveau document
+            </Button>
+          </div>
         }
       />
 
-      <DocumentFilters
-        values={{
-          search: params.search,
-          status: params.status as DocumentStatus | undefined,
-          origin: params.origin as DocumentOrigin | undefined,
-          domain: params.domain as DocumentDomain | undefined,
-        }}
-      />
+      <div data-tour="guide-documents-filters">
+        <DocumentFilters
+          values={{
+            search: params.search,
+            status: params.status as DocumentStatus | undefined,
+            origin: params.origin as DocumentOrigin | undefined,
+            domain: params.domain as DocumentDomain | undefined,
+          }}
+        />
+      </div>
 
+      <div data-tour="guide-documents-list">
       {page.items.length === 0 ? (
         <EmptyState title="Aucun document a afficher." />
       ) : (
@@ -103,6 +109,7 @@ export default async function DocumentsLibraryPage({ searchParams }: { searchPar
           </TableBody>
         </Table>
       )}
+      </div>
 
       {page.pageInfo.hasNextPage && page.pageInfo.nextCursor ? (
         <Button

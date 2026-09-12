@@ -19,9 +19,11 @@ export function SavedSearchPanel({ savedSearches, activeSearchId }: { savedSearc
       padding="tight"
       title="Mes veilles"
       actions={
-        <Button variant="link" href="/app/market-watch?new" className="text-xs">
-          + Nouvelle
-        </Button>
+        <span data-tour="guide-market-watch-new" className="flex">
+          <Button variant="link" href="/app/market-watch?new" className="text-xs">
+            + Nouvelle
+          </Button>
+        </span>
       }
     >
       {savedSearches.length === 0 ? (

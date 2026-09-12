@@ -179,43 +179,51 @@ export default async function SubscriptionPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Abonnement & utilisation" description="Consultez votre forfait, comparez les offres disponibles et gérez votre facturation." />
+      <PageHeader guideKey="subscription" title="Abonnement & utilisation" description="Consultez votre forfait, comparez les offres disponibles et gérez votre facturation." />
 
-      {subscription ? <CurrentPlanCard subscription={subscription} quotas={quotas} priceCents={currentPriceCents} canManage={canManage} /> : <NoPlanCard canManage={canManage} />}
+      <div data-tour="guide-subscription-current-plan">
+        {subscription ? <CurrentPlanCard subscription={subscription} quotas={quotas} priceCents={currentPriceCents} canManage={canManage} /> : <NoPlanCard canManage={canManage} />}
+      </div>
 
-      <PlanCatalogSection catalog={catalog} currentPlanTier={subscription?.planTier ?? null} hasAnySubscription={subscription !== null} canManage={canManage} />
+      <div data-tour="guide-subscription-plans">
+        <PlanCatalogSection catalog={catalog} currentPlanTier={subscription?.planTier ?? null} hasAnySubscription={subscription !== null} canManage={canManage} />
+      </div>
 
-      <PassCard passPurchases={passPurchases} priceCents={passEntry?.onePriceCents ?? null} canManage={canManage} />
+      <div data-tour="guide-subscription-pass">
+        <PassCard passPurchases={passPurchases} priceCents={passEntry?.onePriceCents ?? null} canManage={canManage} />
+      </div>
 
-      <Card title="Utilisation">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-tenderos-slate">Crédits AO disponibles</span>
-            <span className="font-medium text-tenderos-navy">
-              {aoCreditBalance}
-              {quotas && quotas.AO_ROLLOVER_CAP !== UNLIMITED ? ` (plafond ${quotas.AO_ROLLOVER_CAP})` : ""}
-            </span>
+      <div data-tour="guide-subscription-usage">
+        <Card title="Utilisation">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-tenderos-slate">Crédits AO disponibles</span>
+              <span className="font-medium text-tenderos-navy">
+                {aoCreditBalance}
+                {quotas && quotas.AO_ROLLOVER_CAP !== UNLIMITED ? ` (plafond ${quotas.AO_ROLLOVER_CAP})` : ""}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-tenderos-slate">Utilisateurs</span>
+              <span className="font-medium text-tenderos-navy">
+                {usage.activeUsers} / {quotas ? formatQuotaLimit(quotas.USERS_MAX) : "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-tenderos-slate">Chat IA (aujourd&apos;hui)</span>
+              <span className="font-medium text-tenderos-navy">
+                {usage.chatMessagesToday} / {quotas ? formatQuotaLimit(quotas.CHAT_AI_DAILY_MAX) : "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-tenderos-slate">Stockage</span>
+              <span className="font-medium text-tenderos-navy">
+                {formatStorageBytes(usage.storageBytesUsed)} / {quotas && quotas.STORAGE_GB_MAX !== UNLIMITED ? `${quotas.STORAGE_GB_MAX} Go` : "Illimité*"}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-tenderos-slate">Utilisateurs</span>
-            <span className="font-medium text-tenderos-navy">
-              {usage.activeUsers} / {quotas ? formatQuotaLimit(quotas.USERS_MAX) : "—"}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-tenderos-slate">Chat IA (aujourd&apos;hui)</span>
-            <span className="font-medium text-tenderos-navy">
-              {usage.chatMessagesToday} / {quotas ? formatQuotaLimit(quotas.CHAT_AI_DAILY_MAX) : "—"}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-tenderos-slate">Stockage</span>
-            <span className="font-medium text-tenderos-navy">
-              {formatStorageBytes(usage.storageBytesUsed)} / {quotas && quotas.STORAGE_GB_MAX !== UNLIMITED ? `${quotas.STORAGE_GB_MAX} Go` : "Illimité*"}
-            </span>
-          </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
 
       {passPurchases.length > 0 ? (
         <Card title="Historique Pass AO">
@@ -244,38 +252,40 @@ export default async function SubscriptionPage() {
         </Card>
       ) : null}
 
-      <Card title="Historique des crédits AO">
-        {aoCreditLedger.length > 0 ? (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>Date</TableHeaderCell>
-                <TableHeaderCell>Type</TableHeaderCell>
-                <TableHeaderCell>Variation</TableHeaderCell>
-                <TableHeaderCell>Solde après</TableHeaderCell>
-                <TableHeaderCell>AO concerné</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {aoCreditLedger.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell>{new Date(entry.createdAt).toLocaleDateString("fr-FR")}</TableCell>
-                  <TableCell>
-                    <Badge tone={aoCreditMovementTypeTone(entry.type)}>{AO_CREDIT_MOVEMENT_TYPE_LABELS[entry.type]}</Badge>
-                  </TableCell>
-                  <TableCell className={entry.amount < 0 ? "text-tenderos-slate" : "font-medium text-tenderos-navy"}>
-                    {entry.amount > 0 ? `+${entry.amount}` : entry.amount}
-                  </TableCell>
-                  <TableCell>{entry.balanceAfter}</TableCell>
-                  <TableCell className="text-tenderos-slate">{entry.tenderId ?? "—"}</TableCell>
+      <div data-tour="guide-subscription-credit-history">
+        <Card title="Historique des crédits AO">
+          {aoCreditLedger.length > 0 ? (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableHeaderCell>Date</TableHeaderCell>
+                  <TableHeaderCell>Type</TableHeaderCell>
+                  <TableHeaderCell>Variation</TableHeaderCell>
+                  <TableHeaderCell>Solde après</TableHeaderCell>
+                  <TableHeaderCell>AO concerné</TableHeaderCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <EmptyState title="Aucun mouvement de crédit AO" description="Les attributions et consommations de crédits AO apparaîtront ici." />
-        )}
-      </Card>
+              </TableHead>
+              <TableBody>
+                {aoCreditLedger.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell>{new Date(entry.createdAt).toLocaleDateString("fr-FR")}</TableCell>
+                    <TableCell>
+                      <Badge tone={aoCreditMovementTypeTone(entry.type)}>{AO_CREDIT_MOVEMENT_TYPE_LABELS[entry.type]}</Badge>
+                    </TableCell>
+                    <TableCell className={entry.amount < 0 ? "text-tenderos-slate" : "font-medium text-tenderos-navy"}>
+                      {entry.amount > 0 ? `+${entry.amount}` : entry.amount}
+                    </TableCell>
+                    <TableCell>{entry.balanceAfter}</TableCell>
+                    <TableCell className="text-tenderos-slate">{entry.tenderId ?? "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <EmptyState title="Aucun mouvement de crédit AO" description="Les attributions et consommations de crédits AO apparaîtront ici." />
+          )}
+        </Card>
+      </div>
     </div>
   );
 }

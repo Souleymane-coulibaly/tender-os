@@ -191,7 +191,7 @@ export function ValidationSection({
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="flex items-center gap-3 rounded border border-tenderos-navy/10 p-4">
+      <section data-tour="guide-tender-validation-readiness" className="flex items-center gap-3 rounded border border-tenderos-navy/10 p-4">
         <span className="text-sm font-medium text-tenderos-navy">Statut de préparation :</span>
         <span
           className={`rounded px-2 py-0.5 text-xs font-medium ${readinessStatusBadgeClass(readiness.status)}`}
@@ -209,7 +209,7 @@ export function ValidationSection({
       </section>
 
       {canManage ? (
-        <section className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
+        <section data-tour="guide-tender-validation-run" className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
           <h2 className="text-sm font-semibold text-tenderos-navy">
             Lancer un contrôle de validation
           </h2>
@@ -252,7 +252,7 @@ export function ValidationSection({
       ) : null}
 
       {run ? (
-        <section className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
+        <section data-tour="guide-tender-validation-controls" className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
           <h2 className="text-sm font-semibold text-tenderos-navy">
             Contrôles ({run.issues.length})
           </h2>
@@ -289,7 +289,7 @@ export function ValidationSection({
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col gap-2 rounded border border-tenderos-navy/10 bg-tenderos-light p-3">
+              <div data-tour="guide-tender-validation-approve" className="flex flex-col gap-2 rounded border border-tenderos-navy/10 bg-tenderos-light p-3">
                 <label htmlFor="approve-comment" className="text-sm font-medium text-tenderos-navy">
                   Commentaire (facultatif)
                 </label>
@@ -324,7 +324,7 @@ export function ValidationSection({
           ) : null}
         </section>
       ) : (
-        <p className="text-sm text-tenderos-slate">
+        <p data-tour="guide-tender-validation-controls" className="text-sm text-tenderos-slate">
           Aucun contrôle de validation lancé pour l&apos;instant.
         </p>
       )}

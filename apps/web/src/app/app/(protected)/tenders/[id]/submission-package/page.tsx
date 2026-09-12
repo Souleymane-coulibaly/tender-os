@@ -23,6 +23,7 @@ export default async function TenderSubmissionPackagePage({ params }: { params: 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        guideKey="tender-submission-package"
         breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Dossier de soumission" }]}
         title="Dossier de soumission"
         description="Package final (document exporté, pièces de signature vérifiées et manifest) — nécessite une approbation finale active et, si une signature est requise, une transaction vérifiée."

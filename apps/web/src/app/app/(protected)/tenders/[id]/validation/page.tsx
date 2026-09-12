@@ -43,6 +43,7 @@ export default async function TenderValidationPage({ params }: { params: Promise
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        guideKey="tender-validation"
         breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Validation" }]}
         title="Validation finale"
         description="Vérifie la conformité d'un aperçu avant approbation (pièces obligatoires, contenu non validé) et fige la version approuvée — jamais un contournement du contrôle bloquant."

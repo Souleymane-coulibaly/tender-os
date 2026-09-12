@@ -162,7 +162,7 @@ function GeneratedDocumentCard({
   }
 
   return (
-    <div className="rounded border border-tenderos-navy/10 p-3">
+    <div data-tour="guide-tender-documents-generated-document" className="rounded border border-tenderos-navy/10 p-3">
       <div className="flex items-center justify-between">
         <Button type="button" onClick={toggle} variant="ghost" size="sm">
           {generatedDocument.title}
@@ -291,7 +291,7 @@ function GenerateForm({
 
   if (templates.length === 0) {
     return (
-      <p className="text-sm text-warning-fg">
+      <p data-tour="guide-tender-documents-generated-new" className="text-sm text-warning-fg">
         Aucun template avec une version active. Un administrateur doit d&apos;abord en activer un
         (Configuration IA → Templates documentaires).
       </p>
@@ -299,7 +299,7 @@ function GenerateForm({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
+    <div data-tour="guide-tender-documents-generated-new" className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
       <h2 className="text-sm font-semibold text-tenderos-navy">Nouveau document</h2>
       <div className="flex flex-wrap gap-2">
         <Select value={templateId} onChange={(e) => handleTemplateChange(e.target.value)}>
@@ -343,6 +343,7 @@ function GenerateForm({
       ) : null}
 
       <Button
+        data-tour="guide-tender-documents-generated-generate"
         type="button"
         disabled={isPending}
         onClick={handleSubmit}
@@ -409,7 +410,7 @@ export function DocumentsGeneratedSection({
         />
       ) : null}
 
-      <section className="rounded border border-tenderos-navy/10 p-4">
+      <section data-tour="guide-tender-documents-generated-history" className="rounded border border-tenderos-navy/10 p-4">
         <h2 className="mb-3 text-sm font-semibold text-tenderos-navy">Historique</h2>
         {generatedDocuments.length === 0 ? (
           <p className="text-sm text-tenderos-slate">Aucun document généré pour l&apos;instant.</p>

@@ -28,46 +28,50 @@ export default async function DeliverableTemplatesListPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card
-        title="Templates de mémoire"
-        description="Structure des sections du Mémoire technique/de la Synthèse exécutive — obligatoires/facultatives, instructions, type de génération IA. Réservé OWNER/Administrateur."
-      >
-        {templates.length === 0 ? (
-          <p className="text-sm text-tenderos-slate">Aucun template pour l&apos;instant.</p>
-        ) : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>Nom</TableHeaderCell>
-                <TableHeaderCell>Type de document</TableHeaderCell>
-                <TableHeaderCell>Palier</TableHeaderCell>
-                <TableHeaderCell>Version active</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {templates.map((template) => (
-                <TableRow key={template.id}>
-                  <TableCell>
-                    <Link href={`/app/ai-configuration/deliverable-templates/${template.id}`} className="font-medium text-tenderos-navy hover:underline">
-                      {template.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-tenderos-slate">{DELIVERABLE_TYPE_LABELS[template.documentType] ?? template.documentType}</TableCell>
-                  <TableCell className="text-tenderos-slate">{template.scopeLevel}</TableCell>
-                  <TableCell className="text-tenderos-slate">
-                    {template.activeVersion ? `v${template.activeVersion.version}` : <Badge tone="warning">Aucune version active</Badge>}
-                  </TableCell>
+      <div data-tour="guide-ai-configuration-list">
+        <Card
+          title="Templates de mémoire"
+          description="Structure des sections du Mémoire technique/de la Synthèse exécutive — obligatoires/facultatives, instructions, type de génération IA. Réservé OWNER/Administrateur."
+        >
+          {templates.length === 0 ? (
+            <p className="text-sm text-tenderos-slate">Aucun template pour l&apos;instant.</p>
+          ) : (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableHeaderCell>Nom</TableHeaderCell>
+                  <TableHeaderCell>Type de document</TableHeaderCell>
+                  <TableHeaderCell>Palier</TableHeaderCell>
+                  <TableHeaderCell>Version active</TableHeaderCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Card>
+              </TableHead>
+              <TableBody>
+                {templates.map((template) => (
+                  <TableRow key={template.id}>
+                    <TableCell>
+                      <Link href={`/app/ai-configuration/deliverable-templates/${template.id}`} className="font-medium text-tenderos-navy hover:underline">
+                        {template.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-tenderos-slate">{DELIVERABLE_TYPE_LABELS[template.documentType] ?? template.documentType}</TableCell>
+                    <TableCell className="text-tenderos-slate">{template.scopeLevel}</TableCell>
+                    <TableCell className="text-tenderos-slate">
+                      {template.activeVersion ? `v${template.activeVersion.version}` : <Badge tone="warning">Aucune version active</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+      </div>
 
       {canManage ? (
-        <Card title="Nouveau template">
-          <CreateDeliverableTemplateForm />
-        </Card>
+        <div data-tour="guide-ai-configuration-create">
+          <Card title="Nouveau template">
+            <CreateDeliverableTemplateForm />
+          </Card>
+        </div>
       ) : null}
     </div>
   );

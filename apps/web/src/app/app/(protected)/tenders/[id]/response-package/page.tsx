@@ -44,6 +44,7 @@ export default async function TenderResponsePackagePage({ params }: { params: Pr
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        guideKey="tender-response-package"
         breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Dossier final" }]}
         title="Dossier final"
         description="Assemblez les pièces déjà produites (Checklist, dossier administratif, mémoire technique, chiffrage) en un dossier de réponse par lot, contrôlez sa complétude, validez-le, puis générez le ZIP prêt au dépôt manuel. Une pièce facultative absente ne bloque jamais le dossier."

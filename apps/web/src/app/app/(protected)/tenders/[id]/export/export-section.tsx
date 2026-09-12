@@ -165,7 +165,7 @@ export function ExportSection({
   return (
     <div className="flex flex-col gap-6">
       {canManage ? (
-        <section className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
+        <section data-tour="guide-tender-export-preview" className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
           <h2 className="text-sm font-semibold text-tenderos-navy">Nouvel aperçu</h2>
           {!capabilities.canExport ? (
             <div className="flex flex-col gap-1">
@@ -200,7 +200,7 @@ export function ExportSection({
               </Select>
 
               {rows.length > 0 ? (
-                <div className="flex flex-col gap-3">
+                <div data-tour="guide-tender-export-sections" className="flex flex-col gap-3">
                   {rows.map((row) => (
                     <div key={row.sectionId} className="rounded border border-tenderos-navy/10 p-3">
                       <div className="mb-2 flex items-center gap-2">
@@ -294,6 +294,7 @@ export function ExportSection({
               ) : null}
 
               <Button
+                data-tour="guide-tender-export-generate"
                 type="button"
                 disabled={isPending || rows.length === 0}
                 onClick={handlePreview}
@@ -336,7 +337,7 @@ export function ExportSection({
         </section>
       ) : null}
 
-      <section className="rounded border border-tenderos-navy/10 p-4">
+      <section data-tour="guide-tender-export-history" className="rounded border border-tenderos-navy/10 p-4">
         <h2 className="mb-3 text-sm font-semibold text-tenderos-navy">Historique</h2>
         {history.length === 0 ? (
           <p className="text-sm text-tenderos-slate">Aucun export pour l&apos;instant.</p>

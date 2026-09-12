@@ -25,6 +25,7 @@ export default async function TenderAssistantPage({ params }: { params: Promise<
         breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Assistant IA" }]}
         title="Assistant IA"
         description="Posez une question sur ce dossier — le DCE, l'analyse IA, la checklist, les données du Tender et la base de connaissances validée de l'entreprise. Chaque réponse cite ses sources ; l'assistant reste en lecture seule sur vos données métier."
+        guideKey="tender-assistant"
       />
       <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/assistant`} />
       <ChatSection tenderId={tenderId} initialConversations={conversations} />

@@ -39,24 +39,30 @@ export default async function ClientsListPage({ searchParams }: { searchParams: 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        guideKey="clients"
         breadcrumb={[{ label: "Clients" }]}
         title="Clients"
         description={`${page.total} client(s)`}
         actions={
-          <Button href="/app/clients/new" variant="primary">
-            Nouveau client
-          </Button>
+          <div data-tour="guide-clients-create" className="flex">
+            <Button href="/app/clients/new" variant="primary">
+              Nouveau client
+            </Button>
+          </div>
         }
       />
 
-      <ClientFilters
-        values={{
-          nameSearch: params.nameSearch,
-          status: params.status as ClientAccountStatus | undefined,
-          includeArchived: params.includeArchived === "true",
-        }}
-      />
+      <div data-tour="guide-clients-filters">
+        <ClientFilters
+          values={{
+            nameSearch: params.nameSearch,
+            status: params.status as ClientAccountStatus | undefined,
+            includeArchived: params.includeArchived === "true",
+          }}
+        />
+      </div>
 
+      <div data-tour="guide-clients-list">
       {page.items.length === 0 ? (
         <EmptyState
           title={
@@ -101,6 +107,7 @@ export default async function ClientsListPage({ searchParams }: { searchParams: 
           </TableBody>
         </Table>
       )}
+      </div>
 
       {page.nextCursor ? (
         <Button variant="link" href={`/app/clients?${new URLSearchParams({ ...params, cursor: page.nextCursor }).toString()}`} className="self-start">

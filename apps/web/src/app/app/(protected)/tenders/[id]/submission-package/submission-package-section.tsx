@@ -41,7 +41,7 @@ export function SubmissionPackageSection({
   return (
     <div className="flex flex-col gap-6">
       {canCreate ? (
-        <section className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
+        <section data-tour="guide-tender-submission-package-create" className="flex flex-col gap-3 rounded border border-tenderos-navy/10 p-4">
           <h2 className="text-sm font-semibold text-tenderos-navy">
             Constituer un nouveau package
           </h2>
@@ -69,15 +69,17 @@ export function SubmissionPackageSection({
       ) : null}
 
       {latest?.status === "COMPLETED" ? (
-        <Alert tone="success">
-          <p className="text-sm font-medium text-success-fg">
-            Package v{latest.version} prêt —{" "}
-            {PACKAGE_STATUS_LABELS[latest.readinessStatus] ?? latest.readinessStatus}
-          </p>
-        </Alert>
+        <div data-tour="guide-tender-submission-package-ready">
+          <Alert tone="success">
+            <p className="text-sm font-medium text-success-fg">
+              Package v{latest.version} prêt —{" "}
+              {PACKAGE_STATUS_LABELS[latest.readinessStatus] ?? latest.readinessStatus}
+            </p>
+          </Alert>
+        </div>
       ) : null}
 
-      <section className="rounded border border-tenderos-navy/10 p-4">
+      <section data-tour="guide-tender-submission-package-history" className="rounded border border-tenderos-navy/10 p-4">
         <h2 className="mb-3 text-sm font-semibold text-tenderos-navy">Historique des packages</h2>
         {initialPackages.length === 0 ? (
           <p className="text-sm text-tenderos-slate">
@@ -86,7 +88,7 @@ export function SubmissionPackageSection({
         ) : (
           <div className="flex flex-col gap-3">
             {initialPackages.map((pkg) => (
-              <div key={pkg.id} className="rounded border border-tenderos-navy/10 p-3">
+              <div key={pkg.id} data-tour="guide-tender-submission-package-version" className="rounded border border-tenderos-navy/10 p-3">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium text-tenderos-navy">
                     Version {pkg.version}

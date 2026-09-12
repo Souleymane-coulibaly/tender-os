@@ -76,7 +76,7 @@ export function GenerationSection({
         <div className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-4">
           <h2 className="text-sm font-semibold text-tenderos-navy">Lancer une génération</h2>
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1">
+            <div data-tour="guide-tender-generations-task-type" className="flex flex-col gap-1">
               <label htmlFor="taskType" className="text-sm font-medium text-tenderos-navy">
                 Type de contenu
               </label>
@@ -96,6 +96,7 @@ export function GenerationSection({
               </Select>
             </div>
             <Button
+              data-tour="guide-tender-generations-generate"
               type="button"
               onClick={handleLaunch}
               disabled={isLaunching || !isSelectedTaskTypeReady}
@@ -119,9 +120,9 @@ export function GenerationSection({
       ) : null}
 
       {initialGenerations.length === 0 ? (
-        <p className="text-sm text-tenderos-slate">Aucune génération pour l&apos;instant.</p>
+        <p data-tour="guide-tender-generations-list" className="text-sm text-tenderos-slate">Aucune génération pour l&apos;instant.</p>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div data-tour="guide-tender-generations-list" className="flex flex-col gap-4">
           {initialGenerations.map((generation) => (
             <GenerationCard
               key={generation.id}
@@ -171,7 +172,7 @@ function GenerationCard({
   const canAct = actorRole !== "READ_ONLY" && actorRole !== undefined;
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-4">
+    <div data-tour="guide-tender-generations-card" className="flex flex-col gap-2 rounded border border-tenderos-navy/10 p-4">
       <div className="flex items-center justify-between">
         <div>
           <span className="font-medium text-tenderos-navy">

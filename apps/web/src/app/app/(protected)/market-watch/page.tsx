@@ -47,6 +47,7 @@ export default async function MarketWatchPage({ searchParams }: { searchParams: 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        guideKey="market-watch"
         breadcrumb={[{ label: "Veille" }]}
         title={headerSearch ? headerSearch.name : "Veille"}
         description={
@@ -63,15 +64,17 @@ export default async function MarketWatchPage({ searchParams }: { searchParams: 
       />
 
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:gap-6">
-        <aside className="shrink-0 md:w-72">
+        <aside data-tour="guide-market-watch-saved-searches" className="shrink-0 md:w-72">
           <SavedSearchPanel savedSearches={savedSearches} activeSearchId={activeSearchId} />
         </aside>
 
         <div className="min-w-0 flex-1">
           {isCreating ? (
-            <Card title="Nouvelle veille">
-              <CreateSavedSearchForm />
-            </Card>
+            <div data-tour="guide-market-watch-create-form">
+              <Card title="Nouvelle veille">
+                <CreateSavedSearchForm />
+              </Card>
+            </div>
           ) : activeSearch ? (
             matchesError ? (
               <ApiErrorState error={matchesError} />
@@ -84,7 +87,7 @@ export default async function MarketWatchPage({ searchParams }: { searchParams: 
                 }
               />
             ) : (
-              <div className="flex flex-col gap-3">
+              <div data-tour="guide-market-watch-matches" className="flex flex-col gap-3">
                 {matches.map((match) => (
                   <MatchCard key={match.id} match={match} savedSearchId={activeSearch.id} />
                 ))}

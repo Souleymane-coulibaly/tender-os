@@ -51,19 +51,23 @@ export default async function TenderChecklistPage({ params }: { params: Promise<
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: tender.title, href: `/app/tenders/${tenderId}` }, { label: "Checklist" }]} title="Checklist" />
+      <PageHeader breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: tender.title, href: `/app/tenders/${tenderId}` }, { label: "Checklist" }]} title="Checklist" guideKey="tender-checklist" />
       <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/checklist`} />
       <ChecklistSection tenderId={tenderId} items={items} lots={lots} progress={progress} freshness={freshness} />
-      <AiSuggestionsSection
-        // Remonté quand la liste change (après `router.refresh()`), le panneau gardant sinon
-        // l'état initial de son premier rendu.
-        key={suggestions.map((suggestion) => suggestion.id).join(",")}
-        tenderId={tenderId}
-        initialSuggestions={suggestions}
-        canManage={canManageAiSuggestions(role)}
-        entityTypes={["CHECKLIST_ITEM"]}
-        canGenerate={false}
-      />
+      {/* Guide de page : enveloppe posée ici, `AiSuggestionsSection` étant aussi rendu par la vue
+          d'ensemble du dossier. */}
+      <div data-tour="guide-tender-checklist-suggestions">
+        <AiSuggestionsSection
+          // Remonté quand la liste change (après `router.refresh()`), le panneau gardant sinon
+          // l'état initial de son premier rendu.
+          key={suggestions.map((suggestion) => suggestion.id).join(",")}
+          tenderId={tenderId}
+          initialSuggestions={suggestions}
+          canManage={canManageAiSuggestions(role)}
+          entityTypes={["CHECKLIST_ITEM"]}
+          canGenerate={false}
+        />
+      </div>
     </div>
   );
 }

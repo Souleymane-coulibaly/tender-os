@@ -36,7 +36,7 @@ export default async function TenderAnalysisPage({ params }: { params: Promise<{
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: tender.title, href: `/app/tenders/${tenderId}` }, { label: "Analyse" }]} title="Analyse" />
+      <PageHeader breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: tender.title, href: `/app/tenders/${tenderId}` }, { label: "Analyse" }]} title="Analyse" guideKey="tender-analysis" />
       <TabsNav items={buildTenderNavTabs(tenderId)} activeHref={`/app/tenders/${tenderId}/analysis`} />
       <AnalysisSection tenderId={tenderId} initialData={analysisData} canTrigger={canTriggerAnalysis(role)} />
     </div>

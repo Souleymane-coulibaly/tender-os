@@ -25,41 +25,45 @@ export default async function DocumentThemesListPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card title="Identité documentaire" description="Couleurs, police, logo — appliqués aux documents exportés (DOCX/PDF). Réservé OWNER/Administrateur.">
-        {themes.length === 0 ? (
-          <p className="text-sm text-tenderos-slate">Aucun thème pour l&apos;instant.</p>
-        ) : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>Nom</TableHeaderCell>
-                <TableHeaderCell>Palier</TableHeaderCell>
-                <TableHeaderCell>Version active</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {themes.map((theme) => (
-                <TableRow key={theme.id}>
-                  <TableCell>
-                    <Link href={`/app/ai-configuration/document-themes/${theme.id}`} className="font-medium text-tenderos-navy hover:underline">
-                      {theme.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-tenderos-slate">{theme.scopeLevel}</TableCell>
-                  <TableCell className="text-tenderos-slate">
-                    {theme.activeVersion ? `v${theme.activeVersion.version}` : <Badge tone="warning">Aucune version active</Badge>}
-                  </TableCell>
+      <div data-tour="guide-ai-configuration-list">
+        <Card title="Identité documentaire" description="Couleurs, police, logo — appliqués aux documents exportés (DOCX/PDF). Réservé OWNER/Administrateur.">
+          {themes.length === 0 ? (
+            <p className="text-sm text-tenderos-slate">Aucun thème pour l&apos;instant.</p>
+          ) : (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableHeaderCell>Nom</TableHeaderCell>
+                  <TableHeaderCell>Palier</TableHeaderCell>
+                  <TableHeaderCell>Version active</TableHeaderCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Card>
+              </TableHead>
+              <TableBody>
+                {themes.map((theme) => (
+                  <TableRow key={theme.id}>
+                    <TableCell>
+                      <Link href={`/app/ai-configuration/document-themes/${theme.id}`} className="font-medium text-tenderos-navy hover:underline">
+                        {theme.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-tenderos-slate">{theme.scopeLevel}</TableCell>
+                    <TableCell className="text-tenderos-slate">
+                      {theme.activeVersion ? `v${theme.activeVersion.version}` : <Badge tone="warning">Aucune version active</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+      </div>
 
       {canManage ? (
-        <Card title="Nouveau thème">
-          <CreateDocumentThemeForm />
-        </Card>
+        <div data-tour="guide-ai-configuration-create">
+          <Card title="Nouveau thème">
+            <CreateDocumentThemeForm />
+          </Card>
+        </div>
       ) : null}
     </div>
   );

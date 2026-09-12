@@ -27,15 +27,16 @@ export function DeliverablesSection({
   );
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div data-tour="guide-tender-deliverables-list" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {ordered.map((deliverable) => (
         <Link
           key={deliverable.id}
           href={`/app/tenders/${tenderId}/deliverables/${deliverable.id}`}
+          data-tour="guide-tender-deliverables-card"
           className="block"
         >
           <Card interactive padding="tight" className="h-full">
-            <div className="flex flex-col gap-2">
+            <div data-tour="guide-tender-deliverables-status" className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-tenderos-navy">
                   {DELIVERABLE_TYPE_LABELS[deliverable.type] ?? deliverable.type}

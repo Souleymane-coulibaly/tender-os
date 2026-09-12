@@ -513,7 +513,7 @@ function ProgressSummary({ progress }: { progress: ChecklistProgress | null }) {
   // Une checklist vide n'est pas « prête à 100 % » : elle n'a encore rien à vérifier.
   if (global.totalApplicable === 0) {
     return (
-      <div className="rounded-xl bg-tenderos-light p-3 text-sm text-tenderos-slate">
+      <div data-tour="guide-tender-checklist-progress" className="rounded-xl bg-tenderos-light p-3 text-sm text-tenderos-slate">
         Aucun élément applicable pour l&apos;instant : ajoutez-en un ou comparez avec la dernière analyse.
       </div>
     );
@@ -521,7 +521,7 @@ function ProgressSummary({ progress }: { progress: ChecklistProgress | null }) {
   const percent = Math.round((global.validated / global.totalApplicable) * 100);
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl bg-tenderos-light p-3">
+    <div data-tour="guide-tender-checklist-progress" className="flex flex-col gap-2 rounded-xl bg-tenderos-light p-3">
       <div className="flex items-center justify-between">
         <span className="text-sm font-bold text-tenderos-navy">
           {global.validated} / {global.totalApplicable} validés ({percent}%)
@@ -582,7 +582,7 @@ export function ChecklistSection({
     <Card
       title="Checklist"
       actions={
-        <div className="flex items-center gap-2">
+        <div data-tour="guide-tender-checklist-compare" className="flex items-center gap-2">
           {/* Checkpoint 2.1-P2.1-FIX-B (mission §31) — axe distinct de la fraîcheur de l'analyse
               elle-même (déjà affichée dans l'onglet Analyse) : la Checklist peut avoir besoin
               d'une réconciliation même quand l'analyse est déjà à jour. */}
@@ -631,19 +631,24 @@ export function ChecklistSection({
             </select>
           </label>
         ) : null}
-        {filteredItems.length === 0 ? (
-          <EmptyState
-            title="Aucun élément de checklist"
-            description="Ajoutez un élément manuellement ci-dessous, ou comparez avec la dernière analyse IA pour en suggérer."
-          />
-        ) : (
-          <ul>
-            {filteredItems.map((item) => (
-              <ChecklistItemRow key={item.id} tenderId={tenderId} item={item} lots={lots} />
-            ))}
-          </ul>
-        )}
+        {/* Guide de page : enveloppe commune à la liste et à son état vide (`EmptyState` ne
+            transmet pas `data-tour`). */}
+        <div data-tour="guide-tender-checklist-items">
+          {filteredItems.length === 0 ? (
+            <EmptyState
+              title="Aucun élément de checklist"
+              description="Ajoutez un élément manuellement ci-dessous, ou comparez avec la dernière analyse IA pour en suggérer."
+            />
+          ) : (
+            <ul>
+              {filteredItems.map((item) => (
+                <ChecklistItemRow key={item.id} tenderId={tenderId} item={item} lots={lots} />
+              ))}
+            </ul>
+          )}
+        </div>
         <form
+          data-tour="guide-tender-checklist-add"
           action={formAction}
           className="flex flex-wrap items-end gap-2 border-t border-tenderos-navy/10 pt-3"
         >

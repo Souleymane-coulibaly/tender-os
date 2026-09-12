@@ -37,47 +37,51 @@ export default async function WebhooksPage() {
   return (
     <div className="flex flex-col gap-6">
       {canManage ? (
-        hasWebhooksEntitlement ? (
-          <Card title="Nouveau webhook">
-            <CreateWebhookForm clients={clients} />
-          </Card>
-        ) : (
-          <EntitlementUpgradeNotice featureLabel="Les webhooks" />
-        )
+        <div data-tour="guide-integrations-create">
+          {hasWebhooksEntitlement ? (
+            <Card title="Nouveau webhook">
+              <CreateWebhookForm clients={clients} />
+            </Card>
+          ) : (
+            <EntitlementUpgradeNotice featureLabel="Les webhooks" />
+          )}
+        </div>
       ) : null}
 
-      <Card title="Webhooks existants">
-        {webhooks.length === 0 ? (
-          <p className="text-sm text-tenderos-slate">Aucun webhook pour l&apos;instant.</p>
-        ) : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>Endpoint</TableHeaderCell>
-                <TableHeaderCell>Événements</TableHeaderCell>
-                <TableHeaderCell>Restriction client</TableHeaderCell>
-                <TableHeaderCell>Statut</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {webhooks.map((webhook) => (
-                <TableRow key={webhook.id}>
-                  <TableCell>
-                    <Link href={`/app/integrations/webhooks/${webhook.id}`} className="font-medium text-tenderos-navy hover:underline">
-                      {webhook.endpointUrl}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-tenderos-slate">{webhook.events.length} événement(s)</TableCell>
-                  <TableCell className="text-tenderos-slate">{webhook.allowedClientAccountIds.length === 0 ? "Toute l'organisation" : `${webhook.allowedClientAccountIds.length} client(s)`}</TableCell>
-                  <TableCell>
-                    <Badge tone={WEBHOOK_SUBSCRIPTION_STATUS_TONE[webhook.status]}>{WEBHOOK_SUBSCRIPTION_STATUS_LABELS[webhook.status]}</Badge>
-                  </TableCell>
+      <div data-tour="guide-integrations-list">
+        <Card title="Webhooks existants">
+          {webhooks.length === 0 ? (
+            <p className="text-sm text-tenderos-slate">Aucun webhook pour l&apos;instant.</p>
+          ) : (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableHeaderCell>Endpoint</TableHeaderCell>
+                  <TableHeaderCell>Événements</TableHeaderCell>
+                  <TableHeaderCell>Restriction client</TableHeaderCell>
+                  <TableHeaderCell>Statut</TableHeaderCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Card>
+              </TableHead>
+              <TableBody>
+                {webhooks.map((webhook) => (
+                  <TableRow key={webhook.id}>
+                    <TableCell>
+                      <Link href={`/app/integrations/webhooks/${webhook.id}`} className="font-medium text-tenderos-navy hover:underline">
+                        {webhook.endpointUrl}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-tenderos-slate">{webhook.events.length} événement(s)</TableCell>
+                    <TableCell className="text-tenderos-slate">{webhook.allowedClientAccountIds.length === 0 ? "Toute l'organisation" : `${webhook.allowedClientAccountIds.length} client(s)`}</TableCell>
+                    <TableCell>
+                      <Badge tone={WEBHOOK_SUBSCRIPTION_STATUS_TONE[webhook.status]}>{WEBHOOK_SUBSCRIPTION_STATUS_LABELS[webhook.status]}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }

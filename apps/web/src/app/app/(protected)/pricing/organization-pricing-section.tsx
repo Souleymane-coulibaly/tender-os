@@ -30,9 +30,11 @@ function CostAggregateCard({ title, aggregate }: { title: string; aggregate: Cos
 export function OrganizationPricingSection({ summary }: { summary: OrganizationCostSummary }) {
   return (
     <div className="flex flex-col gap-6">
-      <CostAggregateCard title="Coût IA réel — toute l'organisation" aggregate={summary.technicalCost} />
+      <div data-tour="guide-ai-costs-total">
+        <CostAggregateCard title="Coût IA réel — toute l'organisation" aggregate={summary.technicalCost} />
+      </div>
 
-      <div>
+      <div data-tour="guide-ai-costs-by-client">
         <h3 className="mb-2 text-sm font-semibold text-tenderos-navy">Par client</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(summary.byClient).map(([clientAccountId, aggregate]) => (
@@ -42,7 +44,7 @@ export function OrganizationPricingSection({ summary }: { summary: OrganizationC
         {Object.keys(summary.byClient).length === 0 ? <p className="text-sm text-tenderos-slate">Aucune donnée de coût pour l&apos;instant.</p> : null}
       </div>
 
-      <div>
+      <div data-tour="guide-ai-costs-by-task-type">
         <h3 className="mb-2 text-sm font-semibold text-tenderos-navy">Par type de tâche IA</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(summary.byTaskType).map(([taskType, aggregate]) => (
@@ -51,7 +53,7 @@ export function OrganizationPricingSection({ summary }: { summary: OrganizationC
         </div>
       </div>
 
-      <p role="note" className="rounded-lg border border-tenderos-navy/10 bg-tenderos-light p-3 text-xs text-tenderos-slate">
+      <p data-tour="guide-ai-costs-disclaimer" role="note" className="rounded-lg border border-tenderos-navy/10 bg-tenderos-light p-3 text-xs text-tenderos-slate">
         {ESTIMATE_DISCLAIMER_TEXT}
       </p>
     </div>

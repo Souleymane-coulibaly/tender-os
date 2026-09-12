@@ -40,12 +40,13 @@ export default async function MyValidationsPage({ searchParams }: { searchParams
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        guideKey="validations"
         breadcrumb={[{ label: "Mes validations" }]}
         title="Mes validations"
         description="Les demandes de validation où vous êtes désigné approbateur, tous appels d'offres confondus — validation interne TenderOS, jamais une signature électronique."
       />
 
-      <nav className="flex flex-wrap gap-2 text-xs">
+      <nav data-tour="guide-validations-filters" className="flex flex-wrap gap-2 text-xs">
         <Link href="/app/validations" className={filterClasses(!status)}>
           Toutes
         </Link>
@@ -56,7 +57,9 @@ export default async function MyValidationsPage({ searchParams }: { searchParams
         ))}
       </nav>
 
-      <ValidationsList initialApprovals={approvals} />
+      <div data-tour="guide-validations-list">
+        <ValidationsList initialApprovals={approvals} />
+      </div>
     </div>
   );
 }

@@ -26,6 +26,7 @@ export default async function TenderDocumentsGeneratedPage({ params }: { params:
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        guideKey="tender-documents-generated"
         breadcrumb={[{ label: "Appels d'offres", href: "/app/tenders" }, { label: "Dossier", href: `/app/tenders/${tenderId}` }, { label: "Documents générés" }]}
         title="Documents générés"
         description="Générez un document DOCX éditable à partir d'un template activé. Un champ requis manquant bloque la génération, sauf si le template autorise la génération partielle — la valeur n'est alors jamais inventée, elle apparaît dans « Champs manquants »."

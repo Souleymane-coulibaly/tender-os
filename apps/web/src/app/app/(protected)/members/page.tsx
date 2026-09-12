@@ -49,19 +49,28 @@ export default async function MembersPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        guideKey="members"
         title="Équipe"
         description={
           <>
             Gérez les membres, leurs rôles et les accès à votre organisation. Le nombre de membres actifs est limité par votre offre — consultez{" "}
-            <a href="/app/subscription" className="font-medium text-tenderos-blue hover:underline">
+            <a data-tour="guide-members-seat-limit" href="/app/subscription" className="font-medium text-tenderos-blue hover:underline">
               Abonnement &amp; utilisation
             </a>{" "}
             pour votre plafond actuel.
           </>
         }
-        actions={canManage ? <InviteMemberDialog seatUsage={seatUsage} /> : undefined}
+        actions={
+          canManage ? (
+            <div data-tour="guide-members-invite" className="flex">
+              <InviteMemberDialog seatUsage={seatUsage} />
+            </div>
+          ) : undefined
+        }
       />
-      <MembersSection members={members} canManage={canManage} currentUserId={currentUserId} />
+      <div data-tour="guide-members-list">
+        <MembersSection members={members} canManage={canManage} currentUserId={currentUserId} />
+      </div>
     </div>
   );
 }
