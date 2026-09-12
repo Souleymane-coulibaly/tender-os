@@ -1,9 +1,9 @@
-import { type ArgumentsHost, Catch, type ExceptionFilter, HttpStatus } from "@nestjs/common";
+import { type ArgumentsHost, Catch, type ExceptionFilter, HttpStatus, Logger } from "@nestjs/common";
 import type { Response } from "express";
 import { DomainError } from "../../../../shared-kernel/domain-error";
 import type { RequestWithId } from "../../../../shared-kernel/request-id.middleware";
 import { ProviderErrorCode } from "../../domain/enums";
-import { RemoteProviderError } from "../../domain/errors";
+import { ConnectorNotConfiguredError, RemoteProviderError } from "../../domain/errors";
 
 /** Mission §13 — statut HTTP dérivé de `providerErrorCode` (jamais le statut brut du provider
  *  propagé tel quel). AUTH_ERROR -> 401 (déclenche naturellement un flux "reconnecter" côté
@@ -31,6 +31,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   EXTERNAL_CONNECTION_ALREADY_EXISTS: HttpStatus.CONFLICT,
   EXTERNAL_CONNECTION_CLIENT_NOT_ALLOWED: HttpStatus.NOT_FOUND,
   CONNECTOR_PERMISSION_MISSING: HttpStatus.FORBIDDEN,
+  // Défaut de configuration du serveur (identifiants OAuth, `API_BASE_URL`) : service
+  // indisponible pour ce connecteur, jamais un 500 opaque.
+  CONNECTOR_NOT_CONFIGURED: HttpStatus.SERVICE_UNAVAILABLE,
   OAUTH_STATE_INVALID: HttpStatus.BAD_REQUEST,
   SYNC_CONFIGURATION_NOT_FOUND: HttpStatus.NOT_FOUND,
   EXPORT_TARGET_NOT_FOUND: HttpStatus.NOT_FOUND,
@@ -66,6 +69,8 @@ const STATUS_BY_CODE: Record<string, number> = {
 
 @Catch(DomainError)
 export class ConnectorsErrorFilter implements ExceptionFilter {
+  private readonly logger = new Logger(ConnectorsErrorFilter.name);
+
   catch(exception: DomainError, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -82,6 +87,12 @@ export class ConnectorsErrorFilter implements ExceptionFilter {
         error: { code: exception.providerErrorCode, message: exception.message, requestId: request.id },
       });
       return;
+    }
+
+    if (exception instanceof ConnectorNotConfiguredError) {
+      // Le NOM de la variable manquante (jamais une valeur) va au log serveur, pour l'exploitant ;
+      // la réponse garde le message générique.
+      this.logger.error(`Connector not configured — missing environment variable ${exception.variableName} (request ${request.id})`);
     }
 
     const status = STATUS_BY_CODE[exception.code] ?? HttpStatus.INTERNAL_SERVER_ERROR;

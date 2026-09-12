@@ -546,6 +546,31 @@ Non corrigé : même décision de jeu de données que pour le Cockpit, à étend
 Web : typecheck 0, lint 0 erreur, tests unitaires 560/560. Piste plus structurante, non engagée :
 regrouper les 19 onglets en 4 à 5 étapes (préparer, rédiger, chiffrer, valider et signer, déposer).
 
+**Connecteurs : « erreur serveur » (Microsoft 365) puis « connexion déjà active » (Google
+Workspace) sans aucune connexion affichée.** Cause établie (noms de variables Railway, jamais les
+valeurs ; logs staging) : `API_BASE_URL`, `MICROSOFT_OAUTH_CLIENT_ID`/`_SECRET` et
+`GOOGLE_OAUTH_CLIENT_ID`/`_SECRET` absentes du service API staging — deux « Missing required
+environment variable: API_BASE_URL » dans les logs. Défauts de code révélés : (1) la connexion
+PENDING était enregistrée AVANT le démarrage du flux OAuth — l'échec de configuration laissait une
+ligne orpheline qui bloquait toute nouvelle tentative (« déjà active »), invisible sur la carte non
+rafraîchie ; (2) une variable manquante remontait en 500 opaque ; (3) le secret OAuth n'était lu
+qu'à l'échange du code, après le consentement de l'utilisateur chez le provider.
+
+- Configuration vérifiée avant toute écriture : URL d'autorisation construite avant l'état OAuth, flux
+  démarré avant la connexion ; identifiant ET secret vérifiés dès l'initiation.
+- Nouvelle erreur `CONNECTOR_NOT_CONFIGURED` (503, message français explicite) ; le nom de la
+  variable manquante va au log serveur uniquement.
+- Une connexion PENDING abandonnée ne bloque plus : révoquée et remplacée (audit :
+  `replacedPendingConnectionId`) ; ACTIVE et REAUTH_REQUIRED restent un refus. Débloque aussi la
+  ligne orpheline Google de staging, sans écriture manuelle en base.
+- Carte du connecteur relue après un échec de connexion.
+- Tests : 8 nouveaux (vrai adapter Microsoft, vraies variables d'environnement : aucune écriture
+  si une variable manque, remplacement d'une connexion PENDING, refus ACTIVE/REAUTH_REQUIRED) ;
+  module connecteurs 59/59 dont l'intégration HTTP réelle (19) ; web 85/85 ciblés ; typecheck API
+  et web 0, lint 0.
+- Reste à faire côté exploitation (hors code) : définir les 5 variables sur le service API staging
+  et déclarer les URL de redirection chez Microsoft Entra et Google Cloud.
+
 ## Portes de qualité
 
 | Porte | Résultat |

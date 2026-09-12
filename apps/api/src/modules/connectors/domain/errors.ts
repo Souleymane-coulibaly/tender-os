@@ -30,6 +30,16 @@ export class ExternalConnectionAlreadyExistsError extends DomainError {
   }
 }
 
+/** Connecteur non configuré côté serveur (identifiants OAuth du provider ou `API_BASE_URL`
+ *  absents) : une erreur d'exploitation explicite, jamais un 500 opaque. `variableName` sert
+ *  uniquement au log serveur — jamais une valeur, et jamais renvoyé dans la réponse HTTP. */
+export class ConnectorNotConfiguredError extends DomainError {
+  readonly code = "CONNECTOR_NOT_CONFIGURED";
+  constructor(readonly variableName: string) {
+    super("This connector is not configured on the server yet — contact the platform administrator.");
+  }
+}
+
 export class ConnectorPermissionMissingError extends DomainError {
   readonly code = "CONNECTOR_PERMISSION_MISSING";
   constructor() {

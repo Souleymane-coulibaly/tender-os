@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { z } from "zod";
-import { getRequiredEnv } from "../../../shared-kernel/env";
+import { requireConnectorEnv } from "../application/services/connector-env";
 import { ConnectorProvider, ProviderErrorCode } from "../domain/enums";
 import { RemoteProviderError, UnsupportedRemoteFileTypeError } from "../domain/errors";
 import type { ConnectorProviderAdapter, DownloadedFile, OAuthAccountInfo, OAuthTokenResult, RemoteContainer, RemoteFile, RemoteFolderListing } from "../application/ports/connector-provider-adapter";
@@ -62,13 +62,16 @@ export class GoogleWorkspaceAdapter implements ConnectorProviderAdapter {
   readonly provider = ConnectorProvider.GoogleWorkspace;
 
   private get clientId(): string {
-    return getRequiredEnv("GOOGLE_OAUTH_CLIENT_ID");
+    return requireConnectorEnv("GOOGLE_OAUTH_CLIENT_ID");
   }
   private get clientSecret(): string {
-    return getRequiredEnv("GOOGLE_OAUTH_CLIENT_SECRET");
+    return requireConnectorEnv("GOOGLE_OAUTH_CLIENT_SECRET");
   }
 
   buildAuthorizationUrl(input: { state: string; codeChallenge: string; redirectUri: string }): string {
+    // Le secret n'entre pas dans l'URL, mais sans lui l'échange du code échouerait APRÈS le
+    // consentement de l'utilisateur chez Google : sa présence est vérifiée dès l'initiation.
+    requireConnectorEnv("GOOGLE_OAUTH_CLIENT_SECRET");
     const params = new URLSearchParams({
       client_id: this.clientId,
       response_type: "code",

@@ -394,6 +394,7 @@ export const API_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   INVALID_CLIENT_KNOWLEDGE_SCOPE: "Ce périmètre de connaissances n'est pas valide pour ce client.",
   INVALID_CLIENT_ROLE: "Ce rôle client n'est pas valide.",
   // ---- Connecteurs ----
+  CONNECTOR_NOT_CONFIGURED: "Ce connecteur n'est pas encore configuré sur le serveur. Contactez l'administrateur de la plateforme.",
   CONNECTOR_PERMISSION_MISSING: "Votre rôle ne permet pas cette action sur les connecteurs.",
   EXPORT_TARGET_NOT_FOUND: "La version du document à exporter est introuvable.",
   EXTERNAL_CONNECTION_ALREADY_EXISTS: "Une connexion est déjà active pour ce service. Déconnectez-la d'abord.",

@@ -282,6 +282,9 @@ export function ConnectorProviderCard({
     setIsPending(false);
     if (result.error || !result.authorizationUrl) {
       setError(result.error ?? "Impossible de démarrer la connexion.");
+      // L'état serveur a pu changer malgré l'échec (connexion en cours laissée par un essai
+      // précédent) : la carte le relit plutôt que de proposer encore « Connecter » à l'aveugle.
+      router.refresh();
       return;
     }
     window.location.href = result.authorizationUrl;

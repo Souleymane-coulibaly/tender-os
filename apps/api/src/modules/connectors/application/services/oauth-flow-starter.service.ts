@@ -24,6 +24,11 @@ export class OAuthFlowStarterService {
     const codeVerifier = generatePkceCodeVerifier();
     const codeChallenge = derivePkceCodeChallenge(codeVerifier);
 
+    // URL construite AVANT toute persistance : un connecteur non configuré (identifiants OAuth ou
+    // `API_BASE_URL` absents) échoue ici sans laisser de state orphelin derrière lui.
+    const adapter = getAdapter(this.adapters, input.provider);
+    const authorizationUrl = adapter.buildAuthorizationUrl({ state, codeChallenge, redirectUri: oauthRedirectUri(input.provider) });
+
     const flowState = OAuthFlowState.initiate({
       id: this.idGenerator.generate(),
       state,
@@ -37,7 +42,6 @@ export class OAuthFlowStarterService {
     });
     await this.flowStateRepository.save(flowState);
 
-    const adapter = getAdapter(this.adapters, input.provider);
-    return adapter.buildAuthorizationUrl({ state, codeChallenge, redirectUri: oauthRedirectUri(input.provider) });
+    return authorizationUrl;
   }
 }
